@@ -1,0 +1,140 @@
+local constant Unsigned cGEN_ODDS = 500; //< 1-in-this to release new stream
+local constant Unsigned cPCT_GROW =  25; //< this% to increase growth odds
+local constant Unsigned cPCT_INIT =  25; //< this% initial growth odds
+
+local typedef SLGen(cGEN_ODDS) Streamer;
+
+local typedef EventWindow.SiteNum SN;
+local typedef ColorUtils.ARGB ARGB;
+
+local typedef Unsigned(2) Sym;
+local typedef Unsigned(7) Percent;
+
+/** Don't Cross The Streams.  A lonely bein shoots swapline tractor
+    streams to the four compass directions, trying to pull in
+    something, anything.. while obeying the ancient warning.. mostly..
+
+    \symbol S
+    \color #f00
+
+    \author Dave Ackley
+    \license lgpl
+    \copyright (C) 2021 Living Computation Foundation
+*/
+element S {
+  Void behave() {
+    EventWindow ew;
+    ew[0] = Streamer.instanceof;
+  }
+}
+
+/** SwapLine
+    \symbol SL
+    \color #34e
+*/
+element SwapLine {
+  EventWindow ew;
+  ColorUtils cu;
+  Random r;
+
+  Sym mSym;         // Our permanently-assigned direction
+  Percent mGrow;    // How hard we try to grow into empties
+
+  typedef Unsigned(2) Eraser;
+  Eraser mEraser;   // If !=0 leave behind Emptys instead of swapping
+
+  ARGB getColor(Unsigned selector) {
+    ARGB ret = cu.color(0xffffffff);
+    which (mSym) {
+      case 0u: { ret = cu.color(0xff0101fe); }
+      case 1u: { ret = cu.color(0xff01fe01); }
+      case 2u: { ret = cu.color(0xfffe0101); }
+      case 3u: { ret = cu.color(0xff01cece); }
+    }
+    if (mEraser == mEraser.maxof) // Dark flickers if we're a negastream
+      ret = cu.dimmer(ret);
+    return ret;
+  }
+
+  Bool siteIsKin(SN sn) {
+    Atom & a = ew[sn];
+    if (a as SwapLine) return a.mSym == mSym; // Same dir?
+    return false;
+  }
+  
+  Void behave() {
+    ew.changeSymmetry(mSym);
+
+    // Pre-erase if erasing's our thing
+    if (mEraser != mEraser.minof) {
+      if (mEraser == mEraser.maxof) mEraser = 1u; // Spin flag
+      else ++mEraser;        
+      ew[1] = Empty.instanceof;  // We don't gaf what's in there
+    }
+    
+    // Merge with forward kin
+    if (siteIsKin(1)) {  
+      ew[0] = Empty.instanceof; 
+      return;
+    } 
+
+    // Check for stream crossing
+    if (ew[1] is SwapLine)         // If (non-kin) SwapLine ahead..
+      ew[1] = Streamer.instanceof; // ..we cannot have that!
+
+    // Maybe widen the stream?
+    if (r.oddsOf(mGrow,100u)) {
+      for (SN sn = 2u; sn <= 3u; ++sn) { // Check right and left
+        SN fw = (SN) (sn+3u), bk = (SN) (sn+5u);
+        if (ew.isLive(sn) && ew[sn] is Empty &&  // If all 
+            ew.isLive(fw) && ew[fw] is Empty &&  // sites alive
+            ew.isLive(bk) && ew[bk] is Empty)    // and empty
+          ew[sn] = ew[0];                // Be Like Me!
+      }
+    }
+
+    // Must we hodl?
+    if (siteIsKin(7) || siteIsKin(8)) return; 
+
+    // Advance to the future!
+    Atom tmp = ew[1];
+    ew[1] = ew[0];
+    ew[0] = tmp;
+  }
+}
+    
+/** SwapLine Generator
+    \color #2e3
+    \symbol SG
+*/
+element SLGen(Unsigned cODDS) {
+  EventWindow ew;
+  ColorUtils cu;
+  Random r;
+
+  Percent mGrowGen = cPCT_INIT; // Generated SLs get this growth percent
+  Bool mBlink = true;           // Start out white
+
+  ARGB getColor(Unsigned selector) {
+    return mBlink ? cu.color(0xffeeeeee) : cu.color(0xff333333);
+  }
+
+  Void behave() {
+    if (r.oneIn(100)) mBlink = !mBlink;
+    if (r.oneIn(cODDS+1)) {
+      Sym sym = (Sym) r.between(0,3); // Random dir
+      SN sn = (SN) r.between(1,4);    // Random ngb
+      
+      if (r.oddsOf(cPCT_GROW,100u)) ++mGrowGen; // Slowly widen the streams
+
+      SwapLine sl;
+      sl.mSym = sym;                // Stream dir
+      sl.mGrow = mGrowGen;          // Stream spread
+      if (ew[sn] is Self)           // Stream mission: Swap..
+        sl.mEraser++;               // ..or nuke!
+
+      ew[sn] = sl.atomof;           // The Stream Is Away!
+    } 
+  }
+}
+
