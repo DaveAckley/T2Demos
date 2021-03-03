@@ -1,0 +1,52 @@
+local typedef ColorUtils.Channel Channel;
+
+/** Huegene OG. Co-evolution of plants and herbivores.  http://robust.cs.unm.edu/doku.php?id=ulam:demos:coevolution#ulam_source_code
+  \color #f00
+  \radius 1
+  \symmetries all
+  \author Dave Ackley
+  \license lgpl
+  \copyright (C) 2015 The Regents of the University of New Mexico (C) 2021 Living Computation Foundation
+*/
+element S {
+  Unsigned(7) mWait;
+  Random r;
+  Void behave() {
+    ByteStreamLogger bsl;
+    bsl.forceOutput(true);
+    EventWindow ew;
+    if (mWait++ == 0) {
+      // First event: Generate four sibling plants
+      Plant p;
+      p.once.new(); // Disarm init routine
+      for (Unsigned i = 0; i < 3u; ++i) // Randomize by hand
+        p.color[i] = (Channel) r.between(Channel.minof,Channel.maxof);
+      for (Unsigned(6) i = 1u; i <= 4u; ++i) {     // ngb sites
+        for (Unsigned j = 0; j < 16u; ++j) {       // mutation hits
+          for (Unsigned k = 0; k < 3u; ++k) {      // channels
+            p.color[k] = p.mutate(p.color[k]);
+          }
+        }
+        ew[i] = p.atomof; // Deposit increasingly mutated versions
+      }
+      bsl.printf("maidaplant\n");
+
+    } else if (mWait == mWait.maxof) {
+      // Last event
+      Herbivore h;
+      Unsigned(6) site = (Unsigned(6)) r.between(1,4); // Plant to copy
+      Atom & a = ew[site];
+      if (a as Plant) {
+        h.once.new(); // Disarm the herbivore's init routine
+        h.hunger = h.hunger.maxof / 2 + 1; // Init hunger by hand instead
+        for (Int i = 0; i < 3; ++i) { // And copy plant's genes 
+          h.color[i] = a.color[i];
+          for (Int j = 0; j < 2; ++j)
+            h.color[i] = h.mutate(h.color[i]);  // But mutated a little
+        }
+        bsl.printf("maidaherbi\n");
+      }
+      ew[0] = h.atomof; // Either way, that's where we start.
+    }
+  }
+}

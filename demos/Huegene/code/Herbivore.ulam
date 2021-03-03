@@ -1,0 +1,85 @@
+/**
+   \symmetries all
+   \radius 1
+*/
+element Herbivore {
+  typedef Unsigned(8) Channel;
+  typedef Channel ARGB[4];
+  typedef Channel RGB[3];
+  typedef Unsigned(7) Hunger;
+     
+  EventWindow ew;
+  Random random;
+     
+  Once once;
+  RGB color;
+  Hunger hunger;
+     
+  constant Hunger cEAT_PER_ENERGY = 6;
+  constant Int cMUTATION_DISTANCE = 10;
+     
+  Channel mutate(Channel cur) {
+    Int mutOdds = cMUTATION_DISTANCE;
+    return (Channel) (cur + random.between(-mutOdds,mutOdds));
+  }
+     
+  Bool isEdible(RGB us, RGB them) {
+    Unsigned sad;
+    for (Int i = 0; i < 3; ++i) {
+      Int diff = (Int) us[i] - (Int) them[i];
+      if (diff < 0) diff = -diff;
+      sad += (Unsigned) diff;
+    }
+    sad /= 50u;
+    if (sad == 0u) ++sad;
+    return random.oneIn(sad);
+  }
+     
+  Void behave() {
+    if (once.new()) {
+      hunger = hunger.maxof / 2 + 1;
+      for (Int i = 0; i < 3; ++i) 
+        color[i] = (Channel) random.between(Channel.minof,Channel.maxof);
+    }
+    if (++hunger == hunger.maxof) {
+      Empty e;
+      ew[0] = e;
+      return;
+    }
+    if (!ew.isLive(1)) return;
+    if (ew[1] is Plant) {
+      Plant p = (Plant) ew[1];
+      if (isEdible(color, p.color)) {
+        hunger -= (Hunger) (p.energy * cEAT_PER_ENERGY);
+        if (hunger == hunger.minof) {
+          Hunger give = (Hunger) (3 * hunger.maxof / 4 + 1);
+          hunger = give;
+          Self kid = self;
+          hunger = (Hunger) (Hunger.maxof - give);
+          for (Int i = 0; i < 3; ++i) {
+            kid.color[i] = mutate(kid.color[i]);
+          }
+          ew[0] = kid;
+        }
+      } else {
+        Empty e;
+        ew[0] = e;
+      }
+      ew[1] = self;
+    } else if (ew[1] is Empty || ew[1] is Self) {
+      ew.swap(0,1);
+    }
+  }
+     
+     
+  ARGB getColor(Unsigned selector) {
+    ARGB ret;
+    ret[0] = 0xff;
+    ret[1] = color[0]; 
+    ret[2] = color[1]; 
+    ret[3] = color[2]; 
+    return ret;
+  }
+     
+}
+

@@ -1,0 +1,51 @@
+/**
+   \symmetries all
+   \radius 1
+*/
+element Plant {
+  typedef Unsigned(8) Channel;
+  typedef Channel ARGB[4];
+  typedef Channel RGB[3];
+  typedef Unsigned(3) Energy;
+
+  EventWindow ew;
+  Random random;
+
+  Once once;
+  RGB color;
+  Energy energy;
+
+  constant Int cMUTATION_DISTANCE = 7;
+  Channel mutate(Channel cur) {
+    return (Channel) (cur + random.between(-cMUTATION_DISTANCE,cMUTATION_DISTANCE));
+  }
+
+  Void behave() {
+    if (once.new()) {
+      for (Int i = 0; i < 3; ++i) 
+        color[i] = (Channel) random.between(Channel.minof,Channel.maxof);
+    }
+    ++energy;
+    if (!ew.isLive(1)) return;
+    if (energy == energy.maxof && ew[1] is Empty) {
+      energy = Energy.maxof / 2 - 1;
+      Self kid = self;
+      for (Int i = 0; i < 3; ++i) {
+        kid.color[i] = mutate(kid.color[i]);
+      }
+      ew[1] = kid;
+    }
+  }
+
+
+  ARGB getColor(Unsigned selector) {
+    ARGB ret;
+    ret[0] = 0xff;
+    ret[1] = color[0]; 
+    ret[2] = color[1]; 
+    ret[3] = color[2]; 
+    return ret;
+  }
+
+}
+
