@@ -1,0 +1,23 @@
+element ESL {
+  /** Inner ESL radius to fill
+      \range 1..20 */
+  parameter Unsigned pESLInnerRadius = 1;
+
+  /** Outer ESL radius to fill
+      \range 0..20 */
+  parameter Unsigned pESLOuterRadius = 1;
+  Void behave() {
+    typedef EventWindow.SiteNum SiteNum;
+    typedef MDist.ESLRadius ESLRadius;
+    EventWindow ew;
+    for (SiteNum i = 1; i < 41u; ++i) {
+      ew[i] = Empty.instanceof;
+    }
+    MDist md;
+    SiteNum start = md.getFirstESLIndex((ESLRadius) pESLInnerRadius);
+    SiteNum end =  md.getLastESLIndex((ESLRadius) pESLOuterRadius);
+    for (SiteNum i = start; i <= end; ++i) {
+      ew[i] = Wall.instanceof;
+    }
+  }
+}

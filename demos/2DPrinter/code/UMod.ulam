@@ -1,0 +1,32 @@
+quark UMod(Unsigned bits) {
+  typedef Unsigned(bits) Value;
+  constant Value cVALUE_MIDPOINT = (Value) ((Value.maxof - Value.minof) / 2);
+  Value mVal;
+
+  Void set(Value v) { mVal = v; }
+  Value get() { return mVal; }
+  Value getMaxof() { return mVal.maxof; }
+  Value getMinof() { return mVal.minof; }
+
+  Bool isLess(Self u2) {
+    if (mVal < u2.mVal) return (u2.mVal - mVal) < cVALUE_MIDPOINT;
+    /* if (mVal >= u2.mVal) */ return (mVal - u2.mVal) >= cVALUE_MIDPOINT;
+  }
+  Bool isEqual(Self u2) { return mVal == u2.mVal; }
+  Bool isGreater(Self u2) { return !isEqual(u2) && !isLess(u2); }
+  Bool isLessEqual(Self u2) { return !isGreater(u2); }
+  Bool isGreaterEqual(Self u2) { return !isLess(u2); }
+  Bool isNotEqual(Self u2) { return !isEqual(u2); }
+  Bool isOneLessThan(Self u2) { u2.decrement(); return isEqual(u2); }
+  Bool isOneMoreThan(Self u2) { u2.increment(); return isEqual(u2); }
+
+  Void increment() { increment(1); }
+  Void increment(Value incr) {
+    mVal = (Value) (((Unsigned) mVal + incr) % Value.maxof);
+  }
+
+  Void decrement() { decrement(1); }
+  Void decrement(Value decr) {
+    increment((Value) (Value.maxof - decr));
+  }
+}

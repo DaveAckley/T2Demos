@@ -1,0 +1,104 @@
+transient CPlateBehaviorCopy : CPlateBehavior {
+  typedef UGridContent.S2D S2D;
+  typedef S2D.Coord SCoord;
+
+  Bool advanceRPS(CPlate & cp) {
+    if (mCPlateSameSN == 0)  // Anybody on phase?
+      return false;          // No..
+    if (mCPlateLessSN > 0)   // Anybody still need to phase up?
+      return false;          // Yes
+
+    Atom a = ew[mCPlateSameSN];
+    CPlate & ngb = (CPlate&) a;
+
+    // Shoot shoot shoot
+    Bool theyWin = ngb.u.mCOPY.mSwapState.winsOver(cp.u.mCOPY.mSwapState);
+    if (theyWin &&               // If their state beats us, and
+        mCPlateRPSLoseSN == 0) { // nobody loses to us (which would beat them)
+
+      cp.progress();
+      cp.u.mCOPY.mSwapState.throwThis(ngb.u.mCOPY.mSwapState);    // then we can advance
+
+      return true;
+    }
+    return false;
+  }
+
+  Bool headEmitSwapLine(CPlate & cp) {
+    if (!cp.isHeadCommander() ||   // Not our job
+        !(ew[1] is Empty) || // or locs unavailable
+        !(ew[9] is Empty) ||
+        !cp.u.mCOPY.mSwapState.isScissors() ||       // or it's not our turn
+        mCPlateRPSLoseSN != 0) // or still previous turn out there
+      return false;
+
+    if (!ew.isAccessible(1) || // or locs unavailable
+        !ew.isAccessible(9)) {
+      cp.miscarry();
+      return false;
+    }
+
+    cp.u.mCOPY.mSwapState.throwRock();
+
+    SwapLine sl;
+    sl.setMyTag((Content.MyTag) cp.getMyTag());
+    sl.setWindowRotation(cp.getWindowRotation());
+    sl.mLocation = cp.mLocation;
+    sl.mMax = cp.mMax;
+    sl.mCopyX = cp.u.mCOPY.mNextCopyColumn;
+    --cp.u.mCOPY.mNextCopyColumn;
+    ew[1] = sl;
+
+    if (sl.mCopyX >= cp.cORIGIN_X) // No trailer for the reaper
+      ew[9] = Trailer.instanceof;
+
+    cp.progress();
+    return true;
+  }
+
+  Bool tailReleaseSwapLine(CPlate & cp) {
+    // Tail advances rock to paper when the back of a swapline is waiting at 12
+    if (!cp.isTailCommander() ||                   // unless not our job
+        mCPlateScanner.getSwapLineSN() != 12 || // or no line waiting
+        !cp.u.mCOPY.mSwapState.isRock() ||      // or we're not ready
+        mCPlateRPSLoseSN != 0) // or a ngb isn't ready
+      return false;
+
+    SwapLine sl = (SwapLine) ew[12];
+    if (sl.mJustNeedsSalute) {
+      cp.u.mCOPY.mSwapState.throwPaper();
+      cp.progress();
+      return true;
+    }
+    return false;
+  }
+
+  Bool rootSynchronize(CPlate & cp) {
+    // Root advances paper to scissors
+    if (cp.mSource != cp.mSource.minof ||
+        !cp.u.mCOPY.mSwapState.isPaper() ||
+        mCPlateRPSLoseSN != 0)   // no rock out there
+      return false;
+
+    cp.u.mCOPY.mSwapState.throwScissors();
+    cp.progress();
+    return true;
+  }
+
+  virtual Void behave(CPlate & cp) { 
+    if (cp.isCargo()) 
+      return;
+    doScan(cp);
+    assessBoredom(cp);
+    Bool advanced = advanceRPS(cp);
+    if (advanced)
+      return;
+    if (headEmitSwapLine(cp))
+      return;
+    if (tailReleaseSwapLine(cp))
+      return;
+    if (rootSynchronize(cp))
+      return;
+  }
+
+}

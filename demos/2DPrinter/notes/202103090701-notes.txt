@@ -1,0 +1,22 @@
+{2}  -*- text -*- 
+[0:
+
+Tue Mar  9 07:01:43 2021 OK, let's try to get the 2D printer working
+for a T2 Demo.  Main issue is seeding: How shall we come up with an
+initial object to get printed?
+
+We'd like it to be obviously random-y and grown-looking, so it's clear
+we're copying a 'frozen accident' rather than a structure that we
+could have just regenerated identically from scratch.
+
+So how about like a Frobworld grass structure, maybe with rapidly
+evolving colors to make it more fun?  Maybe decay into a cross of
+grass or something, to help ensure we do get some growth.
+
+[1:
+
+Tue Mar  9 07:16:46 2021 So, where's the 2D printer code??
+
+:1]
+
+:0]

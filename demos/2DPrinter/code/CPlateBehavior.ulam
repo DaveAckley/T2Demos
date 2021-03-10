@@ -1,0 +1,101 @@
+
+
+transient CPlateBehavior {
+  EventWindow ew;
+  typedef EventWindow.SiteNum SiteNum;
+
+  typedef UGridContent.S2D S2D;
+  typedef S2D.Coord SCoord;
+
+
+  constant Int cFAIL = 0xFA11CB0;
+  constant Int cENOMETH = cFAIL + 1;
+
+  virtual Void behave(CPlate & cp) { cp.die(cENOMETH); }
+
+  /// Shared data
+  CPlateScanner mCPlateScanner;
+  SiteNum mCPlateLessSN;
+  SiteNum mCPlateSameSN;
+  SiteNum mCPlateMoreSN;
+  SiteNum mCPlateRPSLoseSN;
+  SiteNum mCPlateRPSTieSN;
+  SiteNum mCPlateRPSWinSN;
+  SiteNum mKidSN;
+  SiteNum mSwaplineSN;
+  SiteNum mOurContentSN;
+  SiteNum mAnyContentSN;
+  SiteNum mEmptySN;
+
+
+  Void doScan(CPlate & cp) {
+    mCPlateScanner.scan(cp);
+    mCPlateLessSN = mCPlateScanner.getCPlateLessSN();
+    mCPlateSameSN = mCPlateScanner.getCPlateSameSN();
+    mCPlateMoreSN = mCPlateScanner.getCPlateMoreSN();
+    mKidSN = mCPlateScanner.getKidSN();
+    mSwaplineSN = mCPlateScanner.getSwapLineSN();
+    mOurContentSN = mCPlateScanner.getOurContentSN();
+    mAnyContentSN = mCPlateScanner.getAnyContentSN();
+
+    mCPlateRPSLoseSN = mCPlateScanner.getCPlateRPSLoseSN();
+    mCPlateRPSTieSN = mCPlateScanner.getCPlateRPSTieSN();
+    mCPlateRPSWinSN = mCPlateScanner.getCPlateRPSWinSN();
+
+    mEmptySN = mCPlateScanner.getEmptySN();
+  }
+
+  Void assessBoredom(CPlate & cp) {
+    // We assess boredom two ways.
+    Unsigned assessedBoredom = Unsigned.maxof;
+
+    // First, by paying a lot of attention to our kid's boredom
+    if (mKidSN != 0) { // If we have any..
+      CPlate c = (CPlate) ew[mKidSN];
+
+      // But only if we're in the same state
+      if (c.mPlateState == cp.mPlateState)
+        assessedBoredom = c.boredom();
+    }
+
+    // And second, by paying some attention to our neighbor's boredom
+    if (mCPlateSameSN != 0) {          // If anybody in same state
+      CPlate ngb = (CPlate) ew[mCPlateSameSN];
+
+      Unsigned ngbBoredom = ngb.boredom() + 3u; // we only care a little about kin boredom
+
+      if (ngbBoredom < assessedBoredom)
+        assessedBoredom = ngbBoredom;
+    }
+
+    if (assessedBoredom < cp.boredom())
+      cp.setBoredom(assessedBoredom);    // Guess we're not as bored as we thought
+  }
+
+  Bool dieWithoutCPlates(CPlate & cp) {
+    if (cp.mSource != cp.mSource.minof && // If we're not the source, and
+        cp.mSource != cp.mSource.maxof && // not destined to be the source,
+        mSwaplineSN == 0 &&          // and no swaplines to mess us up..
+        mCPlateLessSN == 0 &&
+        mCPlateSameSN == 0 &&
+        mCPlateMoreSN == 0) {            // _somebody_ should be around..
+      ew[0] = Empty.instanceof;
+      return true; // died
+    }
+    return false;
+  }
+
+  Bool checkPlateStateChange(CPlate & cp) {
+
+    if (mCPlateMoreSN != 0) {       // If anybody from the future
+      CPlate ngb = (CPlate) ew[mCPlateMoreSN];
+
+      if (cp.boredom() < 2u) cp.miscarry(); // Way too soon!  Timing abort!
+      cp.advancePlateState(ngb.mPlateState);
+      cp.progress();
+      return true;
+    }
+    return false;
+  }
+}
+

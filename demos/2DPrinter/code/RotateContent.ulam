@@ -1,0 +1,32 @@
+/** A base class for Content that can have any of four persistent
+    rotational symmetries of the event window
+*/
+quark RotateContent : Content {
+  // Local typedefs
+  typedef Unsigned(2) WindowRotation;
+
+  // Local data
+  WindowRotation mRot;
+  constant WindowRotation c000R = 0u;
+  constant WindowRotation c090R = 1u;
+  constant WindowRotation c180R = 2u;
+  constant WindowRotation c270R = 3u;
+
+  WindowRotation getWindowRotation() { return mRot; }
+  Void setWindowRotation(WindowRotation wr) { 
+    mRot = wr; 
+    applyCurrentWindowRotation();
+  }
+  Void applyCurrentWindowRotation() {
+    EventWindow ew;
+    ew.changeSymmetry(mRot);
+
+  }
+
+  Void behave() {
+    super.behave();
+    if (isDead()) return;
+    applyCurrentWindowRotation();
+  }
+
+}

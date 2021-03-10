@@ -1,0 +1,73 @@
+
+/**
+   Simple type-and-instance identification system.  Provides a 32 bit
+   compile-time 'species' identifier, and a 1 to 31 bit run time
+   'self' identifier tag, and a 1 to 31 bit exponential watchdog for
+   progress monitoring and emergency death.
+ */
+
+quark QID(Bits speciesID, Unsigned(5) myTagBits, Unsigned(5) myProgressBits, Unsigned triggerLevel) { 
+  constant Bits cSPECIES_ID = speciesID;
+
+  constant Unsigned(5) cQID_TAG_BITS = myTagBits;
+  typedef Bits(cQID_TAG_BITS) MyTag;
+  MyTag mTag;
+
+  constant Unsigned(5) cQID_DOG_BITS = myProgressBits;
+  constant Unsigned cQID_DOG_MAXOF = Unsigned(cQID_DOG_BITS).maxof;
+  constant Unsigned cQID_DOG_TRIGGER = triggerLevel;
+  typedef XTimer(cQID_DOG_BITS,cQID_DOG_TRIGGER, 1) MyDog;
+  MyDog mDog;
+
+  Void progress() { mDog.reset(); }
+
+  Unsigned boredom() { return mDog.current(); }
+
+  Void setBoredom(Unsigned newb) { mDog.set((MyDog.Counter) newb); }
+
+  Bool isDead() { return mDog.alarm(); }
+
+  Void behave() {
+    if (mDog.countAlarm())
+      emergencyDeath();
+  }
+
+  virtual Bool shareFate(Atom & a)
+  {
+    if (a as Self) {
+      if (a.getMyTag() == getMyTag()) {
+        a.mDog.trigger();
+        return true;
+      }
+    }
+    return false;
+  }
+
+  Void emergencyDeath() {
+    EventWindow ew;
+    for (EventWindow.SiteNum sn = 1; sn <= 41; ++sn) {
+
+      if (!ew.isAccessible(sn)) continue;
+
+      Atom a = ew[sn];
+      if (shareFate(a))
+        ew[sn] = a;
+    }
+
+    Fail f;
+    f.fail(cSPECIES_ID);
+  }
+
+  Bits getMyTag() { return mTag; }
+
+  Void setMyTag(MyTag tag) { mTag = tag; }
+
+  Bool isMySpecies(Atom a) { return a is Self; }
+
+  Bool isPartOfMe(Atom a) {
+    if (a as Self) 
+      return getMyTag() == a.getMyTag();
+    return false;
+  }
+
+}

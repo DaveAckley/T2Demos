@@ -1,0 +1,15 @@
+/** 2D Printer (2016).  
+  \symbol S
+*/
+element S {
+  Void behave() {
+    EventWindow ew;
+    FrobGrass fg;
+    fg.setBoredom(8u);
+    ew[0] = fg;
+    fg.progress();
+    fg.mRootDistance++;
+    ew[1] = fg;
+    ew[4] = fg;
+  }
+}

@@ -1,0 +1,43 @@
+quark U2D7 {
+  typedef Unsigned(7) Coord;
+  Coord mX;
+  Coord mY;
+
+  Self(C2D c) {
+    mX = (Coord) c.getX();
+    mY = (Coord) c.getY();
+  }
+
+  Void set(Int x, Int y) {
+    setX(x);
+    setY(y);
+  }
+
+  Void setX(Int x) { mX = (Coord) x; }
+  Void setY(Int y) { mY = (Coord) y; }
+
+  Coord getX() { return mX; }
+  Coord getY() { return mY; }
+
+  Bool equals(Self other) {
+    return getX() == other.getX() && getY() == other.getY();
+  }
+
+  Bool isOrigin() { return toC2D().isOrigin(); }
+  
+  /*
+  Self toS2D(C2D c) {
+    S2D ret;
+    ret.set((SCoord) c.getX(), (SCoord) c.getY());
+    return ret;
+  }
+  */
+
+  C2D toC2D() {
+    C2D ret;
+    ret.set(mX, mY);
+    return ret;
+  }
+
+}
+

@@ -1,0 +1,130 @@
+local typedef EventWindow.SiteNum SiteNum;
+
+/** 'Intelligent' Grass inspired by FrobWorld growth dynamics.
+  \symbol Gf
+  \color #33c
+  \radius 2
+*/
+element FrobGrass : Content {
+  typedef Unsigned(3) Distance;
+  Distance mRootDistance;
+  EventWindow ew;
+
+  @Override
+  ARGB getColor(Unsigned selector) {
+    ColorUtils cu;
+    ARGB c1 = super.getColor(selector);
+    return cu.modify(c1, 100u-mRootDistance*10u);
+  }
+
+  Void behave() {
+    super.behave();
+    if (isDead()) return;
+
+    // Scan neighborhood
+    FrobGrassState state;
+    state.init();
+    state.scan();
+
+    // Stay quiet in repro
+    if (state.isRepro()) {
+      progress();
+      return;
+    }
+
+    // Update non-root distances
+    if (mRootDistance != 0) {
+      mRootDistance = (Distance) (state.minDistance()+1u);
+      progress(); 
+    } else {
+      // Root considers kids
+      if (boredom() >= 10u) {
+        SiteNum sn = state.chosenEmpty();
+        if (sn != sn.maxof) {  // Have spot?
+          typedef RotateContent.WindowRotation Rot;
+          Random r;
+          Rot rot = (Rot) r.between(Rot.minof, Rot.maxof);
+          which (rot) {
+            case 0u: { ew[sn] = NorthXCPlate.instanceof; }
+            case 1u: { ew[sn] = EastXCPlate.instanceof; }
+            case 2u: { ew[sn] = SouthXCPlate.instanceof; }
+            case 3u: { ew[sn] = WestXCPlate.instanceof; }
+          }
+          progress(); // We tried
+        }
+      }
+    }
+    
+    // Die if overextended
+    if (mRootDistance == Distance.maxof) {
+      ew[0] = Empty.instanceof;
+      return;
+    }
+
+    // Perhaps grow
+    if (mRootDistance + 1u < Distance.maxof) {
+      SiteNum growSite = state.growIntoEmpty();
+      if (growSite != SiteNum.maxof) {
+        Self s = self;
+        s.mRootDistance++;
+        ew[growSite] = s;
+        return;
+      }
+    }
+  }
+}
+
+
+transient FrobGrassState : SiteVisitor {
+  typedef FrobGrass.Distance Distance;
+  WindowScanner mWS;
+  WindowScanner.Category mReproCat;
+  WindowScanner.Category mEmptyCat;
+  WindowScanner.Category mGrassCat;
+  WindowScanner.Category mRootDCat;
+
+  Distance minDistance() {
+    if (mWS.getHits(mRootDCat) == 0u) return Distance.maxof;
+    Distance min = (Distance) (Distance.maxof - mWS.getMax(mRootDCat));
+    return (min); 
+  }
+
+  Bool isRepro() { return mWS.getHits(mReproCat) > 0u; }
+
+  SiteNum chosenEmpty() { return mWS.getSiteNum(mEmptyCat); }
+
+  SiteNum growIntoEmpty() {
+    Unsigned empties = mWS.getHits(mEmptyCat);
+    Unsigned repros  = mWS.getHits(mReproCat);
+    Unsigned grasses = mWS.getHits(mGrassCat);
+    if (repros == 0u && empties > 0u && grasses < 2u)
+      return mWS.getSiteNum(mEmptyCat);
+    return SiteNum.maxof;
+  }
+
+  Void init() {
+    mWS.resetCategories();
+    mReproCat = mWS.allocateCategory();
+    mEmptyCat = mWS.allocateCategory();
+    mGrassCat = mWS.allocateCategory();
+    mRootDCat = mWS.allocateMaxCategory(); // Actually min
+  }
+
+  Void scan() {
+    mWS.scan(self);
+  }
+
+  // SiteVisitor API
+  @Override
+  virtual Void visit(WindowScanner& ws, Atom & a, SiteNum sn) {
+    if (a is CPlate || a is SwapLine) ws.categorize(sn, mReproCat);
+    else if (sn <= 4u) { // Only check out to radius one for grass business
+      if (a is Empty) ws.categorize(sn, mEmptyCat);
+      else if (a as FrobGrass) {
+        ws.categorize(sn, mGrassCat);
+        ws.categorize(sn, mRootDCat, FrobGrass.Distance.maxof - a.mRootDistance);
+      }
+    }
+  }
+
+}

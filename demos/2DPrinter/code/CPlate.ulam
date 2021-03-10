@@ -1,0 +1,320 @@
+quark CStateGROW {
+  typedef UGridContent.S2D S2D;
+  typedef S2D.Coord SCoord;
+  SCoord mMinHeadRow, mMaxTailRow;
+}
+
+quark CStateCOPY {
+  typedef UGridContent.S2D S2D;
+  typedef S2D.Coord SCoord;
+  SCoord mNextCopyColumn;
+
+  Bool mHeadCommander, mTailCommander;
+  RockPaperScissors mSwapState;
+  Bits(3) mReserved;
+}
+
+quark CStateKID {
+  Bits(14) mReserved;
+}
+
+union CPlatePhaseState {
+  CStateGROW mGROW;
+  CStateCOPY mCOPY;
+  CStateKID mKID;
+}
+
+/** Circumferential Plating that replicates an 'arbitrary' object of
+    compatible content.
+
+    \symbol CP
+    \color #ccc
+    \radius 4
+
+    (Note radius 3 works in _many_ circumstances -- and is notably
+    faster -- but RPS lockup during swapline transit, though still
+    rare, is a greater risk at radius 3.)
+
+    \author Dave Ackley
+    \license lgpl
+    \version 1
+ */
+element CPlate : UGridContent {
+  EventWindow ew;
+
+  typedef UGridContent.S2D S2D;
+  typedef S2D.Coord SCoord;
+
+  typedef EventWindow.SiteNum SiteNum;
+
+  typedef Unsigned(2) PlateState;
+
+  Void die() {
+    Fail f;
+    f.fail();
+  }
+
+  Void die(Int code) {
+    Fail f;
+    f.fail(code);
+  }
+
+  typedef Unsigned(1) OneBit;
+  typedef Unsigned(4) SourceSN;
+
+  S2D mLocation;
+  SourceSN mSource = SourceSN.maxof;
+
+  S2D mMax;
+  CPlatePhaseState u;
+  PlateState mPlateState;
+
+  constant PlateState cPLATESTATE_GROW = 0u;
+  constant PlateState cPLATESTATE_COPY = 1u;
+  constant PlateState cPLATESTATE_KID = 2u;
+  constant PlateState cPLATESTATE_RSV2 = 3u;
+
+  Void assertPS(PlateState ps) { if (mPlateState != ps) die(); }
+
+  Void advancePlateState(PlateState toPS) {
+    if (toPS == cPLATESTATE_COPY) enterPlateStateCOPY();
+    else if (toPS == cPLATESTATE_KID) enterPlateStateKID();
+    else die();
+    progress();
+  }
+
+  Void enterPlateStateCOPY() {
+    assertPS(cPLATESTATE_GROW);
+    Bool headCommander = isHeadCommander(); // read under _GROW rules
+    Bool tailCommander = isTailCommander();
+
+    mPlateState = cPLATESTATE_COPY;
+    u.mCOPY.mHeadCommander = headCommander; // write under _COPY rules
+    u.mCOPY.mTailCommander = tailCommander;
+    u.mCOPY.mSwapState.throwScissors();     // initial rps state
+    u.mCOPY.mNextCopyColumn = (SCoord) mMax.getX();
+    u.mCOPY.mReserved = 0;
+  }
+
+  Void enterPlateStateKID() {
+    assertPS(cPLATESTATE_COPY);
+    mPlateState = cPLATESTATE_KID;
+    u.mKID.mReserved = 0;
+  }
+
+  SCoord getMinHeadRow() { assertPS(cPLATESTATE_GROW); return u.mGROW.mMinHeadRow; }
+  SCoord getMaxTailRow() { assertPS(cPLATESTATE_GROW); return u.mGROW.mMaxTailRow; }
+  Void setMinHeadRow(SCoord sc) { assertPS(cPLATESTATE_GROW); u.mGROW.mMinHeadRow = sc; } 
+  Void setMaxTailRow(SCoord sc) { assertPS(cPLATESTATE_GROW); u.mGROW.mMaxTailRow = sc; } 
+  Void resetMinHeadRow() { assertPS(cPLATESTATE_GROW); u.mGROW.mMinHeadRow = u.mGROW.mMinHeadRow.maxof; } 
+  Void resetMaxTailRow() { assertPS(cPLATESTATE_GROW); u.mGROW.mMaxTailRow = u.mGROW.mMaxTailRow.minof; } 
+
+  Void globalInit(Content & c) {
+    mPlateState = cPLATESTATE_GROW;
+    mSource = 0u;
+    mLocation.set(cORIGIN_X, cORIGIN_Y);
+    mMax.set(SCoord.minof, SCoord.minof);
+    setMyTag((MyTag) c.getMyTag()); // Imprint on this content!
+    progress();
+  }
+
+  Bool isHeadCommander() {
+    if (mPlateState == cPLATESTATE_GROW)
+      return (mLocation.getX() == cORIGIN_X &&
+              mLocation.getY() == getMinHeadRow());
+    if (mPlateState == cPLATESTATE_COPY)
+      return u.mCOPY.mHeadCommander;
+    if (mPlateState == cPLATESTATE_KID)
+      return false;  // No one commands a kid
+    die();
+    /* NOT REACHED */
+    return false;
+  }
+
+  Bool isTailCommander() {
+    if (mPlateState == cPLATESTATE_GROW)
+      return (mLocation.getX() == mMax.getX() &&
+              mLocation.getY() == u.mGROW.mMaxTailRow);
+    if (mPlateState == cPLATESTATE_COPY)
+      return u.mCOPY.mTailCommander;
+    if (mPlateState == cPLATESTATE_KID)
+      return false;  // No one commands a kid
+    die();
+    /* NOT REACHED */
+    return false;
+  }
+
+  Void miscarry() {
+    mLocation.set(SCoord.maxof,SCoord.minof);
+  }
+
+  Bool isMiscarriage() {
+    S2D abortCode;
+    abortCode.set(SCoord.maxof,SCoord.minof);
+    return mLocation.equals(abortCode);
+  }
+
+  /** Kill certain neighbors if we go down */
+  virtual Bool shareFate(Atom& a)
+  {
+    if (a as Trailer) {
+      a.massDieOff();
+      return true;
+    }
+    return super.shareFate(a);
+  }
+
+  Bool terminated() {
+    if (!isMiscarriage()) return false;
+
+    EventWindow ew;
+    for (SiteNum i = 1; i < 41; ++i) {
+      if (!ew.isAccessible(i)) continue;
+      Atom a = ew[i];
+      if (a as CPlate) a.miscarry();
+      else if (a as SwapLine) a.miscarry();
+      else if (a as Trailer) a.massDieOff();
+      else continue;
+      ew[i] = a;
+    }
+    ew[0] = Empty.instanceof;
+    return true;
+  }
+
+  Void behave() {
+
+    ////
+    // Cross-platestate behaviors
+
+    super.behave();
+    if (terminated()) return;
+
+    ////
+    // PlateState-specific behaviors
+
+    if (mPlateState == cPLATESTATE_GROW) {
+      CPlateBehaviorGrow cpb;
+      return cpb.behave(self);
+    }
+    if (mPlateState == cPLATESTATE_COPY) {
+      CPlateBehaviorCopy cpb;
+      return cpb.behave(self);
+    }
+    if (mPlateState == cPLATESTATE_KID) {
+      CPlateBehaviorKid cpb;
+      return cpb.behave(self);
+    }
+    if (mPlateState == cPLATESTATE_RSV2) {
+      CPlateBehaviorRsv2 cpb;
+      return cpb.behave(self);
+    }
+    die();
+  }
+
+  ARGB getColor(Unsigned selector) {
+    if (selector == 0u) return super.getColor(selector);
+
+    ColorUtils cu;
+    if (selector == 2u && mPlateState == cPLATESTATE_COPY) {
+      if (u.mCOPY.mSwapState.isRock()) return cu.color(250,0,0);
+      if (u.mCOPY.mSwapState.isPaper()) return cu.color(0,250,0);
+      if (u.mCOPY.mSwapState.isScissors()) return cu.color(0,0,250);
+    }
+
+    if (isHeadCommander()) return cu.color(0,250,0);
+    if (isTailCommander()) return cu.color(250,0,0);
+
+    ARGB ret;
+    Int delta[4];
+    Int shift = 15;
+    if (mPlateState == cPLATESTATE_GROW) {
+      ret = cu.color(200,200,200);
+      delta[1] = -shift;
+      delta[2] = -shift;
+      delta[3] = shift;
+    } else if (mPlateState == cPLATESTATE_COPY) {
+      ret = cu.color(150,150,150);
+      delta[1] = -shift;
+      delta[2] = shift;
+      delta[3] = -shift;
+    } else {
+      ret = cu.color(150,150,150);
+      delta[1] = shift;
+      delta[2] = -shift;
+      delta[3] = -shift;
+    }
+
+    if (mSource==0u) ret[1] = 250;
+    if (mLocation.getX() == cORIGIN_X ||
+        mLocation.getY() == cORIGIN_Y) ret[2] = 150;
+    if (mLocation.getX() == mMax.getX() ||
+        mLocation.getY() == mMax.getY()) ret[2] = 250;
+
+    Unsigned(8) bd = (Unsigned(8)) boredom();
+    for (Unsigned i = 1; i < 4u; ++i)
+      ret[i] = (Unsigned(8)) (ret[i] + bd*delta[i]);
+    return ret;
+  }
+}
+
+quark XCPlate : RotateContent {
+  //  typedef RotateContent.WindowRotation WindowRotation;
+
+  Void becomeCPlate(WindowRotation wr) {
+    EventWindow ew;
+    CPlate cp;
+    cp.setWindowRotation(wr);
+    ew[0] = cp.atomof;
+  }
+}
+
+/** Decays into a CPlate reproducing west \symbol WX */
+element WestXCPlate : XCPlate { Void behave() { becomeCPlate(c000R); } }
+
+/** Decays into a CPlate reproducing north \symbol NX */
+element NorthXCPlate : XCPlate { Void behave() { becomeCPlate(c090R); } }
+
+/** Decays into a CPlate reproducing east \symbol EX */
+element EastXCPlate : XCPlate { Void behave() { becomeCPlate(c180R); } }
+
+/** Decays into a CPlate reproducing south \symbol SX */
+element SouthXCPlate : XCPlate { Void behave() { becomeCPlate(c270R); } }
+
+/** Aborts any one adjacent single replication.
+    \symbol RT
+    \color #f00
+    \symmetries all
+ */
+element ReplicationTerminator {
+  EventWindow ew;
+  Random random;
+  Void behave() {
+    Atom a = ew[1];
+
+    if (a as CPlate) a.miscarry();
+    else if (a as SwapLine) a.miscarry();
+    else if (a as Trailer) a.massDieOff();
+    else if (!random.oneIn(500)) return; // We expire eventually
+
+    ew[1] = a;
+    ew[0] = Empty.instanceof;
+  }
+}
+
+/** Poisons any one adjacent content
+    \symbol PZ
+    \color #f0f
+    \symmetries all
+ */
+element ContentPoison {
+  EventWindow ew;
+  Void behave() {
+    Atom a = ew[1];
+    if (a as Content) {
+      a.emergencyDeath();
+      ew[1] = a.atomof;
+      ew[0] = Empty.instanceof;
+    }
+  }
+}
+

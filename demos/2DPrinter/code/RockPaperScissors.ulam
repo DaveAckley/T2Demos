@@ -1,0 +1,34 @@
+/** Three-phase synchronizer.
+ */
+quark RockPaperScissors {
+  typedef Unary(2) RPSState;
+  RPSState mRPS;
+  constant RPSState cRPS_ROCK = 0u;
+  constant RPSState cRPS_PAPER = 1u;
+  constant RPSState cRPS_SCISSORS = 2u;
+
+  Bool isThis(RPSState rps) { return mRPS == rps; }
+  Bool isRock() { return isThis(cRPS_ROCK); }
+  Bool isPaper() { return isThis(cRPS_PAPER); }
+  Bool isScissors() { return isThis(cRPS_SCISSORS); }
+
+  Void throwThis(RockPaperScissors rps) { throwThis(rps.mRPS); }
+  Void throwThis(RPSState rps) { mRPS = rps; }
+  Void throwRock() { throwThis(cRPS_ROCK); }
+  Void throwPaper() { throwThis(cRPS_PAPER); }
+  Void throwScissors() { throwThis(cRPS_SCISSORS); }
+
+  Bool winsOver(RockPaperScissors other) {
+    if (other.mRPS == cRPS_SCISSORS) return mRPS == cRPS_ROCK;
+    return mRPS == other.mRPS + 1u;
+  }
+
+  Bool tiesWith(RockPaperScissors other) {
+    return mRPS == other.mRPS;
+  }
+
+  Bool losesTo(RockPaperScissors other) {
+    return !winsOver(other) && !tiesWith(other);
+  }
+}
+

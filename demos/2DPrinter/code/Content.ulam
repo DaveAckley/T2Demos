@@ -1,0 +1,23 @@
+/**
+   A base class for content participating in the reproducing cell
+   demo.
+ */
+quark Content : QID(0xFEEDF00Du, 5, 4, 15) {
+  constant Unsigned cQID_TAG_BITS = 5;
+  constant Unsigned cQID_DOG_BITS = 4;
+  constant Unsigned cQID_DOG_TRIGGER = 14;
+
+  // Export instantiated template types
+  typedef Super.MyTag MyTag;
+  typedef Super.MyDog MyDog;
+
+  /** If I am directly behind a SwapLine, I am likely being
+      transported, so I should not, for example, get upset if some of
+      my usual constraints are being violated. */
+  Bool isCargo() {
+    EventWindow ew;
+    return ew[4] is SwapLine;
+  }
+
+
+}

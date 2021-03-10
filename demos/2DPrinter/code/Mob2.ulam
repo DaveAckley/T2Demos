@@ -1,0 +1,154 @@
+ulam 1;
+use Empty;
+
+use EventWindow;
+use Once;
+use Random;
+use Telomere;
+
+use AtomUtils;
+use WindowServices;
+
+/** Mob. Mob artificial gravity, drifting, and random heading changes
+
+    \symbol M2
+    \symmetries rotations
+    \color #94d
+    \license lgpl
+    \radius 3
+ */
+element Mob2 : Content {
+  EventWindow ew;
+  Random r;
+
+  typedef Telomere(3) Telo;
+  typedef Telo.Tail Tail;
+  typedef EventWindow.Symmetry Symmetry;
+  typedef EventWindow.SiteNum SiteNum;
+
+  typedef XTimer(4,12u,1u) NewTimer;
+
+  typedef EventWindow.Dir Dir;
+  Telo telomere;
+  Once once;
+  Dir heading;
+  NewTimer timer;
+  Bool newDir;
+
+  /** Mob antigravity.  Larger values mean more swapping regardless of
+      number of kin, which means more churn and movement in general,
+      but also more likelihood of mob breakup.
+
+      \range 1..100
+  */
+  parameter Unsigned cMOB_ANTIGRAVITY = 50;
+
+  /** Drift slowness.  Larger values mean more likely to accept moves
+      that are toward the mob but against the heading direction, which
+      means a slower drift but less likelihood of mob breakup.
+
+      \range 1..25
+  */
+  parameter Unsigned cDRIFT_SLOWNESS = 4;
+
+  Void behave() {
+    if (once.new()) {
+      telomere.setGen(Tail.maxof);
+      heading = ew.cDIR_SOUTH; // hardcode for demo
+    }
+    if (!telomere.dup(self.atomof, (SiteNum) 1)) {
+      if (ew[1] is Self) ew.swap(0, 1); // Churn the goo during growth
+    } else {
+      if (newDir) {
+        timer.count();
+        if (timer.alarm()) {
+          timer.reset();
+          newDir = false;
+        }
+      } else {
+        timer.count();
+        if (timer.alarm()) {
+          // XXX STICK TO SOUTH FOR NOW          heading = (Dir) r.bits(Dir.sizeof);
+          newDir = true;
+        }
+      }
+
+      // Everything in here is as symmetric (or not) as we want
+      // Symmetry 000R compensates for the '+Y goes down' of the GUI
+      ew.changeSymmetry(ew.cSYMMETRY_000R);
+
+      AtomUtils au;
+      WindowServices wu;
+      Int slot;
+      Self p;
+      Empty e;
+      Int pt = au.getType(p.atomof);
+      Int et = au.getType(e.atomof);
+      wu.reset(1,3);
+      if (!wu.scan(et, pt)) return;
+
+      Unsigned empCount = wu.getHits(0);
+      Unsigned mobCount = wu.getHits(1);
+
+      if (mobCount == 0u || empCount == 0u) {         // If no kin or no empties, quit here
+        if (empCount > 0u) ew.swap(0, wu.getPick(0)); // But if have empties, diffuse first
+        return; 
+      }
+
+      SiteNum empIdx = wu.getPick(0);
+      SiteNum podIdx = wu.getPick(1);
+
+      if (!newDir) {
+        Atom mob = ew[podIdx];
+        if (mob as Self) {
+          if (mob.newDir && mob.heading != heading) {
+            timer.set(mob.timer.current());
+            heading = mob.heading;
+            newDir = true;
+          }
+        }
+      }
+
+      if (!r.oddsOf(cMOB_ANTIGRAVITY, cMOB_ANTIGRAVITY + wu.getHits(1)))
+        return;                 // The more kin around, the less swapping
+
+      C2D origin;
+      C2D podPos = ew.getCoord(podIdx);
+      C2D empPos = ew.getCoord(empIdx);
+
+      Unsigned empPodDistance =  // Distance from empty to other pod
+        empPos.manhattanDistance(podPos);
+      Unsigned usPodDistance =   // Distance from us to other pod
+        origin.manhattanDistance(podPos);
+
+      // if empty is closer to other pod than we are, swap there.
+      if (empPodDistance < usPodDistance) {
+
+        // but if the swap is going against our heading, maybe don't
+
+        C2D mobDir = ew.mapSym(origin.neighbor(heading));
+
+        if (mobDir.dot(podPos) < 0 && r.oneIn(cDRIFT_SLOWNESS))
+          return;
+
+        ew.swap((SiteNum) 0, empIdx);
+      }
+    }
+  }
+
+  typedef ColorUtils.ARGB ARGB;
+
+  ARGB getColor(Unsigned selector) {
+    ColorUtils cu;
+    ARGB ret = super.getColor(selector);
+    if (selector == 1u) {
+
+      if (newDir) return cu.color(0xffff0000u);
+      for (Unsigned i = 1; i < 4u; ++i) { 
+        ret[i] += 10u*telomere.gen;
+      }
+    }
+
+    return ret;
+  }
+}

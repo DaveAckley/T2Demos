@@ -1,0 +1,12 @@
+use U2D7;
+/** A base class for RotateContent that can be addressed by U2D7
+    coordinates based on a floating origin
+*/
+quark UGridContent : RotateContent {
+  typedef U2D7 S2D;
+  typedef S2D.Coord SCoord;
+
+  constant SCoord cORIGIN_X = 3u;
+  constant SCoord cORIGIN_Y = 1u;
+}
+

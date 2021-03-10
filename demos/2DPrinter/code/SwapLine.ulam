@@ -1,0 +1,432 @@
+/** Limited-slip trailer place-holder \symbol TL \color #770 \radius 2
+*/
+element Trailer {
+  constant Unsigned cPOISON_PILL = 0xDEADBEEFu;
+  Unsigned(16) mCarriedType;
+  Bits(32) mFrontBits;
+  Bits(23) mBackBits;
+  
+  Unsigned(16) getMyType() {
+    AtomUtils au;
+    return (Unsigned(16)) au.getType(self.atomof);
+  }
+
+  Void massDieOff() {
+    mCarriedType = getMyType();
+    mFrontBits = cPOISON_PILL;
+  }
+
+  Void behave() {
+    super.behave();
+    
+    if (mCarriedType == getMyType() && mFrontBits == cPOISON_PILL) {
+      EventWindow ew;
+      for (EventWindow.SiteNum i = 1; i < 41; ++i) {
+        if (!ew.isAccessible(i)) continue;
+        Atom a = ew[i];
+        if (a as CPlate) a.miscarry();
+        else if (a as Self) a.massDieOff();
+        ew[i] = a.atomof;
+      }
+      ew[0] = Empty.instanceof;
+    }
+  }
+}
+
+/** Limited-slip swap line tractor with localization and lifetime
+   \symbol TK
+   \radius 3
+*/
+element SwapLine : UGridContent {
+  EventWindow ew;
+
+  typedef EventWindow.SiteNum SiteNum;
+
+  /*
+    Note the current plan is that these coordinates are all relative
+    to the POST-SWAP origin (the cplate root in the parent), even if
+    the origin has yet to be swapped.  We'll revisit this if needed as
+    we get experience with the swapline.
+   */
+  S2D mLocation;           // Where I am right now
+  S2D mMax;                // Swap area limit
+  SCoord mCopyX;           // Which column I am to copy
+  Bool mStarboardAllHere, mPortAllHere; // Recursively identify the back man 
+  Bool mJustNeedsSalute;   // A whole bit just for the last man off the parent
+  Bool mInKid;             // Set when we drop the cargo
+
+  Bool isUs(SiteNum sn, Self& dest) {
+    Atom a = ew[sn];
+    if (a as Self) {
+      if (!isPartOfMe(a)) return false;
+      dest = a;
+      return true;
+    }
+    return false;
+  }
+
+  Bool isMostStarboardRow() { return mLocation.getY() <= cORIGIN_Y; }
+  Bool isMostPortRow() { return mLocation.getY() >= mMax.getY(); }
+
+  Bool isStarboardAllToThisColumn() {
+    if (isMostStarboardRow()) return true; // Nobody there to be behind
+    if (isSelf(5)) return false;        // There's a man behind
+    Self temp;
+    if (isUs(2, temp) && !temp.mStarboardAllHere) 
+      return false;
+    if (isUs(7, temp) && !temp.mStarboardAllHere) 
+      return false;
+    return true;
+  }
+
+  Bool isPortAllToThisColumn() {
+    if (isMostPortRow()) return true;
+    if (isSelf(6)) return false;        // There's a man behind
+    Self temp;
+    if (isUs(3, temp) && !temp.mPortAllHere) return false;
+    if (isUs(8, temp) && !temp.mPortAllHere) return false;
+    return true;
+  }
+
+  // Do I believe the whole line is at least up to here?  I do if
+  // either (1) both all starboard and all port are here, or (2)
+  // anybody is past the line, meaning that they must have seen the
+  // release
+  Bool isABackMan() {
+    Self temp;
+    return (mStarboardAllHere && mPortAllHere) || 
+      isUs(7,temp) ||
+      isUs(8,temp);
+  }
+
+  Bool spreadTo(SiteNum sn, SiteNum sn2) {
+    C2D offset = ew.getCoordRaw(sn);
+    C2D newloc = offset.add(mLocation.toC2D());
+    Int newy = newloc.getY();
+    if (newy < cORIGIN_Y || newy > mMax.getY()) 
+      return false;
+
+    if (ew[sn] is Self || ew[sn2] is Self) { // maybe a few consistency checks wouldn't hurt
+      // but we're clueless right now // if (!isPartOfMe(ew[sn])) miscarry();
+      return false; // no spread
+    }
+
+    progress();  // Kid gets fresh start
+    Atom a = self.atomof;
+    Self& s = (Self&) a;
+    s.mLocation.setY(newy);
+    ew[sn] = a;
+    if (!mInKid && mCopyX >= cORIGIN_X) { // No trailer for the reaper
+      C2D cd = ew.getCoordRaw(sn);
+      cd.setX(cd.getX() - 1);
+      ew[cd] = Trailer.instanceof;
+    }
+    return true;
+  }
+
+  Bool isSelf(SiteNum sn) { return ew.isAccessible(sn) && isPartOfMe(ew[sn]) && ew[sn] is Self; }
+
+  Bool isNoLineStarboard() { return !isSelf(5) && !isSelf(2) && !isSelf(7); } // Nobody above
+  Bool isNoLinePort() { return !isSelf(6) && !isSelf(3) && !isSelf(8); } // Nobody below
+
+  Bool isAllAlone() { return isNoLineStarboard() && isNoLinePort(); }
+
+  Bool isEndCapStarboard() { return isNoLineStarboard() && isSelf(3); } // Nobody above and dressed below
+  Bool isEndCapPort() { return isNoLinePort() && isSelf(2); } // Nobody below and dressed above
+
+  Bool isMovableByPort() {
+    return 
+      //      mLocation.getX() > mMax.getX() + 1 ||  // Last steps not controlled here
+      mLocation.getY() >= mMax.getY() ||     // Max Y row is unconstrained port
+      isSelf(3) || isSelf(8);                // Port neigbhor is not lagging
+  }
+
+  Bool isMovableByStarboard() {
+    return 
+      //      mLocation.getX() > mMax.getX() + 1 ||  // Last steps not controlled here
+      mLocation.getY() <= cORIGIN_Y ||     // Min Y row is unconstrained starboard
+      isSelf(2) || isSelf(7);                // Starboard neighbor is not lagging
+  }
+
+  Bool isMovable() {
+    return isMovableByPort() && isMovableByStarboard();
+  }
+
+  typedef RockPaperScissors.RPSState RPSState;
+  /**
+     Return true if there's a tail commander at our 9 and he's NOT in
+     state \c rps.  Returns false if there's no tail commander there,
+     or there is but he's in some other RPSState.
+   */
+  Bool seeTailCommanderNotInState(RPSState rps) {
+    Atom a = ew[9];
+    if (a as CPlate) {  
+      if (isPartOfMe(a) && 
+          a.mPlateState == a.cPLATESTATE_COPY && 
+          a.isTailCommander()) {               // Officer on deck!
+        return !a.u.mCOPY.mSwapState.isThis(rps); // How do they look?
+      }
+    }
+    return false; 
+  }
+
+  Bool isAllDoneHere() {
+    if (mLocation.getX() < mMax.getX() + 1) return false;
+    if (mLocation.getX() > mMax.getX() + 1) return true;
+    RockPaperScissors obj;
+    if (seeTailCommanderNotInState(obj.cRPS_PAPER)) return false;
+    return true;
+  }
+
+  Bool needsSalute() {
+    RockPaperScissors obj;
+    return seeTailCommanderNotInState(obj.cRPS_PAPER);
+  }
+
+  Bool isMiscarried() {
+    return 
+      mLocation.getX() == S2D.Coord.maxof &&
+      mLocation.getY() == S2D.Coord.maxof &&
+      mMax.getX() == 0 &&
+      mMax.getY() == 0;
+  }
+  Void miscarry() {
+    mLocation.set(S2D.Coord.maxof, S2D.Coord.maxof);
+    mMax.set(0,0);
+  }
+
+  Void massDieOff() {
+    EventWindow ew;
+    for (EventWindow.SiteNum sn = 1; sn <= 41; ++sn) {
+
+      if (!ew.isAccessible(sn)) continue;
+
+      Atom a = ew[sn];
+      if (shareFate(a))
+        ew[sn] = a;
+    }
+  }
+
+  Void behave() {
+    super.behave();
+
+    // Was there a miscarriage?
+    if (isMiscarried()) {
+      massDieOff();
+      return;
+    }
+
+    // Am I just starting out?
+    if (!mInKid && mLocation.getX() == cORIGIN_X) {
+      // Yes, spread the line if need be
+      Bool worked = false;
+      worked = worked || spreadTo(3,8);
+      worked = worked || spreadTo(2,7);
+      if (worked) {
+        progress();
+        return;
+      }
+    }
+
+    // Am I absolutely all done?
+
+    if (mInKid && mLocation.getX() > mMax.getX()) {
+      // Yes.  Please make an orderly exit
+      if (isEndCapStarboard() ||     // I'm the end man from starboard
+          isEndCapPort() ||          // or port, or
+          isAllAlone()) {
+        ew[0] = Empty.instanceof;
+      }
+      return;
+    }
+
+    // Special rules if I the grim cplate reaper!
+    if (mCopyX < cORIGIN_X) {
+      if (isMovable()) {
+
+        // Cream (or otherwise process) the guy ahead of us
+        Atom a = ew[4];
+        if (a is CPlate)
+          ew[4] = Empty.instanceof;
+        else if (a as Trailer) {
+          AtomUtils au;
+          Atom kida = au.new(a.mCarriedType);
+          kida = au.writeCopy(kida, a.mFrontBits, 0, 32);
+          kida = au.writeCopy(kida, a.mBackBits, 32, 23);
+          ew[4] = kida;
+        }
+        progress();
+        if (mLocation.getX() == mMax.getX() + 1) {
+          mInKid = true;
+          mLocation.setX(mCopyX + 1);
+        } else {
+          mLocation.setX(mLocation.getX() + 1);
+          ew.swap(0,4);
+        }
+      }
+      return;
+    }
+
+    // Update line knowledge
+    Bool iAmReady = isAllDoneHere();
+    mStarboardAllHere = isStarboardAllToThisColumn();
+    mPortAllHere = isPortAllToThisColumn();
+    mJustNeedsSalute = isABackMan() && needsSalute();
+
+
+    // AT THE GENERATIONAL DIVIDE
+    if (mLocation.getX() == mMax.getX() + 1) {
+      Bool canGo =              // Yes.  Can I advance?
+        iAmReady &&      // Yes if I myself am done, and
+        isABackMan();           // Everybody else has gotten here 
+
+      if (!canGo) return;
+
+      mInKid = true;
+      mLocation.setX(mCopyX + 1);
+
+      // Time to rewrite the cargo as the kid!
+      Atom a = ew[1];
+      if (a as CPlate) {
+        a.enterPlateStateKID();
+      }
+      if (a as Content) {   // Content cargo gets offspring tag!
+        typedef Unsigned(MyTag.sizeof) TagNum;
+        TagNum tagn = (TagNum) a.getMyTag();
+        if (tagn == tagn.maxof) tagn = 1u;
+        else ++tagn;
+        a.setMyTag(tagn);
+        a.progress();  // Yes. This is progress.
+        // XXX compiler problem with it here:        ew[1] = a.atomof;
+      }
+      ew[1] = a; // XXX so putting it here
+    } else 
+      if (!isMovable()) return; // Normal case: Can I move?
+
+    // IN THE CHILD
+    if (mInKid) { //mLocation.getX() > mMax.getX() + 2) {
+      if (!isMovable()) return; // Normal case: Can I move?
+      // Swapping keeps the kid alive, kid alive, kid alive
+      // Swapping keeps the kid alive, it's really passive now.
+      Atom a = ew[4];
+      if (a as Content) {
+        a.progress();
+        // XXX compiler problem: ew[4] = a.atomof;
+      }
+      ew[4] = a;
+
+      // Yes.  Cargo has been dumped, and we're swapping by ones to
+      // keep the kid from falling behind
+
+      mLocation.setX(mLocation.getX() + 1);
+      progress();
+
+      // XXX NYI: Exit the kid and die cleanly!
+
+      ew.swap(0,4);
+      return;
+    }
+
+    // Next: Can we see plating that's not yet rock?
+    SiteNum sna[] = { 24, 19, 12, 20, 17, 7, 4, 8, 18 };
+    for (Unsigned i = 0u; i < sna.sizeof/SiteNum.sizeof; ++i) {
+      SiteNum sn = sna[i];
+      if (!ew.isAccessible(sn)) continue;
+      Atom a = ew[sn];
+      if (a as CPlate) {
+        if (isPartOfMe(a) && 
+            a.mPlateState == a.cPLATESTATE_COPY &&
+            !a.u.mCOPY.mSwapState.isRock())      
+          return;  // Block: We only swap over rocks
+      }
+    }
+
+    // All clear and not done.  Are we picking up cargo?
+    if (!mInKid && mLocation.getX() == mCopyX) { // Yes!
+      Atom a = ew[4];
+      if (a is Content) {
+        ew[1] = a;
+      } else {
+        // Here we have a problem.  This cargo isn't Content so we
+        // can't rely on it to be well-behaved during transport and
+        // storage.  So we are going to pack it in to the trailer,
+        // where there's only room for its first 55 state bits, rather
+        // than all 71.  If this atom doesn't like that, tough.  In
+        // the future, AtomUtils should be extended to report how many
+        // state bits an atom actually uses, so we could, for example,
+        // just shoot the thing, or replace with a default atom of
+        // itself, if it needs more.
+        AtomUtils au;
+        Trailer t = (Trailer) ew[1];
+        Int type = au.getType(a);
+        if (type < 0) type = au.getEmptyType(); // f it
+        t.mCarriedType = (Unsigned(16)) type;
+        t.mFrontBits = au.read(a, 0, 32);
+        t.mBackBits = (Bits(23)) au.read(a, 32, 23);
+        ew[1] = t.atomof;
+      }
+    }
+
+    // We are moving!
+    // Invalidate any inferred line dressing info..
+    mStarboardAllHere = isMostStarboardRow();
+    mPortAllHere = isMostPortRow();
+
+    mLocation.setX(mLocation.getX() + 1);
+    progress();
+
+    Atom temp = ew[4];
+    ew.swap(0,4);
+    ew.swap(1,0);
+    ew[1] = temp;
+  }
+
+  ARGB getColor(Unsigned selector) {
+    ARGB ret = {0xff}; // start with white
+
+    constant Unsigned cSMALL = 0x30;
+    constant Unsigned cLARGE = 0x80;
+
+    if (selector == 0u) return super.getColor(selector);
+
+    if (mLocation.getX() < mCopyX) return ret;
+    ret[3] -= cSMALL; // head towards yellow at pickup
+    if (mLocation.getX() == mCopyX) return ret;
+    ret[1] -= cSMALL; // head towards green after pickup
+
+    if (selector == 1u) return ret;
+
+    if (mLocation.getX() < mMax.getX() + 1) return ret;
+    if (!mPortAllHere) ret[1] -= cLARGE;    // distinguish line 
+    if (!mStarboardAllHere) ret[2] -= cLARGE; // dressing states
+
+    return ret;
+  }
+
+}
+
+/** Minimal eastbound swap line for demos
+    \symbol SE
+    \color #bb3
+    \radius 3
+*/
+element SimpleSwapLineEast {
+  Unsigned(4) mPos;
+  Bool mSetUp;
+  Void behave() {
+    EventWindow ew;
+    // Grow line if needed & possible
+    if (mPos < mPos.maxof && !mSetUp && ew.isAccessible(3))
+      if (ew[3] is Empty) {
+        Self s = self;
+        ++s.mPos;
+        ew[3] = s.atomof;
+        mSetUp = true;
+        return;
+      }
+    // Swap if room and no laggards
+    if (!ew.isAccessible(4)) ew[0] = Empty.instanceof;
+    else if (!(ew[5] is Self) && !(ew[6] is Self))
+      ew.swap(0,4);
+  }
+}

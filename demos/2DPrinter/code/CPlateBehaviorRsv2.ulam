@@ -1,0 +1,9 @@
+transient CPlateBehaviorRsv2 : CPlateBehavior {
+  typedef UGridContent.S2D S2D;
+  typedef S2D.Coord SCoord;
+
+  virtual Void behave(CPlate & cp) { 
+    cp.die();
+  }
+
+}
