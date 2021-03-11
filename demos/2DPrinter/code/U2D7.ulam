@@ -13,6 +13,11 @@ quark U2D7 {
     setY(y);
   }
 
+  Void set(C2D c) {
+    setX((Coord) c.getX());
+    setY((Coord) c.getY());
+  }
+
   Void setX(Int x) { mX = (Coord) x; }
   Void setY(Int y) { mY = (Coord) y; }
 

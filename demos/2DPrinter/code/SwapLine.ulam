@@ -1,4 +1,7 @@
-/** Limited-slip trailer place-holder \symbol TL \color #770 \radius 2
+/** Limited-slip trailer place-holder 
+    \symbol TL 
+    \color #662
+    \radius 2
 */
 element Trailer {
   constant Unsigned cPOISON_PILL = 0xDEADBEEFu;

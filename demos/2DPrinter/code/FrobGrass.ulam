@@ -2,7 +2,7 @@ local typedef EventWindow.SiteNum SiteNum;
 
 /** 'Intelligent' Grass inspired by FrobWorld growth dynamics.
   \symbol Gf
-  \color #33c
+  \color #3c3
   \radius 2
 */
 element FrobGrass : Content {
@@ -13,8 +13,9 @@ element FrobGrass : Content {
   @Override
   ARGB getColor(Unsigned selector) {
     ColorUtils cu;
-    ARGB c1 = super.getColor(selector);
-    return cu.modify(c1, 100u-mRootDistance*10u);
+    ARGB c1 = cu.color(80,255,80);
+    ARGB c2 = cu.color(80,80,255);
+    return cu.between(c1, c2, 100u-mRootDistance*10u);
   }
 
   Void behave() {
@@ -23,7 +24,7 @@ element FrobGrass : Content {
 
     // Scan neighborhood
     FrobGrassState state;
-    state.init();
+    state.init(self);
     state.scan();
 
     // Stay quiet in repro
@@ -76,6 +77,7 @@ element FrobGrass : Content {
 
 
 transient FrobGrassState : SiteVisitor {
+  FrobGrass mCenterGrass;
   typedef FrobGrass.Distance Distance;
   WindowScanner mWS;
   WindowScanner.Category mReproCat;
@@ -102,7 +104,8 @@ transient FrobGrassState : SiteVisitor {
     return SiteNum.maxof;
   }
 
-  Void init() {
+  Void init(FrobGrass theCenter) {
+    mCenterGrass = theCenter;
     mWS.resetCategories();
     mReproCat = mWS.allocateCategory();
     mEmptyCat = mWS.allocateCategory();
@@ -122,7 +125,8 @@ transient FrobGrassState : SiteVisitor {
       if (a is Empty) ws.categorize(sn, mEmptyCat);
       else if (a as FrobGrass) {
         ws.categorize(sn, mGrassCat);
-        ws.categorize(sn, mRootDCat, FrobGrass.Distance.maxof - a.mRootDistance);
+        if (a.getMyTag() == mCenterGrass.getMyTag())
+          ws.categorize(sn, mRootDCat, FrobGrass.Distance.maxof - a.mRootDistance);
       }
     }
   }

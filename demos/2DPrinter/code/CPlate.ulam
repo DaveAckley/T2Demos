@@ -4,6 +4,19 @@ quark CStateGROW {
   SCoord mMinHeadRow, mMaxTailRow;
 }
 
+quark CStatePROBE {
+  typedef UGridContent.S2D S2D;
+  typedef Unary(2) ProbeState;
+
+  constant ProbeState cPROBE_EMIT = 0u; // Need to emit probe
+  constant ProbeState cPROBE_WAIT = 1u; // Waiting for probe to report
+  constant ProbeState cPROBE_DONE = 2u; // Probe reports success
+
+  Bool mHeadCommander, mTailCommander;
+  ProbeState mProbeState;
+  //Bits(3) mReserved;
+}
+
 quark CStateCOPY {
   typedef UGridContent.S2D S2D;
   typedef S2D.Coord SCoord;
@@ -20,6 +33,7 @@ quark CStateKID {
 
 union CPlatePhaseState {
   CStateGROW mGROW;
+  CStatePROBE mPROBE;
   CStateCOPY mCOPY;
   CStateKID mKID;
 }
@@ -59,33 +73,49 @@ element CPlate : UGridContent {
     f.fail(code);
   }
 
-  typedef Unsigned(1) OneBit;
   typedef Unsigned(4) SourceSN;
 
   S2D mLocation;
   SourceSN mSource = SourceSN.maxof;
 
   S2D mMax;
-  CPlatePhaseState u;
   PlateState mPlateState;
+  CPlatePhaseState u;
 
   constant PlateState cPLATESTATE_GROW = 0u;
-  constant PlateState cPLATESTATE_COPY = 1u;
-  constant PlateState cPLATESTATE_KID = 2u;
-  constant PlateState cPLATESTATE_RSV2 = 3u;
+  constant PlateState cPLATESTATE_PROBE = 1u;
+  constant PlateState cPLATESTATE_COPY = 2u;
+  constant PlateState cPLATESTATE_KID = 3u;
+
+  CStatePROBE & asPROBE() {
+    assertPS(cPLATESTATE_PROBE);
+    return u.mPROBE;
+  }
 
   Void assertPS(PlateState ps) { if (mPlateState != ps) die(); }
 
   Void advancePlateState(PlateState toPS) {
-    if (toPS == cPLATESTATE_COPY) enterPlateStateCOPY();
+    if (toPS == cPLATESTATE_PROBE) enterPlateStatePROBE();
+    else if (toPS == cPLATESTATE_COPY) enterPlateStateCOPY();
     else if (toPS == cPLATESTATE_KID) enterPlateStateKID();
     else die();
     progress();
   }
 
-  Void enterPlateStateCOPY() {
+  Void enterPlateStatePROBE() {
     assertPS(cPLATESTATE_GROW);
     Bool headCommander = isHeadCommander(); // read under _GROW rules
+    Bool tailCommander = isTailCommander();
+
+    mPlateState = cPLATESTATE_PROBE;
+    u.mPROBE.mHeadCommander = headCommander; // write under _COPY rules
+    u.mPROBE.mTailCommander = tailCommander;
+    u.mPROBE.mProbeState = u.mPROBE.cPROBE_EMIT;
+  }
+
+  Void enterPlateStateCOPY() {
+    assertPS(cPLATESTATE_PROBE);
+    Bool headCommander = isHeadCommander(); // read under _PROBE rules
     Bool tailCommander = isTailCommander();
 
     mPlateState = cPLATESTATE_COPY;
@@ -97,9 +127,12 @@ element CPlate : UGridContent {
   }
 
   Void enterPlateStateKID() {
-    assertPS(cPLATESTATE_COPY);
-    mPlateState = cPLATESTATE_KID;
-    u.mKID.mReserved = 0;
+    if (mPlateState != cPLATESTATE_COPY)
+      miscarry();
+    else {
+      mPlateState = cPLATESTATE_KID;
+      u.mKID.mReserved = 0;
+    }
   }
 
   SCoord getMinHeadRow() { assertPS(cPLATESTATE_GROW); return u.mGROW.mMinHeadRow; }
@@ -122,6 +155,8 @@ element CPlate : UGridContent {
     if (mPlateState == cPLATESTATE_GROW)
       return (mLocation.getX() == cORIGIN_X &&
               mLocation.getY() == getMinHeadRow());
+    if (mPlateState == cPLATESTATE_PROBE)
+      return u.mPROBE.mHeadCommander;
     if (mPlateState == cPLATESTATE_COPY)
       return u.mCOPY.mHeadCommander;
     if (mPlateState == cPLATESTATE_KID)
@@ -135,6 +170,8 @@ element CPlate : UGridContent {
     if (mPlateState == cPLATESTATE_GROW)
       return (mLocation.getX() == mMax.getX() &&
               mLocation.getY() == u.mGROW.mMaxTailRow);
+    if (mPlateState == cPLATESTATE_PROBE)
+      return u.mPROBE.mTailCommander;
     if (mPlateState == cPLATESTATE_COPY)
       return u.mCOPY.mTailCommander;
     if (mPlateState == cPLATESTATE_KID)
@@ -174,6 +211,7 @@ element CPlate : UGridContent {
       if (a as CPlate) a.miscarry();
       else if (a as SwapLine) a.miscarry();
       else if (a as Trailer) a.massDieOff();
+      else if (a as Probe) a.miscarry();
       else continue;
       ew[i] = a;
     }
@@ -196,16 +234,16 @@ element CPlate : UGridContent {
       CPlateBehaviorGrow cpb;
       return cpb.behave(self);
     }
+    if (mPlateState == cPLATESTATE_PROBE) {
+      CPlateBehaviorProbe cpb;
+      return cpb.behave(self);
+    }
     if (mPlateState == cPLATESTATE_COPY) {
       CPlateBehaviorCopy cpb;
       return cpb.behave(self);
     }
     if (mPlateState == cPLATESTATE_KID) {
       CPlateBehaviorKid cpb;
-      return cpb.behave(self);
-    }
-    if (mPlateState == cPLATESTATE_RSV2) {
-      CPlateBehaviorRsv2 cpb;
       return cpb.behave(self);
     }
     die();
@@ -232,6 +270,8 @@ element CPlate : UGridContent {
       delta[1] = -shift;
       delta[2] = -shift;
       delta[3] = shift;
+    } else if (mPlateState == cPLATESTATE_PROBE) {
+      ret = cu.color(50,100,100);
     } else if (mPlateState == cPLATESTATE_COPY) {
       ret = cu.color(150,150,150);
       delta[1] = -shift;
@@ -255,6 +295,7 @@ element CPlate : UGridContent {
       ret[i] = (Unsigned(8)) (ret[i] + bd*delta[i]);
     return ret;
   }
+
 }
 
 quark XCPlate : RotateContent {
@@ -294,6 +335,7 @@ element ReplicationTerminator {
     if (a as CPlate) a.miscarry();
     else if (a as SwapLine) a.miscarry();
     else if (a as Trailer) a.massDieOff();
+    else if (a as Probe) a.miscarry();
     else if (!random.oneIn(500)) return; // We expire eventually
 
     ew[1] = a;

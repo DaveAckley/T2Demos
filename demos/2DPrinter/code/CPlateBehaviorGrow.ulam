@@ -7,7 +7,7 @@ transient CPlateBehaviorGrow : CPlateBehavior {
     if (cp.mSource==0u && mKidSN > 0) { 
       Random random;
       if (cp.boredom() >= 5u && random.oneIn(10)) {
-        cp.enterPlateStateCOPY();
+        cp.advancePlateState(CPlate.cPLATESTATE_PROBE); // GO GO GO
         return true;
       }
     }
@@ -44,9 +44,12 @@ transient CPlateBehaviorGrow : CPlateBehavior {
     C2D emptyC = ew.getCoordRaw(mEmptySN);
     C2D ourContentC = ew.getCoordRaw(mOurContentSN);
     if (emptyC.manhattanDistance(ourContentC) > 2u) 
-      return false; // Too far
+      return false; // Too far from content
 
     C2D origin;
+    if (emptyC.manhattanDistance(origin) > 2u) 
+      return false; // Too far from us
+
     C2D negC = origin.subtract(emptyC);
     typedef CPlate.SourceSN SourceSN;
     SourceSN reverseSN = (SourceSN) ew.getSiteNumberRaw(negC);

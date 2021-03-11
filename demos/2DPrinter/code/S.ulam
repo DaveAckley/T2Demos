@@ -5,7 +5,7 @@ element S {
   Void behave() {
     EventWindow ew;
     FrobGrass fg;
-    fg.setBoredom(8u);
+    fg.setBoredom(9u);
     ew[0] = fg;
     fg.progress();
     fg.mRootDistance++;

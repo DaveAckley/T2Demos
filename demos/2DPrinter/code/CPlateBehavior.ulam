@@ -97,5 +97,20 @@ transient CPlateBehavior {
     }
     return false;
   }
+
+  SiteNum reversePtr(SiteNum od) {
+    MDist md;
+    C2D coord = md.getSiteCoord(od);   // Their coord relative to us
+    C2D icoord = coord*(C2D.Coord)-1;  // Our coord relative to them
+    return md.getSiteNumber(icoord);   // Our SN relative to them
+  }
+
+  /* Wrong approach?
+  Bool isEmptyNukingProbes(Unsigned sn) {
+    if (ew[sn] is Probe) ew[sn] = Empty.instanceof;
+    return ew[sn] is Empty;
+  }
+  */
+
 }
 
