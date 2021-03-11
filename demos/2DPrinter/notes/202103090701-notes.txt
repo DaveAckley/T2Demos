@@ -1,4 +1,4 @@
-{2}  -*- text -*- 
+{6}  -*- text -*- 
 [0:
 
 Tue Mar  9 07:01:43 2021 OK, let's try to get the 2D printer working
@@ -20,3 +20,78 @@ Tue Mar  9 07:16:46 2021 So, where's the 2D printer code??
 :1]
 
 :0]
+[2:
+
+Wed Mar 10 10:04:32 2021 OK, so we
+
+ - unrotted the 2D printer code and got it working,
+
+ - created FrobGrass.ulam to grow out a shape to print, and
+
+ - got the grass 'root' to issue random reproduce-in-direction cmds.
+
+And it's working, sort of, but with a ton of failed repros and long
+timeouts, as the random repro attempts are highly likely to crash into
+each other.
+
+So my goal now is to make a 'probe phase' that happens between the
+GROW and COPY phases, that emits a 'probe particle' from the head
+commander which scans forward checking for sufficient empty space
+based on the measured size of the object to be copied.
+
+The probe somehow returns a 'occupied' vs 'open' indicator to the head
+commander, which then either miscarries or advances to the COPY phase
+as before.[3:
+
+Wed Mar 10 15:08:12 2021 OK so let's push on probe ideas.  We've got a
+mid-repro object here.  The (to-be) head commander is at (3,3); the
+(to-be) tail commander is at (9,8); both see the max as (9,10).  The
+spot just dead ahead of the head commander would be (2,3) in these
+coords.  Suppose we put a probe there and told it it was at (9,3), and
+told it to flood probe based on a (9,10) max.
+
+Now it's all messed up because I decided to have the head commander at
+(3,Y) instead of (0,Y) so there's going to be some weird offsets and
+stuff.  But pushing on for now.
+
+Or take a simpler case, just a 3x3 hollow Block, heading west (the
+'native' direction).  We have
+
+  headCommander mLocation (3,3)  mMax (9,7)
+  tailCommander mLocation (9,5)  mMax (9,7)
+
+implied NW corner (3,1)
+implied NE corner (9,1)
+implied SE corner (9,7)
+implied SW corner (3,7)
+
+And we'll need something like double the x to grow into.  Say our
+'probe box' size is ..
+
+[4:
+
+Wed Mar 10 15:48:00 2021 Why again, o why, did we do this
+
+  constant SCoord cORIGIN_X = 3u;
+  constant SCoord cORIGIN_Y = 1u;
+
+in UGridContent.ulam?
+
+If we switch
+
+:4]
+
+:3]
+
+:2]
+[5:
+
+Thu Mar 11 10:17:52 2021 OK so we have a Probe thing flooding a
+plausible box ahead of the copy path, and we need to decide how to
+deal with it while we copy.
+
+Actually, maybe we should simplify it first.  Right now it's
+maintaining a parent tree, but all we really need is a root flag.. 
+
+
+:5]
