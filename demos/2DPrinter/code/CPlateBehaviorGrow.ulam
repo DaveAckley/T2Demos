@@ -163,6 +163,12 @@ transient CPlateBehaviorGrow : CPlateBehavior {
   }
 
   virtual Void behave(CPlate & cp) { 
+
+    if (sizeHasOverflowed(cp)) {
+      cp.emergencyDeath();
+      return;
+    }
+
     doScan(cp);
     assessBoredom(cp);
     if (dieWithoutCPlates(cp)) 

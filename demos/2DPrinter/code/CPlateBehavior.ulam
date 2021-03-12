@@ -72,6 +72,12 @@ transient CPlateBehavior {
       cp.setBoredom(assessedBoredom);    // Guess we're not as bored as we thought
   }
 
+  Bool sizeHasOverflowed(CPlate & cp) {
+    return
+      cp.mLocation.mX == cp.mLocation.mX.maxof ||
+      cp.mLocation.mY == cp.mLocation.mY.maxof;
+  }
+
   Bool dieWithoutCPlates(CPlate & cp) {
     if (cp.mSource != cp.mSource.minof && // If we're not the source, and
         cp.mSource != cp.mSource.maxof && // not destined to be the source,
