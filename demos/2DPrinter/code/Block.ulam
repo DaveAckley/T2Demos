@@ -1,34 +1,10 @@
-/** A Block is a Blue thing that acts like content
+/** Generic printable item.
     \symbol Bl
-    \color #77c
-    \radius 1
-      (Not zero to help spread QID death.)
-*/
-element Block : Content
-{
+    \color #55b
+ */
+element Block : Content {
   Void behave() {
     super.behave();
-    if (!isDead())
-      progress();
-  }
-}
-
-/** A GenBlock decays into a Block with a random tag
-    \symbol GB
-    \color #55b
-    \radius 0
-*/
-element GenBlock {
-  Random random;
-  EventWindow ew;
-
-  Void behave() {
-    typedef Block.Super BlockSuper;
-    typedef Content.MyTag MyTag;
-    BlockSuper bs;
-    Block b;
-    MyTag tag = (MyTag) random.bits(bs.cQID_TAG_BITS);
-    b.setMyTag(tag);
-    ew[0] = b;
+    if (update()) return;
   }
 }

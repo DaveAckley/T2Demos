@@ -1,7 +1,7 @@
 /** A base class for Content that can have any of four persistent
     rotational symmetries of the event window
 */
-quark RotateContent : Content {
+quark RotateSPOT : SPOT {
   // Local typedefs
   typedef Unsigned(2) WindowRotation;
 
@@ -13,20 +13,29 @@ quark RotateContent : Content {
   constant WindowRotation c270R = 3u;
 
   WindowRotation getWindowRotation() { return mRot; }
+
+  WindowRotation setRandomWindowRotation() {
+    typedef WindowRotation WR;
+    Random random;
+    WR wr = (WR) random.between(WR.minof,WR.maxof);
+    setWindowRotation(wr);
+    return wr;
+  }
+
   Void setWindowRotation(WindowRotation wr) { 
     mRot = wr; 
     applyCurrentWindowRotation();
   }
+
   Void applyCurrentWindowRotation() {
     EventWindow ew;
     ew.changeSymmetry(mRot);
-
   }
 
-  Void behave() {
-    super.behave();
-    if (isDead()) return;
+  Bool update() {
+    if (super.update()) return true;
     applyCurrentWindowRotation();
+    return false;
   }
 
 }

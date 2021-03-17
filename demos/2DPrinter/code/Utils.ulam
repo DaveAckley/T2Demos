@@ -1,0 +1,10 @@
+quark Utils : Parms {
+  SN reversePtr(SN od) {
+    if (!ew.isAccessible(od)) return Parms.SN.maxof; // Illegal reverses to illegal
+    C2D coord = md.getSiteCoord(od);   // Their coord relative to us
+    C2D icoord = coord*(C2D.Coord)-1;  // Our coord relative to them
+    return md.getSiteNumber(icoord);   // Our SN relative to them
+  }
+
+}
+

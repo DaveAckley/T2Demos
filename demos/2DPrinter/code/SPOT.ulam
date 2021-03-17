@@ -1,0 +1,127 @@
+quark SPOTStage {
+  constant Unsigned cEXEUNT_OMNES = (Unsigned) (Unsigned.maxof>>2);
+  constant Unsigned cREPORT_OUT = (Unsigned) (Unsigned.maxof>>1);
+  constant Unsigned cEMERGENCY_ABORT = Unsigned.maxof;
+
+  virtual Unsigned currentStage() ;     
+  virtual Void advanceToStage(Unsigned newStage) ;
+}
+
+quark SPOTStageBits(Unsigned(5) bits) : SPOTStage {
+  constant Unsigned cSHIFT = Unsigned.sizeof - bits;
+  typedef Unsigned(bits) SizedStage;
+  SizedStage mStage;
+
+  Unsigned stagify(SizedStage stg) {
+    // We fill with 1s to allow equality with cEXEUNT_OMNES and cEMERGENCY_ABORT
+    return (Unsigned) ((stg<<cSHIFT)|(Unsigned.maxof>>(Unsigned.sizeof-cSHIFT)));
+  }
+
+  SizedStage unstagify(Unsigned stage) {
+    return (SizedStage) (stage>>cSHIFT);
+  }
+
+  virtual Unsigned currentStage() { return stagify(mStage); }
+
+  virtual Void advanceToStage(Unsigned newStage) {
+    SizedStage newS = (SizedStage) (newStage>>cSHIFT);
+    if (newS < mStage) { Fail f; f.fail(); }
+    else if (newS > mStage) mStage = newS;
+  }
+  
+}
+
+/** Staged Priority Operations Team: Composable sequenced parallel computations
+    \version 1
+    \author Dave Ackley
+    \license GPL3
+ */
+quark SPOT + SPOTStage {
+  typedef EventWindow.SiteNum SN;
+
+  /** The priority of this SPOT */
+  virtual Int priority() ;    
+
+  /** The sites that stage advances propagate to */
+  virtual SiteIterator theStage() ;
+  
+  /** All sites that might be involved in operations */
+  virtual SiteIterator neighborhood() ; 
+
+  /** 
+      true iff ew[sn] is something that causes us to go passive.
+
+      By default, only higher priority SPOT causes us to passivate. 
+  */
+  virtual Bool isPassivator(SN sn) {
+    EventWindow ew;
+    Atom & a = ew[sn];
+    if (a as Self) {
+      return a.priority() > self.priority();
+    }
+    return false;
+  }
+
+  /** true iff ew[sn] is part of our computation; false for illegal SN */
+  virtual Bool isProgram(SN sn) ;    
+
+  /** True when it's time to fold up shop */
+  virtual Bool reportOut(Atom & ar) ;
+  
+  virtual Bool update() {
+    ByteStreamLogger log;
+    EventWindow ew;
+    
+    Unsigned stage = currentStage();
+    Unsigned newStage = stage;
+
+    // Scan first and solely for priority check
+    for (SiteIterator si = neighborhood(); si.hasNext();) {
+      DebugUtils du;
+      SN sn = si.next();
+      if (isPassivator(sn)) {
+        //du.print(sn);
+        return true; // Claiming true so caller won't be tempted to act further.
+      }
+    }
+
+    // Scan for report out
+    if (stage >= cEXEUNT_OMNES && stage < cREPORT_OUT) {
+      for (SiteIterator si = neighborhood(); si.hasNext();) {
+        SN sn = si.next();
+        if (reportOut(ew[sn]))
+          newStage = cREPORT_OUT; // Also note if time to report out
+      }
+    }
+
+    Bool modified = false;
+    if (newStage != stage) {
+      advanceToStage(stage = newStage);
+      modified = true;
+    }
+
+    // Scan for stage propagation
+    for (SiteIterator si = theStage(); si.hasNext();) {
+      SN sn = si.next();
+      //log.printf("stage prop %d sn stage %x\n",sn,stage);
+      if (isProgram(sn)) {
+        Self & a = (Self&) ew[sn];
+        //log.printf("isProc sn %d us %x them %x\n",sn,stage,a.currentStage());
+        if (a.currentStage() < stage) {
+          a.advanceToStage(stage);
+          modified = true;
+          // But keep going to maintain isotropy (assuming nghb is..)
+        }
+      }
+    }
+
+    if (stage == cEMERGENCY_ABORT) {
+      ew[0] = Empty.instanceof; 
+      modified = true;
+    }
+
+    return modified;
+  }
+  
+}
+

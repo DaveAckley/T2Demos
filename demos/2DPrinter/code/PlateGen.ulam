@@ -1,0 +1,21 @@
+quark PlateGen : Content + Parms {
+  @Override
+  virtual Int priority() { return cCONTENT_PRIORITY; }
+  Void behave() {
+    EventWindow ew;
+    Plate p;
+    p.setWindowRotation(mRot);
+    p.mSource = 0u;         // You are the root!
+    p.mLocation.init(0,0);  // And for now the center!
+    ew[0] = p;
+  }
+}
+
+/** Decays into a Plate reproducing west \symbol WX */
+element WestPlateGen : PlateGen {Void behave() { setWindowRotation(c000R); super.behave(); } }
+/** Decays into a Plate reproducing north \symbol NX */
+element NorthPlateGen : PlateGen {Void behave() {setWindowRotation(c090R); super.behave(); } }
+/** Decays into a Plate reproducing east \symbol EX */
+element EastPlateGen : PlateGen {Void behave() { setWindowRotation(c180R); super.behave(); } }
+/** Decays into a Plate reproducing south \symbol SX */
+element SouthPlateGen : PlateGen {Void behave() {setWindowRotation(c270R); super.behave(); } }

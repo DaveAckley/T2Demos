@@ -1,0 +1,18 @@
+quark Printer : PrintBase + SPOTStageBits(2u) {
+  virtual Int priority() { return cPRINTER_PRIORITY; }
+  virtual Bool die() ;    // However you do it, and return true when done
+  virtual Bool isDead() ; // However you tell
+
+  Bool processDeath() {
+    if (!isDead()) return false;
+    for (SiteIterator si = neighborhood(); si.hasNext();) {
+      SN sn = si.next();
+      C2D c = md.getSiteCoord(sn);
+      Atom & a = ew[sn];
+      if (a as Self) a.die();
+    }
+    ew[0] = Empty.instanceof;
+    return true;
+  }
+
+}

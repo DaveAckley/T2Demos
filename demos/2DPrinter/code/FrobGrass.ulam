@@ -1,14 +1,18 @@
 local typedef EventWindow.SiteNum SiteNum;
+local typedef QID(0xFEEDF00Du, 5, 4, 15) MyQID;
 
 /** 'Intelligent' Grass inspired by FrobWorld growth dynamics.
   \symbol Gf
   \color #3c3
   \radius 2
 */
-element FrobGrass : Content {
+element FrobGrass : Content + MyQID {
   typedef Unsigned(3) Distance;
   Distance mRootDistance;
-  EventWindow ew;
+  Bool mDead;
+
+  Bool die() { mDead = true; return true; }
+  Bool isDead() { return mDead; }
 
   @Override
   ARGB getColor(Unsigned selector) {
@@ -19,8 +23,14 @@ element FrobGrass : Content {
   }
 
   Void behave() {
-    super.behave();
-    if (isDead()) return;
+    self.Content.behave();
+    self.MyQID.behave();
+    if (self.MyQID.isDead()) return;
+    if (update()) return;
+  }
+
+  Bool update() {
+    if (super.update()) return true;
 
     // Scan neighborhood
     FrobGrassState state;
@@ -30,7 +40,7 @@ element FrobGrass : Content {
     // Stay quiet in repro
     if (state.isRepro()) {
       progress();
-      return;
+      return true;
     }
 
     // Update non-root distances
@@ -42,14 +52,14 @@ element FrobGrass : Content {
       if (boredom() >= 10u) {
         SiteNum sn = state.chosenEmpty();
         if (sn != sn.maxof) {  // Have spot?
-          typedef RotateContent.WindowRotation Rot;
+          typedef RotateSPOT.WindowRotation Rot;
           Random r;
           Rot rot = (Rot) r.between(Rot.minof, Rot.maxof);
           which (rot) {
-            case 0u: { ew[sn] = NorthXCPlate.instanceof; }
-            case 1u: { ew[sn] = EastXCPlate.instanceof; }
-            case 2u: { ew[sn] = SouthXCPlate.instanceof; }
-            case 3u: { ew[sn] = WestXCPlate.instanceof; }
+            case 0u: { ew[sn] = NorthPlateGen.instanceof; }
+            case 1u: { ew[sn] = EastPlateGen.instanceof; }
+            case 2u: { ew[sn] = SouthPlateGen.instanceof; }
+            case 3u: { ew[sn] = WestPlateGen.instanceof; }
           }
           progress(); // We tried
         }
@@ -59,7 +69,7 @@ element FrobGrass : Content {
     // Die if overextended
     if (mRootDistance == Distance.maxof) {
       ew[0] = Empty.instanceof;
-      return;
+      return die();
     }
 
     // Perhaps grow
@@ -69,9 +79,10 @@ element FrobGrass : Content {
         Self s = self;
         s.mRootDistance++;
         ew[growSite] = s;
-        return;
+        return true;
       }
     }
+    return false;
   }
 }
 
@@ -120,8 +131,7 @@ transient FrobGrassState : SiteVisitor {
   // SiteVisitor API
   @Override
   virtual Void visit(WindowScanner& ws, Atom & a, SiteNum sn) {
-    if (a is CPlate || a is SwapLine) ws.categorize(sn, mReproCat);
-    else if (sn <= 4u) { // Only check out to radius one for grass business
+    if (sn <= 4u) { // Only check out to radius one for grass business
       if (a is Empty) ws.categorize(sn, mEmptyCat);
       else if (a as FrobGrass) {
         ws.categorize(sn, mGrassCat);

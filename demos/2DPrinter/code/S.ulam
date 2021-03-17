@@ -1,5 +1,8 @@
-/** 2D Printer (2016).  
+/** 2D Printer, gen 2.  
   \symbol S
+  \author Dave Ackley
+  \license lgpl
+  \copyright 2021t Living Computation Foundation
 */
 element S {
   Void behave() {
@@ -11,5 +14,20 @@ element S {
     fg.mRootDistance++;
     ew[1] = fg;
     ew[4] = fg;
+
+    /*
+    Block b;
+    RotateSPOT.WindowRotation wr = b.setRandomWindowRotation();
+    //RotateSPOT.WindowRotation wr = b.getWindowRotation();
+    ew[0] = b;
+    ew[2] = b;
+    ew[5] = b;
+    ew[33] = b;
+    Plate p;
+    p.setWindowRotation(wr);
+    p.mSource = 0u;         // You are the root!
+    p.mLocation.init(0,0);  // And for now the center!
+    ew[1] = p;
+    */
   }
 }

@@ -1,23 +1,7 @@
-/**
-   A base class for content participating in the reproducing cell
-   demo.
- */
-quark Content : QID(0xFEEDF00Du, 5, 4, 15) {
-  constant Unsigned cQID_TAG_BITS = 5;
-  constant Unsigned cQID_DOG_BITS = 4;
-  constant Unsigned cQID_DOG_TRIGGER = 14;
-
-  // Export instantiated template types
-  typedef Super.MyTag MyTag;
-  typedef Super.MyDog MyDog;
-
-  /** If I am directly behind a SwapLine, I am likely being
-      transported, so I should not, for example, get upset if some of
-      my usual constraints are being violated. */
-  Bool isCargo() {
-    EventWindow ew;
-    return ew[4] is SwapLine;
-  }
-
-
+quark Content : PrintBase + SPOTStageBits(2u) {
+  virtual Int priority() { return cCONTENT_PRIORITY; }
+  virtual SiteIterator theStage() { return neighborhood(); }
+  virtual SiteIterator neighborhood() { return SiteIterator.instanceof(cEWR2x); }
+  virtual Bool isProgram(SN sn) { return EventWindow.instanceof[sn] is Self; }
+  virtual Bool reportOut(Atom & ar) { return false; }
 }

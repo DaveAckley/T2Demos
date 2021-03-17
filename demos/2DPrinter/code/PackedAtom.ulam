@@ -1,0 +1,47 @@
+local constant Unsigned cFRONT_BITS = 12u;
+local constant Unsigned cMID_BITS = 27u;
+local constant Unsigned cBACK_BITS = 71u-cFRONT_BITS-cMID_BITS;
+local constant Unsigned cFRONT_POS = 0u;
+local constant Unsigned cMID_POS = cFRONT_POS + cFRONT_BITS;
+local constant Unsigned cBACK_POS = cMID_POS + cMID_BITS;
+local typedef Bits(16) AtomType;
+local typedef Bits(cFRONT_BITS) FrontBits;
+local typedef Bits(cMID_BITS) MidBits;
+local typedef Bits(cBACK_BITS) BackBits;
+
+quark PackedAtom {
+  AtomUtils au;
+  Bool packAtom(Atom a, PackedFront & pf, PackedMid & pm, PackedBack & pb) {
+    Int type = au.getType(a);
+    if (type < 0) { // Invalid/corrupt atom
+      pf.mType = au.getEmptyType();
+      return false;
+    }
+    pf.mType = (AtomType) type;
+    pf.mBits = (FrontBits) au.read(a, cFRONT_POS, cFRONT_BITS);
+    pm.mBits = (MidBits)   au.read(a, cMID_POS,   cMID_BITS);
+    pb.mBits = (BackBits)  au.read(a, cBACK_POS,  cBACK_BITS);
+    return true;
+  }
+
+  Atom unpackAtom(PackedFront pf, PackedMid pm, PackedBack pb) {
+    Atom a = au.new((Int) pf.mType);
+    a = au.writeCopy(a, pf.mBits, cFRONT_POS, cFRONT_BITS);
+    a = au.writeCopy(a, pm.mBits, cMID_POS,   cMID_BITS);
+    a = au.writeCopy(a, pb.mBits, cBACK_POS,  cBACK_BITS);
+    return a;
+  }
+}
+
+quark PackedFront : PackedAtom {
+  AtomType mType;
+  FrontBits mBits;
+}
+
+quark PackedMid : PackedAtom {
+  MidBits mBits;
+}
+
+quark PackedBack : PackedAtom {
+  BackBits mBits;
+}

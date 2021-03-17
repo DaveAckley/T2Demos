@@ -1,0 +1,13 @@
+quark PrintBase : RotateSPOT + Parms {
+  ////SPOT API
+  //virtual Int priority() ;
+  virtual SiteIterator theStage() { return neighborhood(); }
+  virtual SiteIterator neighborhood() { return SiteIterator.instanceof(cEWR4); }
+  virtual Bool isProgram(SN sn) { return EventWindow.instanceof[sn] is Self; }
+  virtual Bool reportOut(Atom & ar) { return false; }
+  ////
+
+  ////PRINTBASE API
+  virtual Void helloClone() { /* Nothing by default */ }
+  
+}

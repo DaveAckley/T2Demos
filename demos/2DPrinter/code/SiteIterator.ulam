@@ -1,0 +1,37 @@
+transient SiteIterator {
+  ByteStreamString mStream;
+  Int mNext;
+  typedef EventWindow.Symmetry Sym;
+  Sym mSym;
+  typedef EventWindow.SiteNum SN;
+  Self(String sites)
+  {
+    init(sites, 0u);
+  }
+  
+  Self(String sites, Sym sym)
+  {
+    init(sites,sym);
+  }
+
+  Void init(String sites, Sym sym)
+  {
+    ByteStreamString bss(sites);
+    mStream = bss;
+    mSym = sym;
+    mNext = mStream.readByte();
+  }
+
+  virtual Bool hasNext() { return mNext >= 0; }
+
+  virtual SN next() {
+    if (!hasNext()) { Fail f; f.fail(); }
+    SN ret = (SN) mNext;
+    mNext = mStream.readByte();
+    if (mSym!=0u) {
+      MDist md;
+      ret = md.symMap(ret, mSym);
+    }
+    return ret;
+  }
+}

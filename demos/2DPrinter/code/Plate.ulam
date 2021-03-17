@@ -1,0 +1,310 @@
+/** Plating surrounding item during printing
+    \symbol Pl
+    \color #722
+ */
+element Plate : Printer + Utils {
+  B2D mLocation;  // Our location (source based or zero based depending on PlatePhase)
+  B2D mMin;       // Min coord or object size depending on PlatePhase
+  B2D mMax;       // Max coord (min-origin) or (0-origin) depending on PlatePhase
+  typedef Unsigned(B2D.cBITS-1u) ObjectDimension;
+  ObjectDimension mTruckRolls; // For head commander
+  SN mSource;
+  Bool mHeadCommander; // I release the trucks
+
+  virtual Int priority() { return mHeadCommander ? cTRUCK_PRIORITY : super.priority(); }
+  
+  typedef Unsigned(2) TreePhase;
+  constant TreePhase cTREEPHASE_DNFLOOD = 0u;  // Surrounding content and localizing, new kids
+  constant TreePhase cTREEPHASE_UPBOUND = 1u;  // Min and max bounds up, no kids or kids done
+  constant TreePhase cTREEPHASE_DNBOUND = 2u;  // mMin,mLocation,mMax-=globalmin, down, new kids
+  constant TreePhase cTREEPHASE_UPREADY = 3u;  // Kids are ready
+  TreePhase mTreePhase;
+
+  //// PrintBase API
+  @Override
+  virtual Void helloClone() {
+    mTreePhase = cTREEPHASE_UPREADY;  // Just some safely passive 
+    mHeadCommander = false;           // settings for cloned plating
+    mLocation.init(0,0);
+    mMin.init(0,0);
+    mMax.init(0,0);
+    mTruckRolls = 0;
+    mSource = 0;
+  }
+
+  //// Printer API
+  virtual Bool die() { mSource = mSource.maxof; return true; }
+  virtual Bool isDead() { return mSource == mSource.maxof; }
+
+  ARGB getColor(Unsigned selector) {
+    ColorUtils cu;
+    if (mHeadCommander) return cu.color(0xbb1122);
+    ARGB base = cu.color(0x33bb33);
+    if (mLocation.isValid() && mMax.isValid()) {
+      Unsigned len = mLocation.toC2D().length();
+      Unsigned max = mMax.toC2D().length();
+      if (max == 0u) ++max;
+      base = cu.between(cu.color(0xaa0000),
+                        cu.color(0x0000aa),
+                        100u*len/max);
+    }
+    return cu.between(base,
+                      cu.color(0xffff00),
+                      30u*mTreePhase);
+  }
+  
+  Void plateSite(SN sn) {
+    if (!ew.isLive(sn)) { // Needing to plate a non-existent site is bad
+      die();
+      return;
+    }
+    C2D c = md.getSiteCoord(sn);
+    C2D abs = c+mLocation.toC2D();
+    B2D b(abs);
+    if (!b.isValid()) die();
+    Self s = self;              // Be like us
+    s.mSource = reversePtr(sn); // Except we are your parent
+    s.mLocation = b;            // And you are here (in whatever reference prevails)
+    ew[sn] = s;                 // Off you go
+  }
+
+  Bool isMyKid(SN sn) {
+    if (sn == 0u) return false;
+    Atom a = ew[sn];
+    if (a as Self) {
+      return sn == reversePtr(a.mSource);
+    }
+    return false;
+  }
+
+  Bool processDNFLOOD() {
+    ByteStreamLogger bsl;
+    Unsigned kids = 0;
+    Unsigned donekids = 0;
+    B2D minb(B2D.cMAXVAL,B2D.cMAXVAL);
+    B2D maxb(B2D.cMINVAL,B2D.cMINVAL);
+
+    for (SiteIterator si = neighborhood(); si.hasNext();) {
+      SN sn = si.next();
+      C2D c = md.getSiteCoord(sn);
+      Atom & a = ew[sn];
+
+      if (a is Empty) { /* empties are not a problem, deal with them below */ }
+      else if (a is Content) {
+        // Scan for empties in Moore ngb around content
+        for (SiteIterator sj = SiteIterator.instanceof(cMOOREx); sj.hasNext();) {
+          SN snj = sj.next();
+          C2D cj = md.getSiteCoord(snj);
+          C2D abs = c+cj;
+          if (!ew.isAccessible(abs)) continue;
+          // Don't plate beyond 2 of self.  Someone closer might do it.
+          if (abs.length() > 2u) continue;  
+          SN snx = md.getSiteNumber(abs);
+          Atom & aj = ew[snx];
+          /*
+          bsl.printf("sn %d c(%d,%d) snj %d cj(%d,%d) abs(%d,%d)\n",
+                     sn, c.x, c.y,
+                     snj, cj.x, cj.y,
+                     abs.x, abs.y);
+          */
+          if (aj as Empty) {        /* we care about empties here instead */
+            //bsl.printf("snx %d\n",snx);
+            plateSite(snx);
+            ++kids;
+          }
+        }
+      }
+      else if (a as Self) {
+        //bsl.printf("a self sn(%d)\n",sn);
+        if (isMyKid(sn)) { // My kid?
+          ++kids;          // Yes
+          //bsl.printf("iskid kids(%d)\n",kids);
+          if (a.mTreePhase == cTREEPHASE_UPBOUND) { // Has it found bounds yet?
+            ++donekids;                   // Yes
+            minb = minb.min(a.mMin);      // Update our running bounds
+            maxb = maxb.max(a.mMax);
+            //            bsl.printf("donekids(%d)\n",donekids);
+          }
+        }
+      }
+      else {
+        die(); // No Empty, Content, or Self: Can't continue
+        return true;
+      }
+    }
+
+    //bsl.printf("kids %d donekids %d\n",kids,donekids);    
+    if (kids == donekids) {            // No kids or all done?
+      mTreePhase = cTREEPHASE_UPBOUND; // Yes, we're moving on
+      mMin = donekids > 0u ? minb : mLocation; // Set our min
+      mMax = donekids > 0u ? maxb : mLocation; // Set our max
+    }
+    return true;
+  }
+
+  Bool processUPBOUND() {
+    B2D newmin, newmax; // Start off invalid
+    if (mSource == 0u) {  // I'm the root -> mMin and mMax are the global bounds
+      B2D objectsize = mMax - mMin; // XXX FENCEPOST CHECK
+      mLocation -= mMin;            // Remap root to zero origin
+      mMin = objectsize;
+      mMax.init(objectsize.mX*3 + 1, objectsize.mY); // Extend in max the printing direction (+x)
+      mTreePhase = cTREEPHASE_DNBOUND; // And move on
+      return true;  // Did work
+    }
+
+    // Non-root
+    SN sn = mSource;
+    Atom & a = ew[sn];
+    if (a as Self) {
+      if (a.mTreePhase == cTREEPHASE_DNBOUND) {
+        mMin = a.mMin;     // Pick up object size from parent
+        mMax = a.mMax;     // Pick up build plate size from parent
+        C2D c = md.getSiteCoord(mSource); // Parent coord rel to us
+        mLocation.fromC2D(a.mLocation.toC2D() - c); // Our new (zero origin) pos CHECK
+        mTreePhase = cTREEPHASE_DNBOUND; // And move on
+      }
+      return true; // Did work, or need to wait
+    }
+
+    die();                  // Parent not one of us?
+    return true;
+  }
+
+  Bool processDNBOUND()  {
+    ByteStreamLogger bsl;
+    Unsigned kids = 0;
+    Unsigned donekids = 0;
+    C2D box(mMax.mX+1, mMax.mY+1); // +1 to use C2D.contains(..)
+
+    for (SiteIterator si = neighborhood(); si.hasNext();) {
+      SN sn = si.next();
+      if (sn == 0u) continue;
+      C2D c = md.getSiteCoord(sn);
+      Atom & a = ew[sn];
+
+      if (a is Empty) {
+        C2D abs = mLocation.toC2D() + c;
+        //bsl.printf("abs (%d,%d)\n",abs.getX(), abs.getY());
+        if (box.contains(abs)) { // This empty on the print plate?
+          // Ensure only empty or plate in Moore ngb around empty
+          for (SiteIterator sj = SiteIterator.instanceof(cMOOREx); sj.hasNext();) {
+            SN snj = sj.next();                // snj relative to sn
+            C2D cj = md.getSiteCoord(snj) + c; // cj relative to ew[0]
+            C2D ngb = mLocation.toC2D()+cj;    // ngb relative to box
+            /*
+            bsl.printf("sn %d snj %d c(%d,%d) cj(%d,%d) mLoc(%d,%d) box(%d,%d) ngb(%d,%d)\n",
+                       sn, snj,
+                       c.getX(), c.getY(),
+                       cj.getX(), cj.getY(),
+                       mLocation.mX, mLocation.mY,
+                       box.getX(), box.getY(),
+                       ngb.getX(), ngb.getY()
+                       );
+            */
+            if (!box.contains(ngb)) continue;  // Skip it if not on plate
+            //du.print("dnb13");
+            if (!ew.isAccessible(cj)) continue; // Find it later if outside ew (possible?)
+            //du.print("dnb14");
+            if (ew[cj] is Empty || ew[cj] is Plate) continue; // That stuff's okay
+            //du.print("dnb15");
+            return die(); // Uh-oh: Ran into something while filling the bounding box
+          }
+          //du.print("dnb16");
+
+          plateSite(sn);         // OK to plate over the empty
+          ++kids;
+        }
+        continue;
+      }
+
+      if (a as Self) {
+        if (isMyKid(sn)) { // My kid?
+          ++kids;          // Yes
+          if (a.mTreePhase == cTREEPHASE_UPREADY) { // Has it bottomed out yet?
+            ++donekids;                   // Yes
+          }
+        }
+        continue;
+      }
+
+      if (a as Content) {
+        continue; // No action but okay
+      }
+
+      // Not empty, self, or content
+      die();
+      return true;
+    }
+
+    //bsl.printf("DNBOUND kids %d donekids %d\n",kids,donekids);    
+    if (kids == donekids) {            // No kids or all done?
+      mHeadCommander = mLocation == B2D.instanceof(mMin.mX, mMin.mY/2);
+      mTreePhase = cTREEPHASE_UPREADY; // Yes, we're moving on
+    }
+    return true;
+  }
+
+  Void hcOnly() { if (!mHeadCommander) { Fail f; f.fail(); } } 
+
+  Bool rollTruck() {
+    hcOnly();
+    Truck k;
+    k.mRot = mRot; // Set rotation by hand
+    k.mPlateHeight = mMax.mY;
+    k.mOurRow = mLocation.mY;
+    k.mStepsTilDropoff = (B2D.BCoord) (2u*mTruckRolls+1u);
+    UnloadedTrailer ut;
+    ut.mRot = mRot; // Ditto
+    ut.mStepsTilPickup = (B2D.BCoord) (mMin.mX-mTruckRolls-1u);
+    ew[4] = k;
+    ew[12] = ut;
+    ++mTruckRolls;
+    return true;
+  }
+
+  Bool sendInTheCleaner() {
+    hcOnly();
+    Sweeper g;
+    g.mRot = mRot; // Set rotation by hand
+    g.mPlateHeight = (B2D.BCoord) (mMax.mY+2);
+    g.mOurRow = (B2D.BCoord) (mLocation.mY+1);
+    g.mStepsToSweep = (B2D.BCoord)(3*mTruckRolls+1);
+    ew[4] = g;
+    return true;
+  }
+
+  Bool processUPREADY() {
+    if (!mHeadCommander) return false;  // We got nothing to do now
+    for (SiteIterator si = SiteIterator.instanceof(cMOOREx); si.hasNext();) {
+      SN sn = si.next();
+      if (ew[sn] is Truck || ew[sn] is Trailer) return true; // Wait
+    }
+    if (mTruckRolls < mMin.mX) 
+      return rollTruck();
+    if (mTruckRolls == mMin.mX)
+      return sendInTheCleaner();
+    return false;
+  }
+
+  virtual Bool update() {
+    if (super.update()) return true;
+    if (processDeath()) return true;
+
+    Bool ret = false;
+    which (mTreePhase) {
+    case cTREEPHASE_DNFLOOD: { ret = processDNFLOOD(); }
+    case cTREEPHASE_UPBOUND: { ret = processUPBOUND(); }
+    case cTREEPHASE_DNBOUND: { ret = processDNBOUND(); }
+    case cTREEPHASE_UPREADY: { ret = processUPREADY(); }
+      otherwise: { }
+    }
+    return ret;
+  }
+
+  Void behave() {
+    if (update()) return; // Check priority
+    
+  }
+}
+

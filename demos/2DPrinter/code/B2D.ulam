@@ -1,0 +1,100 @@
+quark B2D {
+  constant Unsigned cBITS = 8u;
+  typedef Int(cBITS) BCoord;
+  constant BCoord cMAXVAL = BCoord.maxof;
+  constant BCoord cMINVAL = BCoord.minof+1;
+  BCoord mX = BCoord.minof;
+  BCoord mY = BCoord.minof;
+
+  Self min(Self other) {
+    Self ret = self;
+    if (other.mX < ret.mX) ret.mX = other.mX;
+    if (other.mY < ret.mY) ret.mY = other.mY;
+    return ret;
+  }
+
+  Self max(Self other) {
+    Self ret = self;
+    if (other.mX > ret.mX) ret.mX = other.mX;
+    if (other.mY > ret.mY) ret.mY = other.mY;
+    return ret;
+  }
+
+  Self & operator=(Self other) {
+    init(other);
+    return self;
+  }
+
+  Bool operator==(constant Self & other) {
+    return mX == other.mX && mY == other.mY;
+  }
+
+  Self operator-(Self other) {
+    Self ret = self;
+    if (ret.isValid() && other.isValid()) {
+      ret.mX -= other.mX;
+      ret.mY -= other.mY;
+    }
+    return ret;
+  }
+
+  Self operator+(Self other) {
+    Self ret = self;
+    if (ret.isValid() && other.isValid()) {
+      ret.mX += other.mX;
+      ret.mY += other.mY;
+    }
+    return ret;
+  }
+
+  Self & operator-=(Self other) { self = self - other; return self; }
+
+  Self & operator+=(Self other) { self = self + other; return self; }
+
+  /* Make BCoord.minof an illegal value.  Balances the +- range, and
+     gives us an OoB value for signaling
+  */
+  Bool isValid() {
+    return mY > BCoord.minof && mY > BCoord.minof;
+  }
+
+  Void invalidate() {
+    mX = mY = BCoord.minof;
+  }
+
+  C2D toC2D() {
+    if (!isValid()) {
+      Fail f;
+      f.fail("toC2D invalid B2D");
+    }
+    C2D ret(mX,mY);
+    return ret;
+  }
+
+  Bool fromC2D(C2D c) {
+    init(c.getX(),c.getY());
+    return isValid();
+  }
+
+  Self(Int x, Int y) {
+    init(x,y);
+  }
+
+  Self(C2D c) {
+    fromC2D(c);
+  }
+
+  Void init(Self s) {
+    init(s.mX,s.mY);
+  }
+  
+  Void init(Int x, Int y) {
+    if (x <= BCoord.minof || x <= BCoord.minof ||
+        y > BCoord.maxof  || y > BCoord.maxof)
+      invalidate();
+    else {
+      mX = (BCoord) x;
+      mY = (BCoord) y;
+    }
+  }
+}
