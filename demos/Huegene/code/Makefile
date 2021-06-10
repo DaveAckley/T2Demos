@@ -2,12 +2,12 @@ NAME:=$(notdir $(realpath ..))
 THIS_DIR:=$(strip $(notdir $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))))
 MFZ:=../$(NAME).mfz
 # Customize ULAM_BIN_DIR and MFM_BIN_DIR if necessary
-ULAM_BIN_DIR:=/home/t2/ULAM/bin
-MFM_BIN_DIR:=/home/t2/MFM/bin
+ULAM_BIN_DIR:=/data/ackley/PART4/code/D/ULAM/bin
+MFM_BIN_DIR:=/data/ackley/PART4/code/D/MFM/bin
 ULAM:=$(ULAM_BIN_DIR)/ulam
 MFZRUN:=$(MFM_BIN_DIR)/mfzrun
+#UFLAGS:=-g
 #UFLAGS:=-g --sa
-#UFLAGS:=--sa
 UFLAGS:=-o
 ARGS_TXT_FILES:=$(wildcard args.txt)
 ULAM_FILES:=$(wildcard *.ulam)
