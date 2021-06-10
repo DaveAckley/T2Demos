@@ -1,0 +1,215 @@
+quark PlateUtils {
+  typedef Unsigned(2) PlateDir;
+  constant PlateDir cPLATE_GOES_W = 0u;
+  constant PlateDir cPLATE_GOES_N = 1u;
+  constant PlateDir cPLATE_GOES_E = 2u;
+  constant PlateDir cPLATE_GOES_S = 3u;
+
+  PlateDir borderDir(C2D pos, C2D size) {
+    if (pos.getY() == 0 && pos.getX() < size.getX() - 1)
+      return cPLATE_GOES_N;
+    if (pos.getX() == size.getX() - 1 && pos.getY() < size.getY() - 1)
+      return cPLATE_GOES_E;
+    if (pos.getY() == size.getY() - 1 && pos.getX() > 0)
+      return cPLATE_GOES_S;
+    /*if (pos.getX() == 0 && pos.getY() > 0)*/
+    return cPLATE_GOES_W;
+  }
+
+  Bool onCCWCornerForDir(C2D pos, C2D size, PlateDir pd) {
+    which (pd) {
+    case cPLATE_GOES_N: {
+      return (pos.getY() == 0 &&
+              pos.getX() == 0);
+    }
+    case cPLATE_GOES_E: {
+      return (pos.getX() == size.getX() - 1 &&
+              pos.getY() == 0);
+    }
+    case cPLATE_GOES_S: {
+      return (pos.getY() == size.getY() - 1 &&
+              pos.getX() == size.getX() - 1);
+    }
+    case cPLATE_GOES_W: {
+      return (pos.getX() == 0 &&
+              pos.getY() == size.getY() - 1);
+    }
+    }
+    return false;
+  }
+
+  Bool onBorderForDir(C2D pos, C2D size, PlateDir pd) {
+    which (pd) {
+    case cPLATE_GOES_N: {
+      return (pos.getY() == 0 &&
+              pos.getX() >= 0 &&
+              pos.getX() <= size.getX() - 1);
+    }
+    case cPLATE_GOES_E: {
+      return (pos.getX() == size.getX() - 1 &&
+              pos.getY() >= 0 &&
+              pos.getY() <= size.getY() - 1);
+    }
+    case cPLATE_GOES_S: {
+      return (pos.getY() == size.getY() - 1 &&
+              pos.getX() >= 0 &&
+              pos.getX() <= size.getX() - 1);
+    }
+    case cPLATE_GOES_W: {
+      return (pos.getX() == 0 &&
+              pos.getY() >= 0 &&
+              pos.getY() <= size.getY() - 1);
+    }
+    }
+    return false;
+  }
+
+  C2D stepInDir(PlateDir pd) {
+    C2D ret;
+    which (pd) {
+    case cPLATE_GOES_W: { ret.set(-1,0); }
+    case cPLATE_GOES_N: { ret.set(0,-1); }
+    case cPLATE_GOES_E: { ret.set(1,0); }
+    case cPLATE_GOES_S: { ret.set(0,1); }
+    }
+    return ret;
+  }
+
+  EventWindow.SiteNum reversePtr(EventWindow.SiteNum sn) {
+    EventWindow ew;
+    MDist md;
+    if (!ew.isAccessible(sn)) return sn.maxof; // Illegal reverses to illegal
+    C2D coord = md.getSiteCoord(sn);   // Their coord relative to us
+    C2D icoord = coord*(C2D.Coord)-1;  // Our coord relative to them
+    return md.getSiteNumber(icoord);   // Our SN relative to them
+  }
+
+  EventWindow.SiteNum lineForwardSN(PlateDir dir) {  // Next site forward in line direction
+    which (dir) {
+    case cPLATE_GOES_W: { return 4u; }
+    case cPLATE_GOES_N: { return 3u; }
+    case cPLATE_GOES_E: { return 1u; }
+    case cPLATE_GOES_S: { return 2u; }
+    }
+    // NOT REACHED
+    return EventWindow.SiteNum.maxof;
+  }
+
+  C2D lineForwardOffset(PlateDir dir) {
+    MDist md;
+    return md.getSiteCoord(lineForwardSN(dir));
+  }
+
+  typedef Unary(5) PlateRelation;
+  constant PlateRelation cSAME_PLATE_AS = 0u;     //< L same size and net origin as R
+  constant PlateRelation cCONTAINS_PLATE = 1u;    //< L wholly contains R 
+  constant PlateRelation cCONTAINED_BY_PLATE = 2u;//< L wholly contained by R
+  constant PlateRelation cUNRELATED_TO_PLATE = 3u;//< L disjoint from R (might be adjacent)
+  constant PlateRelation cOVERLAPS_PLATE = 4u;    //< L partially overlaps R (ooh bad?)
+  constant PlateRelation cNOT_PLATE = 5u;         //< L and/or R is inaccessible or not a Plate
+
+  PlateRelation relationTo(EventWindow.SiteNum snl, EventWindow.SiteNum snr) {
+    MDist md;
+    C2D offsetl = md.getSiteCoord(snl);
+    C2D offsetr = md.getSiteCoord(snr);
+    return relationTo(offsetl,offsetr);
+  }
+
+  PlateRelation relationTo(C2D offsetl, C2D offsetr) {
+    EventWindow ew;
+    if (ew.isAccessible(offsetl) && ew.isAccessible(offsetr)) {
+      return relationTo(ew[offsetl], offsetl, ew[offsetr], offsetr);
+    }
+    return cNOT_PLATE;
+  }
+
+  PlateRelation relationTo(Atom& al, C2D offsetl, Atom& ar, C2D offsetr) {
+    if (al as Plate) {
+      if (ar as Plate) {
+        return relationTo(al,offsetl,ar,offsetr);
+      }
+    }
+    return cNOT_PLATE;
+  }
+  
+  PlateRelation relationTo(Plate& pl, C2D offsetl, Plate& pr, C2D offsetr) {
+    TBox tbl(pl.sizeOfPlate(), -pl.positionOnPlate());
+    TBox tbr(pr.sizeOfPlate(), -pr.positionOnPlate() + offsetr - offsetl);
+          
+    if (tbl == tbr) return cSAME_PLATE_AS;
+          
+    TBox inter = tbl.intersectionWith(tbr);
+    if (inter == tbr) return cCONTAINS_PLATE;
+          
+    if (inter == tbl) return cCONTAINED_BY_PLATE;
+    if (inter.volume() == 0u) return cUNRELATED_TO_PLATE;
+
+    DebugUtils du;
+    du.printContext();
+    du.print("PRREL2 OVRLPS");
+    du.print(tbl);
+    du.print(offsetl);
+    du.print(tbr);
+    du.print(offsetr);
+    return cOVERLAPS_PLATE;
+  }
+
+  typedef Unary(4) SiteCategory;
+  constant SiteCategory cSC_UNWANTED = 0u;      //< Outside our plate
+  constant SiteCategory cSC_ALREADY_OURS = 1u;  //< Contains same plate as we are
+  constant SiteCategory cSC_ON_SUBPLATE = 2u;   //< Contains a subplate of our plate
+  constant SiteCategory cSC_CAN_GROW_INTO = 3u; //< Is empty or contains our container
+  constant SiteCategory cSC_WANT_NOT_GOT = 4u;  //< Inaccessible or blocked
+
+  SiteCategory categorizeSite(Plate & us, EventWindow.SiteNum sn) {
+    C2D theirewc;
+    return categorizeSite(us, sn, theirewc);
+  }
+  
+  /** Determine the status of ew site \c sn relative to us.  Return a
+      SiteCategory code describing that status.  Also, if the returned
+      status is
+
+      PlateUtils.cSC_CAN_GROW_INTO,
+      PlateUtils.cSC_ALREADY_OURS, or
+      PlateUtils.cSC_ON_SUBPLATE,
+
+      set \c theirpos to the plate coodinate corresponding to \c sn.
+
+      \sa SiteCategory
+   */
+  SiteCategory categorizeSite(Plate & us, EventWindow.SiteNum sn, C2D & theirpos) {
+    // A site is available for me to grow into if
+    // (1) It is accessible, and
+    // (2) It is in my plate's bounding box, and
+    // (3) It is Empty, or
+    // (4) It is on the plate that contains me
+    EventWindow ew;
+    MDist md;
+    PlateUtils pu;
+    DebugUtils du;
+    C2D mysize = us.sizeOfPlate();
+    C2D mypos = us.positionOnPlate();
+    C2D myewc = us.getOurEWCoord();
+    C2D sc = md.getSiteCoord(sn);
+    C2D c = sc + mypos; 
+    if (!mysize.contains(c)) return pu.cSC_UNWANTED;   // Not in our bbox
+    if (ew.isAccessible(sn)) {
+      theirpos = c;                                // Return plate pos of sn
+      Atom & a = ew[sn];
+      if (a is Empty) return pu.cSC_CAN_GROW_INTO; // Is Empty
+      if (a as Plate) {
+        PlateUtils.PlateRelation rel = pu.relationTo(us, myewc, a, sc);
+        if (rel == pu.cSAME_PLATE_AS)
+          return pu.cSC_ALREADY_OURS;             // Is already our plate
+        if (rel == pu.cCONTAINED_BY_PLATE)
+          return pu.cSC_CAN_GROW_INTO;            // Is on containing plate
+        if (rel == pu.cCONTAINS_PLATE) {
+          return pu.cSC_ON_SUBPLATE;              // Is on contained plate
+        }
+      }
+    }
+    return pu.cSC_WANT_NOT_GOT; // Inaccessible or blocked
+  }
+
+}

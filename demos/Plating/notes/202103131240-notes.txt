@@ -1,0 +1,1462 @@
+{86}  -*- text -*-
+[0:
+
+Sat Mar 13 12:40:59 2021 Well dammed the 2016 2D printer stuff is
+really really slow and so buggy I'm going to try a standing start redo
+based on SPOT technology instead.
+
+TODO
+
+ - Make base class Printable to flag stuff we care about
+
+ - Make an element Block : Printable to copy.
+
+ - Develop a SPOT-based live Armour that surrounds Printable
+
+ - Realize this is way too hard to try to do in a weekend sprint.
+
+:0]
+[1:
+
+Sat Mar 13 13:54:29 2021 Class relationships
+
+PrintBase
+ - Everything involved in printing, including the object itself and
+   the printing infrastructure
+
+Content : PrintBase
+ - The underlying object to be copied.  Determines the Printer bounds
+
+Printer : PrintBase
+ - The printing infrastructure
+
+Plate : Printer
+ - The localization and passivation structure
+
+
+Stages:
+
+
+
+:1]
+[2:
+
+Sun Mar 14 01:39:00 2021 OK so we have Plate.processDNFLOOD() working
+plausibly, and the root eventually reaches state cTREEPHASE_UPMINEX
+and knows the global min.  Now we want to recognize:
+
+  no parents or parent in UPMINEX
+
+
+:2]
+[3:
+
+Sun Mar 14 04:09:42 2021 OK it's starting to get confusing about up
+and down phase names, and about how much work we want to do during
+each event.
+
+ - During DNFLOOD, we scan the whole ew to create kids that point at
+   us, and tree leaves switch to UPMINEX with mExtreme = mLocation.
+   We min over UPMINEX kids while scanning.  Once all our kids are
+   UPMINEX (or we're a leaf) we switch to UPMINEX with mExtreme = min
+
+ - During UPMINEX we look only at our parent, and switch to DNMINLC
+   when they have, or we're the root, remapping to (0,0) at switch
+
+ - During DNMINLC, we scan the whole ew to max over our UPMAXEX kids
+   mExtremes; tree leaves switch to UPMAXEX with mExtreme = mLocation
+
+ - During UPMAXEX we look only at our parent, and switch to DNMAXEX
+   when they have (picking up their mExtreme as ours), or we're the
+   root.  The root sets mExtreme to the final printing plate size.
+
+ - During DNMAXEX we scan the whole ew to create new DNMAXEX kids that
+   point at us to flood the printing plate.  Once all our kids are
+   UPREADY (or we're a leaf) we switch to UPREADY
+
+[4:
+
+Sun Mar 14 04:40:02 2021 Well so framing it like that we do do a scan
+on each DN phase.  We absolutely need to scan for DNFLOOD and DNMAXEX,
+to create new kids from empty.  And we need to scan in DNMINLC,
+because we need to max over the kids and have no place or mechanism to
+store intermediate results.
+
+:4]
+
+:3]
+[5:
+
+Sun Mar 14 06:32:24 2021 So thoughts from morning walk:
+
+ - Should have a 2-wide plate buffer at the leading edge, so there's
+   room to initiate the tractor-trailer.  Could do by asymmetric
+   flooding
+
+ - By doubling the box x-dimension, we have no super obvious way to
+   know where the last line to be copied is.  Or contrariwise we don't
+   know where the head commander is, buried in the middle of the box.
+
+:5]
+[6:
+
+Sun Mar 14 06:37:24 2021 Now, if we went to a third coord, we could do
+min and max in a single tree round trip, then switch to like parent
+max, kid max or something.
+
+[7:
+
+Sun Mar 14 07:04:52 2021 What if we copy from the back?  Why are we
+copying from the front?
+
+       v
+    PPPP........
+    PPPP........
+
+       v
+    PPPPTL......
+    PPPPTL......
+
+      v
+    PPPPTX......
+    PPPPTX......
+
+      v
+    PPPP.TX.....
+    PPPP.TX.....
+
+      v
+    PPPPTLk.....
+    PPPPTLk.....
+
+      v
+    PPPTLPk.....
+    PPPTLPk.....
+
+     v
+    PPPTXPk.....
+    PPPTXPk.....
+
+     v
+    PPPPTXk.....
+    PPPPTXk.....
+
+     v
+    PPPPTXk.....
+    PPPPTXk.....
+
+
+    ABC
+   .ABC......
+   .ABCTL....
+   .ABTLC....
+   .ATLBC....
+   .TLABC....
+   .AT1BC....
+   .ABT1C....
+   .ABCT1....
+   .ABC.T1...
+   .ABC..T1..
+   .ABC.TLa..
+   .ABCTL.a..
+   .ABTLC.a..
+   .ATLBC.a..
+   .ABT2C.a..
+   .ABCT2.a..
+   .ABC.T2a..
+   .ABC.aT2..
+   .ABC.a.T2.
+   .ABC.aTLb.
+   .ABC.TLab.
+   .ABCTL.ab.
+   .ABTLC.ab.
+   .ABCT3.ab.
+   .ABC.T3ab.
+   .ABC.aT3b.
+   .ABC.abT3.
+   .ABC.ab.T3
+   .ABC.abTLc
+   .ABC.aTLbc
+   .ABC.TLabc
+   .ABCTL.abc
+   .ABTLC.abc
+   .ATLBC.abc
+   .TLABC.abc
+   .TLABC.abc
+    ABCX..abc
+    ABC X.abc
+    ABC  Xabc
+    ABC  aXbc
+    ABC  abXc
+    ABC  abc
+
+    ABTLC.abc..
+    ATLBC.abc..
+    TLABC.abc..
+     XABC.abc..
+     AXBC.abc..
+     ABXC.abc..
+     ABCX.abc..
+     ABC Xabc..
+     ABC aXbc..
+     ABC abXc..
+     ABC abcX..
+     ABC abc X.
+     ABC abc
+
+:7]
+
+:6]
+[8:
+
+Sun Mar 14 12:34:09 2021 Well it's more work but since we're redoing
+this anyway we should foggen pipeline the copying phase.  Why the heck
+not?  It would go so much faster.  Each TL moves the parent two
+columns.  If we copy from the back we can drop off the kid columns at
+the front, so we don't have to run the TLs through the kid, and so it
+ends up 'precisely' where the parent started.
+
+So, a single pass would look like this:
+
+  ABC
+  ABC..........
+  ABCTL........
+  ABT3C........
+  AT3BC........
+  T3ABC........
+  c.ABC........
+
+but the fully pipelined version would be like
+
+  ABC
+  ABC......
+  ABCTL....
+  ABT3C....
+  AT3BCTL..
+  T3ABTLC..
+  c.AT2BC..
+  c.T2ABCTL
+  cT2.ABTLC
+  cb..ATLBC
+  cb..T1ABC
+  cb.T1.ABC
+  cbT1..ABC
+  cba...ABC
+
+Now the parent and kid end up separated by a body length, rather than
+a constant width.  But that's just because we didn't pass the TLs
+through the kid.  If we copied from the front we'd pass the TLs
+through the kid and they'd end up adjacent.
+
+We could make the final strip-out-the-plating line go by twos in the
+parent but only ones in the kid, and get a gap column that way.  Like
+
+  ABC
+  ABC........
+  ABCT1......
+  ABT1C......
+  AT1BCT2....
+  TaABT2C....
+  .aATbBC....
+  .aTbABCT3..
+  .TbaABTcC..
+  ..baATcBCTf
+  ..baTcABTfC
+  ..bTcaATfBC
+  ..TcbaTfABC
+  ...cbaT ABC
+  ...cbTa ABC
+  ...cTba ABC
+  ...Tcba ABC
+  ..T cba ABC
+  .T  cba ABC
+  T   cba ABC
+      cba ABC
+
+and we take up 3*bodylength+2 peak usage but only 2*bodylength+1 final
+usage.
+[9:
+
+Sun Mar 14 13:51:01 2021 Thinking about it yet more, leaving the kid
+dead-on where the parent was has the advantage that SOMEBODY ends up
+in that spot, which was presumably somehow advantageous, in the big
+picture, because the parent ended up trying to reproduce.
+
+We could implement a second, slower reproduction mechanism that used
+shuttling swaplines to keep the parent from moving as far.
+
+[10:
+
+Sun Mar 14 14:13:41 2021 But for now let's go for the speed.  We now
+have the plating running out sufficient for it:
+
+      mExtreme.init(mExtreme.mX*3 + 2, mExtreme.mY); // 202103131240-notes.txt:8
+
+[11:
+
+Sun Mar 14 14:21:12 2021 Just tested dying on collision during
+processDNMAXEX.  It worked okay in the end, but it looked like some
+folks were still trying to fill in spots that had die()d, rather than
+just dying ASAP themselves.  What's that about?[12:
+
+Sun Mar 14 14:51:52 2021 It was a bug: Calling reversePtr on a
+blown-up Self was passing SN.maxof to MDist.getSiteCoord().
+[13:
+
+Sun Mar 14 14:53:06 2021 So okay, can we start roughing out our TL
+swaplines here?  They'll have info telling what phase they're in, what
+line they should(have) copy(copied), a u16 of the copied type, and a
+couple of Bits(x) and Bits(71-x) that carry the atomic state
+
+Now, 71+16 == 87..  and we have 2*71 == 142 total bits in two atoms,
+so that means 142-87 == 55 bits available for swapline duties.
+
+We can use different types for empty trailer vs loaded trailer.
+Could we put all 71 carried state bits in a loaded trailer, leaving it
+with no state of its own at all?  Let's try.[14:
+
+Sun Mar 14 15:21:13 2021 What about priority?  We need Trailer to
+participate in the SPOT API.  Is it possible to do that with no state
+bits?  [15:
+
+Sun Mar 14 15:31:29 2021 Well, it might be, if we hardcode a single
+Trailer stage.  But I think it's a stunt we don't want to pursue.
+Let's make two base classes for 'FrontBits' and 'BackBits', and let
+Truck take the front bits and LoadedTrailer take the back bits.  We
+can stick the type in the FrontBits maybe too.[16:
+
+Sun Mar 14 15:37:55 2021 Ehhhhhhhhhxcept quarks are limited to 32
+bits.  I somehow thought they'd gotten to 64 bits.[17:
+
+Sun Mar 14 16:03:47 2021 OK now we have
+
+ Bool PackedAtom.packAtom(Atom a, PackedFront & pf, PackedMid & pm, PackedBack & pb)
+
+to copy pieces of 'a' into pf, pm, and pb, and
+
+ Atom PackedAtom.unpackAtom(PackedFront pf, PackedMid pm, PackedBack pb)
+
+to reverse that and get back the atom.
+[18:
+
+Sun Mar 14 16:22:45 2021 So, back to the Truck.  What else is it
+  carrying?[19:
+
+Sun Mar 14 16:29:56 2021 Well, let's say  'B2D.BCoord mSourceColumn;'
+
+What else?  The plate bounds?  [20:
+
+Sun Mar 14 16:32:44 2021 OK, with
+
+    element Truck : Printer + PackedFront {
+      B2D mPlateBounds;
+      B2D.BCoord mSourceColumn;
+    }
+
+we're at 56 bits with 15 left.  Let's see if we can do some early
+behavior.
+
+:20]
+
+:19]
+
+:18]
+:17]
+
+:16]
+
+:15]
+
+:14]
+
+:13]
+
+:12]
+
+:11]
+:10]
+
+:9]
+:8]
+[21:
+
+Sun Mar 14 17:06:24 2021 OK so where's the dropoff point, given
+
+  B2D mPlateBounds;
+  B2D.BCoord mSourceColumn;
+
+?  We think the first dropoff point is 0?  We need to invert the
+mPlateBounds computation that Plate.processUPMAXEX did at the root, if
+we're going to get by without extra state here.  So at the moment
+that's doing
+
+      mExtreme.init(mExtreme.mX*3 + 2, mExtreme.mY); // 202103131240-notes.txt:8
+
+so we would do something like
+
+  B2D.BCoord objectWidth = (mPlateBounds.mX - 2)/3;
+
+..wait.  Do we always just dropoff at '0'?  Like, pickup when the
+source column is ahead, then advance until the 0 column is just
+behind, then unload and vanish.
+
+ 0 Take the back column, advance 1, drop it
+ 1 Take the next-to-back column, advance 2, drop it
+
+So we just need the head commander to know how many trucks to emit?
+[22:
+
+Sun Mar 14 17:22:06 2021 The head commander does something like
+
+ truck.mPlateBounds = head.mExtreme
+ truck.mSourceColumn = trucksReleasedCount
+ truck.mNextColumn = head.mLocation.mX
+
+and it doesn't look like the truck needs the full plate bounds, just
+the maxY.  It does need a full location for itself, so it can handle
+growing the line.
+
+More like:
+
+  B2D.BCoord mPlateHeight;
+  B2D.BCoord mSourceColumn;
+  B2D mLocation; // How to interpret ew[1]
+
+then
+
+   truck.mPlateHeight = head.mExtreme.mY
+   truck.mSourceColumn = trucksReleasedCount
+   truck.mLocation = head.mLocation
+[23:
+
+Sun Mar 14 17:32:47 2021 NO NO NO DAMMIT THAT'S THE TRAVELING KID
+VERSION!  WE WANTED TO DO THE STATIC KID VERSION.
+
+In the static kid version we always carry the load the same distance
+-- the width of the original object.  And we unload it into the site
+of the truck, replacing it.
+
+But the drive to the pickup point varies from 0 to object width-1.
+And hey we could store that count in the unloaded trailer if we
+wanted.
+
+Truck.
+  B2D.BCoord mPlateHeight;
+  B2D.BCoord mOurRow;
+  B2D BCoord mStepsToDropoff; // Initted to object width
+
+UnloadedTrailer.
+  B2D.BCoord mStepsToPickup;  // Initted to trucks released
+
+Then we drive until mStepsToPickup is 0, then load the trailer, then
+drive until mStepsToDropoff is 0, then unload the trailer and decay.
+
+We should probably not decay until our wingmen have arrived or
+decayed.  And should not start driving until the wingmen exist.
+
+:23]
+:22]
+
+:21]
+[24:
+
+Sun Mar 14 18:14:22 2021 OK so how does fleet deployment work,
+exactly?  The head commander will create a Truck and an
+UnloadedTrailer.  Then that truck will just always check for wing
+trucks, until we get near the end and we're about to decay.
+
+So in SPLAT terms the truck would be thinking something like this:
+
+given T isa Truck
+let N = ~T
+given L isa Trailer
+
+ L.     ..
+ L.@ -> ...   # Maintain safe distance
+ L.     ..
+
+ NNN    .TL
+  @  ->  @    # Deploy N partner (modulo bounds etc)
+
+  @  ->  @    # Deploy S partner (modulo bounds etc)
+ NNN    .TL
+
+   T     .
+  @  -> .     # Hodl
+
+  @  -> .
+   T     .    # Hodl
+
+[25:
+
+Sun Mar 14 18:25:34 2021 Or is
+
+ L@ -> ..   # Maintain safe distance
+
+enough I wonder?  Just don't overtake the truck ahead.  And put any
+pickup or dropoff stuff after this rule, so we can count on a non-L
+ahead of us at those times.
+
+Time to deal with dinner.
+
+:25]:24]
+[26:
+
+Sun Mar 14 20:37:03 2021 OK nap time.  Currently doesn't build, so
+pick up there.
+
+:26]
+[27:
+
+Sun Mar 14 23:36:46 2021 OK so working through it.
+
+Now: How exactly are we going to handle arrival at the dropoff point,
+unloading, and truck decay, regarding the neighbor trucks.
+
+In processDeparture we('re planning to) insist that both wings are
+'ready' -- meaning directly adjacent, or off the plate -- before we
+mark ourselves as 'ut.mDeparted = true;'.  [28:
+
+Mon Mar 15 00:06:26 2021 Well if we're going to dress the line we
+should just dress the damn line.  We've been down this road before and
+we know how to do it: Ready on the left!  Ready on the right!  Ready
+on the firing line!  Two bools in Truck, can we afford them?
+
+:28]
+
+:27]
+[29:
+
+Mon Mar 15 01:15:18 2021 OK this is a ridiculous time to be trying to
+do this but I'm switching Plate.ulam over to use three B2Ds -- mLocation,
+mMin, mMax -- instead of just mLocation and mExtreme.  The goal is to
+reduce the tree round trips to two instead of three.  Problem I'm
+having is trying to broadcast the original global min (to remap
+mLocations) ..  actually I guess it's okay.  Once we've changed to
+zero-origin we don't actually need mMin any more, so we can go ahead
+broadcast the original global mMin that root got.  It's just on the
+phase transition that we do 'mLocation -= mMin;' and then never look
+at mMin again.
+[31:
+
+Mon Mar 15 01:27:09 2021 Oh but we were thinking of reusing mMin to
+give the object size.  ..Could we leave mMax at the object size, and
+just allow plating to the extended size?  Ughy at best.  We could
+plate the runout with a different kind of plating that knows to
+extend?
+
+Suppose we send down the 'real max' -- the object size -- during
+DNBOUND, but at the transition to UPREADY everybody remaps it to the
+expanded plate.  But then we "can't" flood the expanded plate during
+DNBOUND.
+
+Suppose DNBOUND uses mMin as global min and mMax as object size.[32:
+
+Mon Mar 15 01:54:55 2021 Now the way we're doing Truck, we really
+don't care about absolute x coordinates -- we're just using
+distances.  We care about absolute y coordinates for growing and
+dressing the line.  But the absolute y coordinate and bounds doesn't
+have to be in the Plate, only in the Truck.
+
+So what really do we need the distributed Plate to know, in the end?
+
+ - Everybody needs to know
+   = the build plate size
+   = their position within it
+
+   -> But they only need that to flood and to identify the head commander
+
+ - The head commander has to
+   = be able to identify itself.
+   = know the (x,y) size of the object
+   = know its y position in 0..size.y-1
+
+What if we say mMin is the object size, and instead of doing
+
+ mLocation -= mMin;
+
+to update our position, we do it by computing our offset from our
+parents mLocation, which is already updated by induction.
+
+That seems likely to work.
+
+[34: Mon Mar 15 03:23:58 2021 Let's try to implement from here..:34]
+In DNFLOOD
+ - Fill content-adjacent empties with kids
+
+ - At transition to UPBOUND
+   mMin = min of kids' mMin or mLocation if no kids
+   mMax = max of kids' mMax or mLocation if no kids
+
+In UPBOUND
+ - At root transition to DNBOUND:
+   objectsize = mMax - mMin [FENCEPOST CHECK]
+   mLocation -= mMin            NOW ZERO ORIGIN
+   mMax = expanded(objectsize)  NOW BUILD PLATE SIZE
+   mMin = objectsize            NOW OBJECT SIZE
+   mPhaseState = DNBOUND
+ - At non-root transition to DNBOUND [b/c parent is already DNBOUND]
+   mMin = parent.mMin           pick up object size
+   mMax = parent.mMax           pick up build plate size
+   mLocation = parent.mLocation - tocoord(kid.mSourceSN) CHECK
+   mPhaseState = DNBOUND
+
+During DNBOUND
+- Empty flood
+  pos = parent.mLocation + coordOf(emptySN)
+  if (!mMax.contains(pos) [FENCEPOST CHECK]) next
+  make kid at emptySN
+  kid.mSourceSN = reverse(emptySN)
+  // FALL THROUGH
+
+- Kid
+  kid.mMin = parent.mMin  // object size
+  kid.mMax = parent.mMax  // plate size
+  kid.mLocation = parent.mLocation - coordOf(kid.mSourceSN)
+  kid.mPhaseState = DNBOUND
+
+- At transition to UPREADY [b/c all kids are UPREADY]
+  mHeadCommander = mLocation == B2D(mMin.mX,mMin.mY/2)
+  [35: Mon Mar 15 04:21:15 2021 What is the head commander going to
+       use for the trucks released count?  Have it count down the
+       mMin.mX as it releases?  Or replace the Bool mHeadCommander
+       with a B2D.BCoord mTrucksRemaining, and count down that?  :35]
+  mPhaseState = UPREADY
+
+
+- Count kids in UPREADY
+  if all kids UPREADY
+
+During UPREADY
+  if (mLocation.mX == mMin.mX [FENCEPOST CHECK] && // Rightmost edge of object
+      mLocation.mY == mMin.mY/2 )                  // 'Center' row
+   flag as head commander
+
+[33:
+
+Mon Mar 15 03:20:37 2021 So we don't have an interlock on the head
+commander starting to release Trucks.  But then maybe we don't need to
+interlock given that Trucks are higher priority, so they'll suppress
+Plate anyway?  That also means we do need a new type for the head
+commander, so it can run at truck priority.
+
+Let's give it a try.
+
+:33]
+
+:32]
+
+:31]
+[30:
+
+Mon Mar 15 01:22:11 2021 So what about the box flooding, when does
+that happen?  Let's just push on in the code for now.
+
+:30]
+
+:29]
+[36:
+
+Mon Mar 15 05:19:09 2021 Well, modulo lots of fencepost checks and
+stuff, the expedited build plate build seems half plausible.  It's
+weired that you can have UPBOUND, DNBOUND, and UPREADY plates all
+coexisting at the same time, but it seems to be that's what I
+implemented.  Right now we're not going all the way to the root a
+second time before declaring the head commander.
+
+[37:
+
+Mon Mar 15 05:24:10 2021 So, it's about time to try releasing a
+truck.  What happens then?
+
+..Let's try the count-down mMin.mX?  [38:
+
+Mon Mar 15 05:59:57 2021 Fed the cats.
+
+[39:
+
+Mon Mar 15 06:00:03 2021 So let's flesh out the cartoon we think we're
+following, here:
+
+  ABC
+  ABC.......
+  ABCTL..... < 0pick, 3drop.
+  ABT3C..... < -pick, 2drop
+  AT3BCTL... < -pick, 1drop / 1pick, 3drop
+  T3ABTLC... < -pick, 0drop / 0pick, 3drop
+  c.AT2BC... < dropped      / -pick, 2drop
+  c.T2ABCTL. <              / -pick, 1drop / 2pick, 3drop
+  cT2.ABTLC. <              / -pick, 0drop / 1pick, 3drop
+  cb..ATLBC. <              / dropped      / 0pick, 3drop
+  cb..T1ABC.                               / -pick, 2drop
+  cb.T1.ABC.                               / -pick, 1drop
+  cbT1..ABC.                               / -pick, 0drop
+  cba...ABC.                               / dropped
+
+
+[40:
+
+Mon Mar 15 06:14:53 2021 Well, that seems vaguely plausible.  Still
+need to deal with stripping the plating and 'blessing' the offspring.
+
+But nap time.[41:
+
+Mon Mar 15 12:12:29 2021 OK down to the home stretch here.  Let's see
+if we can sprint to trucks transporting..
+
+:41]
+
+:40]
+
+:39]
+
+:38]
+
+:37]
+
+:36]
+[42:
+
+Mon Mar 15 12:13:26 2021 So our 1-high cartoon doesn't have to deal
+with dressing the lines, but we think we're going to do that at
+release and at drop..
+
+We're going with UnloadedTrailer.mStepsTilPickup, and
+Truck.mStepsTilDropoff.  mHeadCommander needs object size (which is in
+mMin), but how is it going to count truck rolls, i.e., steps till
+pickup?[43:
+
+Mon Mar 15 12:26:27 2021 Well it's crazy wasteful but there's room for
+another B2D.BCoord in Plate, so just doing that for now.  (Here's the
+current layout:
+
+  /*__________________________________________________
+  | COMPONENTS of Plate (4) (67 bits total) are:
+  |
+  | Pos	| Bits	| Name	| Type (classid)
+  | 0	| 16	| mLocation	| B2D
+  | 16	| 16	| mMin	| B2D
+  | 32	| 16	| mMax	| B2D
+  | 48	| 8	| mTruckRolls	| Int(8)
+  | 56	| 6	| mSource	| Unsigned(6)
+  | 62	| 1	| mHeadCommander	| Bool(1)
+  | 63	| 2	| mTreePhase	| Unsigned(2)
+  | 65	| 0	| super	| Printer (5)
+  | 65	| 0	| base	| Utils (6)
+  | 65	| 0	| base	| UrSelf (0)
+  | 65	| 0	| base	| PrintBase (17)
+  | 65	| 0	| base	| SPOT (18)
+  | 65	| 0	| base	| Parms (19)
+  | 65	| 2	| base	| SPOTStageBits(2u) (26)
+  | 67	| 0	| base	| SPOTStage (33)
+  |___________________________________________________
+
+and we still have four bits left.. BUT note we aren't even using
+RotateContent yet -- that'll cost two more right there.)
+
+:43]
+
+:42]
+[44:
+
+Mon Mar 15 13:03:31 2021 So, head commander behavior (in
+processUPREADY):
+
+ if truck or trailer visible in SN 1-8, return
+ if mTruckRolls < mMin.mX
+   rollTruck
+   return
+ sendInTheCleaner
+
+:44]
+[45:
+
+Mon Mar 15 13:23:49 2021 OK the head commander rolled a truck.  Now we
+need that to do something.[46:
+
+Mon Mar 15 13:52:03 2021 OK, got around an ish, now looking at
+Truck.checkWing(SN sn), which says:
+
+  // Return false if wing okay or successfully init; true if problem and died
+
+How does that really go?  It wants to involve mReadyBits.
+
+..let's change it to checkWing(Bool north) since it needs to be
+controlling the sites anyway.[47:
+
+Mon Mar 15 14:04:39 2021 Wait, I was thinking checkWing was dressing
+the line but that can't be it, because that requires a three-way
+return.  checkWing has to be just flooding the line.  So it should not
+be checking ready bits.[48:
+
+Mon Mar 15 15:20:04 2021 OK we're floundering a bit in the
+Truck.update() method, which currently looks about like this:
+
+      virtual Bool update() {
+        if (super.update()) return true;
+        if (processDeath()) return true;
+        if (processDeparture()) return true;
+        if (processPickup()) return true;
+        //    if (processArrival()) return true;
+        if (processDropoff()) return true;
+        if (processDrive()) return true;
+        return false;
+      }
+
+and the pattern, such as it is, is that processX is supposed to return
+
+ - false for this event to continue because X is irrelevant or done
+ - true if X is pending and this event should end to wait for another, or
+ - true after calling die(), for this event to end, and then the world
+
+[49:
+
+Mon Mar 15 15:31:01 2021 So do the Truck.processXs really follow that?
+
+ - Printer.processDeath() does
+
+ - Truck.processDeparture() returns false if ew[4] is not an
+   unloadedtrailer.  That seems wrong?
+
+:49]
+
+:48]
+
+:47]
+
+:46]
+
+:45]
+[50:
+
+Mon Mar 15 18:01:44 2021 OK come on.  About last chance to get
+something working here.  Head commander is running a loop
+
+ for (rolls = 0; rolls < objectsize.mX; ++rolls) {
+   waitForNoTrucksInMooreNgb()
+   Truck t(mMax.mY, mLocation.mY, mMin.mX)
+   UnloadedTrailer ut(rolls)
+   ew[4] = t; ew[12] = ut;
+ }
+
+and a Truck is like
+
+ phase0:
+   createWings
+   waitForBothWings
+ phase1:
+   ut = ew[4]
+   for (steps = 0; steps < ut.mStepsTilPickup; ++steps)
+     waitForBackWing
+     driveTruck
+   loadTruck
+ phase2:
+   for (steps = 0; steps < mStepsTilDropoff; ++steps)
+     waitForBackWing
+     driveTruck
+ phase3:
+   waitForBackWing
+   unloadTruck
+   vanish
+
+:50][51:
+
+Mon Mar 15 20:34:28 2021 OK a lot of progress: The TruckPhases
+clarified and simplified things a lot.
+
+We just 'successfully' cloned our first test object.
+
+Why the quotes?  Like evil Kirk from a transporter malfunction, we
+just produced a mirror image clone..
+
+[52:
+
+Mon Mar 15 20:44:49 2021 And geez will you foggen look at :39: above!
+Our HAND-DRAWN CARTOON ALSO produced a mirror image AND WE DIDN'T
+NOTICE!
+
+So we want to pick up from the back.  Let's redraw
+
+  ABC
+  ABC.......
+  ABCTL..... < 2pick, 1drop.
+  ABTLC..... < 1pick, 1drop
+  ATLBCTL... < 0pick, 1drop / 1pick, 3drop
+  T1ABTLC... < -pick, 0drop / 0pick, 3drop
+  a.AT2BC... < dropped      / -pick, 2drop
+  a.T2ABCTL. <              / -pick, 1drop / 0pick, 5drop
+  aT2.ABT3C. <              / -pick, 0drop / -pick, 4drop
+  ab..AT3BC. <              / dropped      / -pick, 3drop
+  ab..T3ABC.                               / -pick, 2drop
+  ab.T3.ABC.                               / -pick, 1drop
+  abT3..ABC.                               / -pick, 0drop
+  abc...ABC.                               / dropped
+
+[53:
+
+Mon Mar 15 20:50:57 2021 Yeah that looks more like it.  And we do
+2u*mTruckRolls+1u for mStepsTilDropoff?  Looks like..
+
+:53]
+
+:52]
+
+:51]
+[54:
+
+Mon Mar 15 21:02:09 2021 OK, now not mirrored, getting closer.
+Current issues:
+
+ - We need to deactivate copied Plate -- once the trucks disappear
+   it's starting to mess things up in the kid
+
+ - We don't actually need or want to copy the head commander column!
+   We should just send in the cleaner one step earlier.
+
+:54]
+[55:
+
+Tue Mar 16 00:06:30 2021 OK it's working.  Let's push our luck and see
+how bad RotateContent blows up..[56:
+
+Tue Mar 16 00:18:31 2021 OK had a couple places where we initted atoms
+without copying from an existing, and needed to set their mRots by
+hand.  Looking plausible now, except flood plating off the edge of the
+universe isn't blowing up.
+
+[57:
+
+Tue Mar 16 00:24:18 2021 OK that's fixed.
+
+But here's a more substantial problem: Filling out the bounding box
+during DNBOUND doesn't die if it encounters more Content that it
+hadn't seen during DNFLOOD.
+
+I guess we could say that if you find an empty you'd like to plate
+during DNBOUND, you have to check the empty's neighbors, and if any of
+them are in the box, but aren't empty or plate, you have to blow up.
+
+:57]:56]
+
+:55]
+
+[58:
+
+Tue Mar 16 00:59:23 2021 Urgh, and I think mRot is messing up my uses
+of md.getSiteCoord!  Need to provide the rot, right?  The right
+rot?[59:
+
+Tue Mar 16 03:10:08 2021 I think it was a few more places where I set
+up atoms denovo and forgot to copy the prevailing mRot.
+
+So I think we're getting pretty close here.  Still sort of see some
+fogups possible in DNBOUND where it looks like a possible fencepost
+allowing plating over a Content, but that might have been my tired
+eyes.
+
+[60:
+
+Tue Mar 16 03:12:07 2021 Trying to import FrobGrass.ulam into this
+structure!
+
+:60]
+
+:59]
+
+:58]
+[61:
+
+Wed Mar 17 04:21:30 2021 OK, so, past the t2sup and evaluating the
+potential 'long run' that I started around 10pm yesterday.  Looks like
+a trapping state has occurred in swaplines:
+
+ .S..S..S
+ S..S..S.
+ S..S.S..
+ .S..S...
+     ^
+   here
+
+which appears to be due to failure to distinguish between my Plate and
+a neighbor's Plate, leading to crossed build plates -- it looks like
+the front (NE-SW) diagonal swapline was actually heading S while the
+two cupped swaplines (NE-S-SE) were heading E.
+
+So I think there's at least two issues we know about:
+
+ - We messed something up when we restricted the DNBOUND flood radius
+   -- sometimes we get slightly non-rectangular build plates
+
+ - Unless Plate can distinguish self Plate from other Plate -- or
+   inside from outside -- this sort of thing is going to continue to
+   happen.
+
+I guess if I was just going to march on with the dev, we should
+investigate the former issue while thinking about the latter.
+
+[62:
+
+Wed Mar 17 04:32:10 2021 In that context, a related question is:
+
+ - Should we do a second full reduction to the root before allowing
+   the head commander to begin releasing?
+
+Or a different angle on it: During the UPBOUND reduction, could we
+propagate incremental changes to min and max back down, and avoid the
+second round trip?  There's a well-foundedness claim that 'mins can
+only get minner and maxes can only get maxer'..
+
+But I think no.  There's a point to distinguishing 'first plate' from
+'second plate': Only first plate defines the boundaries of the
+reproducing self.  The second plate 'just' claims temporary space
+needed for the build.
+
+But how about this: When Plate foo encounters another Plate bar during
+DNBOUND, foo should examine bar's state and bounds to determine
+whether they're from the same object or not.
+
+Every Plate carries origin and bounds info!  No additional tags or
+nonces are needed (in principle at least) to distinguish self and
+non-self Plate.
+
+And this makes us wonder -- now that we are doing Plate.mLocation,
+.mMin, and .mMax -- maybe we c|should ditch the whole switching to
+0-based origin.  Have mLocation be relative to the root, and have all
+the 0-based stuff just be (mLocation - mMin) after DNBOUND has
+completed.
+
+Then given any Plate b at location 'boff' wrt self, the invariant is
+
+ C2D zPos() { return mLocation - mMin; }
+
+ Bool isKin(Plate b, C2D boff) { return zPos() == b.zPos() - boff; }
+
+modulo being in an acceptable phase to trust zPos.
+
+[63:
+
+Wed Mar 17 05:26:43 2021 So that is really totally obvious and also
+drives home the importance of the first plating and the location of
+the root.
+
+Ah but now we need to be careful.  Once we start running trucks
+through, Plates get moved without updating their coords, so that moves
+their claimed origin.  We could fix that, though, couldn't we?
+Because we're saying we're only rolling on top of existing plate, so
+truck swapping can't push any plate outside the min or max bounds.
+
+We just need to do movedplate.mLocation.mX += 2, basically, and we're
+done.
+
+Well that all seems quite good and obvious.
+
+But it's another substantial redo..
+[64:
+
+Wed Mar 17 06:06:52 2021 OK, committed all this stuff as '2DPrinter,
+gen 2'.  The implicit-zero mapping is gen 3.[65:
+
+Wed Mar 17 06:08:03 2021 So, what are our phases to be?  Currently:
+
+  typedef Unsigned(2) TreePhase;
+  constant TreePhase cTREEPHASE_DNFLOOD = 0u;  // Surrounding content and localizing, new kids
+  constant TreePhase cTREEPHASE_UPBOUND = 1u;  // Min and max bounds up, no kids or kids done
+  constant TreePhase cTREEPHASE_DNBOUND = 2u;  // mMin,mLocation,mMax-=globalmin, down, new kids
+  constant TreePhase cTREEPHASE_UPREADY = 3u;  // Kids are ready
+
+[66:
+
+Wed Mar 17 07:45:40 2021 Now wondering if we might want to do
+rock-paper-scissors instead of counting.  Or double RPS if we need 
+separate down and up phases.  I'm tempted by this idea because it
+suggests a way to make the reproduction process itself somewhat
+programmable.  "If PHASE do OP and enter PHASE"
+
+:66]
+[67:
+
+Wed Mar 17 07:49:01 2021 Wait.  If we don't remap coords, how do we
+know how big the object is?  Have to invert the x-dimension extension
+to find the original x-max, and know that's the object width?[68:
+
+Wed Mar 17 12:41:11 2021 After nap.  Well suppose we leave the coords
+as the original object position all along, and have everybody compute
+the build plate extension themselves?  Same work either way, but the
+data members can have clearer names and more durable meanings.
+
+Although I guess the meaning isn't completely clear or durable as the
+trucks start to move things?
+
+[69:
+
+Wed Mar 17 14:12:11 2021 After walk.  Well, plate can't communicate
+across truck lines -- at least not without help -- because of
+priority, so the inconsistency of pre-truck and post-truck coordinates
+is officially immaterial.  As long as the two plates of interest are
+on the same side of the same number of trucks, their numbering is
+consistent?
+
+Well no that's not true: We're explicitly including a one-high Plate
+border around the whole thing -- that DOESN'T get moved by the
+trucks.  So their coords go bad as soon as the first truck passes, and
+they never get fixed.
+
+But if we do the mLocation update during truck swapping, that keeps
+the swapped plates consistent with the 'cosmic background reference'
+border, right?  Well, at least if min/max was the build plate and not
+the object position relative to the root.[70:
+
+Thu Mar 18 00:39:51 2021 OK, so could we (start in to) do this?  One
+further thing on the moving-location-of-origin thing:
+
+If we insist that the root plate be (magically) set up not at (0,0) at
+the beginning of the process is NOT the plate root, but is instead AN
+ATOM OF THE OBJECT TO BE COPIED/MOVED..
+
+:70]
+
+:69]
+
+:68]
+
+:67]
+
+:65]
+
+:64]
+:63]
+
+:62]
+
+:61]
+[71:
+
+Thu Mar 18 14:59:46 2021 OK, reset.  Let's get a 3rd gen idea cleaned
+up enough to try, here.
+
+ - Winner: Use implied origin to distinguish kin from non-kin Plate
+
+ - Get Plate, Truck, and Trailer onto SPOT watchdog stuff, for
+   last-ditch cleanup.  Truck progress is moving.  Plate progress
+   is.. what?  Changing state during config and that's it?  The repro
+   has to finish before Plate loses it?
+
+ - Also consider a reverse XTimer, that does the unlikely counts first
+   and the likely counts last.  Make it easier to set something to
+   trigger 'soon'.
+
+:71]
+[72:
+
+[73:
+
+Tue Mar 23 14:33:34 2021 OK, so had a notes file version skew here,
+had to hack out some duplicated note numbers.  The rest of :72: here
+is now several notes from today, merged together into one.
+
+:73]
+
+Tue Mar 23 13:07:04 2021 So it's been days and days with no hacking
+here.  (Did a cut at a selfimage PCB and sent it off to PCBWay
+though.)
+
+So we absolutely want to do the implied origin for Plate kin
+recognition.  What I'm struggling with is whether that means we want
+to move the origin when a swapline passes, or not.
+
+The important event for non-kin recognition is when Plate is scanning
+locally to decide if we need to miscarry.  And we will never be
+scanning across a swapline because it has higher priority.  So it
+"doesn't matter" whether we rewrite Plate coordinates when we swap
+them or not.
+
+I guess my instinct would be for swapline not to mess with atoms when
+it moves them, if possible.  Is there any reason we really need it to?
+
+Ah: One issue is the border plate.  Since swaplines are NOT swapping
+them, if we don't rewrite coordinates on the stuff we DO swap, they
+will get out of sync with the border.
+
+So that's an argument for saying the border gives us an 'absolute'
+frame of reference independent of reproduction-related movement, so we
+SHOULD rewrite the Plate we move, to stay consistent with that
+space-time-fixed reference frame.  Otherwise, a border Plate looking
+at a moved internal Plate will perceive an inconsistent origin.
+
+
+
+Tue Mar 23 13:20:02 2021 So then, issue #2: So if we rewrite coords,
+that means the root of the Plate tree -- which HAD been located at
+(0,0) -- will no longer be at (0,0) once it's moved.
+
+And does that matter?  As far as I can think, we weren't using that
+identity for anything.
+
+And we had an idea of saying: How about we break that relationship
+immediately, by having the creator of the root Plate be required to
+set the origin to point at itself.  And in principle, Plate could use
+that to establish some kind of identity rule for what to plate.  Like
+having to be a Moore-neighborhood-connected component to that source
+atom. 
+
+
+
+Tue Mar 23 13:31:03 2021 And all that sounds plausible again
+rehearsing it now, but it does sound like a big redo.
+
+But do we see any show-stoppers in it?
+
+ - Instigator points Plate origin at self.
+
+ - Plate scans von Neumann ngb for any (matching) Content.  For each
+   found, scan Moore ngb around that content, plating any empties
+
+ - Once no growth is found, leaves advance and the bounding box
+   propagates up.
+
+ - Final bounding box is broadcast from the Plate root, and box fill
+   commences
+
+ - All through this process, whenever a Plate sees another Plate, it
+   performs a kin/non-kin check.
+
+ - How it responds to non-kin depends on what phase it's in, I guess.
+
+ - If it's surrounding content, it miscarries
+
+ - If it's box filling, it checks if the non-kin is located in the
+   box, and miscarries if so.  Otherwise it ignores it.
+
+ - Trucks swapping parent Plate update the plate's coords.
+
+ - Trucks unpacking kid Plate do what?  Do the trucks even know the
+   destination coord?  I guess they do, since they have to know their
+   dropoff column.  Do they know their row?
+
+Tue Mar 23 13:59:57 2021 At the moment Trucks have mStepsTilDropoff
+and DON'T have an absolute column number.  So unpacking kid plate is a
+problem.
+
+Wait.  Do the child plate coords even change?  Doesn't the kid end up
+right where the parent was, until the final strip-out-the-plate pass?
+
+I think so!
+
+DOH!
+
+Tue Mar 23 13:53:35 2021 Kind of sounds like a plan.
+
+[74:
+
+Tue Mar 23 14:35:44 2021 So, kid plate coords don't change, ever --
+although the final clean-up advances the kid one column, it kills the
+plate so plate coords are moot.
+
+[75:
+
+Tue Mar 23 14:51:59 2021 So in checking that just now, it did remind
+me of one additional issue: The fact that we don't interlock the box
+filling and the truck starting.
+
+Which, in previous design thinking, lead us towards thinking about
+abandoning strict numeric phases in favor of a rock-paper-scissors
+progression that was going to be modular in time so we could stack
+tree-pass computations together without having to assign specific
+numbers to them all up front.
+
+But it really seems more like two phases in the tree case, down and
+up.  On the down, trees grow and broadcast and what-not.  Leaves
+switch to up and specify the base case of the reduction.  Once the
+reduction reaches the root, another down phase can begin?  No third
+color needed?
+[76:
+
+Tue Mar 23 15:13:45 2021 I guess so, because the tree relationship
+provides extra structure.  Although, could the second color be "I've
+gone down".
+
+  All are initted to RED
+
+  Root goes GREEN to trigger operation
+
+  GREEN node performs operation (e.g., flood empty with RED kids), and
+  turns all RED kids GREEN.  Once there are no more RED kids (or
+  convertible empties, etc), node goes BLUE
+
+  BLUE nodes wait for all their kids to be RED, and then reduces and
+  goes RED.
+
+Red Root reduction complete / map can start
+
+Red above green: This map must be seen
+
+Blue above red: It goes to your head
+
+Green leaf means map is (locally) complete / reduction can start
+
+[77:
+
+Tue Mar 23 18:14:19 2021 So that seems plausible dunnit.
+
+:77]
+
+:76]
+
+:75]
+
+:74]
+
+:72]
+[78:
+
+Wed Mar 24 02:03:34 2021 OK so let's implement RPS map reduce.  Tree
+map reduce.  (And it doesn't have to be a tree, does it?  E.g., once
+we have the final bounding box at the root, we could, I'd think, flood
+the box via manhattan distance rather than parent links.)
+[79:
+
+Wed Mar 24 02:14:41 2021 Could we cleanly transfer control to the head
+commander?  That's still an outstanding issue here, yes?  [80:
+
+Wed Mar 24 02:24:26 2021 Come on this is a big enough step without
+trying to get smart here too.
+
+So the overall plan is:
+
+ root starts red.  goes green on RXTimer.
+
+ case Green:
+   mapGreen
+   if ! kidsAllRed() wait
+   mapOut();
+   turn Blue;
+
+ case Blue
+   waitBlue
+   if kidsAllRed() {
+     reduceIn();
+     turn Red;
+   }
+
+ case Red:
+   if 
+   
+kidsAllRed
+  scan and decide
+
+doGreen()
+  if (invalid(max)) plateContentWithRed()
+
+doBlue()
+ ;
+
+
+mapOut()
+  if (invalid(max)) turnKidsGreen
+
+plateContentWithRed
+  makeNewRedKidsNearContent
+
+  
+
+:80]
+
+:79]
+
+:78]
+[81:
+
+Wed Mar 24 03:53:06 2021 Hmm always complications.  Another issue is:
+when the truck unloads, there's TWO sites it has to fill, and the
+carried atom only provides one.[82:
+
+Wed Mar 24 04:15:48 2021 Just trying the existing code: And even when
+the truck is carrying a Plate, after unloading it calls helloClone()
+on the offspring, which currently reinitializes its fields, so even
+though it could know its correct position in the plate grid, it
+doesn't.
+
+[83:
+
+Wed Mar 24 04:19:00 2021 So I'm thinking we're going to need to blank
+screen this thing yet again, and import as we build..  We'd like
+trucks to know where they are, for example: Can we afford that?[84:
+
+Wed Mar 24 04:20:18 2021 Currently it's:
+
+      __________________________________________________
+      | COMPONENTS of Truck (28) (61 bits total) are: 
+      | 
+      | Pos	| Bits	| Name	| Type (classid)
+      | 0	| 8	| mPlateHeight	| Int(8)
+      | 8	| 8	| mOurRow	| Int(8)
+      | 16	| 8	| mStepsTilDropoff	| Int(8)
+      | 24	| 2	| mReadyBits	| Bits(2)
+      | 26	| 2	| mTruckPhase	| Unsigned(2)
+      | 28	| 1	| mGarbageTruck	| Bool(1)
+      | 29	| 0	| super	| TruckBase (3)
+      | 29	| 0	| base	| UrSelf (0)
+      | 29	| 2	| base	| RotateSPOT (15)
+      | 31	| 0	| base	| Printer (23)
+      | 31	| 0	| base	| PrintBase (32)
+      | 31	| 0	| base	| Parms (33)
+      | 31	| 0	| base	| SPOTStage (40)
+      | 31	| 0	| base	| SPOT (39)
+      | 31	| 2	| base	| SPOTStageBits(2u) (41)
+      | 33	| 28	| base	| PackedFront (43)
+      | 61	| 0	| base	| PackedAtom (44)
+      |___________________________________________________
+
+and
+      __________________________________________________
+      | COMPONENTS of UnloadedTrailer (29) (14 bits total) are: 
+      | 
+      | Pos	| Bits	| Name	| Type (classid)
+      | 0	| 1	| mDeparted	| Bool(1)
+      | 1	| 8	| mStepsTilPickup	| Int(8)
+      | 9	| 1	| super	| Trailer (8)
+      | 10	| 0	| base	| UrSelf (0)
+      | 10	| 2	| base	| RotateSPOT (15)
+      | 12	| 0	| base	| Printer (23)
+      | 12	| 0	| base	| PrintBase (32)
+      | 12	| 0	| base	| Parms (33)
+      | 12	| 0	| base	| AtomUtils (34)
+      | 12	| 0	| base	| SPOTStage (40)
+      | 12	| 0	| base	| SPOT (39)
+      | 12	| 2	| base	| SPOTStageBits(2u) (41)
+      |___________________________________________________
+
+
+and
+      __________________________________________________
+      | COMPONENTS of LoadedTrailer (35) (64 bits total) are: 
+      | 
+      | Pos	| Bits	| Name	| Type (classid)
+      | 0	| 1	| super	| Trailer (8)
+      | 1	| 27	| base	| PackedMid (36)
+      | 28	| 32	| base	| PackedBack (37)
+      | 60	| 0	| base	| UrSelf (0)
+      | 60	| 2	| base	| RotateSPOT (15)
+      | 62	| 0	| base	| Printer (23)
+      | 62	| 0	| base	| PrintBase (32)
+      | 62	| 0	| base	| Parms (33)
+      | 62	| 0	| base	| AtomUtils (34)
+      | 62	| 0	| base	| SPOTStage (40)
+      | 62	| 0	| base	| SPOT (39)
+      | 62	| 2	| base	| SPOTStageBits(2u) (41)
+      | 64	| 0	| base	| PackedAtom (44)
+      |___________________________________________________
+
+[85:
+
+Wed Mar 24 04:37:46 2021 Blank screening.
+
+:85]
+
+:84]
+
+:83]
+
+:82]
+
+:81]

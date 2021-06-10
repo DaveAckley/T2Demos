@@ -1,0 +1,2199 @@
+{184}  -*- text -*-
+[0:
+
+Sat May 15 05:50:17 2021 OK:
+
+[1: Sat May 15 06:34:50 2021 First cut anyway
+DONE :1] - Try for Unsigned(7) S2D.Coord
+
+:0]
+[2:
+
+Sat May 15 06:35:02 2021 So now we're at
+
+  /*__________________________________________________
+  | COMPONENTS of Test14 (16) (48 bits total) are:
+  |
+  | Pos	| Bits	| Name	| Type (classid)
+  | 0	| 0	| du	| DebugUtils
+  | 0	| 2	| mTick	| UMod(2,1)
+  | 2	| 2	| mTock	| UMod(2,1)
+  | 4	| 28	| super	| B2DPlate (11)
+  | 32	| 16	| base	| StdPlateOpState (12)
+  | 48	| 0	| base	| UrSelf (0)
+  | 48	| 0	| base	| Plate (1)
+  | 48	| 0	| base	| PlateOpState (2)
+  |___________________________________________________
+  */ //gcnl:NodeBlockClass.cpp:2499
+
+and we're using Unsigned(7).maxof as an illegal B2D coord value, so
+B2D here has a range of 0..126.
+
+[3:
+
+Sat May 15 06:44:46 2021 Now another issue is that Tecton/move was
+not, I believe using the OMGISO 'containing plate' theory.  It was
+still labeling itself as off-the-plate when it started.  Can we fix
+that up?
+
+It does mean that there'll be a weird 'single piece of containing
+plate inside the middle of a contained plate' -- something a bit
+different than what happens during Tecton/grow, because in the latter
+the containing plate IS the resulting plate, so all the
+post-Tecton-processed sites are on the (previously) containing plate.
+
+[4:
+
+Sat May 15 07:19:14 2021 Actually we'd already implemented that, and
+it's already working; it just wasn't in the version we were letting
+run.  So I wasn't lying about that in t2sup #298 so that's good.
+
+:4]
+
+:3]
+
+:2]
+[5:
+
+Sat May 15 12:51:17 2021 OK so come on come on new functionality time
+go go go.
+
+What Shall We Make Now?
+
+Thoughts:
+
+ - A tiny fast-moving 'message' plate.
+
+ - Some mechanism for entering and exiting a plate.
+
+ - A first cut 'virtual atom', whatever we're going to call that?
+
+[6:
+
+Sat May 15 12:53:47 2021 Let's try for some kind of 2x2-ish plate that
+moves atomically.  [7:
+
+Sat May 15 12:54:58 2021 Do we want to be lifting some behavior out of
+Test14 around this point?
+
+Well maybe but let's go straight at Msg10.ulam for now.  Or Sig10
+maybe?  We're talking like neurotransmitters here.  And I guess one
+point is that such signals begin to rotate us away from spatial
+identification towards nominal identification.  I'm a serotonin
+regardless of where I'm found.
+
+[8:
+
+Sat May 15 13:04:28 2021 I guess I think we might head for
+combinatoric circuits first.. level signaling?  event signaling?  What
+about some simple interplate gradient mechanism?  I guess one point
+for signals is to reach beyond an event window without moving.
+
+Demonstrating composition would be big: Implementing some compound
+logic function by building simple logic functions internally that
+'want' to hook up with each other in certain ways.
+
+First level could be hook up based on position -- inputs are certain
+sides, outputs other sides?  Just seed subplates in the desired order?
+Have some internal signalling mechanism for desired movements?  That
+might be worth exploring right there.
+
+With the current border patrol scheme, nobody gets to express any
+positional desires other than full-side-min-clearance.  It would be
+cool / useful to have ways for 'westbound input signals tend to come
+from a bit south of my receptor so I'd vote for us to move south if
+that's convenient'.
+
+I guess a better idea there would be to have the receptor be able to
+migrate up and down its edge, and have a separate background process
+that favors centering (or equally distributing) receptors on
+edges. [9:
+
+Sat May 15 13:42:55 2021 But that would require having a receptor
+concept.  What if a root could release a receptor into its own border,
+and let it migrate.  But what even is a receptor?  A subplate?  That
+would block the border.  Just some paint on a few Test14s?  What good
+is that?
+
+[10:
+
+Sat May 15 13:49:35 2021 So again it begins with what/how do we want
+to compute.  And I'm thinking, again, that the first subtle
+computation we want to focus on is plate tectonics.  Suppose we had a
+'controller' 2x2 that hung out near the root and spoke to it about
+movement decisions.  And other crap in the cell could
+opportunistically send tectonic recommendations towards the
+controller.
+
+And we could even have 1x1 signals, I'd think, that would not use
+root/max clocking.  Maybe that would be one good place to start.  A
+minimum-size signal plate that diffuses towards a target.[11:
+
+Sat May 15 15:42:20 2021 OK we have Sig10.ulam diffusing in a
+randomly-chosen direction defined by a site number target.  And at the
+moment, although it won't enter a subplate, it has no compunction
+about diffusing right off its containing plate and out into the
+world.
+[12:
+
+Sat May 15 15:53:29 2021 I think we're going to want intra-plate
+signaling in some capacity.  Let's try saying you can't enter Empty
+and see how it looks.[13:
+
+Sat May 15 15:59:43 2021 OK, Sig10.mContainerOnly seems to work.
+We're going to need some kind of reasonably short time-out on these
+things or they're going to eat the universe.[14:
+
+Sat May 15 16:28:54 2021 OK they have an RXTimer base class now and
+only last so long.
+
+But what would a plate want to signal about?  Well we talked about
+tectonics advice.  We could send clearance data via signal rather than
+in OpRpy?  Buut signals are quite destructive, because they don't
+clean up after themselves, leaving the plate to heal around this
+rapidly-moving thing.  Don't necessarily want too too much of that
+going on.[16:
+
+Sat May 15 16:38:06 2021 It might not be that horrible to have Sig10
+do a swap and a fix-up on its containing plate.  Or Plate could have a
+way of signaling that it doesn't want that, because it has some
+additional position-dependent state beyond just size/pos.
+
+Or we could just expand the Plate API to give control over move to the
+plate being moved, and it could fix up however it likes.  That's
+probably the ticket.[17:
+
+Sat May 15 16:49:04 2021 But the API's so small and clean now..
+
+[18:
+
+Sat May 15 16:50:08 2021 What about a little associative memory?
+A plate for the memory, with sync just for growth and movement, while
+memory requests and replies go in and out over the border via
+signals.  Might have some way to integrate use information over the
+border and use that for growth decisions.
+
+Signals diffuse around the plate they're on, and look for subplates
+that respond to some kind of Bool keyLookup method.  An association
+could be a plate containing two little subplates for key and val?  But
+the association plate has to get some area to exist at all -- like it
+can't be a 2x1 key plate atop a 2x1 val plate within a 2x2 association
+plate.  Maybe the association plate could be the key plate, and it
+just stretches to cover the value.[19:
+
+Sat May 15 17:07:45 2021 Well, something along these lines seems
+perhaps promising.  Enough to push on it a bit more anyway.
+
+But it's Saturday.  Time for cocktails and second-round cooking.
+
+:19]
+
+:18]
+
+:17]
+
+:16]
+
+[15:
+
+Sat May 15 16:37:19 2021 How about DHS?
+
+:15]
+
+
+:14]
+
+:13]
+
+:12]
+
+:11]
+
+:10]
+
+:9]
+
+:8]
+
+:7]
+
+:6]
+
+:5]
+[20:
+
+Sun May 16 09:27:59 2021 OK, so a re-tuned Test14 filled a {{3H3}}
+overnight in a reasonably satisfying way.
+
+In /data/ackley/SIMDATA/20210516010337.mp4
+
+Then I nuked a corner of it and that locked up a subplate, which
+remains locked up now many kAEPS later and just drives home that we
+still do need a watchdog progress mechanism.  Tecton would be a good
+place to start on that, although we imagine it needs to be plate-level
+eventually. [21:
+
+Sun May 16 10:14:36 2021 Well just put an RXTimer in Tecton directly,
+rather than screwing with Plate right now.  That seems likely to be
+enough to fix the post-nuke lockup we had in 20210516010337
+
+:21]
+
+:20]
+[22:
+
+Sun May 16 10:18:04 2021 If we're serious about heading toward useful
+computation, I think we want to do more of the map/reduce-y SPOTish
+stuff?  What about a data worm to run between plates?  A DHS in a
+Plate sorting data worms would be a plenty good computing demo.  How
+would that work, though?  How would a sorter divert a data worm if the
+key comparison was found in the middle of the worm?  Seems like the
+worm would have to be rotating the key forward as 'layers' of sort
+were passed.
+[23:
+
+Sun May 16 11:57:20 2021 What about a flow-through associative memory?
+Instead of tectonically moving data back and forth like in the SPOT
+demo, have the data split like teeth of a comb, so queries -- likewise
+split -- can run down the aisles between.  Could still be built on
+backman / swapline loose structure, but at stride two.  If it was
+stride three there could be a row to copy out a result next to the
+query, rather than behind it..  I think nah.
+
+And a query could become a datum if it reached the end without finding
+its thing, by shifting phase.
+
+[24:
+
+Sun May 16 12:18:33 2021 But the big idea is building models, not
+computing.  Making a nucleus that is a model of a larger plate.
+Sending clearance reports to the nucleus.
+
+:24]
+
+:23]
+
+:22]
+[25:
+
+Sun May 16 12:27:42 2021 Have a pretty good livelock in a plate in the
+current run -- two subplates rubbing in a NW corner configuration.  I
+think it might be possible for the two subplates to reach a state that
+lets the containing plate tock reach the root, but it seems waaaay
+unlikely given the sizes involved.[26:
+
+Sun May 16 12:56:34 2021 Still locked up.  Move mDog from Tecton to
+B2DPlate maybe?[27:
+
+Sun May 16 15:26:19 2021 So now have watchdogs running in root and max
+(looking for tick or tock) (and tectons, looking for swap forward).
+Interesting (sort of) that when I had all Plate atoms looking for
+tick/tock, it tended to blow up the Plate even with very low RXTimer
+odds.  Just goes to show if you throw quadratic dice you'll see low
+probability events pretty often.[28:
+
+Sun May 16 16:17:30 2021 Well, we've got another pair of crossed
+subplates that look pretty damn tight, and even though I expect the
+watchdog will catch it eventually, that's going to kill our only
+plate.
+
+I'm thinking we need the border patrol to look diagonally at the
+corners somehow.  Maybe that's something to do in concert with redoing
+the border patrol as previously noted.
+[29:
+
+Sun May 16 16:26:30 2021 I guess let's go with the suggestion?  Or
+have explicit BorderPlate?  Or have tick-tock run only on the
+borders??
+
+:29]
+:28]
+
+:27]
+
+:26]
+
+:25]
+[30:
+
+Mon May 17 16:31:55 2021 OK back to signals and something with that.
+
+:30]
+[31:
+
+Mon May 17 21:25:13 2021 Let's make a little language with
+instructions like 'go to this location' and 'deploy a plate with these
+parameters' and use it to make a programmed creature that constructs
+itself, with a bunch of subplates, according to that program.
+
+We need enough storage to have reasonable flexibility in configuring a
+subplate.  Maybe it isn't specific (x,y) targets but 'go E to
+containing border' or like that.  Working up to something that could
+express incrementally copying the program to a new 'controller'
+plate.
+
+:31]
+[32:
+
+Tue May 18 01:45:20 2021 Go for evo-devo as the programming goal.
+Include stuff like 'broadcast this to the plate' and have subplates
+able to pick up the passing signals and store them.  Use it to pass
+along the programming that is building the creature.
+
+Suppose each plate contains one byte of payload..
+
+We could have a flag that gets advanced boustrophedonically on the
+tick and reports back its atom's payload on on the tock.  Or we could
+have the whole payload circulate through the plate like a data worm.
+Circular data worm overlaid on plate.  But if it's literally in the
+plate then it'll get all overwritten all the time.  We need to not
+think that way.
+
+So we need a chain-of-subplates concept instead.  Data worm in
+subplates.  Now Sig10 shows that we can do single site plates as long
+as we're not doing the distributed clock, so what about we try for a
+dotted line data worm: Single sites bidirectionally linked by sites
+preferring distance-2 connections.
+
+:32]
+[33:
+
+Wed May 19 02:21:49 2021 OK, working on Stack10.ulam a 'live push-down
+stack in a plate' that I decided to go for last night, as part of a
+push to lay a programmable layer atop plates, in delivery of the
+'plates compute something' goal.
+
+Currently wishing I had the plate repair and growth mechanics lifted
+out of Test14.ulam, so Stack10 could inherit self-construction
+mechanics.[34:
+
+Wed May 19 03:10:19 2021 Extended API possibilities:
+
+ C2D targetPlateSize() ; //< Ultimate desired size for this plate
+ C2D targetPlatePos() ;  //< Desired root position in parent plate
+
+Might want anchoring and weighting mechanics like fogging window
+packing.  'This plate wants to align with the NW of its parent, and be
+four rows high and 50% of its parent wide.'  Then you could have a
+stack that automatically grows with the size of the machine it's in.
+
+But that could be folded into this 'target' API later, right?
+Implementor could look at the parent and figure out whatever it likes?
+
+But if it was declarative it would be easier to express in code.
+[35:
+
+Wed May 19 08:59:35 2021 Well we'd need a name for this 'targetable'
+level.  TPlate?  It's about being a part of a bigger machine.
+
+Well I guess say TPlate to get us going.  [36:
+
+Wed May 19 09:09:45 2021 Hmm well we're also going to be bringing in
+distributed sync and everything.  Who owns computeTock for
+example?[37:
+
+Wed May 19 09:11:52 2021 PlateOp.ulam.  (Hmm, PlateOp.downstreamMerge
+appears to assume OpRpy can be bitwise-ANDed to update, even though
+we're using two bit numbers now.  Is anybody calling downstreamMerge?)
+[38:
+
+Wed May 19 09:14:28 2021 Well yes, Test14 appears to be calling
+it. [39:
+
+Wed May 19 09:24:09 2021 I guess the risk is: If downstream had 2 for
+a min distance, and we had 1, we'd merge that into a 0 instead of a
+1.  Well at least it's conservative.  We ought to be able to find an
+instance of that in the currently running sim, right?[40:
+
+Wed May 19 09:34:43 2021 Well, we didn't find one but we made one, and
+it appears to go from 2 (==10b) to 1 (==01b) without a problem.  Are
+we sure the default downstreamMerge is getting called?[41:
+
+Wed May 19 09:39:41 2021 It is, but only to merge downstream replies
+together, starting from ALL_ONES.  Once we've done that,
+Test14PlateOp.computeTock computes our own clearance and then does
+  ..
+        if (ourdist < dist) {
+          reply = setRpyVal2(reply,i,ourdist);
+  ..
+
+to min across the dists.
+
+So unless the running 'reply' of the downstreams can generate a 2 vs 1
+merge I can't see how this issue could actually be triggered.[42:
+
+Wed May 19 10:02:20 2021 And we only patrol on the borders -- and the
+field just has 255 in OpRpy -- so it's not clear how we could get a 2
+vs 1 merge among downstream borders?
+
+Let's not worry about it now I guess.  Where were we?
+
+Do we want to call it TPlate when it's also the locus of the
+distributed clock?  Call it SyncPlate?  SPlate?   [43:
+
+Wed May 19 10:19:56 2021 Maybe StdPlate?  We already have
+StdPlateOpState as an implementation of PlateOpState..  On that view,
+this would be like SyncPlate for the API and then StdSyncPlate for the
+obvious data members.[44:
+
+Wed May 19 10:29:51 2021 OK so then there's the question of whether we
+want to define computeTick and computeTock to be stacked via
+subclasses doing like super.computeTock, or wrapped with a new API
+method exposed instead, like checkRootAction() or something.[45:
+
+Wed May 19 17:23:20 2021 OK worked through an ish
+
+:45]
+
+:44]
+
+:43]
+
+:42]
+
+:41]
+
+:40]
+
+:39]
+:38]
+
+:37]
+
+:36]
+
+:35]
+
+:34]
+
+:33]
+[46:
+
+Thu May 20 05:11:01 2021 So what all's the logic of plate tectonics
+like?  For use in window packing.  [47:
+
+Thu May 20 05:23:59 2021 Four bits gravity four bits scale
+
+9 dir gravity
+  plus unmanaged
+  plus 2 bit padding
+
+15 fractions
+  plus 0 == unmanaged. 4 bits
+
+7 bits value (0 == unmanaged)
+1 bit isPct.  8 bits total
+if !isPct, value is in sites
+if isPct, value is % of parent sites
+
+x2 for (x,y) == 16 bits
+x2 for pos == 32 bits?
+
+Consider all possible move/grow/shrink dirs
+  Filter by appropriate clearance
+  Evaluate by packing info
+  Weighted pick
+  Release chosen if any
+
+:47]
+
+:46]
+[48:
+
+Thu May 20 12:56:29 2021 Or should we just have something like
+
+ OpCmd getRequestedTectonic(C2D parentsize, C2D oursize, C2D ourpos) ;
+
+and just filter the result for reasonableness.  We could provide
+helper functions.
+
+:48]
+[49:
+
+Fri May 21 11:21:16 2021 OK we need to bash some code into a shape we
+can push to the tiles and try to get something running while there's
+still enough days to perhaps see something happening.
+
+Can we just get the current mess buildable and change Seed10 back to
+an older Test element?  Maybe, let's see.
+
+:49]
+[50:
+
+Sun May 23 02:20:31 2021 OK so there's a Test14-ish run that's been
+going on the tiles for over a day now and it still hasn't even reached
+the edge of one tile.  Ugh.  Going to have to spend a little time on
+'as efficient as necessary' soon, I think.
+[51:
+
+Sun May 23 02:44:53 2021 But, now, come on, can't we make an
+absolutely crappy hardcoded non-general little push-down stack plate?
+
+Simplifications:
+
+ - Don't move from seed origin at all
+
+ - Don't grow at all; just 'heal' to initial given size.
+
+ - Seed sets a fixed-size Nx4 plate with N = K*2+4 for a K item stack
+   = Call it N=20 for an 8 element stack. [55: Sun May 23 04:50:49 2021
+   = But hey wait why do we need 2 columns deeper in the stack?  Once
+     we start pinning against the bottom of the stack plate there's no
+     reason to keep gaps.  So it's really more like N = K+4 or so,
+     right?
+  :55]
+
+ - Have a minimal set of key patterns:
+
+b: border
+i: stack item subplate
+x: stack border or stack item subplate
+.: empty or stack field plate
+
+ xi. ->  x.i   # propagate push
+ xi.     x.i
+
+ ..i ->  .i.   # propagate pop
+ ..i     .i.
+
+
+ - To push, caller does either:
+   = Writes item to stack (1,1) and (1,2) if (1,1) is empty, or
+   = Blocks if (1,1) is occupied.
+
+ - To read or pop stack top, caller does either:
+   = Read/clear stack (1,1) and (1,2), if (1,1) contains item subplate, or
+   = Read/clear stack (2,1) and (2,2), if (2,1) contains item subplate, or
+   = Block if (1,1) and (2,1) are both empty
+
+ - Stack itself provides no explicit distinction between 'empty stack'
+   and 'incomplete pop response'.  If caller wants to detect stack
+   empty without blocking they need to push and maintain and
+   end-of-stack signal value of their own devising.
+
+ - Callers must be located.. where exactly?
+   = Just off the west wall?
+
+    +-------..       +-------..
+   @123              |34
+    |34             @123
+    +-------..       +-------..
+
+   = No there's more:
+
+     @
+    +1------..       +-------..
+    |23              |34
+    |34              |23
+    +-------..       +1------..
+                      @
+
+      @
+    +-1-----..       +-------..
+    |32              |43
+    |43              |32
+    +-------..       +-1-----..
+                       @
+
+[61:
+
+Sun May 23 12:05:44 2021 Except that last one is unique in that it
+cannot see (0,0) on the stack plate, but all the others can.  We could
+look for stack(1,1) to find our plate, but that might be currently
+empty.  stack(0,0) would be a more stable place to look.  [62:
+
+Sun May 23 13:02:51 2021 Oh, neither of the bottom sites can see
+(0,0).  Let's skip just that last guy and look for (0,1).
+
+:62]
+
+ :61]
+
+[52:
+
+Sun May 23 03:17:15 2021 And in fact all six of those sites could be
+populated simultaneously as long as they had some way to decide who
+was eligible to push or pop next.[53:
+
+Sun May 23 03:52:44 2021 Or they could all be populated by the same
+surrounding plate that's using the stack, and potentially any of them
+could advance the computation -- for example, to discard the top of
+stack -- depending who got an event first..  That's the power of
+stigmergy: If everything's out there, anybody who can see the 'board'
+can make the next move.
+
+It's also a way to move SPLAT beyond @-centered rules to, like,
+class-centered rules.  If you're an atom of type TYPE, and you can see
+all of any of these patterns, located anywhere in your ew, you should
+make the first transition you see.  Being careful to step on yourself
+last if that happens to be indicated by the binding you found.
+
+We could do a hacked version of that using plate coords to minimize
+the search problem.
+
+[54:
+
+Sun May 23 04:08:26 2021 All this cleverness would have a huge risk of
+blowing isotropy, though.  Maybe we say that's okay, that's on the
+programmer.  So it wouldn't be wise to use this mechanism to do
+centerless-DReg or something.. where even though you are a DReg
+yourself, you might recognize another DReg elsewhere in your window
+and do the transition on behalf of that guy.
+
+:54]
+
+:53]
+
+:52]
+
+
+:51]
+
+:50]
+[56:
+
+Sun May 23 09:30:27 2021 OK, we need an implementation for the
+push/pop propagation rules.  What kind of helper functions do we want?
+I guess we'd like 'give me row Y of my column if accessible' --
+actually 'give me row 1 of column X if row 1&2 are accessible', and
+I'll scan for 'xi.' and '..i' patterns with that using [myx-4..myx+4]
+or something.
+
+
+:56]
+[57:
+
+Sun May 23 10:32:32 2021 OK so we just saw our first successful push
+propagation, and it was sweet!  The TestStack15 atom that did was
+miles from the action, but it figured out that it could do it and so
+it did it!  Nice!
+
+Desired improvements:
+
+[58: Sun May 23 11:19:40 2021 Also fixed bugs..
+DONE :58] - Ditch or disarm the plate-leveling clocking; it's just distracting
+   here.  Just don't tick maybe?  Will Plate let us (not) do that?
+
+ - Separate class for stackitem, make payload + payload-based color
+
+ - Bool tryStackPush(Payload topush)
+
+ - Bool tryStackPop(Payload &waspopped)
+
+:57]
+[59:
+
+Sun May 23 11:20:09 2021 OK so we're moving towards offering push and
+pop to the world and we're wondering how that API works.  You'd think
+you'd need to run it on an embodied TestStack15 atom, so that it knows
+where the foggen stack actually is.  But that means we need the helper
+functions and what-not to all work when run from other than ew[0].
+Are they?  I doubt it![60:
+
+Sun May 23 11:23:25 2021 So for example getEWCoordIfItemAccessible is
+subtracting self.positionOnPlate() from a given coord and using that
+as an ew coord -- and that assumes we're in ew[0].  We'd need to be
+checking ew.getSiteNumber(self), mapping that to a coord if it's
+legal, then adding (?) that to our ew-based coords
+
+:60]
+
+:59]
+[63:
+
+Sun May 23 13:24:42 2021 What if we didn't have a separate type for
+stack item, but just put a payload into the stack plate itself?  Then,
+conceivably, we could use stack(0,1).payload and stack(0,2).payload as
+an externally convenient cache for the top-of-stack item.[64:
+
+Sun May 23 14:30:17 2021 OK looks like StackOperator16 is successfully
+pushing random crap on its stack.  Need pop now.
+
+:64]
+
+:63]
+[65:
+
+Sun May 23 23:33:15 2021 OK so we made StackOperator16 that emitted
+random pushes and pops to its neighboring stack and got that to work.
+We added a oneIn(1000) shot at it releasing a grow west tecton and got
+that to work.. kinda.
+
+I'd stripped the distributed clock out of TestStack15, because we
+weren't doing any plate-level operations (except flooding), so
+StackOperator16 had no synchronization between tecton releases and
+eventually it overran itself.
+
+Would it be super-hard to ask tecton to block if it sees a forward
+tecton on its same plate and direction?  That would 'solve' this case
+without full plate sync, although crossing tectons on the same plate
+would still screw up.
+
+Or could we put mTick and mTock back in to TestStack15 without a ton
+of pain, with the clock pausing before the root tick, allowing
+external forces to advance that, and then wait.
+
+..I think we've already reused the space mTick/mTock had been taking,
+though.. [66:
+
+Sun May 23 23:57:52 2021 Yeah, TestStack15 is at 70 bits ATM, and we'd
+need at least two for an evenly-vaguely robust distributed clock.  If
+we cut mOpCmd down to five bits instead of six, we could just fit it
+in.. [67:
+
+Mon May 24 00:00:37 2021 OK, well say 32 possible OpCmds instead of
+64, with 16 already assigned to plate birth / growth / movement /
+death, and the other 16 available for expansion.
+
+ Bool(1) mTick, mTock;
+
+
+ mTick mTock upcount uptick dncount dntock
+  F->T  F      0      0       -      -       root: on external tick
+  F->T  F      N      N                      field tick
+  T     F->T   -      -       0      0       max tock
+
+How about down/wait/up instead of tick/tock?
+typedef Unary(2) DClock;
+DClock mClock;
+cDCLOCK_READY = 0u
+cDCLOCK_DOWN = 1u
+cDCLOCK_UP = 2u
+
+  mClock  upcount  updowns  dncount dnups
+   R->D      0        0        -      -      root: external start
+   R->D      N        N        -      -      field+max down
+   D->U      -        -        0      0      max: up
+   D->U      -        -        N      N      field+root up
+   U->R      N        0        -      -      field+max ready
+   U->R      -        -        N      0      root: ready
+N > 0
+Predicates:
+ isRoot
+ isMax
+ isUpstreamDownAll
+ isUpstreamDownNone
+ isDownstreamUpAll
+ isDownstreamUpNone
+
+[68:
+
+Mon May 24 02:14:28 2021 OK have a cut at TestStack15.DClock, now
+considering how to wire it into StackOperator16.  In particular,
+StackOperator16 is keying off stack(0,1) for its anchor, but the new
+TestStack15.startDClock() method has to be called on stack(0,0), which
+isn't even accessible from this supposedly usable operator position:
+
+    +-------..
+    |34
+    |23
+    +1------..
+     @
+
+But accessing the stack root seems like something a stack operator
+would really be wanting to do.  Thinking we should key on stack(0,0)
+and reduce to these four
+
+                             @              @
+  +-------..   +-------..   +1------..    +-1-----..
+ @123          |34          |23           |32
+  |34         @123          |34           |43
+  +-------..   +-------..   +-------..    +-------..
+
+as the only legal operator positions for the stack.
+
+:68]
+:67]
+
+:66]
+
+:65]
+[69:
+
+Mon May 24 03:12:20 2021 So I think we want to run the TestStack15
+DClock only on its border plate.  All the churning in the field is
+really slowing down the DClock propagation.
+
+:69]
+[70:
+
+Mon May 24 03:29:42 2021 OK that's better, but the existing push
+propagation rule bug is a problem: It's blocking the east border
+sometimes, and when the border reconnects it can be in a globally
+inconsistent state, where max sees one READY upstream and one DOWN,
+and that READY will never become DOWN because it's the ready of an
+incomplete UP wave.
+
+I've rejiggered things so only border READY feeds the watchdog, so
+we'll catch this case eventually, but:
+
+(1) We should fix the damn push propagation bug, and
+(2) We should figure a four-phase DClock that wouldn't lock up here
+
+:70]
+[71:
+
+Mon May 24 03:34:33 2021 So just to remind us about the push propagate
+bug: It only occurs when a tecton is deleteing itself after having
+grown the stack plate.  The tecton leaves empty sites behind, that are
+meant to be filled by healing border, but a push operation wins the
+race instead, seeing those sites as merely empty, and therefore
+available to push into.
+
+Now as I say this, the obvious approach is not let push propagate into
+empty sites at all, but force it to wait for the healing and then push
+into that.  Let's give that a try and see how much it slows us down.
+
+:71]
+[72:
+
+Mon May 24 12:37:07 2021 OK so spent stupid time on cuttinpaist bug
+that's now fixed, but the stupid time seems to've uncovered a latent
+apparently stupid bug in TBox.ulam:
+
+  Self(C2D size, C2D pos) {
+    mMin = pos;
+    mMax = mMin + size - C2D.instanceof(-1,-1);
+  }
+
+where the '- C2D.instanceof(-1,-1)' is dubious at best.
+
+:72]
+[73:
+
+Thu May 27 01:49:57 2021 OK past the t2sup and want to think about
+settling the stack demo and trying (yet one more time again) for a
+code cleanup.
+
+Possible goals:
+
+[78: Thu May 27 15:41:11 2021 Just the borders, no 'far in'..
+DONE :78] - Plate with two-bit sync and run-on borders.  Possibly a template
+   arg, defaulting to 1, saying how far in to run the clock?  Does
+   that even make sense?  Does it even help that much?  It reduces the
+   events required to linear..
+
+ - Does there need to be rules about growing / healing depending on
+   clock state?  Like you can only grow upstream if you're in state X
+   or Y, and downstream if .. ?  Seems like one would want that.  Is
+   UMod(2,1) safer in that sense?
+
+[74: Thu May 27 12:59:35 2021 Now have minimal Test16, Plate, etc.
+DONE :74] - Start a whole new spike and re-import
+
+ - Add new methods to SiteUtils for watchdog and timer?!
+   = But that requires (desires?) significant engine work?
+   = Is there some way to have the watchdog help with incumbency?
+     What if feeding the watchdog the wrong food causes the site to go
+     empty, but the watchdog then resets to food agnostic?  Or what if
+     the food is always just the element type?  How does that really
+     slow down forkbomb more than a little?
+
+
+:73]
+[75:
+
+Thu May 27 13:32:26 2021 Been thinking a lot about field Plate uses
+and pheromones.  What if a stack operator didn't have to be in a
+special position but instead just released a 'desire to tell a stack
+to grow'?  Yeah except 'tell a stack to push' requires the item to be
+pushed, and how many bits did we think were going to be available?  I
+guess the item to be pushed would be a subplate looking for a stack to
+push itself onto.
+
+[76:
+
+Thu May 27 14:21:08 2021 The idea is to use a plate as a mini-network
+for anycasting.  Plate designer assigns small numbers to desired
+agents/functions: DataStack, ProgramSource, ALU.. and the field plate
+automatically starts tracking two-bit gradient arrows toward each
+function.  Need to have the gradients age out somehow..  [77:
+
+Thu May 27 14:29:21 2021 I guess we really want gradient levels and
+not directional arrows.  Maybe three bit gradients, or perhaps even
+four, depending on how big our new Plate ends up being.
+
+:77]
+
+:76]
+
+:75]
+[79:
+
+Thu May 27 15:41:53 2021 OK so we have a minimalish new Plate now
+clocking the border on demand.  Don't have any API to do commands on
+clock edges, though.
+
+And we can jam up the clock by erasing leading UP edges, which seems
+to end up looking like a down edge, and we have to erase back to max
+to get it to clear.
+
+I guess if we erase the whole pulse, we end up showing DOWN above
+READY, which does indeed require we go down.[83:
+
+Thu May 27 17:06:26 2021 If we were really serious about running on
+the border of rectangles only, we could declare that all clocks go
+clockwise (say), and have N and E only propagate D, and S and W only
+propagate U.. ?  But then how would border patrol be implemented?
+Partly on the down and partly on the up, I guess.[84:
+
+Thu May 27 22:41:25 2021 Aaand if we did send the clock around a loop,
+so root was in control the whole way, why do we need more than one
+bit?  Root just flips its bit, and then waits for the change to come
+back around.  Everybody just copies from their counterclockwise ngb --
+N copies W, E copies N, S copies E, W copies S -- and we're back at
+the root.
+
+Or what if T goes clockwise and F goes counterclockwise?  But then one
+bit won't do.  Two bits could do it, TF CW, FT CCW, and would help
+reduce the rotational anisotropy.
+
+ Bool mMatchCW; //< vs match CCW
+ Bool mTickVal; //< value to match
+
+Root can only tick if its S and E both match its current state.
+
+Root sets mMatchCW to chosen direction and then flips mTickVal (say,
+regardless).  Non-root looks CCW and CW and compares them to itself.
+If both are different from it, it deletes itself?  If both are the
+same as it, does nothing.  So just one ngb 'a' has changed.  If a is
+CW and a.mMatchCW, or a is CCW and !a.mMatchCW, copy a's clock bits.
+
+[85:
+
+Thu May 27 23:25:09 2021 Or we could just say screw rotational
+anisotropy and go with one bit.  Chirality is a pretty basic concept
+in biochemistry..[86:
+
+Thu May 27 23:27:04 2021 Copied to code-202105272326.  Going with one
+bit here.[87:
+
+Thu May 27 23:30:21 2021 Wait.  If we took FOUR bits we could do
+symmetric interclocking and not just propagate clocks but SEND A
+BIDIRECTIONAL SERIAL DATA STREAM as well.  All we need is a reasonably
+reliable path between whatever counts as the peers.
+
+We'd need some kind of packet framing as well, but then we could do
+say border patrol by sending the border patrol command followed by
+four two bit (or even three bit) blocks initted to all 1s which get
+minned-on-the-fly as they pass through the corresponding edge.
+
+Be easier to widen the data path and use the data path width as 'byte'
+framing for whatever byte size we choose.
+
+It's Dan's (potentially eventually healing) wire all over again, from
+all the way back in the Java days.
+
+Call it..  QStream?  Template on byte width?[88:
+
+Thu May 27 23:48:43 2021 When we advance the interclocking state
+machine, could we search our ngb for others in our state -- and
+matching our definitions of peer directionality -- and update them as
+well?  Be super cool if we could propagate streams through diffuse
+redundant paths, like between plates..
+[89:
+
+Fri May 28 00:07:06 2021 Well but keep it simple for now.  Can we do a
+standalone spike?[90:
+
+Fri May 28 02:01:18 2021 Now I don't see having different left and
+right widths.  We should just be swapping packet buffers upstream and
+down, and swapping is inherently the same width in both directions.
+We have some kind of busy bit(s) saying when we can do the swap, and
+then we opportunistically do it.  The peers are obligated to keep
+consuming or discarding whatever arrives as best they can, to clear
+the bust bit and allow more swaps to happen
+
+Is it like a single Bool mLeftward bit?  Or a threeway
+cLEFTBOUND_PACKET, cRIGHTBOUND_PACKET, cEMPTY_BUFFER ?  Possible
+fourth way for reset or closed?[91:
+
+Fri May 28 07:27:25 2021 OK so we already sort of have two uses of
+QStream11 -- a loose worm-like chain, and the border plate of Test18,
+and they're both kind of working.  Need to take a nap, but it appears
+that when a leftbound (rightbound) overtakes another packet heading
+the same way, they merge rather than having the rearward one block.
+
+So look into that.[92:
+
+Fri May 28 12:32:29 2021 OK, that's now working.  The main problem was
+QStream11.advance() was failing instead of quietly returning false
+after discovering that it needed to block due to congestion.  It
+caused the T8 in question to fail, get erased, and then the plate
+healed around it -- sometimes, hmmmmm, by making a copy of the border
+plate containing the other packet.. causing the congestion and the
+failure to repeat until the failed location healed from another
+direction.
+
+But that also just once again highlights the larger merely-best-effort
+nature of (in particular) the border wire.  Packets can get lost or
+duplicated.
+
+[93:
+
+Fri May 28 13:10:11 2021 Maybe let's do a packet buffer demo, based on
+a queue instead of a stack, with a wire connection to another queue.
+Leave it fragile for now, but consider whether we have room for
+sequence numbers and acks and what-not.
+
+[94:
+
+Fri May 28 13:27:34 2021 What's our bit budgets looking like these
+days?  [95:
+
+Fri May 28 13:30:58 2021 Each atom of TestStack15 (which we have yet
+to bring into the current spike) has a Bits(32) payload, and the
+TestStack15 budget is completely spent.[96:
+
+Fri May 28 13:34:50 2021 Our 'loose wire' TestStream17 currently has
+40 bits unused.  We could have a Bits(32) payload plus two four bit
+sequence spinners if we wanted.  Except we'd have to virtualize doing
+the exchange since quarks poop out at 32 bits..
+[100:
+
+Fri May 28 15:56:18 2021 OK so we made a quark Payload API and now we
+have Test18 running 32 bit payloads on plate border, and TestStream18
+slamming monster 56 bit payloads down loose wire.
+[101:
+
+Fri May 28 16:05:38 2021 OK.  (Taking a break to see if I can read the
+OBDII codes off the car to tell if I can take it for emissions testing
+yet.. [102:
+
+Fri May 28 16:32:34 2021 (Well, I can, but I appear to have cluelessly
+reset the drive cycle monitors while trying not to.  Well done.[114:
+
+Mon May 31 09:56:55 2021 (Except it turns out the drive cycle monitors
+reset every time you start the engine anyway so no loss and the car's
+emissions were now officially checked and approved on Saturday.)
+
+:114])
+
+:102])
+
+:101]
+:100]
+[97:
+
+Fri May 28 14:13:49 2021 So for now:
+
+TODO
+
+ - Make a Deque (subsuming Queue).  I guess it needs to be wrap-around
+   to keep both ends at known locations.  Let it be based on 1x1 32
+   bit items.
+
+[98:
+
+Fri May 28 14:15:51 2021 Actually, let's just do that and get it
+working, then think ahead.
+
+:98]
+
+
+
+:97]
+
+:96]
+
+:95]
+
+:94]
+
+
+
+:93]
+
+:92]
+
+:91]
+
+:90]
+
+:89]
+:88]
+
+:87]
+
+:86]
+
+:85]
+
+:84]
+
+:83][80:
+
+Thu May 27 16:22:33 2021 It kinda seems like we could clear all the
+jams we've created so far just by having UP time out and delete itself
+after a while..
+
+:80]
+
+:79]
+[81:
+
+Thu May 27 17:03:09 2021 OK, added a 'clock arg' concept meant to
+generalize OpCmd and OpRpy.[82:
+
+Thu May 27 17:03:55 2021 Breaking for the evening.  PICK UP AT: Plate
+API for action-at-max (and -at-root?)
+
+:82]
+
+:81]
+[99:
+
+Fri May 28 14:21:12 2021 Hmm, QStream11 tops out at a 30 bit payload
+due to quark limits.  Let's make QStream12 that virtualizes the
+payload entirely.
+
+:99]
+[103:
+
+Sat May 29 02:07:16 2021 OK the deque framework copied from
+TestStack15 has the framework up and we need to figure out the guts.
+
+ - Can we make a 1x1 subplate okay for holding a 32 bit entry?
+
+Key Patterns
+
+b: border
+i: stack item subplate
+x: stack border or stack item subplate
+.: empty or stack field plate
+
+ xi. ->  x.i   # propagate insert
+
+ ..i ->  .i.   # propagate remove
+
+ ...     i..
+ i.i ->  i..   # roll up
+
+ i.i ->  i..   # roll down
+ ...     i..
+
+Not clear how that deals with compression though.  Two more rules?
+
+ ..b ->  i.b   # squeeze up
+ iib     i.b
+
+ iib     i.b   # squeeze down
+ ..b ->  i.b
+
+Maybe.
+
+:103]
+[104:
+
+Sat May 29 23:27:39 2021 OK just getting set up again after struggling
+to get some kind of video capture going on the grid again.  I guess
+we're facing converting Tecton to the non-OpCmd framework.  How
+exactly are we doing that?
+
+Also, while I'm here: I'd like to
+
+TODO:
+
+[105: Sat May 29 23:52:41 2021 In my E/ULAM work repo anyway.  Also
+updated a bunch of other divergences in share/ulam and share/tcc
+DONE :105] - Update E/ULAM ColorUtils.ulam
+
+[106: Sat May 29 23:53:36 2021
+DONE :106] - Add E/ULAM RXTimer.ulam
+
+[107: Sun May 30 00:42:29 2021 Well, B2DT(Unary(8) cBITS_PER_COORD)
+appears to be working..
+DONE :107] - Try templatizing B2D for variable plate sizes.  [108: Sun
+May 30 00:43:27 2021  First cut AtomPlate.ulam exists :108]Goal: A mini-plate
+   that has enough leftover that a 1x2 plate can hold one entire atom
+
+ - Get Tecton revised.
+
+:104]
+[109:
+
+Sun May 30 03:25:49 2021 Trying to make AtomDeque.ulam to use the new
+AtomPlate.  What do the rules look like?  Could we think of it in
+terms of just the AtomPlate(0,0), and just slam in and out of the
+second row, devil take the hindmost?   Well, not for the rolls.
+
+Key Patterns
+
+b: border
+a: AtomPlate (0,0)
+1: AtomPlate (0,1)
+x: stack border or stack item subplate
+.: empty or stack field plate
+#: don't care don't check
+
+ xa. ->  x.a   # propagate insert
+
+ ..a ->  .a.   # propagate remove
+
+ ...     a..
+ ###     1##
+ a.a ->  a..   # roll up
+ ##1 ->  ##.
+
+ a.a ->  a..   # roll down
+ ##1 ->  ##.
+ ...     a..
+ ###     1##
+
+ ..b     a.b
+ ..b ->  1.b   # squeeze up
+ aab     a.b
+ #1b     #.b
+
+ aab     a.b
+ #1b     #.b   # squeeze down
+ ..b     a.b
+ ..b ->  1.b
+
+[110:
+
+Sun May 30 03:33:14 2021 Overall size is Nx6
+
+:110]
+
+:109]
+[111:
+
+Sun May 30 05:22:15 2021 OK, running out of gas in the AtomDeque
+conversion, but wanting to shift to an API like:
+
+  Bool createAtomPlateAt(C2D ewc, Atom inatom) ;
+  Bool destroyAtomPlateAt(C2D ewc, Atom & outatom) ;
+
+maybe in PlateUtils, for example.  Goal is caller never has to
+actually muck with AtomPlate directly, except for deciding where to
+create it and finding it to destroy.
+
+:111]
+[112:
+
+Mon May 31 03:11:03 2021 OK I'm complexity overwhelming myself again.
+
+Need more plan.
+
+Restate current goals:
+
+ - AtomPlate dedicated to being a 1x2 plate holding a single atom
+
+ - Routines to create or destroy a 1x2 AtomPlate
+
+ - Routines to read an atom from or write an atom to a 1x2 AtomPlate
+
+ - Routine to clear an AtomPlate (write Empty to it)
+
+ - Routines to destroy a 1x2 AtomPlate and extract the atom
+
+[113:
+
+Mon May 31 09:16:25 2021 And what we need to do before that is
+somehow summarize the tools and services we already have
+implemented...
+
+IN QUARK Plate
+
+  Bool isPlateBorder() ..  based on our pos and size
+  Bool isPlateField() ..   based on our pos and size
+  Bool isPlateBorderCoord(C2D pos) .. based on given pos and our size
+  Bool isPlateFieldCoord(C2D pos) ..  based on given pos and our size
+  SN getOurSN()       ..   or fail if we are not in EW
+  C2D getOurEWCoord() ..   or fail if we are not in EW
+  Bool mustBlockOrDie() .. based on DeathBits and full EW scan
+  SN plateCoordToEWSN(C2D plateCoord) .. based on our p&s & EW
+
+
+IN QUARK PlateUtils
+
+  SiteCategory categorizeSite(Plate& us, SN sn) ..
+  SiteCategory categorizeSite(Plate& us, SN sn, C2D & theirpos) ..
+
+
+
+
+:113]
+:112]
+[115:
+
+Mon May 31 10:26:15 2021 Can we ditch the DClock stuff?  Are we saying
+we'll sync at the Plate level, if desired, using QStream instead of
+presuming DClock?  It would simplify Plate.ulam significantly..
+[116:
+
+Mon May 31 10:46:40 2021 Well, we have DClock stuff all commented out
+(flagged with XXYY) and we can still apparently run little packets
+around the border of a Deque32.  I think, checkpointing this mess into
+say code-202105311047..[117:
+
+Mon May 31 10:48:26 2021 Now let's strip the XXYY.[118:
+
+Mon May 31 10:57:46 2021 Stripped.  Now let's get growth-and-movement
+API going based on QStream.  Want a way to identify g&m packets /
+commands without completely forcing the QStream packet size or
+representation. [119:
+
+Mon May 31 11:20:54 2021 So we lost the g&m stuff when we ditched
+OpCmd oh so four days long ago.  And whether we closely follow OpCmd
+or not it all involves commitments about command structure.
+
+SAMPLE STRUCTURES:
+
+ - OpCmd style: Enumerated command numbers for {MOVE|GROW} x [NSEW]
+   plus BORDER x {INNER|OUTER} plus NOOP
+
+ - Bottom up 'voting' style?  Packet is a command (e.g., OpCmd) value
+   plus a vote count, and each site or side does a Fisher-Yates or max
+   to maybe take over king of the hill.  Then OpCmd style in second
+   pass to execute the chosen action.
+   = That's a little cool.
+   = And it's still top-downish since somebody has to 'call the vote'
+   = Needs a way to put global command urgencies on a common scale
+   = Could 'pre-vote' with a top-down selection other than no-op: Do
+     this unless condition this urgent
+
+ - Higher level commands: DIFFUSE, GROW, UP_GRADIENT, DOWN_GRADIENT
+
+[120:
+
+Mon May 31 14:56:45 2021 Could we spare even three bytes maybe, one
+for command, one for arg, one for urgency?  Well we're doing an API so
+just make them Unsigned, and have implementations provide whatever
+they can?  What is this API called?  Command?  PlateCommand?
+PlateControl?  Action?  Consensus?  Collective?  Group?  PlateComm?
+CandC?  C3?  CCC?  PlateCCC?[121:
+
+Mon May 31 15:10:23 2021 Well, going with PlateComm.ulam for now.  Is
+there a fixed distinction, like a Bool, between vote and act?  Input
+vs output?  Inbound vs outbound?  Query vs reply?  Is it all really
+that symmetric?  Map vs reduce?[122:
+
+Mon May 31 15:22:58 2021 Now, another thing to think about is we have
+the bidirectionality of QStream.  We could have results going in the
+opposite direction of queries, rather than necessarily making a full
+loop.
+
+But come on, simple simple get something working first.
+
+Let's accept a Query/Reply distinction orthogonal from specifics?  Or
+just have some actions be queries and some replies?
+
+Now, all of this is going to just be an overlay on the Payload API wrt
+QStream, right?  We don't want QStream to know or care about any of
+this.  QStream manages accepting, moving, and delivering opaque
+payloads to the left or right and that's it.
+
+So in that sense PlateComm may not have to be the be-all-end-all; the
+QStream and Payload APIs will sail on anyway.
+
+[123:
+
+Mon May 31 15:44:34 2021 So coming from minimal need.  Well how many
+bits do we really want to blow here?[124:
+
+Mon May 31 15:47:34 2021 Test18 has a 32 bit payload..  Ditto
+Deque32.  TestStream18 has a foggen 56 bit payload..
+
+[125:
+
+Mon May 31 15:50:09 2021 And the idea is we take like a prefix or a
+suffix of the payload to ship our packets through?  The Payload API
+currently says 'suffix' all over the place but that's maybe kind of a
+pain?  We'll see; probably doesn't really matter.  Well but a union
+will give us prefixes matching from the left, soooooo maybe..
+
+Suppose we take say two bits on the left as a 'communications family'
+to start us off, and say that, say, family #1 is the G&M stuff we're
+working on now.  [126:
+
+Mon May 31 16:34:54 2021 Well okay we did that but now PlateComm feels
+like pretty thin gruel as far as advancing the communications
+design..  It's just a family plus get and set raw bits?  Maybe we
+stick quark PlateCommGNM in there too?
+
+:126]
+
+:125]
+
+:124]
+
+:123]
+
+:122]
+
+:121]
+
+:120]
+
+
+:119]
+
+:118]
+
+:117]
+
+:116]
+:115]
+[127:
+
+Tue Jun  1 02:53:35 2021 What about (geez Jun 1 yikes) action bitmaps
+during the 'integrate' mode?  Maybe like two maps, one for 'feasible'
+and one for 'desirable'.  Feasible starts out 1s, desirable starts out
+0s; each handler knocks out any infeasible actions it sees, and adds
+any still-feasible actions it particularly likes to desirable?
+
+Thing is in addition to growth and movement it would be cool if we
+could programmatically follow gradients with this thing.
+
+And we'd like to see 'distance to nearest other plate' as a form of
+gradient, rather than something different.  So this pushes us back
+towards routing sense data to a decision point, rather than letting
+each distributed entity vote for an overall integrated action.
+
+[128:
+
+Tue Jun  1 14:37:08 2021 From fresh/202106010313-notes.txt:
+
+    Tue Jun  1 04:10:42 2021
+ ..
+    What if the message running on the border plates is a SIMD program?
+
+    What if a persistent SIMD program is simply looping on the border
+    plates and that looping code IS the global control mechanism?  It may
+    choose to act at the root or wherever, but that's up to the program.
+    It could also choose to broadcast a particular
+
+with additional notions of
+
+ - Have opcode/instructions that include modifiable values.  Like:
+
+ - 'DO_GROW_W' as an opcode, with perhaps an Unsigned(8) to count
+   votes for and against that opcode.
+
+ - Say count starts at 1.  If anybody sets the count to 0, that means
+   like 'emergency veto' of this opcode, implying that it looks
+   tocause a fail-grade inconsistency if it were to be performed.  So
+   nobody can change a 0 value once it appears on an opcode.
+
+ - Otherwise, sites increment the count with their interest in that
+   opcode happening.
+
+ - As the vote totals start coming back around to the root it does a
+   (perhaps exponentially weighted) proportional pick of the action to
+   perform, consuming the vote total opcodes in the process.  Once an
+   action to perform has been picked, that is emitted in 'execute'
+   mode.
+
+ - Conceivably, root could re-emit the vote opcodes immediately behind
+   the DO opcode, but that could cause sync issues in that some sites
+   would end up voting before the DO was executed while others voted
+   afterwards.  Safest would be to do a separate loop just for the DO
+   and then reemit the votes afterwards.
+
+[129:
+
+Tue Jun  1 15:13:39 2021 Actually, if the votes could be 'passivated',
+root could reemit them on the fly and release the 'DO' at the end.
+Then when the passivated vote ops came around again they could be
+re-activated.
+
+Or what about sending the DO in the opposite direction?  Does that
+help at all?
+
+[130:
+
+Tue Jun  1 15:20:21 2021 Unclear.  But supposed we have
+VOTE-DO-DONE-IGNORE modifiers that can be put on any opcode.  With
+special code for root to coordinate the global processes:
+
+At root:
+ - VOTE: Exponential-weighted running choice, switch to IGNORE, then
+   do at all
+ - IGNORE: Reset and switch to VOTE, then do at all
+ - DONE: Pick action, reset running, and switch to DO, then do at all
+
+At all:
+ - VOTE: Evaluate op and update count appropriately; advance
+ - DO: If my op, do it and switch to DONE; advance
+ - DONE, IGNORE: Advance
+
+[131:
+
+Tue Jun  1 15:34:12 2021 In some kind of extended universe, there
+could be some tiny control plate near the root (or wherever, at that
+point) that could perform the root actions perhaps.
+
+But this feels almost doable.  How could we try to implement it?
+
+quark PlateInstruction {
+  typedef Unsigned(2) Mode; // VOTE, DO, DONE, IGNORE
+  Mode mMode;
+
+  typedef Unsigned(3) OpCode; // MOVE, GROW, SHRINK,
+  OpCode mOpCode;
+
+  typedef Unsigned(2) Dir;
+  Dir mOpDir;               // D=NESW
+
+
+}
+
+[132:
+
+Tue Jun  1 22:22:13 2021 I'm struggling between ASKING vs TELLING
+Plate sites about operations.  'Do you want to MOVE N?' makes sense:
+Individual plate sites can have important opinions about such things.
+
+But what about gradients?  What do we ASK or TELL about them?  'Do you
+sense X in direction D?'  Could we have 'configuration' ops that would
+say things like 'Be attracted to X' or 'Avoid Y', and then just let it
+all come out in the voting for MOVE/GROW?  Maaaybe.  And how would we
+deploy those configuration ops?  We'd like the ability to deploy them
+asymmetrically, like 'Be attracted to X to the W' but 'Avoid X to the
+E', and 'Ignore X N and S'.
+
+What if mMode was per-dir?
+
+  Mode mDirModes[4];
+
+and maybe we ditch mOpDir and only put DO on one mDirMode to do a
+directed action?
+
+[133:
+
+Tue Jun  1 23:36:57 2021 Also, what about Plate EDGES as an
+intermediate level of structure, rather than just individual site vs
+whole Plate?  We're currently leaping from 0D to 2D, how can that be
+the wise move?  Structure at all scales man.
+
+Could we store differentiated 'edge stuff' along an edge, and have
+corners manage integration along their edges?  What if each Plate site
+offered storage for one key-value pair to be managed collectively?
+Could have room to store like min-clearance, max-clearance,
+average-clearance (x inner|outer) all on separate keys, all implicitly
+referring to the current edge.
+
+:133]
+
+:132]
+:131]
+
+:130]
+
+:129]
+
+:128]
+
+:127]
+[134:
+
+Wed Jun  2 16:52:24 2021 So back to just getting AtomDeque working,
+nice and concrete.  Realizing we have an ambiguity issue that doesn't
+come up in the stack case.  We might mistakenly see the stack as
+empty, but we'll never pop things in the wrong order.
+
+With the deque, if there's only one item in it, that one item might be
+in the top/front row or the back/bottom row.  Suppose it's on the
+back, and we ask to remove the front: What happens?  I wanted to have
+the front remove go ahead and check the back/bottom row too, but that
+could cause items to come off out of order.
+
+It seems like if there's only one item in the deque we'd like it to go
+metastable and vibrate between 1 front/0 back and 0 front/1 back.
+That way if we just pull from the end we want, we may get spurious
+empties -- but that's the same as the stack -- but if we do get
+something it'll be the right thing.
+
+But how would the vibrate rule work?  How could it be sure there
+aren't more items deeper in the deque that just haven't gotten back
+near the ends yet?  Seems like vibrate could destroy the item order
+all by itself.
+
+Could we keep a count of items in the deque?  Is that too gross?  And
+exactly who would be keeping that count and where?
+
+Could we arrange for the field to tell us whether there's any more
+items to the right?  That would help a lot if we could distinguish
+between 'inter-item empty' and 'end-of-row empty'.  That would help
+the stack too, to give a confident empty indicator.
+
+Worth thinking about.  But time to get cooking.[135:
+
+Wed Jun  2 23:47:32 2021 OK, so, thinking about mEmptyEast leads me to
+worryies that even with that the 'simple' rules we've got are not
+robust.  In particular, what stops one row from getting much shorter
+or longer than the other, without rolling, simply due to luck?
+
+Then when we finally roll, we put an empty deep in the dest row, which
+means mEmptyEast is no longer true for all the sites to its west, but
+we can't update that atomically so they don't know that.  Then suppose
+the longer row gets a bunch of deletions and shrinks past that one
+previously-rolled item.  Then what's to stop another roll -- from the
+now shorter but still longer than its neighbor row -- causing the
+items to get out of order?
+
+Well, wouldn't the shortening of the long row leave a bunch of empties
+that needed to heal up (and rediscover mEmptyEast), and are we sure
+they could all do that while avoiding every ew that would see the need
+to roll that last item back?
+
+Could we maintain a rule saying you can't propagate insert if you
+could roll instead?  And you can't propagate remove if you could roll
+the other way instead?  Whatever it means, precisely, to keep the two
+rows from getting significantly unbalanced wrt each other.
+
+
+active row xi. ->  x.i   # propagate insert
+           xi.     x.i
+other row must be not all e
+[142: Thu Jun  3 12:41:57 2021 Made isEmptyOrEastEmptyField.  Did
+  ALTERNATE SIDE LEFTMOST IS NOT EMPTY or 'e'
+condition instead of 'not all e' :142]
+
+active row ..i ->  .i.   # propagate remove
+           ..i     .i.
+other row must have at least one e
+[144:
+
+Thu Jun  3 12:56:16 2021 Do we really need a special condition on
+propagating remove?  Or do we just need to ensure that rolling only
+happens with empty east?  If we do that, then rows can have all sorts
+of big empty gaps in them, but they won't roll because the gaps don't
+end with 'e'.
+
+:144]
+[143: Thu Jun  3 12:48:07 2021 But this theory seems completely wrong,
+no?  We need to propagate removes at the very ends of the deque, for
+example, not just near the middle.  'at least one e' won't allow any
+of those.  
+
+
+  :143]
+source row xie ->  x_e   # propagate roll
+           xie     x_e
+dest row   eee     iee
+           eee     iee
+
+Seems that roll could avoid the need for a separate squeeze rule too.
+Also note it seems to apply to basically the same LHS as propagate
+insert, so we could think about ordering there maybe.
+
+[136:
+
+Thu Jun  3 01:00:00 2021 But, do we think this might work?  It's
+another significant redo while things aren't even settled.  It depends
+on 'e' propagation, which is incompletely implemented and completely
+untested.  It increases the diameter of the main rules, which will
+reduce (shh event efficiency).
+
+[137:
+
+Thu Jun  3 01:24:27 2021 Well can we be completely specific how we
+think 'e' propagation would work?  [138:
+
+Thu Jun  3 01:25:55 2021 checkGrowthAndHealing is currently at
+B2DPlate level.  Seems we might want like a
+
+  virtual Atom B2DPlate.copyOf() { return self.atomof; }
+
+to call when healing, so we could do something like
+
+  @Override
+  virtual Atom AtomDeque.copyOf() {
+    Self s = self;
+    s.mEmptyEast = false;
+    return s.atomof;
+  }
+
+
+and then we need to propagate e somewhere too, I guess in or before
+checkDequeActions().  I guess it might be something like
+
+  Void spreadEastEmpty() {
+    C2D pos = positionOnPlate();
+    C2D siz = sizeOfPlate();
+    mEmptyEast = false; // Assume we're not
+    if (pos.getX() + 1 == siz.getX()) // I am an eastern border plate
+      mEmptyEast = true;
+    else {
+      PlateUtils pu;
+      if (pu.categorizeSite(self, 4) == pu.cSC_ALREADY_OURS) {
+        EventWindow ew;
+        Atom & a = ew[4];  
+        if (a as Self) {  // If east is already us
+          mEmptyEast = a.mEmptyEast; // Then we're empty east if they are
+        } 
+      }
+    }
+
+[139:
+
+Thu Jun  3 01:52:37 2021 Well maybe.  What else would we need?[140:
+
+Thu Jun  3 05:24:12 2021 OK, so Void AtomDeque.spreadEastEmpty() seems
+to be working, albeit slowly.
+
+I need to take a break soon but the next stop would be to revise the
+rules in light of 'e'.  Wondering about whipping up a little
+SPLAT-like representation to consolidate the rules.
+
+ String representation of rule.
+ - Two bytes per site represented: LOC+OP
+ - LOC is 2xInt(4), representing (dx,absy) ?  How about having a
+   couple address modes?
+ - Maybe OP is Unsigned(2) mMode; Unsigned(3) mType; Unsigned(3) mTag.
+ - Mode 0: absx,absy in plate coords
+ - Mode 1: absx,rely in plate coords
+ - Mode 2: relx,absy in plate coords
+ - Mode 3: relx,rely in plate coords
+
+   But what about the source/dest symmetry?  Maybe screw that for now,
+   and write multiple rules instead?  Stack wouldn't have that
+   symmetry anyway and we'd like this to work for stack too.
+
+ - We want to be able to associate code with mType values so we can do
+   matching and voting and what-not.  And tags will allow us to match
+   specific instances of types on both sides of the rule.
+
+transient PlateRuleInterpreter {
+
+  virtual Bool given(AddrMode mode, C2D loc, MatchType type, Tag tag) ;
+
+  virtual Bool check() ;
+
+  virtual Bool change(AddrMode mode, C2D loc, MatchType type, Tag tag) ;
+
+  //// Services
+  Bool interpret(String rule, Plate & basePlate) { .. }
+
+  Void reset() { .. }
+  
+}
+[141:
+
+Thu Jun  3 12:14:05 2021 Well let's try to fix up the existing code to
+respect 'e' instead of starting yet another language engine (though
+the temptation to do that and call it 'SPLATE' is Hard To Resist.)
+
+:141]
+:140]
+
+:139]
+
+:138]
+
+:137]
+
+        
+
+:136]
+
+:135]
+
+:134]
+[145:
+
+Thu Jun  3 14:02:30 2021 OK it's kind of working.  Backing up and
+moving the flag.
+
+:145]
+[146:
+
+Thu Jun  3 15:52:24 2021 OK here we are.  Wondering if there's a way
+to balance the crowding more evenly among the upper and lower halves
+of the deque.  If we had a clearly oscillatory rule like this:
+
+source row ie ->  _e   # propagate roll
+           ie     _e
+dest row   Ee     ie
+           Ee     ie
+
+for 'e' meaning empty east and 'E' meaning non-border empty east.
+
+The idea is to let the last bein bounce back and forth between the
+rows and expect the tighter row to be more likely to fill in behind
+and block the return, and the looser row to be more likely to give way
+under the compression.
+
+Could that be the only roll rule?
+
+(We'd need/want to randomize the source/dest iteration order if we did
+this, I'd think.)
+
+[147:
+
+Thu Jun  3 16:08:27 2021 Let's try it!
+[148:
+
+Thu Jun  3 16:42:29 2021 OK so the randomized roll seems quite nice
+and a good example of how to use noise, compared to going for
+well-foundedness.
+
+ - Async means need extra space -- slack -- to accomodate local moves
+   if possible
+
+ - Loss of extra space triggers increasingly remote responses to
+   regain it
+
+ - Only shifting between rows when there's a strictly downhill move
+   obscures the case where one row is much looser than the other.
+
+ - Having the eastern-most item randomly change sides even if no
+   progress can be made helps load balance the sides -- perhaps
+   provoking the looser side to tighten up a bit so that the shifted
+   item is no longer easter-most.
+
+
+:148]
+:147]
+
+
+:146]
+[149:
+
+Fri Jun  4 23:25:10 2021 OK well, did a little LCF stuff today, but
+need to switch to writing and video production and what-ever.  So
+what's a 'final list' of 'tiny' cleanups before we move on :) ?
+
+ - Refresh Tecton without OpCmd.  Use an API and internal signaling
+   
+ - Get Oa doing moves
+
+ - Make AtomStack 'real quick'
+
+[150:
+
+Sat Jun  5 03:40:49 2021 It would be great if we could move the
+operator inside the data structure -- to shift the whole data storage
+part over one column to start at (2,1:2) (in the stack, (2,1:4) in the
+deque), and reserve (1,1:2 or 4) as the 'controller area' or 'contol
+zone'.  Let's see how bad that would break AtomDeque..[151:
+
+Sat Jun  5 03:49:04 2021 OK we have Oa sitting at plate(1,1) now, and
+it's pushing and popping a little, but the insert propagation rule
+isn't triggering so we never open up any space.[152:
+
+Sat Jun  5 03:55:14 2021 OK, now it looks like insert propagation is
+working somewhat, but it's still anemic.  I think we want Oa at one of
+(1,2:3), not (1,1).[153:
+
+Sat Jun  5 04:02:01 2021 Still not right.  To do 'is control zone' the
+code is currently looking for a same-as-us plate in the given ewc, and
+then asking if the position of that plate is in column 1.  But that
+fails if we don't have same-as-us plate in a spot -- because, for
+example, we have an Oa.
+
+What we want to do is map the given ewc to our plate coords based on
+our own ewc, and then just ask about that plate coord, regardless of
+what's occupying the location.  We could do isOurBorder, but not
+certain if we should..[154:
+
+Sat Jun  5 04:23:45 2021 OK isOurControlZone(C2D ewc) now exists.
+Next problem is that the remove propagation is using isEmptyOrField()
+to decide if it can shift left, but that allows shifting right up to
+the edge of the control zone (on the side that doesn't have the Oa),
+which then blocks insertion on that side.  We want that to be
+isEmptyOrNonControlZoneField() or something.[155:
+
+Sat Jun  5 04:26:57 2021 Buut getInsertSN is also calling
+isEmptyOrField..  Does that want to be isEmptyOrNonControlZoneField()
+too? [156:
+
+Sat Jun  5 04:27:57 2021 Actually nobody calls getInsertSN.  Let's
+nuke it.[157:
+
+Sat Jun  5 04:33:48 2021 Actually it wants to be
+isNonControlZoneEmptyOrField(), building..[158:
+
+Sat Jun  5 04:53:26 2021 Looking pretty good now.  Also got rid of the
+special don't count certain blocked states exception, but even so the
+blocks are a fair bit less than they were before.  Though I suspect
+that's mostly because the deque is empty a lot more than it used to
+be, because, I suspect, the popping works better.[159:
+
+Sat Jun  5 05:12:30 2021 So how can we have Oa ask the root about
+moving/growing?  Do we really want to be doing that unconditionally?
+Maybe the root should be running border patrols regularly, and Oa
+could ask about the results?  Or we could even store the most recent
+results in the control zone maybe?
+
+:159]
+
+:158]
+
+:157]
+
+:156]
+
+:155]
+
+:154]
+
+:153]
+
+:152]
+
+:151]
+
+:150]
+
+:149]
+[160:
+
+Sat Jun  5 05:17:15 2021 Tweaked the weights and now most of the
+blockages seem to be coming from empty rather than packed deque
+ends.. [161:
+
+Sat Jun  5 11:21:14 2021 So left it running during nap and sure enough
+it wedged itself with multiple tectons overrunning each other.  We
+need plate-level control of releasing them.
+
+Suppose we put a PlateControl atom at (1,1), that issues background
+border patrols and stores the results, and also buffers command
+requests.  PlateOperator?  The idea is to make it NOT itself be a
+Plate, like AtomDequeOperator isn't a Plate, to free up space for BP
+results and command requests.
+
+Ooh and maybe PlateOperator could have the final desired Plate size,
+which we've been wanting a place for.  With the current 'SeedFoo'
+approach, we just stick the final desired Plate size in the initial
+Plate atom, and then expect it to heal all the way to the final size.
+
+And that's okay enough I guess for hand-triggered demos in the middle
+of oceans of free space, but it's bad for trying to deploy a new Plate
+inside of an existing Plate, because it's almost certainly going to
+cause overlapping plates.  So it's better to indirect one more time,
+and have the new Plate start out INTENDING to be small, and then
+control its own growth towards whatever it needs to become
+functional.
+
+So let's give that a shot.
+[162:
+
+Sat Jun  5 23:52:26 2021 OK, so before the evening we got as far as
+running packets around the border of AtomDeque.  But they don't stop
+when they get to plate(0,1), which is supposedly the right peer.  How
+is that supposed to work?
+
+That would be a B2DStreamPlate issue?[163:
+
+Sun Jun  6 00:17:24 2021 Oh, I guess the point is that getNextSN
+shouldn't return plate(0,0) as right of plate(0,1).  But
+B2DPlate.getCWPlate() doesn't implement that behavior.  Should it?
+
+I'm thinking kind of no.  Let's have B2DStreamPlate.getNextSN check
+for the peers and have things stop..[164:
+
+Sun Jun  6 00:21:50 2021 We're thinking it's a one-liner:
+
++    if (isPeer(!left)) return SN.maxof;
+
+let's see how that goes.  [165:
+
+Sun Jun  6 00:24:35 2021 Orrrr maybe
+
++    if (isPeer(left)) return SN.maxof;
+
+[166:
+
+Sun Jun  6 00:28:47 2021 OK that's working.  Now the arrived packets
+are clumping up CCW at the right peer at plate(0,1).
+
+So, we need to consume arrived packets, and we need to send meaningful
+packets.. [167:
+
+Sun Jun  6 01:39:55 2021 So PlateOperator currently sets up
+mContainerSN to point at containing plate(0,0), and then just uses
+that in the future.  Receiving currently isn't working because we're
+asking plate(0,0) instead of plate(0,1).
+
+So do we want
+
+ - two SN data members, for plate(0,0) and plate(0,1)?
+
+ - one SN data member for plate(0,0) and compute plate(0,1) from it?
+ 
+ - zero SN data members and compute plate(0,0:1) on the fly each
+   event?
+[169:
+
+Sun Jun  6 02:38:38 2021 Let's compute them fresh on the fly each
+event.  It's stigmergic.
+
+:169]
+[168:
+
+Sun Jun  6 02:04:59 2021 For a few weeks now at least I've been
+thinking about eventual hardware support for plate computation, but
+the last couple days I've also been thinking about the possibilities
+of h/w access control via plate relationships.  Like what if only
+stuff INSIDE a plate could access the surrounding plate?  So if a
+PlateOperator was outside a Plate (like at plate(-1,0)) it couldn't
+run methods on plate(0,0) or something like that.
+
+Not sure the thoughts go anywhere but wanted to mention them.
+
+:168]
+
+:167]
+
+:166]
+
+:165]
+
+:164]
+
+:163]
+
+:162]
+
+:161]
+
+:160]
+[170:
+
+Sun Jun  6 03:13:23 2021 Well went with
+
+  EventWindow.SiteNum mRootSN;
+  EventWindow.SiteNum mRPeerSN;
+
+because it seemed easier to write.  Packets are getting sent and
+received.
+
+Now we need them to say something.[171:
+
+Sun Jun  6 03:15:32 2021 Our payload is 16 bits.  That's enough for
+4x3 bit distances + 3 bit opcode + 1 bit left.  So we can't do inner
+and outer patrols at the same time but so be it.  We also need
+namespace to issue the actual commands.[172:
+
+Sun Jun  6 04:30:11 2021 Come on come on, stop drifting.
+
+:172]
+
+
+:171]
+
+:170]
+[173:
+
+Sun Jun  6 16:57:17 2021 OK, got some stuff fixed of mine and culam's
+and then more mine and border patrol is starting to look plausible.
+There's a sequencing issue at the R peer: We have no interlock saying
+whether a packet has just arrived vs has arrived and sensing has been
+performed.  It might seem like an unlikely boundary case but in fact
+the PlateOperator itself blocks inner from the west, but that cannot
+be seen until the packet is in fact at the RPeer..[174:
+
+Sun Jun  6 17:07:26 2021 Now, in QStream12 we're using a Unary(2) for
+'BufferStatus', with values
+
+  constant BufferStatus cBUFFER_EMPTY = 0u;      //< mPacketBuffer is empty
+  constant BufferStatus cLEFTBOUND_PACKET = 1u;  //< mPacketBuffer contains a leftbound packet
+  constant BufferStatus cRIGHTBOUND_PACKET = 2u; //< mPacketBuffer contains a rightbound packet
+
+We could go to Unsigned(2) and get one more state.. But it's not clear
+how that helps.  We can't lose the LEFT/RIGHT-BOUND status by having
+cINBOUND_PACKET or whatever.
+
+Could we have RPeer push the packet toward PO after processing, rather
+than the reverse?
+
+Or have the fourth state be like cPACKET_ARRIVED, and have it used only at
+the terminating peer?  Hmm maybe?
+
+:174]
+
+:173]
+[175:
+
+Mon Jun  7 12:17:12 2021 OK, so we workaround some stuff and now grow
+tectons are starting to work, raising a new issue.  If we grow from
+the west (or north), everything's fine, but if we grow from the east
+(or south), then the PO gets moved from plate(1,0) to plate(2,0) and
+deletes itself when it notices that.
+
+And that's pretty fundamental to the operation of these data
+structures.  It's like we should do all our growing(/shrinking) from
+the west and north, and just do moves to the east and south to make
+room. [176:
+
+Mon Jun  7 12:37:30 2021 And we're going to hardcode (this) Tecton to 
+know that?  I guess so.[177:
+
+Mon Jun  7 12:38:55 2021 Actually I guess it's (this) PlateOperator.
+Which isn't so bad, or is a bit less bad, anyway.
+
+:177]
+
+:176]
+
+:175]
+[178:
+
+Mon Jun  7 13:25:51 2021 OK so we need to interlock the PlateOperator
+commands: We just got two tectons deadlocking each other (and
+currently with no functioning watchdog system either).[179:
+
+Mon Jun  7 13:27:38 2021 I guess let's have a little command timer
+that we start when we send a packet, and clear when we receive
+one.[180:
+
+Mon Jun  7 14:15:12 2021 OK that's sort of working, although the
+code's a mess.
+
+:180]
+
+:179]
+
+:178]
+[181:
+
+Thu Jun 10 13:08:46 2021 OK so come on, Eval or the like.  Ideas that
+have been knocking around in my head:
+
+ - An Eval API, or Code API, or the like
+
+ - For purposes of self-assembly, have a magic start mechanism that
+   somehow gets an Eval instance into some special location, but then
+   the execution loop is feed the next SQ to the Eval instance in that
+   special location.
+
+ - Where feeding is calling something like
+        Bool Eval.execute(SQ & codon) ;
+
+ - Although we probably want more return values
+
+:181]
+[182:
+
+Thu Jun 10 13:34:30 2021 We should start trying for examples with
+example code.
+
+Main issue is we always have the 'why not just implement that
+directly?' question.
+
+FOR EXAMPLE: Making a 'construction arm' or 'transmission line' to get
+code and influence distributed to some remote location, as part of
+reproduction.  We could have each 'codon' create one more link in that
+chain according to some rule, or we could just -- as we already did --
+have like TestStream18 that creates a whole chain of packet
+transmitters, all by itself.
+
+codon:
+
+ - A 'general seed' element that waits for 2x2 (or 1x3 or whatever)
+   empty or field to be available atomically, then pops an initial
+   plate of that size and some given type.
+
+[183:
+
+Thu Jun 10 14:22:11 2021 We're going to need a way to generate the
+initial code string.  How much help can we get from culam there?
+Initialized constant classes?  Constant class arrays?
+
+:183]
+
+:182]

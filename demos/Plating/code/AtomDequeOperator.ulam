@@ -1,0 +1,196 @@
+/** AtomDequeOperator
+    \symbol Oa
+ */
+element AtomDequeOperator {
+  typedef AtomDeque MyContainer;
+  DebugUtils du;
+  Random random;
+  EventWindow.SiteNum mContainerSN;
+  Bool mLastEventSucceeded;
+
+  typedef Unsigned(17) BigCount; 
+  typedef Unsigned(13) MedCount; 
+  typedef Unsigned(8) SmallCount;
+  BigCount mNextSend, mNextRecv, mBlocked;
+  SmallCount mErrs;
+
+  //// UrSelf API
+  @Override
+  ARGB getColor(Unsigned selector) {
+    ARGB ret = super.getColor(selector);
+    ColorUtils cu;
+    if (!mLastEventSucceeded)
+      ret = cu.between(ret,cu.color(0xffff0000),75);
+    return ret;
+  }
+
+  // Look for container plate root site
+  Bool lookForContainerRootAt(Int x, Int y) {
+    EventWindow ew;
+    C2D c((C2D.Coord) x, (C2D.Coord) y);
+    if (!ew.isAccessible(c)) return false;
+    Atom & a = ew[c];
+    if (a as MyContainer) {
+      C2D spos = a.positionOnPlate();
+      if (spos.length() == 0u) {
+        mContainerSN = ew.getSiteNumber(c);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  Bool findContainer() {
+    EventWindow ew;
+    if (mContainerSN != 0u) {
+      // Once bonded to a container, just die if it's gone
+      C2D c = ew.getCoord(mContainerSN);
+      return lookForContainerRootAt(c.getX(),c.getY());
+    }
+    if (lookForContainerRootAt(-1,-2)) return true;
+    if (lookForContainerRootAt(-1,-3)) return true;
+    /*
+    if (lookForContainerRootAt(1,-1)) return true;
+    if (lookForContainerRootAt(1,-2)) return true;
+    if (lookForContainerRootAt(-1,1)) return true;
+    if (lookForContainerRootAt(-2,1)) return true;
+    */
+    return false;
+  }
+
+  Bool tryPush(Bool atFront) {
+    EventWindow ew;
+    MyContainer & stk = (MyContainer&) ew[mContainerSN];
+    ColorAtom ca;
+    if (!atFront) {
+      ColorUtils cu;
+      ca.mARGB = cu.color(0xff000000 + mNextSend);
+    }
+    if ((mLastEventSucceeded = stk.tryInsertAtom(atFront,ca))) {
+      if (!atFront) {
+        ++mNextSend;
+      }
+      return true;
+    } else ++mBlocked;
+    return false;
+  }
+
+  Bool tryPop(Bool atFront) {
+    EventWindow ew;
+    MyContainer & stk = (MyContainer&) ew[mContainerSN];
+    Atom a;
+    if ((mLastEventSucceeded = stk.tryRemoveAtom(atFront,a))) {
+      if (a as ColorAtom) {
+        if (a.mARGB[0] != 0) {
+          ByteStreamLogger bsl;
+          BigCount seq = (BigCount) a.bitsRGB();
+          if (atFront) {
+            if (seq != mNextRecv) {
+              bsl.printf("SEQERR %d: EXPECTED %d GOT %d ([%d][%d][%d][%d])\n",
+                         ++mErrs,
+                         mNextRecv, seq,
+                         a.mARGB[0],a.mARGB[1],a.mARGB[2],a.mARGB[3]
+                         );
+            }
+            mNextRecv = ++seq;
+            if (mNextRecv == 100u) {
+              //HACK TRY TO SPAWN ONCE!
+              if (ew[13] is Empty) 
+                ew[13] = SuperSeedAtomDeque.instanceof;
+              if (ew[14] is Empty) 
+                ew[14] = SuperSeedAtomDeque.instanceof;
+            }
+
+          } else { // Doofus popped its own outbound atom off the back
+            if (seq != mNextSend - 1u) {
+              bsl.printf("REVSEQERR %d: EXPECTED %d GOT %d ([%d][%d][%d][%d])\n",
+                         ++mErrs,
+                         mNextSend - 1u, seq,
+                         a.mARGB[0],a.mARGB[1],a.mARGB[2],a.mARGB[3]
+                         );
+            } 
+            mNextSend = seq; // Back up the send counter
+          }
+        }
+      }
+      return true;
+      //    } else if (!atFront) ++mBlocked; // A 1x1 Oa at plate(-1,2) can't pop back in general
+    } else if (!stk.looksEmpty(atFront)) ++mBlocked; // Don't count a block if there's nothing there..
+    return false;
+  }
+
+  Bool maybePush() {
+    Bool atFront = random.oddsOf(3,10); // less likely to push at front
+    if (random.oddsOf(30,100))
+      return tryPush(atFront);
+    return false;
+  }
+
+  Bool maybePop() {
+    Bool atFront = random.oddsOf(6,10); // more likely to pop at front
+    if (random.oddsOf(35,100))          // also more like to pop period
+      return tryPop(atFront);
+    return false;
+  }
+
+  /* XXX GROWTH HANDLED BY PLATEOPERATOR NOW
+  Bool maybeGrow() {
+    if (!random.oneIn(1000)) return false;
+    return tryGrow();
+  }
+
+  Bool tryGrow() {
+    EventWindow ew;
+    du.printContext();
+    du.print("trygro10");
+    if (!(ew[9] is Empty) || !ew.isAccessible(9)) return false;
+
+    MyContainer & stk = (MyContainer&) ew[mContainerSN];
+    if (stk.sizeOfPlate().getX() > 120) return false;
+
+    C2D stksize = stk.sizeOfPlate();
+    C2D stkpos = stk.positionOnPlate();
+
+    Tecton tc;
+    C2D off = tc.initFromOpCmd(true, PlateUtils.cPLATE_GOES_W,C2D.instanceof(0,0),stksize);
+    du.print("trygro11");
+    du.print(off);
+    if (off.length() > 0u) {
+      C2D stackroot = ew.getCoord(mContainerSN);
+      C2D tectonstart = stackroot + off;
+      ew[tectonstart] = tc;
+      du.print("trygro12");
+      return true;
+    }
+
+    du.print("trygro13");
+    return false;
+  }
+  */
+
+  Bool mustBlock() {
+    EventWindow ew;
+
+    DebugUtils du;
+    for (EventWindow.SiteNum sn = 1u; sn < 41u; ++sn) {
+      if (!ew.isAccessible(sn)) continue;
+      Atom & a = ew[sn];
+      if (a is Tecton) return true;
+    }
+    return false;
+  }
+
+  Void behave() {
+    EventWindow ew;
+    if (mustBlock()) return;
+    if (!findContainer()) ew[0] = Empty.instanceof;
+    else {
+      //      if (maybeGrow()) return;
+      if (random.oneIn(2)) {
+        if (maybePush()) return;
+      } else {
+        if (maybePop()) return;
+      }
+    }
+  }
+}

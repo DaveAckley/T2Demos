@@ -1,0 +1,3 @@
+quark Foo {
+  Void(23) mVoid;
+}

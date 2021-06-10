@@ -1,0 +1,211 @@
+/** PlateOperator
+    \symbol PO
+    \color #33a
+ */
+element PlateOperator {
+  typedef B2DStreamPlate MyContainer;
+  typedef B2DStreamPlate.B2DStreamPayload MyPayload;
+  DebugUtils du;
+  Random random;
+  EventWindow.SiteNum mRootSN;
+  EventWindow.SiteNum mRPeerSN;
+
+  typedef Unsigned(3) Clearance;
+  typedef Clearance DirClearance[4];
+  DirClearance mInnerClearance;
+  DirClearance mOuterClearance;
+  
+  typedef B2D SizeCoord;
+  SizeCoord mDesiredPlateSize;
+
+  constant Unsigned cTIMER_BITS = 3u;
+  typedef XTimer(cTIMER_BITS,Unsigned(cTIMER_BITS).maxof,8u) CommandTimer;
+  CommandTimer mCmdTimer;
+
+  //// UrSelf API
+  @Override
+  ARGB getColor(Unsigned selector) {
+    ARGB ret = super.getColor(selector);
+    ColorUtils cu;
+    //ret = cu.between(ret,cu.color(0xffff0000),75);
+    return ret;
+  }
+
+  // Look for container plate root site
+  Bool lookForContainerRootAt(Int x, Int y) {
+    EventWindow ew;
+    C2D c((C2D.Coord) x, (C2D.Coord) y);
+    if (!ew.isAccessible(c)) return false;
+    Atom & a = ew[c];
+    if (a as MyContainer) {
+      C2D spos = a.positionOnPlate();
+      if (spos.length() == 0u) {
+        mRootSN = ew.getSiteNumber(c);
+        C2D c0x1(0,1);
+        C2D rpc = c+c0x1;
+        if (ew.isAccessible(rpc)) {
+          Atom & a2 = ew[rpc];
+          if (a2 as MyContainer) {
+            C2D spos2 = a2.positionOnPlate();
+            if (spos2 == c0x1) {
+              mRPeerSN = ew.getSiteNumber(rpc);
+              return true;
+            }
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  Bool findContainer() {
+    EventWindow ew;
+    if (mRootSN != 0u) {
+      // Once bonded to a container, just die if it's gone
+      C2D c = ew.getCoord(mRootSN);
+      return lookForContainerRootAt(c.getX(),c.getY());
+    }
+    if (lookForContainerRootAt(-1,-1)) return true;
+    if (lookForContainerRootAt(-1,-2)) return true;
+    return false;
+  }
+
+  Bool mustBlock() {
+    EventWindow ew;
+
+    DebugUtils du;
+    for (EventWindow.SiteNum sn = 1u; sn < 41u; ++sn) {
+      if (!ew.isAccessible(sn)) continue;
+      Atom & a = ew[sn];
+      if (a is Tecton) return true;
+    }
+    return false;
+  }
+
+  Void considerOuter() {  // We just got new outer data.  Should we act on it?
+    //// SIZE CHECK
+    ///XXXXHACK
+    if (!mDesiredPlateSize.isValid())
+      mDesiredPlateSize.init(20,6);
+    ///XXXXHACK
+
+    if (!mDesiredPlateSize.isValid()) return;  // Nothing to do without a valid size
+    EventWindow ew;
+    MyContainer & root = (MyContainer&) ew[mRootSN];
+    C2D rootsiz = root.sizeOfPlate();
+    C2D targetsiz = mDesiredPlateSize.toC2D();
+
+    Bool needx = rootsiz.getX() < targetsiz.getX();
+    Bool needy = rootsiz.getY() < targetsiz.getY();
+
+    ByteStreamLogger bsl;
+    //    bsl.printf("CONSIDROO:(%d,%d)\n",needx,needy);
+
+    Unsigned actcount = 0;
+    Bool actwantsgrow;
+    PlateUtils.PlateDir actdir;
+    PlateUtils pu;
+    Random random;
+    for (Unsigned i = 0; i < 4u; ++i) {
+      if (mOuterClearance[i] < 2u) continue;
+      PlateUtils.PlateDir pd = (PlateUtils.PlateDir) i;
+      PlateUtils.PlateDir oppd = (PlateUtils.PlateDir) ((i+2u)%4u);
+      C2D incr = pu.stepInDir(pd);
+      //      bsl.printf("CONSIDROO11:%d=%d/%d=%d(%d,%d)\n",
+      //                 pd,mOuterClearance[pd],
+      //                 oppd,mOuterClearance[oppd],
+      //                 incr.getX(),incr.getY());
+
+      if (needx && incr.getX() != 0) {
+        if (random.oneIn(++actcount)) { actdir = pd; actwantsgrow = true; }
+      } else if (needy && incr.getY() != 0) {
+        if (random.oneIn(++actcount)) { actdir = pd; actwantsgrow = true; }
+      } else if (mOuterClearance[pd] - 1u > mOuterClearance[oppd]) {
+        //        bsl.printf("CONSIDROO1110:%d\n",actcount);
+        if (random.oneIn(++actcount)) { actdir = pd; actwantsgrow = false; }
+        //        bsl.printf("CONSIDROO1111:%d/%d/%d\n",actcount,actdir,actwantsgrow);
+      }
+    }
+    //    bsl.printf("CONSIDROO12:%d/%d)\n",actcount,actdir);
+
+    if (actcount > 0u) {
+      B2DPacket pkt;
+      B2DPacketAct.ActOp op = B2DPacketAct.cAOP_SIDE_MOVE;
+      if (actwantsgrow && actdir != pu.cPLATE_GOES_E && actdir != pu.cPLATE_GOES_S)
+        op = B2DPacketAct.cAOP_SIDE_GROW;
+      pkt.initAct(op,actdir,3u);
+      MyPayload pay;
+      pay.mBits = (MyPayload.MyBits) pkt;
+      pay.mHasPayload = true;
+      //      bsl.printf("CONSIDROO13:%x -- ",pay.mBits);
+      //      pkt.print(bsl);
+      //      bsl.printf("\n");
+      if (root.trySendPayload(true,pay)) {
+        mCmdTimer.set(1u);
+        return;
+      }
+      //      bsl.printf("CONSIDROO14\n");
+    }
+
+  }
+
+  Bool receivePacket(B2DPacket bp) {
+    if (!bp.isSense()) return false;
+    ByteStreamLogger bsl;
+    bsl.printf("RECVOO:");
+    bp.print(bsl);
+    bsl.printf("\n");
+    B2DPacketSense & sp = bp.asSense();
+    Bool outer = sp.mSenseDir == sp.cSDIR_OUTWARD;
+    for (Unsigned i = 0; i < 4u; ++i) {
+      B2DPacketSense.Clearance c = sp.mDirData[i];
+      if (c > 4u) continue;
+      if (outer)
+        mOuterClearance[i] = c;
+      else
+        mInnerClearance[i] = c;
+    }
+
+    if (outer)
+      considerOuter();
+    return true;
+  }
+
+  Void behave() {
+    EventWindow ew;
+    if (mustBlock()) return;
+    if (!findContainer()) ew[0] = Empty.instanceof;
+    else {
+      ByteStreamLogger bsl;
+      // PLATEOPS
+      MyContainer & root = (MyContainer&) ew[mRootSN];
+      MyContainer & rpeer = (MyContainer&) ew[mRPeerSN];
+      MyPayload pay;
+      Random random;
+      DebugUtils du;
+      B2DPacket bp;
+      if (rpeer.tryRecvPayload(false,pay)) {
+        mCmdTimer.reset();
+        bp = (B2DPacket) pay.mBits;
+        receivePacket(bp);
+      } else if (mCmdTimer.current() == 0u) {
+        bp.initSense(random.oddsOf(4,5), 1u); 
+        bsl.printf("SENDOO:");
+        bp.print(bsl);
+        bsl.printf("\n");
+        pay.mBits = (MyPayload.MyBits) bp;
+        pay.mHasPayload = true;
+        du.printContext();
+        du.print("RELKEKLASKLAKRKEN");
+        du.print((Unsigned) pay.mBits);
+        mCmdTimer.set(1u);
+        if (root.trySendPayload(true,pay)) return;
+        du.print("AWAYRELKEKLASKLAKRKEN");
+      } else if (mCmdTimer.countAlarm()) {
+        du.printContext();
+        du.print("LOST CMD TIMER RESET");
+        mCmdTimer.reset();
+      }
+    }
+  }
+}

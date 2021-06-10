@@ -1,0 +1,95 @@
+/** TestStream18. Packet exchange on wire
+    \symbol W8
+    \color #5c5
+ */
+element TestStream18 : QStream12 + Payload {
+  typedef EventWindow.SiteNum SN;
+
+  //// URSELF API
+  @Override
+  virtual ARGB getColor(Unsigned selector) {
+    ARGB ret = super.getColor(selector);
+    ColorUtils cu;
+    if (mBufferStatus == cLEFTBOUND_PACKET) // red shifted
+      ret = cu.between(cu.color(0xff0000), ret, 66);
+    else if (mBufferStatus == cRIGHTBOUND_PACKET) // blue shifted
+      ret = cu.between(cu.color(0x0000ff), ret, 66);
+    return ret;
+  }
+
+  //// QSTREAM API
+  @Override
+  virtual SN getNextSN(Bool left) {
+    if (left) return mLeftSN == 0u ? SN.maxof : mLeftSN;
+    /*!left*/ return mRightSN == 0u ? SN.maxof : mRightSN;
+  }
+  @Override
+  virtual Bool isPeer(Bool left) {
+    return
+      (left && mLeftSN == 0u) ||
+      (!left && mRightSN == 0u);
+  }
+  
+  //// PAYLOAD API
+  @Override
+  virtual Bool loadFrom(RawBits bits) {
+    mPayload = (MyPayload) bits;
+    return true;
+  }
+
+  @Override
+  virtual Bool storeTo(RawBits & bits) {
+    bits = mPayload;
+    return true;
+  }
+
+  typedef Bits(56) MyPayload;
+  MyPayload mPayload;
+  
+  SN mLeftSN;
+  SN mRightSN;
+  Once mOnce;
+
+  Void behave() {
+    EventWindow ew;
+    if (mOnce.new()) {
+      Random random;
+      PlateUtils pu;
+      if (mLeftSN == 0u && mRightSN == 0u) { // Only in original
+        send(random.oneIn(2), 1u); // Send 1 right or left
+      }
+      for (Unsigned l = 0u; l < 2u; ++l) {
+        Bool left = l == 0u;
+        Bool unset = left ? mLeftSN == 0u : mRightSN == 0u;
+        if (unset && random.oddsOf(99,100)) { // Try to grow 
+          SN sn = (SN) random.between(1,12);
+          SN revsn = pu.reversePtr(sn); 
+          if (ew[sn] is Empty) {
+            Self s;
+            if (left) {
+              self.mLeftSN = sn;
+              s.mRightSN = revsn;
+            } else {
+              self.mRightSN = sn;
+              s.mLeftSN = revsn;
+            }
+            ew[sn] = s;
+          }
+        }
+      }
+    } else {
+      advance();
+      for (Unsigned l = 0u; l < 2u; ++l) {
+        Bool left = l == 0u;
+        if (isPeer(left)) {
+          RawBits inbits;
+          if (recv(left, inbits)) {
+            RawBits outbits = (RawBits) (((Unsigned) inbits) + 1u);
+            send(!left, outbits);
+          }
+        }
+      }
+    }
+  }
+}
+

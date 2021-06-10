@@ -1,0 +1,166 @@
+use Deque32;
+local typedef Deque32 MyStack;
+
+quark QDequeOperator19 {
+  DebugUtils du;
+  Random random;
+  EventWindow.SiteNum mStackSN;
+  Bool mLastEventSucceeded;
+
+  //// UrSelf API
+  @Override
+  ARGB getColor(Unsigned selector) {
+    ARGB ret = super.getColor(selector);
+    ColorUtils cu;
+    if (!mLastEventSucceeded)
+      ret = cu.between(ret,cu.color(0xffff0000),75);
+    return ret;
+  }
+
+  // Look for stack plate root site
+  Bool lookForStackRootAt(Int x, Int y) {
+    EventWindow ew;
+    C2D c((C2D.Coord) x, (C2D.Coord) y);
+    if (!ew.isAccessible(c)) return false;
+    Atom & a = ew[c];
+    if (a as MyStack) {
+      C2D spos = a.positionOnPlate();
+      if (spos.length() == 0u) {
+        mStackSN = ew.getSiteNumber(c);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  Bool findStack() {
+    EventWindow ew;
+    if (mStackSN != 0u) {
+      // Once bonded to a stack, just die if it's gone
+      C2D c = ew.getCoord(mStackSN); 
+      return lookForStackRootAt(c.getX(),c.getY());
+    }
+    if (lookForStackRootAt(1,-1)) return true;
+    if (lookForStackRootAt(1,-2)) return true;
+    if (lookForStackRootAt(-1,1)) return true;
+    if (lookForStackRootAt(-2,1)) return true;
+    return false;
+  }
+
+  Bool tryPush() {
+    EventWindow ew;
+    MyStack & stk = (MyStack&) ew[mStackSN];
+    MyStack.MyPayload pay = random.bits(pay.sizeof);
+    Bool atFront = random.oneIn(2);
+    if (stk.tryInsert(atFront,pay))
+      return mLastEventSucceeded = true;
+    return false;
+  }
+
+  Bool tryPop() {
+    EventWindow ew;
+    MyStack & stk = (MyStack&) ew[mStackSN];
+    Bool atFront = random.oneIn(2);
+    MyStack.MyPayload pay;
+    if (stk.tryRemove(atFront,pay))
+      return mLastEventSucceeded = true;
+    return false;
+  }
+
+  Bool maybePush() {
+    if (random.oddsOf(30,100)) 
+      return tryPush();
+    return mLastEventSucceeded = false;
+  }
+
+  Bool maybePop() {
+    if (random.oddsOf(30,100))
+      return tryPop();
+    return mLastEventSucceeded = false;
+  }
+
+  Bool maybeGrow() {
+    if (!random.oneIn(1000)) return false;
+    return tryGrow();
+  }
+
+  Bool tryGrow() {
+    EventWindow ew;
+    if (!(ew[1] is Empty) || !ew.isAccessible(1)) return false;
+
+    MyStack & stk = (MyStack&) ew[mStackSN];
+    if (stk.sizeOfPlate().getX() > 120) return false;
+
+    C2D stksize = stk.sizeOfPlate();
+    C2D stkpos = stk.positionOnPlate();
+
+    ///XXXX
+    return false;
+  }
+
+  Bool mustBlock() {
+    EventWindow ew;
+
+    DebugUtils du;
+    for (EventWindow.SiteNum sn = 1u; sn < 41u; ++sn) {
+      if (!ew.isAccessible(sn)) continue;
+      Atom & a = ew[sn];
+      //      if (a is Tecton) return true;
+    }
+    return false;
+  }
+
+  Void behave() {
+    EventWindow ew;
+    if (mustBlock()) return;
+    if (!findStack()) ew[0] = Empty.instanceof;
+    else {
+      if (maybeGrow()) return;
+      if (maybePush()) return;
+      if (maybePop()) return;
+    }
+  }
+}
+
+/** DequeOperator19
+    \symbol DO
+    \color #44d
+ */
+element DequeOperator19 : QDequeOperator19 { }
+
+/** DequeOperator19Push
+    \symbol Du
+    \color #4d4
+ */
+element DequeOperator19Push : QDequeOperator19 {
+  Void behave() {
+    EventWindow ew;
+    if (mustBlock()) return;
+    if (!findStack() || tryPush()) ew[0] = Empty.instanceof;
+  }
+}
+
+/** DequeOperator19Pop
+    \symbol Do
+    \color #d44
+ */
+element DequeOperator19Pop : QDequeOperator19 {
+  Void behave() {
+    EventWindow ew;
+    if (mustBlock()) return;
+    if (!findStack() || tryPop()) ew[0] = Empty.instanceof;
+  }
+}
+
+/** GrowOperator19
+    \symbol GS
+    \color #dd4
+ */
+element GrowOperator19 : QDequeOperator19 {
+  Void behave() {
+    EventWindow ew;
+    if (mustBlock()) return;
+    if (!findStack()) ew[0] = Empty.instanceof;
+    else if (tryGrow()) ew[1] = Empty.instanceof;
+  }
+}

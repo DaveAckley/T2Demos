@@ -1,0 +1,100 @@
+/** Exchange virtual PacketBuffers via a peer-to-peer stream
+ */
+quark QStream12 : Payload {
+  typedef EventWindow.SiteNum SN;
+
+  //// QStream API
+  virtual SN getNextSN(Bool left) ;       //< SN of next site toward left (right) Peer, or SN.maxof if none
+  virtual Bool isPeer(Bool left) ;        //< true if we are the left (right) Peer
+
+  //// QStream SERVICES
+  //Bool advance() ;                      //< true if packet moved in, out, or both
+  //Bool send(Bool left, Payload & from) ; //< true if packet bits were sent to left (right)
+  //Bool recv(Bool left, Payload & to) ;   //< true if packet bits were received from left (right)
+
+  //// IMPLEMENTATION
+  typedef Unsigned(2) BufferStatus;
+  constant BufferStatus cBUFFER_EMPTY = 0u;      //< mPacketBuffer is empty
+  constant BufferStatus cLEFTBOUND_PACKET = 1u;  //< mPacketBuffer contains a leftbound packet
+  constant BufferStatus cRIGHTBOUND_PACKET = 2u; //< mPacketBuffer contains a rightbound packet
+  constant BufferStatus cARRIVED_PACKET = 3u;    //< mPacketBuffer contains a packet ready for delivery
+
+  BufferStatus oppositeDir(BufferStatus bs) {
+    if (bs == cLEFTBOUND_PACKET) return cRIGHTBOUND_PACKET;
+    if (bs == cRIGHTBOUND_PACKET) return cLEFTBOUND_PACKET;
+    return cBUFFER_EMPTY;
+  }
+    
+  BufferStatus mBufferStatus;
+
+  Bool canSend() { return mBufferStatus == cBUFFER_EMPTY; }
+
+  Bool canRecv(Bool left) {
+    BufferStatus bs = left ? cLEFTBOUND_PACKET : cRIGHTBOUND_PACKET;
+    return mBufferStatus == bs;
+  }
+
+  Bool send(Bool left, RawBits from) { //< true if a packet containing from was sent to left (right)
+    if (!canSend()) return false;
+    if (!self.loadFrom(from)) return false;
+    mBufferStatus = left ? cLEFTBOUND_PACKET : cRIGHTBOUND_PACKET;
+    return true;
+  }
+
+  Bool recv(Bool left, RawBits & to) {  //< true if a packet payload was received from the left (right)
+    BufferStatus desired = left ? cLEFTBOUND_PACKET : cRIGHTBOUND_PACKET;
+    if (mBufferStatus != desired && mBufferStatus != cARRIVED_PACKET) return false;
+    if (!self.storeTo(to)) return false;
+    mBufferStatus = cBUFFER_EMPTY;
+    return true;
+  }
+
+  Bool canAdvance() {
+    SN wasteSN;
+    return canAdvance(wasteSN);
+  }
+
+  Bool canAdvance(SN & destSN) {
+    if (mBufferStatus == cBUFFER_EMPTY) return false; // Let others push
+    if (mBufferStatus == cARRIVED_PACKET) return false; // Let somebody pick it up
+
+    // If we are at the destination peer, we can "advance"
+    if (isPeer(mBufferStatus == cLEFTBOUND_PACKET)) 
+      return true;
+
+    SN tmpSN = getNextSN(mBufferStatus == cLEFTBOUND_PACKET);
+    EventWindow ew;
+    if (tmpSN == 0u || !ew.isAccessible(tmpSN)) return false;
+    Atom & a = ew[tmpSN];
+    if (a as Self) {
+      BufferStatus opp = oppositeDir(mBufferStatus);
+      if (a.mBufferStatus == cBUFFER_EMPTY || a.mBufferStatus == opp) {
+        destSN = tmpSN;
+        return true;
+      }
+    }
+    return false;
+  }
+
+  Bool advance() {
+    EventWindow ew;
+    SN destSN;
+    if (!canAdvance(destSN)) return false;
+
+    // Have we arrived?
+    if (isPeer(mBufferStatus == cLEFTBOUND_PACKET)) {
+      mBufferStatus = cARRIVED_PACKET;
+      return true;
+    }
+
+    // Keep on trucking
+    Self & a = (Self&) ew[destSN];
+    if (!swapPayload(a)) return false;
+
+    BufferStatus bstmp = mBufferStatus;
+    mBufferStatus = a.mBufferStatus;
+    a.mBufferStatus = bstmp;
+    return true;
+  }
+
+}

@@ -1,0 +1,13 @@
+/** API for Plate-level command and communications structure.
+ */
+quark PlateComm {
+
+  typedef Unsigned(1) Mode;
+  constant Mode cMODE_INTEGRATE = 0u; //< Taking action suggestions
+  constant Mode cMODE_EXECUTE = 1u;   //< Executing chosen action
+  Mode mMode;
+
+  typedef Unsigned(3) Action;
+  typedef Unsigned(4) Urgency;
+  typedef Unsigned(7) Urgency;
+}

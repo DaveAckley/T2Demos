@@ -1,0 +1,1936 @@
+{149}  -*- text -*-
+[0:
+
+Thu Apr 29 00:52:35 2021 OK, so we're back on ulam; goal is to develop
+useful space-holding Plating, that can:
+
+ - Robustly maintain a local coordinate system
+
+ - Flood to a given shape relative to that coordinate system
+   = Shape interface defines a predicate Bool inShape(C2D localCoord);
+
+Maybe just that much, for starters
+
+:0][1:
+
+Thu Apr 29 04:11:01 2021 Ugh twitturd.
+
+:1][2:
+
+Thu Apr 29 09:06:16 2021 OK have a first little spike with Box10.ulam
+and QPlate.ulam, that makes and maintains a 'circle' shape (despite
+the name Box10).  It's really just a generalization of the ancient
+'living box' idea, applied to a Shape interface.[3:
+
+Thu Apr 29 09:34:31 2021 Now it's a circle with a shaft sticking out
+of it, to show we can make arbitrary shapes.  Maybe it's a coronavirus
+spike.
+[4:
+
+Thu Apr 29 09:39:53 2021 So, what next?  Detect alien coordinate
+systems?  And do what?
+
+Or, globalize some kind of stability announcement?  Or try to develop
+robust paths toward the origin from everywhere, for signal routing?
+How might that work, given:
+
+ - There might be arbitrary occlusions and blockages within the shape,
+
+ - And the origin itself might not (currently) exist.
+
+(Do we even assume the origin is in the Shape??  Nothing actually
+enforces that so far, except the Seed inits to the origin.)
+
+[5:
+
+Thu Apr 29 10:21:21 2021 If we took the rule that closer-to-the-origin
+dominates, we might be able to let the origin move and have the shape
+redefine itself around the new origin.  But if we're inconsistent we
+probably want to die and let the consistent-with-new-origin thing
+rebuild itself.
+
+When an inconsistent-origin QPlate is detected, I wonder if there's a
+distinction to be made based on whether or not the inconsistent origin
+isInShape relative to the current QPlate.  If it is, that might
+suggest origin movement; if not that might suggest an alien coordinate
+system.
+
+:5]
+
+:4]
+:3]
+
+:2]
+[6:
+
+Thu Apr 29 10:52:14 2021 Let's detect alien coordinate systems and
+just die away from it, and see what it looks like.[7:
+
+Thu Apr 29 11:05:37 2021 OK we're doing that, and we're boiling at
+overlaps.. but they still get pretty close to each other.  Feel like
+overlap detection should maybe reach farther than growth.[8:
+
+Thu Apr 29 11:20:24 2021 OK, now they're 'boiling at a distance',
+FWIW.  Seems like it would be better to defer somehow, but..  [9:
+
+Thu Apr 29 11:34:12 2021 How about two stages?  If we see an alien,
+die if it's at esl <= 2, otherwise just don't grow.
+
+:9]
+
+:8]
+
+
+:7]
+
+:6]
+[10:
+
+Fri Apr 30 06:43:32 2021 OK so let's get the rotations going
+  again.[11:
+
+Fri Apr 30 07:08:21 2021 OK that seems to be working.
+
+Having flickering between diagonal aliens because we're now obeying
+the neighborhood() for alien detection as well as growth, so we can't
+be sure.. why can't we be sure, again?[12:
+
+Fri Apr 30 07:14:13 2021 Because we weren't restricting growth to the
+von Neumann ngb even though we'd intended to.  OK no flickering now.
+
+[13:
+
+Fri Apr 30 07:51:16 2021 OK what now?  Some kind of stability
+detection would be good.  What can we do about flexible routing toward
+the origin?  If we have room for like one little message, we could
+just let them back up and fill trapping states until subsequent
+messages went another way..  urgh.
+
+Or we could just go uphill and let trapping states trap.  And tell
+larger scales to avoid trapping states if they don't like that.  Maybe
+they could even use trapping states strategically to create divisions
+prior to spawning or something.  But not our problem, down here, no
+matter what.
+
+[14:
+
+Fri Apr 30 08:03:27 2021 It might be nice to have a variety of signals
+that could be maintained, rather than just messages to be sent.  For
+example, what if 'stability' was like a single bit signal that was:
+
+ (1) Pulled down locally whenever a configuration changed, and
+ (2) Pulled up if a leaf and no configuration change, and
+ (3) AND-ed across kids if non-leaf
+
+where 'kids' means 'strictly more distant' plate, I guess.  That still
+implies multiple parents, though, so a single 0 can spread while
+propagating upwards.  Have to see what it looks like.
+
+[15:
+
+Fri Apr 30 08:14:24 2021 How could we implement that in a semiclean
+way?  Something allowing multiple signals with different semantics,
+for example.
+
+ - Give each particular signal a numeric tag
+
+ - Have a signal QSignals interface, with perhaps
+   = Bool supports(SigNum sn)
+   = {{ SignalIterator supportedSignals() }}
+   = etc
+
+ - Some kind of signal combining op function
+
+[16:
+
+Fri Apr 30 08:22:42 2021 Before we get going here, do we really want
+to be calling these things signals?  Vs?  [17:
+
+Fri Apr 30 08:31:11 2021 ..indicator? [18:
+
+Fri Apr 30 08:34:27 2021 Screw it, signals.[19:
+
+Fri Apr 30 08:40:15 2021 Started into it.  Have a call at 9, though,
+so can't go deep now.  Currently hardcoding Bool signals but wondering
+if that's a bad idea.  In particular, wondering about like Unary(2)
+three-level signals, that could support a dead state, or even an RPS
+rotation if we believed things were robust enough to support that.
+
+If we said Unary(2), would the stability base cases be 0u/2u and the
+combining op then be min?  When would case 1u ever occur?  I suppose
+the combining op could be like 1-, so having a single 0u would pull a
+2u to a 1u..  Or the combining op could even be truncated average.
+
+All seems not very motivated at the moment, though[20:
+
+Sat May  1 01:11:51 2021 OK let's get Bool signals going and see what
+it looks like.
+
+ - A given element wishing to use signals inherits from QSignals, and
+   declares data members of type QSignal(signum) for each signal they
+   wish to participate in.
+
+[21:
+
+Sat May  1 01:40:15 2021 So, somewhere, we need an iteration over
+signals, and an iteration over sites that we'll propagate signals
+from.  I guess an individual QSignal could say which coords it cared
+about?  And that would allow us to define upstream or downstream
+signals?  I guess let's put ..[22:
+
+Sat May  1 03:03:41 2021 Dammit I'm falling off into generalities
+again.  Need to just IMPLEMENT some specific thing.  Let's hardcode
+the pattern-complete signal as an example;
+
+A site is a 'leaf' if
+
+(1) It isInShape, and
+(2) No neighborhood site that's farther from the origin isInShape
+
+If a leaf finishes its growth scan without finding any isInShape sites
+that aren't already QPlate, then it sets its pattern-complete flag.
+
+A site is a 'non-leaf' if
+(1) It isInShape, and
+(2) Some other isInShape neighbor is farther from the origin
+
+When a non-leaf performs its growth scan, it computes a running min
+over sites that:
+(1) Contain a kin-QPlate ('kin' meaning common origin with us)
+(2) Return true from self.QSignals.implements(cSN_PATTERN_COMPLETE)
+
+[23:
+
+Sat May  1 03:18:52 2021 Hmm would we rather merge signal supporting
+and signal values?
+
+quark QSignal {
+  virtual Unsigned getValue() ; // return Unsigned.maxof -> not implemented
+  virtual Unsigned setValue(Unsigned newValue) ; // return value stored or .maxof unimplemented
+}
+
+quark QSignalGradient(Unary(31) cGRADIENT_BITS) : QSignal {
+  typedef Unsigned(cGRADIENT_BITS) SigVal;
+  SigVal mSigVal;
+  virtual Unsigned getValue() { return mSigVal; }
+  virtual Unsigned setValue(Unsigned newValue) {
+    if (newValue != newValue.maxof) {
+      mSigVal = (SigVal) newValue;  // saturating
+    }
+  }
+}
+
+quark QSignalBool : QSignal {
+  typedef Bool SigVal;
+  SigVal mSigVal;
+  virtual Unsigned getValue() { return mSigVal ? 1u : 0u; }
+  virtual Unsigned setValue(Unsigned newValue) {
+    if (newValue != newValue.maxof) {
+      mSigVal = newValue != 0u;
+    }
+  }
+}
+
+ - or I guess:
+
+local typedef QSignalGradient(1) QSignalBool;
+
+  amounts to the same thing..
+
+[24:
+
+Sat May  1 03:33:43 2021 Gah nap.
+
+:24]
+
+:23]
+
+
+
+:22]
+
+:21]
+
+
+
+:20]
+
+:19]
+
+:18]
+
+:17]
+
+:16]
+
+
+:15]
+
+:14]
+
+:13]
+
+:12]
+
+:11]
+
+:10]
+[25:
+
+Sat May  1 08:53:08 2021 OK, so a directly-hacked Bool
+QPlate.mPatternComplete seems to be working.  But we don't have
+anything to do with that information.  We could time-out and die,
+perhaps, as a first thing.  Actually we don't even have a ripcord yet,
+so perhaps that's a next thing to put in.[26:
+
+Sat May  1 09:03:14 2021 Do it along with alien scan?[27:
+
+Sat May  1 09:13:13 2021 Signal with illegal coord?  No, that would
+blow alien detection.  Add it to the Shape API and let subs deal with
+it?  [28:
+
+Sat May  1 09:57:22 2021 Did Void Shape.die() and Bool Shape.isDead().
+And just blew another bit for Bool mIsDead.
+
+Currently having Box10 just die() on a oneIn(10000) whenever the
+pattern isn't complete.  Started by flooding the whole world with Seed
+and now it's down to four complete patterns and a smattering of
+pattern fragments -- mostly tiny and mostly in the ITCs.  I imagine it
+will asymptote at maybe six or eight full patterns, once enough of the
+ITC starts waste away to allow the remaining ones to grow.
+
+[29:
+
+Sat May  1 10:13:23 2021 Let's try to say that if there's a lot more
+aliens than kin (like > 2x, say) then we should just quietly go empty.
+Right now, the half-completed patterns are much more likely to die()
+than random scattered singletons, because the larger patterns are
+taking many more die-on-incomplete shots.[30:
+
+Sat May  1 12:40:22 2021 Well, started trying to add a grow-on-stable
+feature, but that requires desired size information to flow
+downstream, and not just stability information flowing upstream.[31:
+
+Sat May  1 13:38:05 2021 I think I should start another spike and just
+go for rectangles.  Ditch the Shape interface and weld it all
+together.[32:
+
+Sat May  1 13:39:13 2021 Copied to code-202105011339.
+
+:32]
+
+:31]
+
+
+
+:30]
+
+:29]
+
+:28]
+
+:27]
+
+:26]
+
+:25]
+[33:
+
+Sun May  2 00:21:40 2021 OK, so questioning the whole approach of
+durable solid-pack plate.  Using plate during reproduction, it's at
+least somewhat reasonable to assume the copied material won't move or
+grow significantly during the life of the plate.  With durable plate
+that's not true.
+
+I'm wondering about the wide-spaced routing grid approach as an
+alternative.
+
+I'm also wondering about what if BaseUtils gave you read-only access
+to the vonN or Moore neighborhood base sites.  That would mean:
+
+ - You could implement 'pull' based distribution mechanisms in the
+   base layer without having to project state into the event layer
+
+   = E.g., you could put local coords in the base layer and random
+     types in the event layer could use or maintain them without tying
+     up any of their own state bits
+
+ - EW structs would need to be extended to hold the extra base sites
+
+ - Cache upds would need a way to ship center site base layer info
+
+ - ITC opening would need to ship one row/col of base layer state
+
+:33]
+[34:
+
+Sun May  2 11:16:17 2021 So, now thinking nested bounding boxes, each
+with (maxx,maxy)+(myx,myy).  They automatically detect and maintain
+bounding box containment relations with adjacent atoms by checking
+bounding box overlaps.  They use the nesting relationships as the
+primary mechanism for determining priority: Contained is lower
+priority than container.
+
+Then swaplines and tractors automatically work relative to the
+bounding box they're given, to move or modify that box and all its
+subboxes.
+
+Contained boxes should have (maxx,maxy) no greater that
+container.(maxx-2,maxy-2), so they can be completely surrounded.  It
+would be better if we could have a nesting boxes all the way at the
+edge of a containing box but then
+
+[38: Sun May  2 13:21:52 2021
+DONE :38]First demo:   Seed a 9x7 box which grows itself.
+[52: Mon May  3 02:10:16 2021
+DONE :52]Second demo:  9x7 box detects its own stability and seeds a 4x3 box
+              inside itself
+Third demo:   4x3 box diffuses inside 9x7 box by releasing swaplines
+Fourth demo:  9x7 box diffuses itself while 4x3 box diffuses inside
+Fifth demo:   Head explodes
+
+[35:
+
+Sun May  2 11:40:20 2021 Process:
+
+ - START FROM A BLANK SCREEN, AND
+ - MINIMIZE CLASSES INSTEAD OF MAXIMIZING GENERALITY.
+ - WORK WITH A FULL ELEMENT NOT A QUARK, BUT
+ - DELEGATE TO A 'CONTROL QUARK' DATA MEMBER FOR DIFFERENTIATION
+
+[36: Sun May  2 11:46:23 2021 go go go :36][37:
+
+Sun May  2 12:43:29 2021 Working on transient TBox, have to remember
+that the TBox.mPos is the position of the WHOLE BOX in some 'absolute'
+space, not [40: ..went with TBox.mMin and .mMax instead..  :40]
+
+:37]
+
+:35]
+
+:34]
+[39:
+
+Sun May  2 13:22:14 2021 OK, so stability detection means a lot more
+hair[41: with the signal stuff.  Does minimizing classes mean we just
+extend the Plate API somehow?  :41][42:
+
+Sun May  2 13:35:53 2021 OK, added
+
+  virtual Bool Plate.isPlateStable() ;
+
+and trying to implement that in Test10.  Issue: What's 'upstream' and
+'downstream' for purposes of stability propagation?  Propagating
+toward the origin means we'll have this privileged corner in each box;
+do we want that?  How hard do we want to try otherwise?
+
+We could declare (width/2,height/2) as the signal center, but that
+seems pretty weird.
+
+Let's let (0,0) be the 'top' and see how it feels.[43:
+
+Sun May  2 13:57:12 2021 Have to break for meeting but stability
+reporting to (0,0) seems mostly plausible.
+
+-> Oh but we'll need to extend the 'complete' logic not to get upset
+   by encountering wholly-contained subplates..
+
+[44:
+
+Sun May  2 15:52:00 2021 OK a brief mid-cooking hack shot here.[45:
+
+Sun May  2 16:14:10 2021 OK need to get back to cooking soon, but
+looking just ahead: We need a way to distinguish 'empty Plate' from
+'in-use Plate', so a subplate, for example, can decide whether it can
+grow into a given parent Plate site.[46:
+
+Sun May  2 16:22:51 2021 Sauce needs a bit more time.  So how do we
+categorize Plate?  Another set-of-constants 'enum'?  What values?
+
+[47:
+
+Sun May  2 16:26:32 2021 So wait, do we really need this?  Could we
+not say that any site that's in the containing plate (and perhaps
+non-border) is, by definition, available for subplate growth or
+movement?  Because if it's not available, it should be occupied by a
+subplate, in which case it won't read as in the containing plate.
+
+Yeah.  Too simple and clean not to try it anyway.[48:
+
+Sun May  2 16:42:49 2021 Have to break away again.  Current status is
+the logic in Test10.checkGrowthAndStability() is still messed up,
+trying to integrate the two cases for growth (actually Empty or wholly
+containing plate).  Pick up there in the overnight.[49:
+
+Sun May  2 17:31:09 2021 Or while dinner's in the oven here..
+
+[50:
+
+Sun May  2 21:45:52 2021 OK, so pretty cool: We've got a box growing
+itself and then seeding a smaller box inside itself, which grows as
+well.  And both boxes repair themselves and gradually detect
+stability.  And I bet $100 that if I make the outermost box like twice
+as big, the nested box will grow an even smaller nested box inside
+it.[51:
+
+Sun May  2 21:51:24 2021 Aand it did.  Nice!
+
+:51]
+
+:50]
+
+:49]
+
+:48]
+
+:47]
+
+:46]
+
+:45]
+
+   :44]
+
+:43]
+
+:42]
+
+:39]
+[53:
+
+Mon May  3 02:13:08 2021 OK so I guess we're talking swaplines now.
+Actually I think we should do window rotations first.
+Then nesting-based priorities.
+THEN swaplines.
+[54:
+
+Mon May  3 02:19:16 2021 So what's the principle for window rotations?
+I assume we're going to normalize them out so Plate.sizeOfPlate() and
+Plate.positionOnPlate() always work in c000R?  But Test10, our
+most-derived class, calls positionOnPlate() to determine[55: Mon May
+3 02:27:25 2021 .. actually I'm not sure why it does call it.  It uses
+it like this:
+
+        C2D mypos = positionOnPlate();
+ ..
+          C2D c = md.getSiteCoord(i) + mypos;  // Plate coord of site
+ ..
+            if (c.length() > mypos.length()) {  // site is downstream of us, so we're
+
+but I don't see what mypos is really contributing there, appearing on
+both sides of the > relation.  Well, it sets the origin, which affects
+when md.getSiteCoord(i) increments will change sign, which affects the
+length calculation.  But it sure seems like we could say something
+like
+
+          C2D off = md.getSiteCoord(i);         // Offset to site
+ ..
+            if (off.getX() + off.getY() > 0) {  // site is downstream of us, so we're
+
+and get the same effect without using pos.
+
+[56:
+
+Mon May  3 03:44:02 2021 Well, I'm really not sure how window rotation
+wants to work here.  I'm tempted to push it even though it'll just be
+harder to deal with later, if I can't keep pushing it indefinitely.
+
+Well let's take an explicit little go here before giving up:
+
+   a:(12x6)
+     Aaaaaaaaaaaa
+     a..........a
+     a..........a
+     a..........a
+     a..........a
+     aaaaaaaaaaaa
+
+with 'A' being the origin for 'a'
+
+Let's put a 4x3 b inside, and mark its corners for reference:
+
+   a:(12x6)
+     aaaaaaaaaaaa
+     aBbb1......a
+     ab..b......a
+     a3bb2......a
+     a..........a
+     aaaaaaaaaaaa
+
+Now let's say we really wanted b rotated 180:
+
+   a:(12x6)
+     aaaaaaaaaaaa
+     a2bb3......a
+     ab..b......a
+     a1bbB......a
+     a..........a
+     aaaaaaaaaaaa
+
+ So now B and its corners say
+
+ B:size  (4,3)   1:size  (4,3)   2:size  (4,3)   3:size  (4,3)
+   pos   (0,0)     pos   (3,0)     pos   (3,2)     pos   (0,2)
+   wrot  c180L     wrot  c180L     wrot  c180L     wrot  c180L
+
+But we need them to report like:
+
+ B:sizep (4,3)   1:sizep (4,3)   2:sizep (4,3)   3:sizep (4,3)
+   posp  (3,2)     posp  (0,2)     posp  (0,0)     posp  (3,0)
+
+And let's see, tpos = SymMap<PSYM_DEG180L>(posp) would give us
+
+  tpos   (0,0)    tpos   (-3,0)   tpos   (-3,-2)  tpos   (0,-2)
+
+and mpos = size-tpos-(1,1) is:
+
+B:mpos   (3,2)  1:mpos   (6,2)  2:mpos   (6,4)  3:mpos   (3,4)
+
+So that's not it.  The whole thing about rotations is you have to know
+what you're rotating around.  And that's pretty clear in an event
+window, but it's really not for a general box.
+
+That mpos is saying like:
+
+   a:(12x6)
+     aaaaaaaaaaaa
+     a..........a
+     a..B..1....a
+     a..........a
+     a..3..2....a
+     aaaaaaaaaaaa
+
+?  Rotating it around its own origin, then offsetting it up and left
+for some mysterious reason.
+
+[57:
+
+Mon May  3 04:26:13 2021 So yeah let's ditch wrot and push on and alia
+jacta est and future Dave will just curse past Dave once again.
+
+:57]
+
+:56]
+
+:55]
+
+:54]
+
+:53]
+[58:
+
+Mon May  3 04:28:11 2021 So now, instead of wrot, it's nesting based
+priorities.  Do we do that within the update API?  We're not using
+that yet.  We should just do it in the Plate API, given our 'minimize
+classes' admonishment.
+
+Now, just because some visible site is part of a containing plate that
+doesn't mean we have to passivate.  We want some explicit 'takes
+priority' indication as well, that Plate 'tectonics' like SwapLine
+will employ.[59:
+
+Mon May  3 04:55:46 2021 OK we have a cut at Bool Plate.isTectonic(),
+but so far nothing is tectonic so it never says true.
+
+Now there's an issue about swaplines and plate coordinates.  We really
+want swaplines to have the sizeOfPlate corresponding to the plate
+they're moving.  But we also need the swapline to begin OUTSIDE that
+plate, occupying what will become the first destination line of the
+post-move Plate.
+
+But so far we've never dealt with a positionOnPlate that's outside of
+(0,0)..sizeOfPlate-(1,1).  Do we believe that has much chance of
+working?
+
+[60:
+
+Mon May  3 05:02:17 2021 Who knows.  Let's build some tectonic stuff
+and see what starts happening.[61:
+
+Mon May  3 11:30:54 2021 So, arrays of constant classes with
+initializations involving folding through data members of other
+constant classes, nice!  Like:
+
+      constant C2D cRGTBCK [] = {
+        { .x = (C2D.Coord) (cRGT[0].x + cBCK[0].x), .y = (C2D.Coord) (cRGT[0].y + cBCK[0].y) },
+        { .x = (C2D.Coord) (cRGT[1].x + cBCK[1].x), .y = (C2D.Coord) (cRGT[1].y + cBCK[1].y) },
+        { .x = (C2D.Coord) (cRGT[2].x + cBCK[2].x), .y = (C2D.Coord) (cRGT[2].y + cBCK[2].y) },
+        { .x = (C2D.Coord) (cRGT[3].x + cBCK[3].x), .y = (C2D.Coord) (cRGT[3].y + cBCK[3].y) }
+      };
+
+It's a ton of boilerplate to deal with not using ew symmetries, but
+let that go for now.
+
+So can we have some adapted specifics for how ShiftPlate -- our
+Plate-adapted SwapLine -- is actually going to work?
+
+Growth Phase
+Shift Phase
+Shrink Phase
+
+Growth Phase: !mLeftReady || !mRightReady
+ - If !isLeftInPlate(), mLeftReady = true;
+   else if isUs(LFT), mLeftReady = asUs(LFT).mLeftReady
+   else tryMakeUs(LFT)
+ - If !isRightInPlate(), mLeftReady = true;
+   else if isUs(LFT), mLeftReady = asUs(LFT).mLeftReady
+   else tryMakeUs(LFT)
+
+[62: Mon May  3 12:07:58 2021 Well, we can't be using the obvious
+isInPlate(C2D), though, because at init time we're assertively outside
+the plate in the antitravel direction.  We need to consider the axes
+separately.. The shift axis vs the constant axis? isShiftLine(C2D) ?
+
+Can we make a rule that all C2D values are Plate coords or offsets to
+Plate coords?  So only ShiftDirection stuff is in fwd/bck/lft/rgt
+terms.
+
+:62]
+
+Shift Phase: mLeftReady && mRightReady
+ -
+
+:61]
+
+:60]
+
+:59]
+
+:58]
+[63:
+
+Mon May  3 12:20:10 2021 It would be nice if we could reserve swapline
+init space in some non-blocking way before releasing the line.  Some
+placeholder..  I guess with programmable priority that could actually
+just be ShiftPlate.  It just wouldn't assert its priority until
+mLeftReady && mRightReady.  (We sure are going to need to prioritize
+between multiple ShiftPlates on the same plate.  Can just imagine
+seeing multiple ShiftPlates trying to grow on multiple edges of the
+same plate, releasing if and when they manage to complete growth.)
+
+Actually it's worse than that: If there's a growing ShiftPlate at 90
+degrees to a traveling ShiftPlate, the latter won't shift the former
+and the former's coords will get all thrown off.  At the very least
+I'd think a growing ShiftPlate would need to blow up if it sees a
+traveling ShiftPlate on the same plate.
+
+Oncoming ShiftPlates would have to have some pre-arranged tie-breaking
+mechanism so one could run over the other, but even that wouldn't be
+trivial because plate coords are inconsistent across a ShiftPlate.[64:
+
+Mon May  3 13:04:21 2021 Maybe we need to just do a straight-up say
+ShiftPlateWest, to see it working before trying to deal with faking
+the rotations..
+[65:
+
+Mon May  3 13:16:08 2021 Trying 'PlateShifterW' to go east and shift
+the plate west.  Contrary to previous discussion, it now seems we are
+going to need some kind of explicit 'empty plate' marker.. Because how
+do we know if we can grow PlateShifterW into an adjacent site?  Can we
+really assume that anything that's in the containing plate is fair
+game?  Really really?
+
+Well, what else could it be though?  We're saying swaplines identify
+with the plate they're moving, so it can't be that.  Can't be a
+sibling plate either.
+
+So, if it's ANY kind of Plate, that's in our containing plate, we can
+just stomp it for our swapline.  Wild.[66:
+
+Mon May  3 14:02:11 2021 OK first cut spread-north code compiles, but
+doesn't do anything but set mNorthReady because we spawned at the
+northern row anyway.  So need to generalize for N/S anyway -- there's
+too much code here to paste.[67:
+
+Mon May  3 14:29:35 2021 OK the 'isTectonic()' business isn't going to
+cut it as it stands.  For example, the first PlateShifterW was
+blocking the second PlateShifterW from growing further, because it was
+tectonic so both PlateShifterWs decided to hold.
+
+And when I changed PlateShifterW.isTectonic() to say false until both
+sides were ready, then as soon as the first end became fully ready,
+its tectonicity blocked the rest of the line from becoming ready.
+
+So we really need some kind of gradations-within-containment.
+[68:
+
+Mon May  3 15:27:16 2021 Suppose we say 'Int priority()' as before,
+except hardcode the containment sensitivity.  So we won't even call
+priority() if containment says it's not relevant, and if it is
+relevant, we'll call self.priority() and compare it to the max of the
+neighbor priority()s[69:
+
+Mon May  3 15:40:25 2021 OK, so that got the PlateShifterW all built
+and done with GROWTH PHASE.  Now need to write SHIFT PHASE.
+[70:
+
+Mon May  3 16:42:05 2021 Well SHIFT PHASE starting to come along but
+we've got a race problem coming out of GROWTH PHASE: The first bein
+that sees both sides ready is free to advance whether or not its
+neighbor beins have picked up the side-readiness infomation they need
+from the first bein.  So they never decide they're ready.
+
+It seems like we'd like to wait until we have both sides ready AND our
+neighbors have both sides ready.  But.. again.. once the first bein to
+see that state advances, how will its neighbors do that check?
+
+How do existing swaplines deal with this?  In 2D printer land, for
+example?[71:
+
+Mon May  3 16:52:53 2021 Well they do lots of complicated stuff, is
+what they seem to do.
+
+So, we need the 'release' check to be willing to look ahead, and not
+just abreast?  If I'm both-sides-ready I advance.  And if I'm not
+both-sides-ready, I check both abreast and ahead, to see if there's
+kin that is ready.  I guess the mere existence of a front bein should
+imply we're ready on that side, since it shouldn't have released until
+it's ready both ways.
+
+Can we make spreadLine do that additional check, instead of its
+callers? [72:
+
+Mon May  3 17:04:29 2021 Well, that kind of worked!  The innermost
+plate shifted west and cleaned up appropriately, but then it kept on
+going until it had driven through the middle plate and up to the edge
+of the outer plate.
+
+Where it stopped, leaving the nesting relationships broken.
+
+Progress!
+
+Time for cocktails.[73:
+
+Tue May  4 01:05:30 2021 OK, so, made Bool Plate.isPlateBorder() and
+now Test10's innermost box stops shifting once it reaches the border
+of its containing plate.
+
+[74:
+
+Tue May  4 02:21:09 2021 So, how do we prioritize some next steps
+here?  Choosing among like
+
+ - PlateShifterW -> all dirs
+
+ - PlateShifterW rip cord to kill just self if blocked in growth phase
+
+ - PlateShifterW rip cord to kill self and plate-being-shifted if
+   problem during shift phase
+
+ - Plate rip cord to kill all of single plate (and all of its subplates)
+
+ - Atomic movement for small plates, where before and after all fit in
+   one event window
+
+[75:
+
+Tue May  4 03:40:00 2021
+
+ - Reusable plate state distribution mechanism, so, e.g., entire plate
+   can agree it's going to try shifting south, and not be releasing
+   conflicting plateshifters on different edges.
+[76:
+
+Tue May  4 04:09:15 2021 So for now anyway we say plate coordination
+will happen by only releasing commands from the origin, and the origin
+will wait for command confirmation before proceeding.  That's how
+we'll avoid conflicting plateshifters.  Two flags -- new command + new
+response?  Root sets cmd and newCmd and clears newRsp.  Downstream
+sees newCmd and copies cmd, newCmd, newRsp.  Leaf,,
+
+[77:
+
+Tue May  4 04:14:53 2021 Well if we're serializing through the root do
+we even need a full plate broadcast before execution?  We could flood
+to the leaves and then execute on the way back up.  But any way we
+slice it, the execution confirmation won't necessarily be coming from
+the farthest leaves, right?  Or people that don't have to do anything
+for a particular cmd just claim that "it's done as far as they're
+concerned" ?  And then it's like plate stability -- min over task
+doneness to the root?[78:
+
+Tue May  4 04:27:19 2021 Red - new command outbound; Green - current
+command propagated; Blue - previous command completed.
+
+Root sets Red
+[79:
+
+Tue May  4 04:32:56 2021 So, the general spatial tree had nice
+RGB/Dead sequencing stuff -- but in that case each node had a unique
+parent, which we don't see here.  Although we had kind of concluded
+that full RPS/RGB was overkill for the tree, so it's probably just the
+ticket here.
+
+Blue: Previous command completed.  'Default' state
+
+Root sets Red and cmd
+
+Blue: If see Red, take cmd and set Red
+Red:
+  if see Blue, wait
+  set Green
+Green:
+  if see Red, wait
+  do cmd, whatever that means for you
+  set Blue
+Blue:
+  if see Green, wait
+
+
+DOWN/ACT/UP?
+
+Root sets cmd and set DOWN
+
+in DOWN
+ for downstream s,
+   if s is UP, push cmd to s and set s.DOWN
+   if s is DOWN, leave it down
+   [ if s is ACT, die() ? ]
+ set ACT
+
+in ACT
+ for downstream s, if s not UP, stay in ACT
+ do cmd whatever that means to you
+ set UP
+
+in UP
+ stay in UP until exogenous
+
+:79]
+
+:78]
+
+:77]
+
+:76]
+Something like levels or stages, but not necessarily single pass.
+
+[exogenous]
+  requests
+    Plate construction
+      asserts
+        Plate complete
+
+Plate complete
+  requests
+    Plate operation
+      asserts
+        Plate operating
+
+Plate operating
+  requests
+    Plate movement
+      asserts
+        Plate moving
+
+Plate moving
+  requests
+    Plate shifters
+      asserts
+        Plate shifted
+
+
+:75]
+
+:74]
+
+:73]
+
+:72]
+
+:71]
+
+:70]
+:69]
+
+:68]
+
+:67]
+
+:66]
+
+
+:65]
+:64]
+
+:63]
+[80:
+
+Tue May  4 06:03:04 2021 Found another trapping state: PlateShifterW
+currently won't shift over Empties, so it doesn't advance, but Plate
+is blocked by PlateShifterW, so it doesn't fill the Empties.
+
+Should let PlateShifterW swap Empties, I'd think.  They can get filled
+on the other side.
+
+:80]
+[81:
+
+Tue May  4 10:51:54 2021 Opps just caught another PlateShifterW bug:
+It doesn't properly ignore PlateShifterWs on subplates, so rather than
+absolutely swapping over and/or through them, it hangs up at the
+subplate.. But the pieces not blocked by the subplate continued going,
+so that's weird too.[82:
+
+Tue May  4 11:08:31 2021 Seemed to be because of priority blocking, or
+failing to block.  Subplate PlateShifter should block for containing
+plate PlateShifter, but at the moment both are just priority 10 and
+the logic said tied priorities don't block.  Changing it to
+ties-go-to-containing-plate causes the whole show to lock up as soon a
+subplate tries to start growing, because that's 0 vs 0.
+
+So do we maybe want some kind of priority that depends on the SIZE of
+the plate as well as the containment relation?  Like, your 'blocking
+power' is your priority * your plate area?  Or area + priority, saying
+priority is really mostly for breaking ties.  But that fails on sub-0
+vs super-0 again.  Multiplying allows 0 priority to cancel out the
+area sensitivity.
+
+So the conundrum is
+
+ - sub-Test10 does NOT want to be blocked by super-Test10, but
+ - sub-PlateShifterW DOES want to be blocked by super-PlateShifterW.
+
+Is that really sensible, and if so, how shall we implement it?
+
+Have Plate subtypes 'declare dominion' over subplates?  PlateShifterW
+is going to mess with the inside of subplates, so it declares
+dominion.  Test10 is not, so it doesn't.
+
+Would we ever want subplates to declare dominion over superplates?
+Could imagine it might be handy for control purposes -- like for
+extruding something into a superplate (?)  Not clear what that even
+means.
+
+We could have a Bits(PlateRelation.maxof+1u) mask that says what you
+declare dominion over.  Default is (1u<<cSAME_PLATE_AS)
+
+Test10 takes the default
+PlateShifterW says (1u<<cSAME_PLATE_AS)|(1u<<cCONTAINS_PLATE)
+
+Maybe it's your 'domain' rather than your 'dominion'..  If ngb 'a' is
+within your domain, you block if a.priority() > self.priority().  If a
+is not in your domain, check if you are in a's domain.  If so..block?
+
+[83:
+
+Tue May  4 11:36:24 2021 Well that might be workable but it feels like
+overkill at the moment.  All we think we need right now is like
+
+ virtual Bool Plate.blockSubplates() { return false; }
+
+and PlateShifterW overrides to true because it is going to be messing
+around in subplates.
+[84:
+
+Tue May  4 16:09:40 2021 OK well blockSubplates() worked well enough
+for us to run some bigger Test10s.  Now have
+../data/20210504114253.mp4 showing a lot of good stuff but culminating
+in a race apparently caused by an intermediate plate -- call it '2' --
+choosing cOPS_DIE_JUST_HERE.
+
+It looks like that 2's death happened as expected, and the plate
+surrounding it -- plate 1 -- began growing back in to the vacated
+space, as expected.  There wasn't that much space to refill into,
+because the next innermost plate -- plate 3 -- was still there, going
+about its business, basically oblivious to the goings-on around it.
+
+But then plate 1 saw itself as stable -- which it was locally but not
+globally -- and it went ahead and seeded a new intermediate plate as
+usual (in the normal starting place for a plate 2).  And that could
+even, under other circumstances, have worked out plausibly.  But in
+this case, plate 3 had already started heading west, so by the time
+the new plate 2 finished growing, plate 3's western edge was sitting
+directly on the column where plate 2's western edge wanted to go.
+
+And things were wholly mestup from there.  And quite quickly, plate 1
+punched out, taking its subplates with it, and the world became empty.
+
+[85:
+
+Tue May  4 17:17:22 2021 But the bottom line there is it's mostly
+about high-level operations sequencing, which we really haven't
+addressed yet anyway.  The stuff that Test10's doing all depends on
+the Plate.isPlateStable(), which we know is only a heuristic when
+plate boundaries are in flux.  We were intending PlateOpState to be a
+more principled mechanism for plate-level operation sequencing.
+
+:85]
+
+:84]
+:83]
+
+
+:82]
+
+:81]
+[86:
+
+Wed May  5 02:27:47 2021 So how do we want to start using
+PlateOpState.ulam?  What's a relatively minimal intervention to
+our existing code?  Leave plate stability as is, but change
+Test11.checkAction() to also consider PlateOpState for deciding when
+to act?[87:
+
+Wed May  5 02:43:55 2021 At the moment, Plate.mustBlock() looks at
+Plate.getOpState(), but only for purposes of dying.
+
+:87]
+
+:86]
+[88:
+
+Wed May  5 08:02:12 2021 So to do a down-act-up map-reduce kind of
+thing on a grid, instead of on a tree, we have to deal with having up
+to three parents.  And even if the grid is complete and stable, the
+presence of subplates means we might see any subset of those three
+parents.  And hmm we might see isolated parents -- that have no route
+to the origin.  What do we do about them?  Like this:
+
+
+  11111111111111111111
+  11111122222222111111
+  11111122222222111111
+  13333333311144444441
+  1333333331*144444441
+  13333333311144444441
+  11111111111111111111
+
+The parents of * have no uphill route to the plate 1 origin.
+
+And wait, even given plate borders, we can have completely
+disconnected plate sites, too:
+
+  11111111111111
+  11122222222111
+  11122222222111
+  13333311144441
+  1333331*144441
+  13333311144441
+  11115555555111
+  11115555555111
+  11111111111111
+
+So we can't propagate a 'plate command' to the sites around * at all.
+
+Maybe we should be thinking of plate commands as moving ONLY on plate
+borders.  That seems likely to suffice for motion-related stuff.
+
+[89:
+
+Wed May  5 08:28:48 2021 We could try to declare that subplates should
+maintain a containing-plate border, outside their own sub-plate
+border?  That would keep the sites of the containing plate connected.
+
+Or we could try to have disconnected sites detect that and die?  Then
+that space can be repopulated if and when tectonic shifts open a path?
+
+What if the root issued like clock edges at a rate proportional the
+plate diagonal or something.  The 'clock edges' could be commands,
+with the default command being like "don't die" or 'feed watchdog'.
+
+Question is: Is there any signal return to the root?  A tok for the
+tik?  It'll be self-clocking then.  But still need separate watchdog
+clocking to catch isolated groups?  Subplate motion reopening a
+channel to an isolated subgroup can still cause inconsistency, before
+the watchdog fires.
+
+[90:
+
+Wed May  5 09:05:38 2021 And once again, we have to keep asking what
+we want this for.  Large object motion is going to take a long time
+and have inevitable failure modes.
+
+Our initial purpose was to be able to move east or south, which
+requires launching a swapline from somewhere other than the root.
+
+And we can do that with just plate border involvement.  We could also
+do 'shell growth', by having a command that tries to grow a new plate
+(w+2)x(h+2)@(-1,-1), and then having the current plate die once the
+shell is completed, leaving the newer larger plate to fill in as
+usual.
+
+It does seem like we should try to keep sibling subplates from
+actually touching, though.  It would be nice for the sites of each
+given level of plate to be connected under normal circumstances.
+
+When we get to inter-sibling signaling we could maybe try for some
+sort of in-containing-plate-but-not-empty stuff to use as signals,
+which could go into inter-sibling gaps without blocking containing
+plate signal transmission.
+
+Seems like we ought be able to have incremental growth, too, where
+just completing a single new edge could unleash a higher priority
+flood to spread the new size and pos.  That could even share structure
+with shifters, since those also start by coating an edge.  Some tricky
+business if multiple growth floods encounter each other, since
+presumably the new plate sized itself under the assumption that it was
+the only change taking place.
+
+But maybe if we could get priorities set.. like perhaps that origin
+motions defer to non-origin motions, or something.  Then a westbound
+growth flood could roll over an eastbound one in the same plate,
+rewriting the eastbound flood's size to match the increase that the
+westbound flood is spreading.  Then the eastbound flood could
+continue, making its origin mods.
+
+Or whatever; that doesn't sound quite right, but I suspect it's
+achievable.
+[91:
+
+Wed May  5 10:17:49 2021 Could we possibly start roughing out a
+framework for non-empty plate?  In particular, I'd like to have border
+plate that share and maintain four estimates of free-space around the
+border.  But we don't want to saddle all Plate with carrying those
+bits.
+
+Let's recheck what ClassUtils actually offers and costs..[92:
+
+Wed May  5 10:21:46 2021 So we have 'typedef Unsigned ClassId'..  so
+32 bits.  We'd want to limit that somehow I assume.
+
+And there's nothing that does anything like whipping up an instance of
+a ClassId.
+
+I could imagine two approaches:
+
+ (1) Pass in an array of bits and a classid, and get back an (UrSelf&)
+     that is actually an UlamRef pointing at array of bits, with
+     effectiveself set to the classid.
+
+ (2) Actually (1) is all I can think of.
+
+Do I even believe (1) at all?  We can't even pass variable sized
+arrays..  I think it would have to be a special transient that
+contained an array of bits, and we'd take a ref to one of those + a
+classid, and fake up an ulamref and return that.
+
+Something like:
+
+  transient MyMegaObject {
+    stuff stuff
+    Bool doWorkAndStuff() {
+      return true; // if did work
+    }
+  }
+
+..then..
+
+  ClassUtils clu;
+  ClassUtils.ClassId asid = MyMegaObject.classidof;
+  Unsigned bitsize = MyMegaObject.sizeof;
+  typedef Bits(32) BitHolder[32]; // Say hard 1KBit limit for this stuff
+  BitHolder temp;
+  self.pullFromPlateEW(temp, bitsize);
+  MyMegaObject & mmo = clu.castBitHolder(temp, asid);
+  if (mmo.doWorkAndStuff())
+    self.pushToPlateEW(temp, bitsize);
+
+[93:
+
+Wed May  5 11:01:26 2021 And that seems vaguely plausible if plenty
+scary too.  You can put atoms and elements in transients, so we'd be
+talking dealing with arbitrary bit patterns in Atom processing.
+
+:93]
+
+:92]
+
+:91]
+
+:90]
+
+:89]
+
+:88]
+[94:
+
+Wed May  5 11:55:19 2021 OK so maybe a future
+ClassUtils.castBitHolder(..) could exist.  But for now, let's try to
+do BorderPlate : Plate
+
+[95:
+
+Wed May  5 13:12:01 2021 I'm just not sure I want to be subclassing
+for such as BorderPlate.  For example, suppose BorderPlate wakes up
+and discovers its not on a border anymore.  What's it supposed to do?
+I guess delete itself back to empty, and let somebody else take over.
+
+I was worried that BorderPlate was supposed to know about Test11 or
+whatever it is, and turn into that.  But, if borders are instances of
+BorderPlate, then they cannot be sources of Test11s or whatever to
+repair a plate after disturbances large or small -- and that was One
+Good Thing about borders.
+
+Now it's true that at the moment Test11 isn't actually doing
+anything.  It's got 35 bits to burn as it stands.  We'd like to keep
+32 if possible for our transformer mode.
+
+:95]
+
+:94]
+[96:
+
+Thu May  6 01:39:33 2021 From 202105051420-fresh/ notes:
+
+    Wed May  5 16:14:08 2021 Right now we're privileging the origin but
+    not the max.  Why don't we just say there should be a spinner going
+    from the origin and getting acked at the max, and those two sites
+    should exist or else things are scewed up.  Origin ticks and max
+    tocks, and we size the spinner to have a fair dead zone and
+    comparisons landing in the dead zone pull the ripcord.  If we're
+    saying only one tick in flight -- meaning we can use this for
+    plate-global control -- then it seems even three bits out and three
+    bits back would be pretty good.  The root can tick when all the
+    incoming tocks match the root's tick.  Downstream picks up the tick as
+    long as its no more than one more than the previous tock.  Max can
+    increment the tock when all the incoming ticks are one more than the
+    previous tock.  Even two bits out and two back would be workable,
+    right?  When plate repairs it copies its own tick and tock.  Upstream
+    picks up the tock as long as its no more than the previous tick
+ ..
+    Wed May  5 18:00:03 2021 Really should switch to the code notes file
+    but just to round this off currently.
+
+     Bool doTick = false, doTock = false;
+     Unsigned ourLength = ..;
+     Unsigned maxLength = ..;
+     for (nbg) {
+       Atom & a
+       if (a as Self) {
+         Unsigned theirLength = ..;
+         if (ourLength > theirLength) {
+           // We are downstream of a
+           if (!mTock.isComparable(a.mTick)) die(self and down)
+           else if (a.mTick.isOneMoreThan(mTock)) doTick = true;
+         }
+         if (ourLength < theirLength) {
+           // We are upstream of a
+           if (!mTick.isComparable(a.mTock)) die(self and down)
+           else if (a.mTock == mTick) doTock = true;
+         }
+       }
+     }
+     if (doTick) mTick++;
+     if (doTock) mTock++;
+
+
+:96]
+[97:
+
+Thu May  6 09:04:11 2021 OK, so we have a spike Test11 doing
+head-to-tail Tick-Tock clocking.  I want to do a Test12 to try to get
+rid of mPlateStable, since we'd like that to be a special case of a
+head-to-tail round trip clock pulse. [98:
+
+Thu May  6 09:23:44 2021 OK, first problem with Test12 is that
+initializing mTick and mTock to zero means the origin thinks it can
+tick immediately.
+
+We're changing to init mTick=1u / mTock=0u but note that means if we
+tried growing from the max it would think it could tock immediately.
+
+But if we only generate commands from the head, an immediate tock
+would not be problematic.  And/or, if we insisted that the first
+command from the head is 'Construct thyself', then we could start with
+0u/0u and let the head tick immediately.
+
+Or if it's 'Construct the max' rather than 'construct thyself', we
+could maybe start at either end.
+
+:98]
+
+:97]
+[99:
+
+Thu May  6 11:18:01 2021 OK, trying to actually propagate commands
+down and replies up, and facing the issue: What if multiple (up or
+downstream) sources disagree on the reply (or command)?  I started out
+just saying pull the ripcord, but now I'm wondering but whether that's
+right.
+
+In particular, I think we need the ability to initiatie command
+execution wherever it's spatially appropriate.  Like the obvious way
+to seed a sibling plate to our east would be to start it from our
+northeast, which is neither our origin nor our max.
+
+So the next question is: Do we want to do that on the way down (the
+tick) or on the way back up (the tock)?  If we want to deliver a
+response to the root, it seems more appropriate to do it on the tock.
+But then we're in the situation just mentioned: Two different
+downstream sites could be offering two different responses to a
+tock-ready upstream.  Which does it pick and how?
+
+[100:
+
+Thu May  6 11:28:04 2021 If we had a special 'unknown' response we
+could let any 'real' response displace that; that seems about the
+least we could do.  And if we got multiple disagreeing non-unknown
+responses we could still pull the ripcord.
+
+A step up from that, I suppose, would be for the command itself to
+specify some response-combining function.  A command might be looking
+for all responses to succeed, or any response to succeed, and we could
+support both.  The tock response combining is, after all, the reduce
+step, and there's different useful ways to reduce.
+
+:100]
+
+:99]
+[101:
+
+Thu May  6 16:13:53 2021 OK so moved the flag again, meaning we're on
+the flight path to next T2sday.  And need to prioritise possible next
+design steps considering that.  Wish list would be like:
+
+[105: Thu May  6 17:38:48 2021
+DONE :105] - PlateShifter renamed to something involve 'tectonic'.
+   'Tectons'?  'Tectonica'?  Single site is a tecton, whole line is a
+   tectonic?
+
+[106: Thu May  6 18:07:32 2021 First cut anyway
+DONE :106] - Tectons generalized to both movement and growth.  Instances carry a
+   mode telling whether they're
+   = swaplines which just swap and then decay at termination, or
+   = growlines which rewrite plate size/pos then become new plate
+
+ - Tectons generalized to handle four directions.
+
+ - BorderPlate that continually assesses min free space
+
+ - Test13 (or whatever) that
+   (0) starts out as a miniplate and grows
+   (1) moves away from crowds
+   (2) grows/diffuses when free space is plentiful
+   (3) spawns new miniplates within itself sometimes
+   (4) destroys itself (and up) when it becomes big,
+       freeing all the content within it.
+
+ - Record Test13 running on the grid for three days or so
+
+[102:
+
+Thu May  6 17:15:41 2021 Now, one possibility is to have explicit
+commands to measure free space, and return like just four bits as a
+response -- 'Is there at least K empty sites everywhere in direction D
+from us?' With a four bit answer for D == N,E,S,W or whatever.
+
+Then root could ask the question on one tick, and act on the result in
+the next tick.  Might be a better way to go, eating dog food and all.
+
+[103:
+
+Thu May  6 17:20:45 2021 Let's start a new spike for this.
+
+[104:
+
+Thu May  6 17:21:49 2021 code/ renamed to code-202105061721/
+
+:104]
+
+:103]
+
+:102]
+:101]
+[107:
+
+Fri May  7 02:27:21 2021 OK, directional Tectons go go go.[108:
+
+Fri May  7 09:27:01 2021 OK, we've got east- and southbound tectons
+moving or growing plates west- and northbound.  They're both getting
+released from the root.  I'm thinking maybe just have the other two
+release from the max, and avoid drive-by midfield releasing entirely.
+
+Still need to get a command framework going.  How many bits are we
+going to spend from command & response?[109:
+
+Fri May  7 09:38:20 2021 Test12 is currently at 40 bits:
+
+  /*__________________________________________________
+  | COMPONENTS of Test12 (21) (40 bits total) are:
+  |
+  | Pos	| Bits	| Name	| Type (classid)
+  | 0	| 2	| mTick	| UMod(2,1)
+  | 2	| 2	| mTock	| UMod(2,1)
+  | 4	| 1	| mCmd	| Unsigned(1)
+  | 5	| 32	| super	| B2DPlate (3)
+  | 37	| 3	| base	| StdPlateOpState (4)
+  | 40	| 0	| base	| UrSelf (0)
+  | 40	| 0	| base	| Plate (9)
+  | 40	| 0	| base	| PlateOpState (13)
+  |___________________________________________________
+  */ //gcnl:NodeBlockClass.cpp:2499
+
+so we're already under the 32 bits I was hoping to offer to the 'mega'
+level.  (What do we want to call the 'built from multiple plate atoms
+but updating atomically via a transient' level?  We don't really have
+to decide quite yet, but.. 'virtual'? 'virtual machine' 'mega-atom'
+'megamolecule' 'condensate' 'transient' 'combiners' 'transformers'
+'gems' 'stones' 'crystals' 'emergons' 'overs' 'committees' 'virtual
+atoms' 'megatomics' 'unions' 'virtuons' 'collecton' 'transiomics'
+'team' 'platonics' 'platonic' 'platoon' 'platom' 'plateam'
+'multiplate' 'platomic' 'overplate' .. someone stop me stop me[110:
+
+Fri May  7 10:41:24 2021 So anyway.  I kind of like 'platonic',
+accepting both the philosophic and emotional overtones for good and
+for bad.  'At the platonic level' 'Do it with platonics' 'we don't
+have to be platonic for this simple thing'..
+
+:110])
+
+:109]
+
+:108]
+
+:107]
+[111:
+
+Fri May  7 10:46:11 2021 So anyway.  What if we tried to reserve 16
+bits for the platonic level?  That gives us 15 bits to play with now.
+
+An eight bit response would allow us to assess both sides of each
+border in a single clock.  We currently have a one bit 'Command', if
+we expanded that to 8 bits command, plus 8 bits reply, that's the
+whole bit budget right there.
+
+Fog it let's do it.[112:
+
+Fri May  7 12:03:11 2021 OK now wait a second.  What is PlateOpState
+doing now?  Are any of the PlateOpStates ever used, except for the
+death ones?[113:
+
+Fri May  7 12:04:54 2021 cOPS_INIT is used to init mOpState..  But
+
+  constant OpState cOPS_PUSH_CMD =  1u;
+  constant OpState cOPS_DO_CMD =    2u;
+  constant OpState cOPS_PULL_RES =  3u;
+
+are never used.  So, we could expand PlateOpState into 8 bits, add an
+8 bit reply, reclaim the 1 bit in mCmd, and end up clutching 4 whole
+bits to spend at the candy store.
+
+:113]
+
+:112]
+
+:111]
+[114:
+
+Fri May  7 12:45:37 2021 Looks like the current code can't handle a
+1x1 plate -- which isn't very surprising -- but 1x2 and 2x1 both work
+fine.[115:
+
+Fri May  7 13:41:29 2021 OK so now we're at this:
+
+  /*__________________________________________________
+  | COMPONENTS of Test12 (16) (52 bits total) are:
+  |
+  | Pos	| Bits	| Name	| Type (classid)
+  | 0	| 2	| mTick	| UMod(2,1)
+  | 2	| 2	| mTock	| UMod(2,1)
+  | 4	| 32	| super	| B2DPlate (10)
+  | 36	| 16	| base	| StdPlateOpState (8)
+  | 52	| 0	| base	| UrSelf (0)
+  | 52	| 0	| base	| Plate (1)
+  | 52	| 0	| base	| PlateOpState (2)
+  |___________________________________________________
+  */ //gcnl:NodeBlockClass.cpp:2499
+
+with mCmd ditched and StdPlateOpState having both
+
+  OpCmd mOpCmd = cOPS_INIT;
+  OpRpy mOpRpy = cOPS_INIT;
+
+(with
+  typedef Unsigned(8) OpCmd;
+  typedef Unsigned(8) OpRpy;
+from PlateOpState.)
+
+(mOpRpy shouldn't be cOPS_INIT but we're not doing anything with Rpy
+yet..)
+
+Time for nap.
+
+:115]
+
+:114]
+[116:
+
+Fri May  7 17:54:37 2021 Have to break for cooking about a half hour
+ago.. but.. working through computing the BORDER_PATROL stuff.  Once
+we get back we need to define what the getOpRpy() bits actually mean
+in terms of inner and outer and the compass directions..
+
+Pick up there.[117:
+
+Sat May  8 13:55:31 2021 OK, getting closer.. but the root and max
+stuff is getting messier too.
+
+One current issue: Propagating replies up is currently just picking a
+random downstream to update and propagate.  But if the command is
+border patrol, we need to be logical-ANDing across the downstream
+replys and updating/propagating that.
+
+We really need more structure on the commands.
+
+Nap time.
+
+[118:
+
+Sat May  8 16:36:08 2021 So how do we put a little more structure on
+command/reply?  Tables of properties?  Subclasses?
+
+How to tick / Map details / Downstream operations
+
+How to tock / Reduce details / Upstream operations
+
+How to execute
+
+Map-reduce as split..apply..combine
+
+tick : split
+tock : combine
+
+
+  if mTick == mTock, perform tick processing:
+TICK_WAIT       wait for min(upstream mTick) == mTick+1    root has no upstream
+TICK_READY      merge upstream opCmds & compute            root does rooty stuff
+TICK            mTick++ (to move us one ahead of our downstream)
+
+  else if mTick == mTock + 1, perform tock processing:
+TOCK_WAIT       wait for min(downstream mTock) == mTock+1  max has no downstream
+TOCK_READY      merge downstream opRpys and compute        max does maxy stuff
+TOCK            mTock++ (to make us match our upstream)
+
+  else die-and-down
+
+PARAMETERS:
+ - Upstream opCmd merge rule : default: die unless all same
+ - Downstream opRpy merge rule : default: running AND
+ - OpCmd computeTick(OpCmd mergedCmd) : default: return mergedCmd
+ - OpRpy computeTock(OpRpy mergedRpy) : default: return mergedRpy
+
+Now since we don't have a unique parent here we might have a use for a
+from-upstream 'combine' as well as a from-downstream one.
+
+[119:
+
+Sat May  8 17:09:54 2021 And since we're cleaning up it would be nice
+to
+
+(1) Have root/max participate in border patrol computations
+(2) Support a 1x1 plate
+
+[120:
+
+Sun May  9 01:07:28 2021 OK, this is getting close to our last chance
+to get the basic-demo-I-desire working for this T2sday.  Let's just go
+subclasses and may Gob Have Mergy on our Heeded Soles.  [121:
+
+Sun May  9 02:43:48 2021 OK well we've added
+
+    quark Test12PlateOp : PlateOp
+    
+at the bottom of Test12.ulam, and moved what had been 'doGeneralTock'
+into Test12PlateOp.computeTock(..), and that is now compiled but
+untested.  But, we've put the computeTick (and computeTock) call in:
+
+    if (upcount > 0u && upcount == upticks) {
+      self.setOpCmd(pop.computeTick(self,upcmd));
+      ++mTick;
+    } else if (downcount > 0u && downcount == downtocks) {
+      self.setOpRpy(pop.computeTock(self,downrpy));
+      ++mTock;
+    }
+
+so the 'upcount > 0u' (e.g.) part excludes root (max) from partaking.
+
+If we just ditch the first if-clauses, what happens?  In computeTick,
+upcmd will be cOPS_INIT, so it can be detected..  But in computeTock
+downRpy won't be anything unique.  So we'd have to be looking at
+size/pos for that anyway..
+
+:121]
+
+:120]
+
+:119]
+
+
+:118]
+
+:117]
+
+:116]
+[122:
+
+Sun May  9 04:43:32 2021 OK so debugging eastbound tecton for a
+westbound plate.  Problem, I think, is the tecton pos/size is causing
+it to not be recognized as 'same plate', which is (I think) causing
+surrounding plate not to block when they should.
+
+But wait.. eastbound tecton used to be working.  What's different now?
+Maybe it wasn't really working?
+
+The specific problem I'm seeing is the just-moved lower left corner is
+ticking when it shouldn't.  Ah, I get it: And the reason it's ticking
+now, and wasn't before, is that with tecton above it it has no
+upstream plates to consider.. and now with that not stopping things,
+off we go.  Before, the 'upcount > 0' condition kept the tick from
+happening.
+
+But what we _want_ to stop the tick from happening is getting the
+Plate to realize it should block because 'related-enough' tecton is in
+the neighborhood.  Maybe we should block for overlapping plate
+priority stuff as well?  That could cause lockup in corrupted cases
+but we're still going to need a watchdog, eventually, anyway.
+
+Let's see if that's easy to try.
+[123:
+
+Sun May  9 05:07:42 2021 Well it was easy to try and looks like part
+of the solution, but the next thing we're seeing is that westbound
+tecton for eastbound plate needs to rewrite both pos and size if it's
+a growline,
+[124:
+
+Sun May  9 11:10:54 2021 So, working though a bunch of
+failure-to-block issues is (potentially) leading me to yet another
+OMGISO event.  All along, been we've that Tectons are on the
+plate they are moving -- which causes some weirdness because that
+means, technically, the Tectons are starting outside the bounds of
+their own plate.
+
+And the OMGISO alternative is to say that Tectons should ALWAYS be on
+a newly-created superplate of the plate they are operating on.
+Because the RANGE OF ACTION of a Tecton is ALWAYS bigger than the
+plate it is acting on, and we 'should' declare the Tecton to be the
+size of its RANGE OF ACTION, whether or not we change the
+operated-upon plate to match that size (for grow) or not (for move),
+and whether we change the operated-upon plate positions (for grow east
+and grow south) or not (for everything else).
+
+The more I write here, the more I have to say OMGISO.
+
+So a tecton involves a temporary containing-plate springing into
+existence, and then the subplate being operated on will defer to it
+unconditionally, without even checking priority, because Tecton says:
+
+  @Override
+  virtual Bool blockSubplates() { return true; } //< I mow through subplates oh yeah
+
+And then the tecton's pos always remains within the footprint of its
+plate, which is much better than we were doing before.
+
+And then, in the case of a move, the operated-on plate sees itself as
+a subplate of the tectonic plate for the entire operation, just
+changing its position within its containing plate when the tecton
+passes over it.
+
+While, in the case of a grow, the operated-on plate sees itself as a
+subplate of the tectonic plate at first, but then sees itself AS the
+tectonic plate once the tecton has passed over it.
+
+Jeez.  OMGISO.
+
+[125:
+
+Sun May  9 12:26:46 2021 OK we have to try to fix this.  What all are
+the immediate steps we can think of:
+
+[126: Sun May  9 12:45:58 2021 First cut
+DONE :126] - Redo Tecton.initFromOpCmd
+
+[127:
+DONE :127] - Get rid of the overlapping plate allowances wherever we stuck them
+
+[128: Sun May  9 12:46:18 2021 First look
+DONE :128] - Check Test12.tryTectonRelease(OpCmd opc)
+
+[129:
+
+Sun May  9 12:46:54 2021 OK, first failure is: root popped a
+move-plate-n and then almost immediately popped a move-plate-w, which
+means (at least, that) it wasn't deferring to the move-plate-n that
+was right next to it.[130:
+
+Sun May  9 12:49:06 2021 Actually, it appears the move-plate-n it
+popped had the wrong size -- it had the original plate size, not the
+incremented RANGE-OF-ACTION (TM) size.  Why?[131:
+
+Sun May  9 12:50:14 2021 Because I foggen wrote
+
+      tsize.set(size.getX(),size.getY());
+
+in the case cOPC_MOVE_PLATE_N: section.  Smoovreelsmoov.  Very luck to
+have run into that so quickly![132:
+
+Sun May  9 12:51:44 2021 (All the rest of them look okay.  Going
+again.)
+
+[133:
+
+Sun May  9 12:54:22 2021 OK next issue: Grow line doesn't seem to be
+changing the size of the swapped-over plate.[134:
+
+Sun May  9 12:55:56 2021 OK Tecton.behave() needs work.  It's basing a
+lot of assumptions on Bool ismyplate:
+  ..
+        PlateRelation rel = self.relationTo(fwd, fwdsite);
+        ismyplate = rel == cSAME_PLATE_AS;
+
+but that's never going to be true anymore, right?  Because the
+not-yet-swapped-over plate is always going to be a subplate now.
+
+But that raises another issue: When we're growing a plate, we only
+want to change the size of the DIRECTLY-CONTAINED subplate, not any
+other recursively-contained subplates within that.  But all those
+plates -- whether directly- or indirectly- contained by the tectonic
+plate -- are going to look like cCONTAINS_PLATE to the tecton.
+
+So we're presumably going to have to do some subplate size-checking to
+decide if we're looking at a directly-contained plate?  That's gross?
+
+Well maybe not quite so much gross.  It has to be exactly the tecton
+plate - abs(fwddirection) to be the 'directly-contained plate' in this
+case.[135:
+
+Sun May  9 13:18:53 2021 OK, about to try that mod, but lunch first.
+
+:135]
+
+:134]
+
+:133]
+
+:132]
+
+
+:131]
+
+:130]
+
+:129]
+:125]
+:124]
+
+:123]
+:122]
+[136:
+
+Sun May  9 15:10:56 2021 OK the subplate-size-checking seems plausible
+so far.  Now another issue: The border patrol logic is messed up.
+
+It seems to boil down to Test12.getOffsetInDirIfBorder(..) and
+Test12.get[XY]OffsetIfBorder.  In particular, the former doesn't pass
+the direction to the latter, but the answer we want from say
+getXOffsetIfBorder depends on which way we want to go on X, as well as
+whether we want an inner or outer scan.
+
+Maybe let's try just doing it directly in getOffsetInDirIfBorder,
+rather than dishing one more level.[137:
+
+Sun May  9 15:54:16 2021 OK!  Outer growth and movement appears to be
+working plausibly!  I dropped a few outside Wall atoms to hem the
+plate in and it did, very gradually, start to wiggle away from them.
+
+Let's try to get an inner action going!  That's the 'last thing' we
+were hoping for this t2sday round![138:
+
+Sun May  9 16:22:55 2021 OK now the issue appears to be that allowing
+root and max (at least) to participate in border patrol means that the
+inner directions always get knocked out, because the border sites see
+their neighbor border sites in some direction or another.  So I guess
+border sites should not be patrolling on their own edge.  How do we
+express that at this point? 
+
+:138]
+
+:137]
+
+:136]
+[139:
+
+Sun May  9 17:28:17 2021 OK, we have semi-plausible growth and motion
+PLUS auto-seeding of an internal plate PLUS semi-plausible growth and
+motion of that inner plate.  It seems like it's going to be hard for
+the outer plate to spawn more than one internal plate, because the
+internal plate runs so much faster that it tends to soak up any
+additional outer plate growth before the outer plate can see enough
+room internally to respawn.  We shall see about that.
+
+Currently dealing with a pulled ripcord that seems to be due to an
+upstreamMerge inconsistency, which seems, in turn, to be due to a
+plate repair that didn't copy the source's opCmd..[140:
+
+Sun May  9 17:34:24 2021 ..actually the copied-into site looks good.
+It's more like the Test12 that repaired the ngb then went on to tick,
+and in that process set its own opcmd to cOPC_INIT/0.[141:
+
+Sun May  9 17:36:41 2021 Oh!  And the site it repaired into was one of
+its upstream sites!  And its other upstream site was a subplate!  So
+it had no upstreams, and it bogusly decided to tick.
+
+You can only tick with 0 upstreams if you are the root, right?  And
+you can only tock with 0 downstreams if you are the max, right also?
+
+[142:
+
+Mon May 10 01:49:25 2021 OK, so we've had a quadratic time run going
+since around dinner time, and it's up to ~45kAEPS and all still
+looking plausible so I'm going to let it keep going while we shift to
+t2sup production.
+
+SWITCHING TO
+/data/ackley/AV/MFM/T2sdayUpdate/episodes/298-20210510/notes/202105100300-notes.txt
+
+:142]
+
+:141]
+
+:140]
+
+:139]
+[143:
+
+Wed May 12 03:29:34 2021 OK, so t2sup #298 is tottering around out in
+the world, and I finally stopped the quadratic time simulation
+(mfs/mp4 in ../data under '20210509183658').
+
+Changes I'd like to make immediately:
+
+ - Refactor border patrol into separate inner vs outer operations, and
+   return two bits per direction
+
+ - Have Test13 usually do Outer patrol but occasionally do Inner
+   patrol to decide about subplating
+
+ - Have Test13 weight move lines to encourage min dist 2+
+
+[145: Wed May 12 06:42:47 2021
+DONE :145] - Have Test13 weight grow lines to encourage aspect ratio 1
+
+[146: Wed May 12 06:42:59 2021
+DONE :146] - Reduce spawn pct to like 10%
+
+:143]
+[144:
+
+Wed May 12 04:40:19 2021 Let's figure out what's going in with the
+aspect ratio.
+
+:144]
+[147:
+
+Sat May 15 05:47:05 2021 Could we think about going to Unsigned(7) for
+Coords instead of Int(8)?  That could buy four more bits in a base
+Plate quark.
+
+[148:
+
+Sat May 15 05:48:34 2021 I think I want to start a new spike round
+here.  Test12 went public so let's move on.
+
+:148]
+
+:147]

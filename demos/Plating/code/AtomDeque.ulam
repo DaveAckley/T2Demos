@@ -1,0 +1,687 @@
+/** AtomDeque
+    \symbol AD
+    \color #cc4
+ */
+element AtomDeque : B2DStreamPlate + CategorizedSite + B2DStreamPayload {
+
+  typedef EventWindow.SiteNum SN;
+  DebugUtils du;
+
+  //// B2DPlate API
+  @Override
+  virtual Atom copyOf() { 
+    Self s = self;
+    s.mEmptyEast = false; // Everybody has to establish empty east on their own
+    if (s.hasPayload()) { // And we don't dupe communications!
+      RawBits dump;
+      s.storeTo(dump);
+      s.mBufferStatus = QStream12.cBUFFER_EMPTY;
+  }
+    return s.atomof;
+  }
+
+  Bool mEmptyEast; //< true if no items between here and eastern border
+
+  //// Plate API
+
+  //// UrSelf API
+  @Override
+  ARGB getColor(Unsigned selector) {
+    ColorUtils cu;
+
+    if (self.hasPayload()) {
+      return cu.color((Unsigned) (0xff0000|self.peekAtPayload()));
+    }
+
+
+    ARGB ret = cu.color(0xff444433);
+    if (mEmptyEast) {
+      ret = cu.brighter(ret);
+    }
+
+    return ret;
+  }
+
+  Bool die() {
+    du.printContext();
+    du.print("DIIDDIDIEEEE");
+    return true;
+  }
+
+  Bool looksEmpty(Bool front) {
+    if (!eastEmptyFieldSitesAt(front,2)) return false;
+    if (!eastEmptyFieldSitesAt(front,3)) return false;
+    return true;
+  }
+
+  Bool eastEmptyFieldSitesAt(Bool front, Int xcol) {
+    EventWindow ew;
+    Int yrow = front ? 1 : 3;
+    EventWindow.SiteNum ssn = ew.getSiteNumber(self);
+    if (ssn == ssn.maxof) { Fail f; f.fail("NOT IN EW ISANT"); return false; }
+    C2D selfc = ew.getCoord(ssn);     // Where self is in ew
+
+    for (Int yoff = 0; yoff < 2; ++yoff) {
+      C2D ewc = getEWCoordIfItemAccessible(xcol,yrow+yoff);
+      if (!ew.isAccessible(ewc)) return false;
+      Atom & a = ew[ewc];
+      if (a as Self) {
+        PlateUtils pu;
+        PlateUtils.PlateRelation rel = pu.relationTo(self, selfc, a, ewc);
+        if (rel != PlateUtils.cSAME_PLATE_AS) return false;
+        if (!a.mEmptyEast) return false;
+      } else {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  Bool tryInsertAtom(Bool front, Atom atom) {
+    EventWindow ew;
+    SN sn1 = plateCoordToEWSN(C2D.instanceof(2, front ? 1 : 3));
+    if (sn1 == sn1.maxof) return false;
+    C2D ewc = ew.getCoord(sn1);
+    QuotationManager qm;
+    return qm.quoteAtomIntoEW(ewc, atom, self);
+  }
+
+  Bool tryRemoveAtom(Bool front, Atom & atom) {
+    if (tryRemoveAtomAt(front,atom,2)) return true;
+    if (tryRemoveAtomAt(front,atom,3)) return true;
+    return false;
+  }
+
+  Bool tryRemoveAtomAt(Bool front, Atom & atom, Int xcol) {
+    EventWindow ew;
+    SN sn1 = plateCoordToEWSN(C2D.instanceof((C2D.Coord) xcol, front ? 1 : 3));
+    if (sn1 == sn1.maxof) return false;
+    C2D ewc = ew.getCoord(sn1);
+    QuotationManager qm;
+    return qm.dequoteAtomFromEW(ewc, atom, true);
+  }
+
+  /** Check if site at plate (columnx,rowy) is accessible via the
+   * current event window.  Note this routine can be called when self
+   * is not located at ew[0], but self must be in the ew somewhere,
+   * and of course ew accessibility doesn't change.
+   */
+  C2D getEWCoordIfItemAccessible(Int columnX, Int rowy) {
+    EventWindow ew;
+    EventWindow.SiteNum sn = ew.getSiteNumber(self); // Find ourselves
+    if (sn != sn.maxof) {
+      C2D sat = ew.getCoord(sn); // Us as coord
+      C2D siz = sizeOfPlate();
+      if (columnX >= 0 && columnX < siz.getX() && siz.getY() > 3) {
+        C2D pos = positionOnPlate();
+        C2D pci((C2D.Coord) columnX,(C2D.Coord) rowy);
+        C2D ewci = pci - pos + sat;
+        if (ew.isAccessible(ewci)) {
+          return ewci;
+        }
+      } else {
+        //        du.print("gewD15");
+        //        du.print(columnX);
+        //        du.print(siz);
+        //        du.print(sat);
+      }
+    }
+    return C2D.instanceof(100,100); // Not in ew
+  }
+
+  Bool isOurBorderOrControlZoneOrAnItem(C2D ewc) {
+    return 
+      isOurBorder(ewc) || isOurControlZone(ewc) || isAnItem(ewc);
+  }
+
+  Bool isOurBorder(C2D ewc) {
+    EventWindow ew;
+    if (!ew.isAccessible(ewc)) return false;
+    ByteStreamLogger bsl;
+    Atom & a = ew[ewc];
+//    bsl.printf("isIRFBOB10(%d,%d)\n",ewc.getX(),ewc.getY());
+    if (a as Plate) {
+      EventWindow.SiteNum ssn = ew.getSiteNumber(self);
+      if (ssn == ssn.maxof) { Fail f; f.fail("NOT IN EW ISANT"); return false; }
+      C2D selfc = ew.getCoord(ssn);     // Where self is in ew
+
+      PlateUtils pu;
+      PlateUtils.PlateRelation rel = pu.relationTo(self, selfc, a, ewc);
+      if (rel == PlateUtils.cSAME_PLATE_AS) {
+        if (a.isPlateBorder()) return true;
+      }
+    }
+    return false;    // Didn't find our border
+  }
+
+  Bool isOurControlZone(C2D givenewc) {
+    EventWindow ew;
+    EventWindow.SiteNum ssn = ew.getSiteNumber(self);
+    if (ssn == ssn.maxof) { Fail f; f.fail("NOT IN EW ISANT"); return false; }
+    C2D selfewc = ew.getCoord(ssn);     // Where self is in ew
+    C2D selfplatepos = positionOnPlate();  // Where self is in its plate
+    C2D selfplatesiz = sizeOfPlate();  // Size of self's plate
+    
+    C2D ewcoff = givenewc - selfewc; // Where given ewc is relative to us
+    C2D givenplatepos = selfplatepos + ewcoff; // Absolute plate pos of given ewc
+    return                                   
+      givenplatepos.getX() == 1 &&    // Control zone is first column 
+      givenplatepos.getY() > 0 &&     // and not on either 
+      givenplatepos.getY() < selfplatesiz.getY() - 1; // border
+  }
+
+  Bool isAnItemSN(SN sn) {
+    EventWindow ew;
+    if (!ew.isAccessible(sn)) return false;
+    return isAnItem(ew.getCoord(sn));
+  }
+
+  Bool isAnItem(C2D ewc) {
+    EventWindow ew;
+    if (!ew.isAccessible(ewc)) return false;
+    //    du.printContext();
+    //    du.print("iSANT10");
+    //    du.print(ewc);
+    Atom & a = ew[ewc];
+    if (a as Plate) { // XXX as AtomPlate ?
+      EventWindow.SiteNum ssn = ew.getSiteNumber(self);
+      if (ssn == ssn.maxof) { Fail f; f.fail("NOT IN EW ISANT"); return false; }
+      C2D selfc = ew.getCoord(ssn);     // Where self is in ew
+      PlateUtils pu;
+      PlateUtils.PlateRelation rel = pu.relationTo(self, selfc, a, ewc);
+    //      du.print((Unsigned) rel);
+      if (rel == PlateUtils.cCONTAINS_PLATE && a.sizeOfPlate().getX() == 1)
+        return true; // Found width 1 contained plate (== 'item')
+    //      du.print("iSANT12");
+    }
+    return false;    // Didn't find an item
+  }
+
+  Bool isNonControlZoneEmptyOrField(SN sn) {
+    if (sn == sn.maxof) return false;
+    MDist md;
+    return isNonControlZoneEmptyOrField(md.getSiteCoord(sn));
+  }
+
+  Bool isNonControlZoneEmptyOrField(C2D ewc) {
+    if (isOurControlZone(ewc)) return false;
+    EventWindow ew;
+    EventWindow.SiteNum sn = ew.getSiteNumber(self); // Find ourselves
+    if (sn == sn.maxof) { Fail f; f.fail("self not in EW"); return false; }
+    C2D sat = ew.getCoord(sn); // Us as coord
+
+//    du.printContext();
+//    du.print("iEOF10");
+    if (!ew.isAccessible(ewc)) return false;
+//    du.print("iEOF11");
+//    du.print(sat);
+    Atom & a = ew[ewc];
+    if (a is Empty) return true;
+//    du.print("iEOF12");
+    if (a as Plate) {
+      PlateUtils pu;
+      PlateUtils.PlateRelation rel = pu.relationTo(self, sat, a, ewc);
+//      du.print("iEOF13");
+//      du.print((Unsigned) rel);
+
+      if (rel == PlateUtils.cSAME_PLATE_AS && !a.isPlateBorder()) {
+        return true; // Found TestStack15 field
+      }
+//      du.print("iEOF14");
+    }
+    return false;  // Not empty or field
+  }
+
+  Bool isEmptyOrEastEmptyField(C2D ewc) {
+    return isEastEmptyField(ewc, true, false);
+  }
+
+  Bool isEastEmptyField(C2D ewc, Bool acceptEmpty, Bool acceptBorder) {
+    EventWindow ew;
+    EventWindow.SiteNum sn = ew.getSiteNumber(self); // Find ourselves
+    if (sn == sn.maxof) { Fail f; f.fail("self not in EW"); return false; }
+    C2D sat = ew.getCoord(sn); // Us as coord
+
+    if (!ew.isAccessible(ewc)) return false;
+    Atom & a = ew[ewc];
+    if (acceptEmpty && a is Empty) return true;
+    if (a as Self) {
+      PlateUtils pu;
+      PlateUtils.PlateRelation rel = pu.relationTo(self, sat, a, ewc);
+
+      if (rel == PlateUtils.cSAME_PLATE_AS) {
+        if (!a.isPlateBorder() || acceptBorder)
+          return a.mEmptyEast;
+      }
+    }
+    return false;  // Not empty or field
+  }
+
+  
+  Bool isField(C2D ewc) {
+    MDist md;
+    EventWindow.SiteNum itssn = md.getSiteNumber(ewc);
+    C2D itspos;
+    PlateUtils pu;
+    PlateUtils.SiteCategory sc = pu.categorizeSite(self, itssn, itspos);
+    if (sc == PlateUtils.cSC_ALREADY_OURS || sc == PlateUtils.cSC_CAN_GROW_INTO)
+      return isPlateFieldCoord(itspos);
+    return false;  // Not empty or field
+  }
+
+  Bool tryPropagateInsertRule() {
+    EventWindow ew;
+    Int myx = positionOnPlate().getX();
+    for (Int x = -3; x < 3; ++x) {
+      Bool lastRowGood;
+      Int platex = x + myx;
+      C2D pos1[2];
+      C2D pos2[2];
+      C2D pos3[2];
+      for (Int basey = 1; basey <= 3; basey += 2) {
+        for (Int y = 0; y <= 1; ++y) {  // Check both rows for squeakiness?
+          Int platey = basey + y;
+
+          lastRowGood = false; // Until proven otherwise
+
+          // Pos numbering is
+          //  123
+          //
+          // Insert rule is
+          // xi. ->  x.i   # propagate insert
+          // i.e., pos3 <- pos2; pos2 <- empty
+          //
+
+          pos1[y] = getEWCoordIfItemAccessible(platex,platey);
+          if (pos1[y].getX() > 4 || !isOurBorderOrControlZoneOrAnItem(pos1[y])) break;
+
+          pos2[y] = getEWCoordIfItemAccessible(platex+1,platey);
+          if (pos2[y].getX() > 4 || !isAnItem(pos2[y])) break;
+
+          pos3[y] = getEWCoordIfItemAccessible(platex+2,platey);
+          if (pos3[y].getX() > 4 || !isField(pos3[y])) break;
+
+          lastRowGood = true; // OK, this row is good
+        }
+
+        if (lastRowGood) { // OK, (platex,basey)-(platex+2,basey+1) matches pattern
+          //// SPECIAL EXTRA CHECK THAT ALTERNATE SIDE LEFTMOST IS NOT EMPTY or 'e'
+          {
+            Bool inaccessible = false;
+            Bool leftmoste = false;
+            Int alty = 4-basey; // basey:alty 1:3 or 3:1 -- okay?
+            C2D altpos = getEWCoordIfItemAccessible(platex,alty);
+            if (altpos.getX() > 4 || // Leftmost inaccessible
+                isEmptyOrEastEmptyField(altpos)) // or empty or 'e'
+              continue;                          // then ditch this oppty
+          }
+          //// WE HAVE FOUND AN INSERT PROPAGATION OPPTY
+          for (Int y = 0; y <= 1; ++y) {
+            ew[pos3[y]] = ew[pos2[y]]; // pos3<-pos2
+            ew[pos2[y]] = Empty.instanceof; // pos2<-empty
+          }
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  Bool tryPropagateRemoveRule() {
+    EventWindow ew;
+    Int myx = positionOnPlate().getX();
+    for (Int x = -3; x < 3; ++x) {
+      Bool lastRowGood;
+      Int platex = x + myx;
+      C2D pos1[2];
+      C2D pos2[2];
+      C2D pos3[2];
+      for (Int basey = 1; basey <= 3; basey += 2) {
+        for (Int y = 0; y <= 1; ++y) {  // Check both rows for squeakiness?
+          Int platey = basey + y;
+
+          lastRowGood = false; // Until proven otherwise
+
+          // Pos numbering is
+          //  123
+          //
+          // Remove rule is
+          // ..i ->  .i.   # propagate remove
+          // i.e., pos2 <- pos3; pos3 <- empty
+
+          pos1[y] = getEWCoordIfItemAccessible(platex,platey);
+          if (pos1[y].getX() > 4 || !isNonControlZoneEmptyOrField(pos1[y])) break;
+
+          pos2[y] = getEWCoordIfItemAccessible(platex+1,platey);
+          if (pos2[y].getX() > 4 || !isNonControlZoneEmptyOrField(pos2[y])) break;
+
+          pos3[y] = getEWCoordIfItemAccessible(platex+2,platey);
+          if (pos3[y].getX() > 4 || !isAnItem(pos3[y])) break;
+
+          lastRowGood = true; // OK, this row is good
+        }
+
+        if (lastRowGood) { // OK, (platex,basey)-(platex+2,basey+1) matches pattern
+
+          //// WE HAVE FOUND A REMOVE PROPAGATION OPPTY
+          for (Int y = 0; y <= 1; ++y) {
+            ew[pos2[y]] = ew[pos3[y]]; // pos2<-pos3
+            ew[pos3[y]] = Empty.instanceof; // pos3<-empty
+          }
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  Bool tryPropagateRollRule() {
+    Random random;
+    Int a = 1, b = 3;
+    if (random.oneIn(2)) { Int t = a; a = b; b = t; } // Randomize roll dir order
+    if (tryPropagateRollRuleYs(a,b)) return true;
+    if (tryPropagateRollRuleYs(b,a)) return true;
+    return false;
+  }
+
+  Bool tryPropagateRollRuleYs(Int fromplatey, Int toplatey) {
+    EventWindow ew;
+    Int myx = positionOnPlate().getX();
+    Int sourcey = fromplatey;
+    Int desty = toplatey;
+    C2D pos[9];
+    for (Int x = -3; x < 3; ++x) {
+      Int thisx = x + myx;
+
+      // Pos numbering is
+      //   source 12
+      //          34
+      //   dest   56
+      //          78
+      //
+      // Roll rule is
+      //   source   ie      _e
+      //            ie  ->  _e
+      //   dest     Ee      ie
+      //            Ee      ie
+      // i.e., pos5 <- pos1; pos1 <- empty; pos7 <- pos3; pos3 <- empty
+      // where 'e' in this case means specifically emptyEastField allowing border
+      // and 'E' means emptyEastField excluding border
+
+      pos[1] = getEWCoordIfItemAccessible(thisx,sourcey);
+      if (pos[1].getX() > 4 || !isAnItem(pos[1])) continue;
+
+      pos[2] = getEWCoordIfItemAccessible(thisx+1,sourcey);
+      if (pos[2].getX() > 4 || !isEastEmptyField(pos[2],false,true)) continue;
+
+      pos[3] = getEWCoordIfItemAccessible(thisx,sourcey+1);
+      if (pos[3].getX() > 4 || !isAnItem(pos[3])) continue;
+
+      pos[4] = getEWCoordIfItemAccessible(thisx+1,sourcey+1);
+      if (pos[4].getX() > 4 || !isEastEmptyField(pos[4],false,true)) continue;
+
+      pos[5] = getEWCoordIfItemAccessible(thisx,desty);
+      if (pos[5].getX() > 4 || !isEastEmptyField(pos[5],false,false)) continue;
+
+      pos[6] = getEWCoordIfItemAccessible(thisx+1,desty);
+      if (pos[6].getX() > 4 || !isEastEmptyField(pos[6],false,true)) continue;
+
+      pos[7] = getEWCoordIfItemAccessible(thisx,desty+1);
+      if (pos[7].getX() > 4 || !isEastEmptyField(pos[7],false,false)) continue;
+
+      pos[8] = getEWCoordIfItemAccessible(thisx+1,desty+1);
+      if (pos[8].getX() > 4 || !isEastEmptyField(pos[8],false,true)) continue;
+
+      //// WE HAVE FOUND A METASTABLE ROLL OPPTY
+      ew[pos[5]] = ew[pos[1]]; ew[pos[1]] = Empty.instanceof;
+      ew[pos[7]] = ew[pos[3]]; ew[pos[3]] = Empty.instanceof;
+      return true;
+    }
+    return false;
+  }
+  
+  Bool tryPropagateRollRuleYsOLD(Int fromplatey, Int toplatey) {
+    EventWindow ew;
+    Int myx = positionOnPlate().getX();
+    Int sourcey = fromplatey;
+    Int desty = toplatey;
+    C2D pos[13];
+    for (Int x = -3; x < 3; ++x) {
+      Int thisx = x + myx;
+
+      // Pos numbering is
+      //   source 123
+      //          456
+      //   dest   789
+      //          abc
+      //
+      // Roll rule is
+      //   source   ?ie      ?_e
+      //            ?ie  ->  ?_e
+      //   dest     Eee      iee
+      //            Eee      iee
+      // i.e., pos7 <- pos2; pos2 <- empty; posa <- pos5; pos5 <- empty
+      // where 'e' in this case means specifically emptyEastField allowing border
+      // and 'E' means emptyEastField excluding border
+
+      pos[2] = getEWCoordIfItemAccessible(thisx+1,sourcey);
+      if (pos[2].getX() > 4 || !isAnItem(pos[2])) continue;
+
+      pos[3] = getEWCoordIfItemAccessible(thisx+2,sourcey);
+      if (pos[3].getX() > 4 || !isEastEmptyField(pos[3],false,true)) continue;
+
+      pos[5] = getEWCoordIfItemAccessible(thisx+1,sourcey+1);
+      if (pos[5].getX() > 4 || !isAnItem(pos[5])) continue;
+
+      pos[6] = getEWCoordIfItemAccessible(thisx+2,sourcey+1);
+      if (pos[6].getX() > 4 || !isEastEmptyField(pos[6],false,true)) continue;
+
+      pos[7] = getEWCoordIfItemAccessible(thisx,desty);
+      if (pos[7].getX() > 4 || !isEastEmptyField(pos[7],false,false)) continue;
+
+      pos[10] = getEWCoordIfItemAccessible(thisx,desty);
+      if (pos[10].getX() > 4 || !isEastEmptyField(pos[10],false,false)) continue;
+
+      Int destpos = 7; // This duplicates 7 & 10 checks but we did the tighter condition above so..
+      Bool destAllEmpty;
+      for (Int dy = 0; dy <= 1; ++dy) {
+        for (Int dx = 0; dx <= 2; ++dx) {
+          destAllEmpty = false;
+          pos[destpos] =getEWCoordIfItemAccessible(thisx+dx,desty+dy);
+          if (pos[destpos].getX() > 4 ||
+              !isEastEmptyField(pos[destpos],false,true)) break;
+          ++destpos;
+          destAllEmpty = true;
+        }
+        if (!destAllEmpty) break;
+      }
+      if (!destAllEmpty) continue;
+      //// WE HAVE FOUND A ROLL OPPTY
+      ew[pos[7]]  = ew[pos[2]]; ew[pos[2]] = Empty.instanceof;
+      ew[pos[10]] = ew[pos[5]]; ew[pos[5]] = Empty.instanceof;
+      return true;
+    }
+    return false;
+  }
+
+  /*
+  Bool tryPropagateSqueezeRule() {
+    EventWindow ew;
+    Int myx = positionOnPlate().getX();
+    for (Int thisy = 1; thisy <= 2; ++thisy) {
+      Int sourcey = thisy;
+      Int desty = (3 - thisy);
+      for (Int x = -3; x < 3; ++x) {
+        Int thisx = x + myx;
+
+        // Pos numbering is
+        //   source 123  or  dest   456
+        //   dest   456      source 123
+        // depending on y
+        //
+        // Squeeze rule is
+        //   source   iib      i.b
+        //   dest     ..b  ->  i.b
+        // i.e., pos4 <- pos2; pos2 <- empty
+        //
+        C2D pos1 = getEWCoordIfItemAccessible(thisx,sourcey);
+        if (pos1.getX() > 4 || !isAnItem(pos1)) continue;
+
+        C2D pos2 = getEWCoordIfItemAccessible(thisx+1,sourcey);
+        if (pos2.getX() > 4 || !isAnItem(pos2)) continue;
+
+        C2D pos3 = getEWCoordIfItemAccessible(thisx+2,sourcey);
+        if (pos3.getX() > 4 || !isOurBorder(pos3)) continue;
+
+        C2D pos4 = getEWCoordIfItemAccessible(thisx,desty);
+        if (pos4.getX() > 4 || !isEmptyOrField(pos4)) continue;
+
+        C2D pos5 = getEWCoordIfItemAccessible(thisx+1,desty);
+        if (pos5.getX() > 4 || !isEmptyOrField(pos5)) continue;
+
+        C2D pos6 = getEWCoordIfItemAccessible(thisx+2,desty);
+        if (pos6.getX() > 4 || !isOurBorder(pos6)) continue;
+
+        //// WE HAVE FOUND A SQUEEZE OPPTY
+        ew[pos4] = ew[pos2];
+        ew[pos2] = Empty.instanceof;
+        return true;
+      }
+    }
+    return false;
+  }
+  */
+
+  Bool checkDequeActions() {
+    if (tryPropagateInsertRule()) return true;
+    if (tryPropagateRemoveRule()) return true;
+    if (tryPropagateRollRule()) return true;
+    //    if (tryPropagateSqueezeRule()) return true;
+    return false;
+  }
+
+  Void spreadEastEmpty() {
+    C2D pos = positionOnPlate();
+    C2D siz = sizeOfPlate();
+    mEmptyEast = false; // Assume there's stuff to the east
+    if (pos.getX() + 1 == siz.getX()) // I am an eastern border plate
+      mEmptyEast = true;              // So, yeah, east is empty from here
+    else {
+      PlateUtils pu;
+      if (pu.categorizeSite(self, 4) == pu.cSC_ALREADY_OURS) {
+        EventWindow ew;
+        Atom & a = ew[4];  
+        if (a as Self) {  // If east is already us
+          mEmptyEast = a.mEmptyEast; // Then we're empty east if they are
+        } 
+      }
+    }
+  }
+
+  Void behave() {
+    if (mustBlockOrDie()) {
+      return;
+    }
+    checkGrowthAndHealing();
+    spreadEastEmpty();
+    updateStream();
+    if (checkDequeActions()) return;
+  }
+
+}
+
+/** ColorAtom
+    \symbol CA
+ */
+element ColorAtom {
+  Bits(39) mPad; //< To right-justify mARGB in atom
+  ARGB mARGB;
+  @Override
+  ARGB getColor(Unsigned selector) {
+    return mARGB;
+  }
+  Unsigned bitsRGB() { 
+    return (Unsigned)
+      ((mARGB[1] << 16) |
+       (mARGB[2] <<  8) |
+       (mARGB[3] <<  0));
+  }
+  Void behave() {
+    /*
+    if (mARGB[0] == 0x00) {
+      Random random;
+      ColorUtils cu;
+      mARGB = cu.color(0xff000000 + random.bits(24));
+    }
+    */
+  }
+}
+
+/** Seed AtomDeque
+    \symbol Sa
+ */
+element SeedAtomDeque {
+  Void behave() {
+    EventWindow ew;
+    AtomDeque ad;
+    Int w = 12, h = 6;
+    ad.mSizeOfPlate = B2D.instanceof(w,h);
+    ad.mPosOnPlate = B2D.instanceof(0,0);
+    ew[0] = ad;
+  }
+}
+
+
+/** Super Seed AtomDeque
+    \symbol AS
+    \color #ff0
+ */
+element SuperSeedAtomDeque {
+  Bool mSeeded;
+  Void behave() {
+    EventWindow ew;
+    Random random;
+    if (!mSeeded) {
+      Unsigned ecount = 0;
+      EventWindow.SiteNum epick;
+      Bool alle = true;
+
+      for (EventWindow.SiteNum i = 1u; i < 41u; ++i) {
+        if (ew[i] is Empty) {
+          if (i <= 4u && random.oneIn(++ecount))
+            epick = i;
+        } else alle = false;
+      }
+      if (!alle) {
+        if (random.oddsOf(999,1000) && ecount > 0u) { // .1% random death if crowded
+          ew[epick] = ew[0];
+        }
+        ew[0] = Empty.instanceof;
+        return;
+      }
+      PlateOperator po;
+      po.mDesiredPlateSize = B2D.instanceof(15,6);
+      ew[2] = po.atomof;
+
+      AtomDeque ad;
+      ad.mSizeOfPlate = B2D.instanceof(3,4);
+      ad.mPosOnPlate = B2D.instanceof(0,0);
+      ew[15] = ad.atomof;
+
+      // PlateOperator needs to see plate(0,0) and plate(0,1)
+      ad.mPosOnPlate = B2D.instanceof(0,1);
+      ew[5] = ad.atomof;
+
+      mSeeded = true;
+    } else {
+      Atom & a = ew[15];
+      if (a as AtomDeque) {
+        // Has it grown enough to be a deque?
+        if (a.mSizeOfPlate.mY >= 6) {
+          ew[0] = AtomDequeOperator.instanceof; // Decay into an ADO
+        }
+      }
+    }
+  }
+}
+

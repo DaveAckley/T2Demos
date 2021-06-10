@@ -1,0 +1,201 @@
+quark B2DPacketSense {
+  typedef Unsigned(1) SenseDir;
+  constant SenseDir cSDIR_OUTWARD = 0u;
+  constant SenseDir cSDIR_INWARD  = 1u;
+
+  SenseDir mSenseDir;
+  
+  typedef PlateOperator.Clearance Clearance;
+  typedef PlateOperator.DirClearance DirClearance;
+  DirClearance mDirData;
+
+  typedef Unsigned(2) SenseTag;
+  SenseTag mSenseTag;
+
+  Void init(Bool outward, SenseTag tag) {
+    mSenseDir = outward ? cSDIR_OUTWARD : cSDIR_INWARD;
+    mSenseTag = tag;
+    for (Unsigned i = 0u; i < 4u; ++i) {
+      mDirData[i] = Clearance.maxof;
+    }
+  }
+
+  Void print(ByteStreamWriter & w) {
+    w.printf("[sense%s(%d,%d,%d,%d)@%d]",
+             mSenseDir == cSDIR_OUTWARD ? "out" : "in",
+             mDirData[0],mDirData[1],mDirData[2],mDirData[3],
+             mSenseTag);
+  }
+
+  /** Return true if packet changed in any way */
+  Bool sense(Plate & p) {
+    ByteStreamLogger bsl;
+    EventWindow ew;
+    //    bsl.printf("SNDNDEEOOPPP:");
+    //    self.print(bsl);
+    if (!p.isPlateBorder()) return false; 
+    //    bsl.printf("\n");
+    //    bsl.printf("SNDNDEEOOPPP11\n");
+    Bool outer = mSenseDir == cSDIR_OUTWARD;
+    PlateUtils pu;
+    C2D pos = p.positionOnPlate();
+    C2D siz = p.sizeOfPlate();
+    Bool changes = false;
+    for (Unsigned d = pu.cPLATE_GOES_W; d <= pu.cPLATE_GOES_S; ++d) {
+      PlateUtils.PlateDir pd = (PlateUtils.PlateDir) d;
+      if (!pu.onBorderForDir(pos,siz,pd)) continue; 
+      if (!outer && p.isPlateCorner()) continue; // Skip corners for inner measurements
+      // Here twice for corners, once for borders
+      Unsigned mindist = mDirData[pd];
+    //      bsl.printf("SNDNDEEOOPPP12(pd=%d,mindist=%d)\n",pd,mindist);
+      if (mindist == 0u) continue;
+      C2D us; // XXX ASSUMES ew[0]
+      C2D incr = pu.stepInDir(pd);
+      if (!outer) incr = incr*(C2D.Coord)-1;
+      for (Unsigned dist = 0; dist < mindist; ++dist) {
+        us += incr;
+    //        bsl.printf("SNDNDEEOOPPP13(%d)(%d,%d)\n",dist,us.getX(),us.getY());
+        Bool knowndead = ew.isLegal(us) && !ew.isLive(us);
+        if (knowndead || !p.isEmptyOrField(us)) {
+          mDirData[pd] = (Clearance) dist;
+    //          bsl.printf("SNDNDEEOOPPP14(%d)\n",mDirData[pd]);
+          changes = true;
+          break;
+        }
+      }
+    }
+    //    bsl.printf("SNDNDEEOOPPP15(%d)\n",changes);
+    return changes;
+  }
+}
+
+quark B2DPacketAct {
+  typedef Unsigned(3) ActOp;
+  constant ActOp cAOP_NONE         = 0u; //< No command
+  constant ActOp cAOP_NOP          = 1u; //< Command that does nothing
+  constant ActOp cAOP_SENSE_OUTER  = 2u; //< Min clearance to mDirData[side]
+  constant ActOp cAOP_SENSE_INNER  = 3u; //< Min clearance to mDirData[side]
+  constant ActOp cAOP_SIDE_MOVE    = 4u; //< Move toward != 0 mDirData[side]
+  constant ActOp cAOP_SIDE_GROW    = 5u; //< Grow anchor != 0 mDirData[side]
+  constant ActOp cAOP_SIDE_SHRINK  = 6u; //< Shrink from != 0 mDirData[side]
+  constant ActOp cAOP_RSRV1        = 7u;
+  ActOp mActOp;
+
+  typedef Unsigned(2) ActSide;
+  ActSide mActSide;
+
+  typedef Unsigned(2) ActBack;
+  ActBack mActBack;
+  
+  typedef Unsigned(8) ActTag;
+  ActTag mActTag;
+
+  Void init(ActOp op, ActSide side, ActTag tag) {
+    mActOp = op;
+    mActSide = side;
+    mActTag = tag;
+  }
+
+  Void print(ByteStreamWriter & w) {
+    w.printf("[act(%d,%d)@%d]",
+             mActOp,mActSide,mActTag);
+  }
+
+  /** Return true if packet changed in any way */
+  Bool act(Plate & p) {
+    if (!p.isPlateBorder()) return false; 
+
+    ByteStreamLogger bsl;
+    //    bsl.printf("ACT:");
+    //    print(bsl);
+    //    bsl.printf("XXXX\n");
+
+    PlateUtils pu;
+    C2D pos = p.positionOnPlate();
+    C2D siz = p.sizeOfPlate();
+    //    bsl.printf("LKOIACT10(%d,%d)-(%d,%d)[%d]\n",
+    //               pos.getX(),pos.getY(),
+    //               siz.getX(),siz.getY(),
+    //               mActSide);
+    if (!pu.onCCWCornerForDir(pos,siz,mActSide)) return false;
+
+    //    bsl.printf("LKOIACT11(%d,%d)\n",mActOp,mActSide);
+    
+    Bool doMOVE = (mActOp == cAOP_SIDE_MOVE);
+    Bool doGROW = (mActOp == cAOP_SIDE_GROW);
+
+    if (!doMOVE && !doGROW) return false; //XXX OTHER OPS UNIMPLEMENTED
+ 
+    Tecton tc;
+    C2D off = tc.initFromOpCmd(doGROW, mActSide, pos, siz);
+    //    bsl.printf("LKOIACT12(%d,%d)\n",off.getX(),off.getY());
+    if (off.length() > 0u) {
+      EventWindow ew;
+      ew[off] = tc;
+      //      bsl.printf("LKOIACT13\n");
+      return true;
+    }
+    //    bsl.printf("LKOIACT14\n");
+    return false;
+  }
+  
+}
+
+union B2DPacketSenseAct {
+  B2DPacketSense mPacketSense;
+  B2DPacketAct   mPacketAct;
+}
+
+quark B2DPacket {
+  typedef B2DPacketSense.SenseTag SenseTag;
+  typedef B2DPacketAct.ActOp ActOp;
+  typedef B2DPacketAct.ActSide ActSide;
+  typedef B2DPacketAct.ActTag ActTag;
+  
+  typedef Unsigned(1) IOMode;
+  constant IOMode cIOMODE_SENSE = 0u;
+  constant IOMode cIOMODE_ACT =   1u;
+  IOMode mIOMode;
+
+  B2DPacketSenseAct mSenseAct;
+
+  Bool isSense() { return mIOMode == cIOMODE_SENSE; }
+  Bool isAct() { return mIOMode == cIOMODE_ACT; }
+
+  B2DPacketAct & asAct() {
+    if (!isAct()) { Fail f; f.fail("NOT ACT"); }
+    return mSenseAct.mPacketAct;
+  }
+
+  B2DPacketSense & asSense() {
+    if (!isSense()) { Fail f; f.fail("NOT SENSE"); }
+    return mSenseAct.mPacketSense;
+  }
+
+  Bool sense(Plate &p) {
+    if (mIOMode == cIOMODE_ACT) return false;
+    return mSenseAct.mPacketSense.sense(p);
+  }
+
+  Bool act(Plate &p) {
+    if (mIOMode == cIOMODE_SENSE) return false;
+    return mSenseAct.mPacketAct.act(p);
+  }
+
+  Void initSense(Bool outer, SenseTag tag) {
+    mIOMode = cIOMODE_SENSE;
+    mSenseAct.mPacketSense.init(outer, tag);
+  }
+
+  Void initAct(ActOp op, ActSide side, ActTag tag) {
+    mIOMode = cIOMODE_ACT;
+    mSenseAct.mPacketAct.init(op,side,tag);
+  }
+
+  Void print(ByteStreamWriter & w) {
+    if (mIOMode == cIOMODE_SENSE)
+      mSenseAct.mPacketSense.print(w);
+    else
+      mSenseAct.mPacketAct.print(w);
+  }
+}

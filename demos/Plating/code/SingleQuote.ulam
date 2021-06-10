@@ -1,0 +1,224 @@
+transient QuotationManager {
+  EventWindow ew;
+  typedef EventWindow.SiteNum SN;
+  constant C2D c0x0 = { .x = 0, .y = 0 };
+  constant C2D c0x1 = { .x = 0, .y = 1 };
+  constant C2D c1x2 = { .x = 1, .y = 2 };
+  Bool quoteAtomIntoEW(C2D ewc1, Atom atom, Plate & intoPlate) {
+    DebugUtils du;
+    if (!intoPlate.isEmptyOrField(ewc1)) return false;
+
+    C2D ewc2 = ewc1+c0x1;
+    if (!intoPlate.isEmptyOrField(ewc2)) return false;
+
+    SingleQuote sq;
+    sq.setSizeOfPlate(c1x2);
+    sq.setPositionOnPlate(c0x0);
+    ew[ewc1] = sq;
+    sq.setPositionOnPlate(c0x1);
+    ew[ewc2] = sq;
+
+    SingleQuote & sqr = (SingleQuote&) ew[ewc1];
+    return sqr.insertAtomIntoPlate(atom);
+  }
+
+  Bool dequoteAtomFromEW(C2D ewc, Atom & atom, Bool deleteIt) {
+    SN sn1 = ew.getSiteNumber(ewc);
+    SN sn2 = ew.getSiteNumber(ewc+c0x1);
+    if (!ew.isAccessible(sn1) || !ew.isAccessible(sn2))
+      return false;
+    if (!(ew[sn1] is SingleQuote) || !(ew[sn2] is SingleQuote))
+      return false;
+    
+    SingleQuote & sqr = (SingleQuote&) ew[sn1];
+    if (!sqr.removeAtomFromPlate(atom)) return false;
+    if (deleteIt) {
+      ew[sn1] = Empty.instanceof;
+      ew[sn2] = Empty.instanceof;
+    }
+    return true;
+  }
+}
+
+/** An single atom, quoted.
+    \symbol SQ
+    \color #6a6
+*/
+element SingleQuote : B2DPlate2 + CategorizedSite + Payload {
+  typedef B2DTPlate(2u) B2DPlate2;
+  typedef EventWindow.SiteNum SN;
+
+  constant Unsigned cPAYLOAD_BITS = 48u;
+  typedef Bits(cPAYLOAD_BITS) Bits48;
+  typedef Bits48 MyPayload;
+
+  constant Unsigned cPAYLOAD_TO_RAWBITS_SHIFT = 64u - cPAYLOAD_BITS;
+  MyPayload mPayload;
+  Bool mHasPayload;
+  //// URSELF API
+  @Override
+  virtual ARGB getColor(Unsigned selector) {
+    ARGB ret = super.getColor(selector);
+    if (mHasPayload) {
+      ColorUtils cu;
+      MyPayload paysmash = 0xff000000 |
+        (((mPayload >> 24)&0xffffff) ^
+         ((mPayload >>  0)&0xffffff));
+      ret = cu.between(cu.color((Bits) paysmash),ret,40);
+    }
+    return ret;
+  }
+
+  //// PAYLOAD API
+  @Override
+  virtual Bool loadFrom(RawBits bits) {
+    if (mHasPayload) return false;
+    mPayload = (MyPayload) (bits>>cPAYLOAD_TO_RAWBITS_SHIFT);
+    mHasPayload = true;
+    return true;
+  }
+
+  @Override
+  virtual Bool storeTo(RawBits & bits) {
+    if (!mHasPayload) return false;
+    bits = ((RawBits) mPayload)<<cPAYLOAD_TO_RAWBITS_SHIFT;
+    mHasPayload = false;
+    return true;
+  }
+
+  Void writeAtomToPayloads(Atom atom, MyPayload & pay1, MyPayload & pay2) {
+    AtomUtils au;
+    Bits b1,b2;
+    b1 = au.read(atom,0u,32u);
+    b2 = au.read(atom,32u,16u);
+    pay1 = (MyPayload) ((((Bits48) b1) << 16) | b2);
+    b1 = au.read(atom,48u,32u);
+    b2 = au.read(atom,80u,16u);
+    pay2 = (MyPayload) ((((Bits48) b1) << 16) | b2);
+  }
+
+  Atom readAtomFromPayloads(MyPayload pay1, MyPayload pay2) {
+    AtomUtils au;
+    Bits b;
+    Atom ret;
+    ret = au.writeCopy(ret, (Bits) (pay1>>16u), 0u, 32u);
+    ret = au.writeCopy(ret, (Bits) (pay1>>0u), 32u, 16u);
+    ret = au.writeCopy(ret, (Bits) (pay2>>16u),48u, 32u);
+    ret = au.writeCopy(ret, (Bits) (pay2>>0u), 80u, 16u);
+    return ret;
+  }
+
+  Bool getSNPair(SN & sn1, SN & sn2) {
+    EventWindow ew;
+    C2D size = sizeOfPlate();
+    if (size.getX() < 1 || size.getY() < 2)
+      return false;
+    SN s1 = plateCoordToEWSN(C2D.instanceof(0,0));
+    SN s2 = plateCoordToEWSN(C2D.instanceof(0,1));
+    if (!ew.isAccessible(s1) || !ew.isAccessible(s2))
+      return false;
+    if (!(ew[s1] is Self) || !(ew[s2] is Self))
+      return false;
+    sn1 = s1;
+    sn2 = s2;
+    return true;
+  }
+
+  Bool insertAtomIntoPlate(Atom atom) {
+    SN sn1, sn2;
+    if (!getSNPair(sn1,sn2)) return false;
+    EventWindow ew;
+    Self & s1 = (Self&) ew[sn1];
+    Self & s2 = (Self&) ew[sn2];
+    if (s1.mHasPayload || s2.mHasPayload) return false;
+    writeAtomToPayloads(atom, s1.mPayload, s2.mPayload);
+    return s1.mHasPayload = s2.mHasPayload = true;
+  }
+
+  Bool removeAtomFromPlate(Atom & atom) {
+    SN sn1, sn2;
+    if (!getSNPair(sn1,sn2)) return false;
+    EventWindow ew;
+    Self & s1 = (Self&) ew[sn1];
+    Self & s2 = (Self&) ew[sn2];
+    if (!s1.mHasPayload || !s2.mHasPayload) return false;
+    atom = readAtomFromPayloads(s1.mPayload,s2.mPayload);
+    s1.mHasPayload = s2.mHasPayload = false;
+    return true;
+  }
+
+}
+
+quark SingleQuoteUtils {
+  
+  /**
+     parent must be in ew
+   */ 
+  Bool createAtomSubplateIn(Plate& parent, C2D subplatepos0, Atom inatom) {
+    C2D y1(0,1);
+    C2D subplatepos1 = subplatepos0 + y1;
+    if (!parent.isPlateFieldCoord(subplatepos0)) return false;
+    if (!parent.isPlateFieldCoord(subplatepos1)) return false;
+    C2D parentpos = parent.positionOnPlate();
+    C2D parentewc = parent.getOurEWCoord();
+    C2D suboff = subplatepos0 - parentpos;
+    C2D subplateewc0 = parentewc + suboff;
+    C2D subplateewc1 = subplateewc0 + y1;
+    EventWindow ew;
+    if (!ew.isAccessible(subplateewc0)) return false;
+    if (!ew.isAccessible(subplateewc1)) return false;
+
+    {
+      Fail f; f.fail("XXXX FINISHE ME");
+    }
+      
+  }
+
+  Bool createSingleQuoteAtEWC(C2D ewc0, Atom inatom) {
+    EventWindow ew;
+    if (!ew.isAccessible(ewc0)) return false;
+    Atom & a0 = ew[ewc0];
+    if (!(a0 is Empty)) return false;
+    C2D ewc1 = ewc0 + C2D.instanceof(0,1);
+    if (!ew.isAccessible(ewc1)) return false;
+    Atom & a1 = ew[ewc1];
+    if (!(a1 is Empty)) return false;
+    SingleQuote ap;
+    a0 = ap;
+    a1 = ap;
+    SingleQuote & ap0 = (SingleQuote &) a0;
+    SingleQuote & ap1 = (SingleQuote &) a1;
+    ap0.setSizeOfPlate(C2D.instanceof(1,2));
+    ap1.setSizeOfPlate(C2D.instanceof(1,2));
+    ap0.setPositionOnPlate(C2D.instanceof(0,0));
+    ap1.setPositionOnPlate(C2D.instanceof(0,1));
+    return ap0.insertAtomIntoPlate(inatom);
+  }
+    
+  Bool destroySingleQuoteAt(C2D ewc0, Atom & outatom) {
+    EventWindow ew;
+    if (!ew.isAccessible(ewc0)) return false;
+    Atom & a0 = ew[ewc0];
+    if (!(a0 is SingleQuote)) return false;
+    C2D ewc1 = ewc0 + C2D.instanceof(0,1);
+    if (!ew.isAccessible(ewc1)) return false;
+    Atom & a1 = ew[ewc1];
+    if (!(a1 is SingleQuote)) return false;
+    SingleQuote & ap0 = (SingleQuote &) a0;
+    SingleQuote & ap1 = (SingleQuote &) a1;
+    if (ap0.sizeOfPlate() != C2D.instanceof(1,2)) return false;
+    if (ap1.sizeOfPlate() != C2D.instanceof(1,2)) return false;
+    if (ap0.positionOnPlate() != C2D.instanceof(0,0)) return false;
+    if (ap1.positionOnPlate() != C2D.instanceof(0,1)) return false;
+    Atom a;
+    Bool ret = ap0.removeAtomFromPlate(a);
+    if (ret) {
+      outatom = a;
+      a0 = Empty.instanceof;
+      a1 = Empty.instanceof;
+    }
+    return ret;
+  }
+
+
+}

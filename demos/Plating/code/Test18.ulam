@@ -1,0 +1,121 @@
+/** Test18: Packet circulation on plate border
+  \symbol T8
+  \color #aa4
+ */
+element Test18 : B2DPlate + QStream12 + Payload {
+
+  //// Plate API
+
+  //// QSTREAM API
+  @Override
+  virtual SN getNextSN(Bool left) { // LEFT IS CCW, RIGHT IS CW, ON BORDER
+    if (!isPlateBorder()) return SN.maxof;
+    if (left) return getCCWPlate();
+    /*!left*/ return getCWPlate();
+  }
+
+  //// PAYLOAD API
+  @Override
+  virtual Bool loadFrom(RawBits bits) {
+    mPayload = (MyPayload) (bits>>cPAYLOAD_TO_RAWBITS_SHIFT);
+    return true;
+  }
+
+  @Override
+  virtual Bool storeTo(RawBits & bits) {
+    bits = ((RawBits) mPayload)<<cPAYLOAD_TO_RAWBITS_SHIFT;
+    return true;
+  }
+
+  constant Unsigned cPAYLOAD_BITS = 32u;
+  constant Unsigned cPAYLOAD_TO_RAWBITS_SHIFT = 64u - cPAYLOAD_BITS;
+
+  typedef Bits(cPAYLOAD_BITS) MyPayload;
+  MyPayload mPayload;
+
+  @Override
+  virtual Bool isPeer(Bool left) {
+    C2D pos = positionOnPlate();
+    return
+      (left && pos == C2D.instanceof(0,0)) ||
+      (!left && pos == C2D.instanceof(0,1));
+  }
+
+  //// UrSelf API
+  @Override
+  ARGB getColor(Unsigned selector) {
+    ColorUtils cu;
+    ARGB ret = super.getColor(selector);
+
+    /// BORDERNESS
+    if (isPlateBorder())
+      ret = cu.between(cu.color(0x0000ff),ret,25);
+
+    /// DEATHNESS
+    if (getDeathBits() != 0u)
+      ret = cu.between(cu.color(0xff0000),ret,75);
+
+    /// PACKETNESS
+    if (mBufferStatus == cLEFTBOUND_PACKET)
+      ret = cu.between(cu.color(0xdd3333),ret,50);
+    else if (mBufferStatus == cRIGHTBOUND_PACKET)
+      ret = cu.between(cu.color(0x3333dd),ret,50);
+
+    return ret;
+  }
+
+  Void behave() {
+    if (mustBlockOrDie()) return;
+    if (checkGrowthAndHealing()) return;
+    {
+      advance();
+      /*
+      for (Unsigned l = 0u; l < 2u; ++l) {
+        Bool left = l == 0u;
+        if (isPeer(left)) {
+          Bits inbits;
+          if (recv(left, inbits)) {
+            Bits outbits = (Bits) (((Unsigned) inbits) + 1u);
+            send(!left, outbits);
+          }
+        }
+      }
+      */
+    }
+  }
+}
+
+/** Seed18.  Make a Test18
+    \symbol S8
+ */
+element Seed18 {
+  Void behave() {
+    EventWindow ew;
+    Test18 t;
+    t.setSizeOfPlate(C2D.instanceof(17,8));
+    t.setPositionOnPlate(C2D.instanceof(0,0));
+    ew[0] = t;
+  }
+}
+
+/** Clock18.  Start a nearby DClock if possible
+    \symbol C8
+    \color #f00
+ */
+element Clock18 {
+  Void behave() {
+    EventWindow ew;
+    for (EventWindow.SiteNum sn = 1u; sn <= 40u; ++sn) {
+      if (!ew.isAccessible(sn)) continue;
+      Atom & a = ew[sn];
+      if (a as Test18) {
+        Random random;
+        if (a.send(random.oneIn(2),1u)) {
+          ew[0] = Empty.instanceof;
+          return;
+        }
+      }
+    }
+  }
+}
+

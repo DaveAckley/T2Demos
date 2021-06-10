@@ -1,0 +1,51 @@
+/** Utility base class for categorizing plate sites
+ */
+quark CategorizedSite : Plate {
+
+  typedef Unary(4) SiteCategory;
+  constant SiteCategory cSC_UNWANTED = 0u;
+  constant SiteCategory cSC_ALREADY_OURS = 1u;
+  constant SiteCategory cSC_ON_SUBPLATE = 2u;
+  constant SiteCategory cSC_CAN_GROW_INTO = 3u;
+  constant SiteCategory cSC_WANT_NOT_GOT = 4u;
+
+  SiteCategory categorizeSite(EventWindow.SiteNum sn) {
+    // A site is available for me (ew[0]) to grow into if
+    // (1) It is accessible, and
+    // (2) It is in my bbox, and
+    // (3) It is Empty, or
+    // (4) It is on the plate that contains me
+    EventWindow ew;
+    MDist md;
+    C2D mysize = sizeOfPlate();
+    C2D mypos = positionOnPlate();
+    C2D sc = md.getSiteCoord(sn);
+    C2D c = sc + mypos; 
+    if (!mysize.contains(c)) return cSC_UNWANTED;      // Not in bbox
+    if (ew.isAccessible(sn)) {
+      Atom & a = ew[sn];
+      if (a is Empty) return cSC_CAN_GROW_INTO; // Is Empty
+      if (a as Self) {
+        DebugUtils du;
+        du.print("CATSITEDSKL10");
+        du.printContext();
+        PlateUtils pu;
+        PlateUtils.PlateRelation rel = pu.relationTo(C2D.instanceof(0,0), sc);
+        du.print("CATSITEDSKL11");
+        du.print((Unsigned) rel);
+        if (rel == PlateUtils.cSAME_PLATE_AS)
+          return cSC_ALREADY_OURS;             // Is already our plate
+        if (rel == PlateUtils.cCONTAINED_BY_PLATE)
+          return cSC_CAN_GROW_INTO;            // Is on containing plate
+        if (rel == PlateUtils.cCONTAINS_PLATE) {
+
+          //          du.printContext();
+          //          du.print("CCONNTAINS");
+          return cSC_ON_SUBPLATE;              // Is on contained plate
+        }
+      }
+    }
+    return cSC_WANT_NOT_GOT; // Inaccessible or blocked
+  }
+
+}

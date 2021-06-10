@@ -1,0 +1,112 @@
+quark B2DTPlate(Unary(8) cBITS_PER_COORD) : Plate {
+  typedef B2DT(cBITS_PER_COORD) MyB2D;
+  typedef EventWindow.SiteNum SN;
+  MyB2D mSizeOfPlate;
+  MyB2D mPosOnPlate;
+  DeathBits mDeathBits;
+
+  //// B2DPlate API
+  virtual Atom copyOf() { //< A copy of self suitable for healing
+    return self.atomof;
+  }
+
+  //// Plate API
+  @Override
+  virtual C2D sizeOfPlate() { return mSizeOfPlate.toC2D(); }
+  @Override
+  virtual C2D positionOnPlate() { return mPosOnPlate.toC2D(); }
+  @Override
+  virtual DeathBits getDeathBits() { return mDeathBits; }
+  @Override
+  virtual Void setDeathBits(DeathBits bits) { mDeathBits = bits; }
+
+  //// B2DPlate utilities
+
+  Bool setSizeOfPlate(C2D size) { return mSizeOfPlate.fromC2D(size); }
+
+  Bool setPositionOnPlate(C2D pos) { return mPosOnPlate.fromC2D(pos); }
+
+  Bool checkGrowthAndHealing() {
+    EventWindow ew;
+    PlateUtils pu;
+    Random random;
+    MDist md;
+    C2D mypos = positionOnPlate();
+    Bool grew = false;
+    DebugUtils du;
+
+    for (EventWindow.SiteNum i = 1u; i <= 12u; ++i) {
+      PlateUtils.SiteCategory sc = pu.categorizeSite(self, i);
+      if (sc == pu.cSC_UNWANTED) continue;
+      if (sc == pu.cSC_ON_SUBPLATE) continue; // Can't grow into, can't pull stability
+      C2D pc = md.getSiteCoord(i) + mypos; // Plate coord of site
+
+      if (sc == pu.cSC_CAN_GROW_INTO) {
+        if (isPlateBorderCoord(pc) && !isPlateBorder()) // Only border can grow border
+          continue;
+        Atom copyofus = copyOf();
+        Self & bein = (Self&) copyofus; // Or fail, if copyOf screwed up
+        bein.mPosOnPlate.fromC2D(pc);
+        ew[i] = bein.atomof;
+        grew = true;  // Wanted it and got it
+        continue;
+      }
+    }
+
+    return grew;
+  }
+
+  SN getCCWPlate() {
+    PlateUtils pu;
+    C2D pos = positionOnPlate();
+    C2D size = sizeOfPlate();
+    PlateUtils.PlateDir dir = pu.borderDir(pos,size);
+    C2D incr;
+    which (dir) {
+    case pu.cPLATE_GOES_N: {
+      if (pos.getX() > 0) incr.setX(-1); else incr.setY(+1);
+    }
+    case pu.cPLATE_GOES_E: {
+      if (pos.getY() > 0) incr.setY(-1); else incr.setX(-1);
+    }
+    case pu.cPLATE_GOES_S: {
+      if (pos.getX() < size.getX() - 1) incr.setX(+1); else incr.setY(-1);
+    }
+    case pu.cPLATE_GOES_W: {
+      if (pos.getY() < size.getY() - 1) incr.setY(+1); else incr.setX(+1);
+    }
+    }
+    MDist md;
+    EventWindow ew;
+    SN ret = md.getSiteNumber(incr); // XXX ASSUMES WE'RE AT ew[0];
+    if (!(ew[ret] is Self)) ret = SN.maxof; // Only valid if really one of us
+    return ret;
+  }
+
+  SN getCWPlate() {
+    PlateUtils pu;
+    C2D pos = positionOnPlate();
+    C2D size = sizeOfPlate();
+    PlateUtils.PlateDir dir = pu.borderDir(pos,size);
+    C2D incr;
+    which (dir) {
+    case pu.cPLATE_GOES_N: {
+      if (pos.getX() < size.getX() - 1) incr.setX(+1); else incr.setY(+1);
+    }
+    case pu.cPLATE_GOES_E: {
+      if (pos.getY() < size.getY() - 1) incr.setY(+1); else incr.setX(-1);
+    }
+    case pu.cPLATE_GOES_S: {
+      if (pos.getX() > 0) incr.setX(-1); else incr.setY(-1);
+    }
+    case pu.cPLATE_GOES_W: {
+      if (pos.getY() > 0) incr.setY(-1); else incr.setX(+1);
+    }
+    }
+    MDist md;
+    return md.getSiteNumber(incr); // XXX ASSUMES WE'RE AT ew[0]
+  }
+}
+
+quark B2DPlate : B2DTPlate(7) {
+}

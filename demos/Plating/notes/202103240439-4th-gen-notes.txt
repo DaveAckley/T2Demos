@@ -1,0 +1,558 @@
+{56}  -*- text -*- 
+[0:
+
+Wed Mar 24 04:39:39 2021 OK GO.[1:
+
+Wed Mar 24 04:44:13 2021 code/ builds empty.  Let's start Plate.ulam
+and pull gingerly.[2:
+
+Wed Mar 24 04:47:10 2021 import B2D.ulam
+[3:
+
+Wed Mar 24 04:48:56 2021 import Printer, PrintBase, Utils
+
+import RotateSPOT, Parms, SPOT, SiteIterator
+
+:3]
+
+:2]
+
+:1]
+
+:0]
+[4:
+
+Wed Mar 24 04:53:40 2021 Builds.  Let's go for the update()
+framework. [5:
+
+Wed Mar 24 04:55:25 2021 Builds.  Runs.  Does nothing.  Go for
+Frobgrass.
+
+[6:
+
+Wed Mar 24 05:13:53 2021 Bringing in QID.ulam, but wondering if that's
+really a good idea.  All we really want from it is the watchdog stuff,
+and not so much the id stuff.
+
+But sticking with it, I guess.[7:
+
+Wed Mar 24 12:48:49 2021 OK well took forever but now back at wanting
+new 'RPS like' state machine functionality for the Plate.  How do we
+break into coding that?[8:
+
+Wed Mar 24 12:57:50 2021 Well, behavior-on-state-RED, I guess.
+
+:8]
+
+:7]
+
+:6]
+
+:5]
+
+:4]
+[9:
+
+Thu Mar 25 02:33:24 2021 OK, Plate.doGREEN() is up to a minimal level
+of functioning.  doBLUE() next, I guess, looking at mfms..[10:
+
+Thu Mar 25 02:42:30 2021 OK, Plate.doBLUE() went in pretty easy, and
+now it looks like the root knows the global bounding box.  Now we need
+to trigger a second pass in doRED().  [11:
+
+Thu Mar 25 02:49:12 2021 And now we've arrived at the 'distinguishing
+the passes' issue we've been waiting for.  We can attempt to be
+stigmergic, or 'internally stigmergic' if that's not an oxymoron, and
+look at existing data members to tell what phase we're on.  For
+example, I think 'mMax.isValid()' distinguishes pass 2 from pass 1.
+
+But we're going to use a third pass, to get the trucks rolling, and I
+don't see what existing state distinguishes pass 2 from pass 3.  What
+has changed is the bounding box has been flooded successfully, but
+that's not visible from the root event window.
+
+So add a Bool mBBoxReady, that pass 2 sets during reduce?  Let's give
+that a try, and let's make predicates to identify the phases.[12:
+
+Thu Mar 25 02:58:32 2021 And are we making the bounding box be the
+object size or the build plate?  [13:
+
+Thu Mar 25 03:46:09 2021 We want it to be the build plate.  So let's
+just make a function to invert that to find the object size..  [14:
+
+Thu Mar 25 03:47:00 2021 No we want it to be the plated object size.
+Because that's what it is.  So we make a function to expand that to
+the build plate bounding box, and use that:
+
+ buildPlateMin()
+   B2D min(mMin.getX() - 1, mMin.getY() - 1); // drop back one for border
+   return min   
+
+ buildPlateMax()
+[15: NO, need size->  :15]   B2D max(3*mMax.getX() + 1, // Room for parent to run, plus border
+           mMax.getY() + 1);  // Room for border
+   return max
+
+:14]
+
+:13]
+
+:12]
+
+:11]
+
+:10]
+
+:9]
+[16:
+
+Thu Mar 25 15:14:42 2021 OK so into final stretch to T2sup #296.  Made
+progress on the simplified RPS-style tree passes but aren't 100% of
+what we've done.  If we believe it it seems like the next step is
+reinvented tractor-trailers, where we're going to give them GPS
+somehow.
+
+[17:
+
+Thu Mar 25 15:30:58 2021 But exactly how isn't obvious..  Doing the
+full mLocation/mMin/mMax is a super-wasteful 48 bits.  Adding in an
+PackedFront at 28 bits and we're already over at 76 bits.  Although it
+looks like we could load up the trailer a bit more -- LoadedTrailer is
+at 64 bits so we could move 7 bits from PackedFront to PackedMid if we
+didn't need anything else.
+
+[18:
+
+Thu Mar 25 16:14:12 2021 It's tempting to go back to the coord
+remapping scheme so we could hardcode the final mMin as (0,0) and not
+have to store it..  But it complicates things and probably slows them
+down too.
+
+If we just leave it, how much do we really have to git Tractor to know
+what it needs to now.[19:
+
+Thu Mar 25 16:18:59 2021 In Truck.ulam it appears that
+
+  B2D.BCoord mOurRow
+
+is used only to determine whether we're at the edge of the build
+plate, but we could do that stigmergically by recognizing border Plate
+instead.  [20:
+
+Thu Mar 25 16:21:25 2021 That appears to be true of mPlateHeight as
+well..  We could plop down a tractor and tell it its mLocation without
+telling it mMin or mMax.  It spreads to the border plates, using the
+common origin principle to avoid going too far in case of plate
+damage.  And we tell it its destination column.
+
+
+:20]
+
+:19]
+
+:18]
+
+
+:17]
+
+:16]
+[21:
+
+Sat Mar 27 14:06:05 2021 OK so we possibly have time for one more go
+on the grid, but our 4th gen code isn't ready.
+
+WHEN WE LEFT OFF, we were struggling to get the transfer of control to
+the head commander to work, most specifically, and were losing control
+of our complexity on the RGB-tree passes, more generally.
+
+The transfer of control was trying to happen on the spreading 'map'
+phase, since allegedly the previous phase assured us the bounding box
+was complete, so trucks could start rolling at any time.
+
+We were having trouble understanding where to put the 'act if I am the
+head commander' step in the forward recursion.
+
+And we were getting weird results like incomplete bounding boxes
+meaning that some of our new whacking on stuff was affecting prior
+passes.  So that was distressing.
+
+I guess the first step right now is rerun the existing code and try to
+document what appears to be going wrong.
+
+From the design PoV, I'm thinking this is all obviously related to
+recursive tree traversal algorithms, and we should try to cash in on
+that to import concepts like pre-order and post-order and 'When do we
+visit the node?'
+
+The map-reduction approach is post-order: recursively traverse all the
+kids, then do an op that depends on the kids values.
+
+The transfer-to-head-commander could be (we think) pre-order: Visit
+the node and if it's NOT the head commander, traverse the kids looking
+for it.
+
+Now one of the differences is that we're doing parallel traversal, so
+we can't have a single flag to determine when to stop searching.  We
+'traverse' the kids by putting them into the active state (green, usu,
+we think we're doing?), and then they're on their own.
+
+[22:
+
+Sat Mar 27 14:24:08 2021 Trying the existing code.[23:
+
+Sat Mar 27 14:30:34 2021 OK, one run appears to say that current state
+is the root sets mTrucksRolling and goes green, but its kids don't
+pick up on it.  (Or, root doesn't push to the kids.)[24:
+
+Sat Mar 27 14:31:47 2021 And we're unclear on that too: Does parent
+update the kids, or does the parent just change itself and let the
+kids observe that change?  Is there a systematic approach we can take,
+there? [25:
+
+Sat Mar 27 14:41:49 2021 All the way back in 20210313120-notes.txt:80:
+we never filled in 'case Red:'.
+
+In our minds we were thinking have the parent change the kids was
+'faster' but is it really?  The kids still have to have an event.
+
+[26:
+
+Sat Mar 27 15:22:32 2021 Well, does this perhaps make some sense?
+
+--
+IN RED:
+
+ - Wait until the parent is GREEN.
+ - Then determine the phase and perform the pre-order step (if any),
+   then turn GREEN.
+
+   = If we have no parent and we're RED, we're the root and we turn
+     ourselves green however necessary to advance to the next phase.
+
+--
+IN GREEN:
+
+ - Wait until the kids are all BLUE
+ - Then determine the phase and perform the post-order step (if any),
+   then turn BLUE.
+
+   = If we have no kids when we're GREEN, we're a leaf: We do the base
+     step of the recursion for the current phase, then turn BLUE.
+
+--
+IN BLUE:
+ - Wait until the parent is BLUE and the kids are all RED
+ - Then turn RED
+
+"And That's All"
+
+[27:
+
+Sat Mar 27 15:26:39 2021 Do we believe it?  It almost seems clean
+enough to lift out a per-phase functor and have a generic traversal
+algorithm..  In particular, BLUE is weird for looking both up and
+down.
+
+LOOKING UP: I was worried about subtrees advancing to red before their
+parent had reduced.  Parent being blue means it's examined us and
+therefore we can ditch our intermediate result and move on.
+
+LOOKING DOWN: We want going red to happen bottom up.. why do we want
+that?  Just for sanity, or more than that?  More than that: If the
+parent can go red before we do, we'd have to handle looking up and
+seeing red.  Reason enough to avoid, I'd think.
+
+[28:
+
+Sat Mar 27 15:46:14 2021 So, what might a TreeVisitor
+(SimpleTreeVisitor?  GeneralTreeVisitor?) look like?
+
+quark GeneralSpatialTree(Unary(4) cRADIUS = 4u) {
+  constant Unsigned cBITSNEEDED =
+    (cRADIUS <= 1u ? 3u :
+       (cRADIUS == 2u ? 4u :
+         (cRADIUS == 3u ? 5u : 6u)));
+  typedef Unsigned(cBITSNEEDED) EWPtr;
+  EWPtr mParentSN;
+
+  typedef Unary(2) RGBState;
+  constant RGBState cRED_STATE = 0u;
+  constant RGBState cGREEN_STATE = 1u;
+  constant RGBState cBLUE_STATE = 2u;
+  RGBState mRGBState = cRED_STATE;
+}
+
+transient GeneralSpatialTreeVisitor {
+  /** \return false if done, true if need to wait and retry this step*/
+  Bool preorderStep(GeneralSpatialTree & gst) ;
+
+  /** \return false if done, true if need to wait and retry this step*/
+  Bool postorderStep(GeneralSpatialTree & gst) ;
+}
+
+transient GeneralSpatialTreeTraversal {
+          
+}
+[29: Sat Mar 27 16:16:30 2021 Come on let's make files for this..  :29]
+:28]
+
+:27]
+
+:26]
+:25]
+
+:24]
+
+:23]
+
+:22]
+
+
+:21]
+[30:
+
+Sun Mar 28 00:14:30 2021 OK so now we want
+GeneralSpatialTree.traverse(GSTV&) to do all the color processing of
+:26: above.  Well, let's just start into it, a which via colors, and
+see how far we can get.
+
+Oh also though, we're going to need something for dying.  We wish we
+had static methods..  Or maybe one more UrSelf method?  That'd be
+pretty crude hammer though.
+
+We need programmable shared fate.  And I guess that means we should
+link concepts like isKin or (isUs?) to this concept of death and
+failure.
+
+[31:
+
+Sun Mar 28 01:03:52 2021 OK we just did it directly in GST, but we
+kind of like our 'Death API'.  Instead of changing the parent pointer
+to SN.maxof to signal death, now we're extending to
+RED/GREEN/BLUE/DEAD states, using an Unsigned(2) instead of a Unary(2)
+for the state variable.
+
+Preserving (at least potentially) the parent pointer allows us to
+spread our death via the tree geometry -- to both our kids and our
+parent -- instead of spatially.  There can be a different GST packed
+right against us and -- modulo bit failures and such -- our death
+won't touch it.
+
+:31]
+
+:30]
+[32:
+
+Sun Mar 28 01:31:30 2021 OK trying to implement :26: above.  And
+exactly how do we implement "turn ourselves green however necessary to
+advance to the next phase"?  Separate GSTV API call or no?
+
+[33:
+
+Sun Mar 28 01:46:34 2021 Well come on.  Say separate API call for now.
+
+:33]
+
+:32]
+[34:
+
+Sun Mar 28 05:55:58 2021 Well, cool.
+
+We now have an element 'DemoGST' that inherits from GeneralSpatialTree
+and -- over the course of several traverses -- gradually grows a tree
+of DemoGST out around itself, and then -- over the course of several
+more traverses -- cleanly shrinks the tree back to just itself.
+[35:
+
+Sun Mar 28 06:52:52 2021 It also appears to handle chopped-off
+subtrees cleanly.  The broken-off subtree recursively dies away to its
+last leaves, and the rest of the tree continues with the 'ALGORITHM'.
+
+:35]
+:34]
+[36:
+
+Sun Mar 28 11:24:14 2021 OK, so.  Do we try '5th gen' real quick here
+using the GST?[37:
+
+Sun Mar 28 16:24:05 2021 OK, our re-re-re-re-rewritten Plate.ulam is
+now back to needing to transfer control to the head commander and
+start rolling trucks.  How do we want to do that?[38:
+
+Sun Mar 28 16:45:07 2021 In the preorder step of PHASE_ROLL_TRUCKS,
+check for headCommanderLoc() and just start blocking there?  Or the
+postorder step?  Either way it's weird, in that it will be blocking
+just a subtree from progressing[39:
+
+Sun Mar 28 17:00:27 2021 We're doing it in the preorder step ATM, and
+that's what it does.  But so what, for now?  We're absolutely going to
+be trashing the tree structure during repro anyway, right?  Even if we
+preserve the 2D coords.
+
+So:
+
+ - How does the head commander know how many trucks (left) to roll?
+
+ - How do the tractor-trailers work these days?
+
+[40:
+
+Sun Mar 28 17:12:09 2021 Well, what's our bit budget these days?
+
+..Plate's at 63, so it could take a B2D.BCoord if we wanted it to.
+
+But the head commander's (now going to be) getting moved by each truck
+roll.  So
+
+ - Our current 'headCommanderLoc()' should be called
+   'headCommanderStartingLoc', or something, and
+
+ - Couldn't we compute how many more trucks we need based on our head
+   commander position?
+
+So if we took just a Bool for mHeadCommander, and set it at the
+appropriate time, then computed trucks from our moving position..
+That should do it, right?[41:
+
+Sun Mar 28 17:20:32 2021 OK have mHeadCommander, and it's set in
+preorder during cPHASE_ROLL_TRUCKS.  But we're not[42:
+
+Sun Mar 28 17:25:29 2021 And now the head commander is hanging in
+postorder cPHASE_ROLL_TRUCKS, waiting to do business.. that we still
+have to write.  But need to deal with the grid video stuff, and then
+dinner. .
+[43:
+
+Sun Mar 28 17:36:57 2021 Well have a little more time it seems.[44:
+
+Sun Mar 28 23:39:05 2021 OK last go before t2sup time.  We can have
+til maybe 6am to get '5G' tractor/trailer going.  COME ON GO GO GO
+[45:
+
+Mon Mar 29 02:29:52 2021 OK so we still need to know what the Tractor
+is going to know.
+
+Well first let's say we can only deploy into non-border plate, and see
+how that goes..[46:
+
+Mon Mar 29 02:46:04 2021 OK, well we 'deployed' a tractor and unloaded
+trailer where the head commander ought to put it, and the fleet
+deployed to the border 'right nicely'.  So now we need
+
+ - the head commander to do that, and
+
+ - the tractors to start hauling[47:
+
+Mon Mar 29 02:47:23 2021 So okay, what's the computation the head
+commander does to determine
+
+ 1: Is it done rolling trucks, or
+ 2: How many steps to dropoff/pickup for the next truck?
+
+[48:
+
+Mon Mar 29 02:48:42 2021 I guess we should extend isBorder to check X
+as well as Y.  Maybe the head commander will just keep going until
+there's border plate ahead?[49:
+
+Mon Mar 29 03:20:48 2021 OK I think we need to do head commander
+business in postorder instead of preorder:
+
+ - We want everybody to definitely be in phase ROLL_TRUCKS regardless
+   of how the tree laid out, and
+
+ - We want everybody to be ignoring the tree structure while trucks go
+   smashing through destroying it -- even as they (are going to)
+   maintain the 2D coordinate system
+
+[50:
+
+Mon Mar 29 03:23:20 2021 Fudge; we're already doing commander business
+in post-order.  The problem is: Just because we've completely walked
+the tree below the head command and come back up, that doesn't prove
+that some other subtree -- which might be right ahead of the head
+commander -- has done the same.
+
+Do we waste an entire round-trip just setting the head commander bit?
+Then actually roll all the trucks during cPHASE_DONE??
+
+Wait.  Once WE'RE on ROLL_TRUCKS, that does 'guarantee' that the
+bounding box flooding is complete, even if some other subtrees are
+still on FLOOD_BBOX because they haven't heard the news about
+ROLL_TRUCKS.  So we need a slightly more nuanced check in
+Plate.isBorder()?  If we're phase >= ROLL_TRUCKS, or rgb BLUE in
+FLOOD_BBOX, the border is well-defined?[51:
+
+Mon Mar 29 03:33:55 2021 Well, trying that.. but noting that 
+
+:51]
+
+:50]
+:49]
+
+:48]
+:47]
+
+:46]
+
+:45]
+:44]
+
+:43]
+:42]
+
+:41]
+
+:40]
+
+:39]
+
+:38]
+
+:37]
+
+:36]
+[52:
+
+Mon Mar 29 04:49:48 2021 Argh well here's a GST issue: In the current
+scheme of things, this :26: rule:
+
+    --
+    IN BLUE:
+     - Wait until the parent is BLUE and the kids are all RED
+     - Then turn RED
+
+means that being RED is ambiguous between being at the very beginning
+or very ending of a phase -- wait, is it?  When to we pick up the new
+phase number?  Only when turning green?  Then we could unambiguously
+say phaseX+RED means end of phaseX.  Let's check.[53:
+
+Mon Mar 29 04:53:36 2021 Right now, plateSite uses addChild which
+copies self, so the new child is already going to be on the parent's
+phase when it comes into existent.  And then GST says if we're RED and
+our parent is GREEN, then run the preorder step.  And then
+PlateTreeVisitor.preorderStatep calls Plate.phaseFromParent().
+
+[54:
+
+Mon Mar 29 04:56:36 2021 So it looks like, yeah: If we change
+plateSite() to plate with the phase before the parent, then PhaseX:RED
+should unambiguously mean end of phase X.
+
+Buuuut, plateSite is definitely called when mPhase == 0.  We have no
+prior phase to set the kids to.  That says we need to go with
+cPHASE_PLATE_INIT = 0u, and increment the phase in root preorder
+instead of postorder.  It's currently in postorder, right?[55:
+
+Mon Mar 29 05:00:45 2021 Yes, in PlateTreeVisitor.endTraverse().  Can
+we get rid of cPHASE_DONE, maybe?  But what do we compare to to know
+the phases are done?
+
+:55]
+
+:54]
+
+:53]
+
+
+:52]
