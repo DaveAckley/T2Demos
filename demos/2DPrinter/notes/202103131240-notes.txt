@@ -1,4 +1,4 @@
-{64}  -*- text -*-
+{86}  -*- text -*-
 [0:
 
 Sat Mar 13 12:40:59 2021 Well dammed the 2016 2D printer stuff is
@@ -1051,9 +1051,412 @@ done.
 Well that all seems quite good and obvious.
 
 But it's another substantial redo..
+[64:
 
+Wed Mar 17 06:06:52 2021 OK, committed all this stuff as '2DPrinter,
+gen 2'.  The implicit-zero mapping is gen 3.[65:
+
+Wed Mar 17 06:08:03 2021 So, what are our phases to be?  Currently:
+
+  typedef Unsigned(2) TreePhase;
+  constant TreePhase cTREEPHASE_DNFLOOD = 0u;  // Surrounding content and localizing, new kids
+  constant TreePhase cTREEPHASE_UPBOUND = 1u;  // Min and max bounds up, no kids or kids done
+  constant TreePhase cTREEPHASE_DNBOUND = 2u;  // mMin,mLocation,mMax-=globalmin, down, new kids
+  constant TreePhase cTREEPHASE_UPREADY = 3u;  // Kids are ready
+
+[66:
+
+Wed Mar 17 07:45:40 2021 Now wondering if we might want to do
+rock-paper-scissors instead of counting.  Or double RPS if we need 
+separate down and up phases.  I'm tempted by this idea because it
+suggests a way to make the reproduction process itself somewhat
+programmable.  "If PHASE do OP and enter PHASE"
+
+:66]
+[67:
+
+Wed Mar 17 07:49:01 2021 Wait.  If we don't remap coords, how do we
+know how big the object is?  Have to invert the x-dimension extension
+to find the original x-max, and know that's the object width?[68:
+
+Wed Mar 17 12:41:11 2021 After nap.  Well suppose we leave the coords
+as the original object position all along, and have everybody compute
+the build plate extension themselves?  Same work either way, but the
+data members can have clearer names and more durable meanings.
+
+Although I guess the meaning isn't completely clear or durable as the
+trucks start to move things?
+
+[69:
+
+Wed Mar 17 14:12:11 2021 After walk.  Well, plate can't communicate
+across truck lines -- at least not without help -- because of
+priority, so the inconsistency of pre-truck and post-truck coordinates
+is officially immaterial.  As long as the two plates of interest are
+on the same side of the same number of trucks, their numbering is
+consistent?
+
+Well no that's not true: We're explicitly including a one-high Plate
+border around the whole thing -- that DOESN'T get moved by the
+trucks.  So their coords go bad as soon as the first truck passes, and
+they never get fixed.
+
+But if we do the mLocation update during truck swapping, that keeps
+the swapped plates consistent with the 'cosmic background reference'
+border, right?  Well, at least if min/max was the build plate and not
+the object position relative to the root.[70:
+
+Thu Mar 18 00:39:51 2021 OK, so could we (start in to) do this?  One
+further thing on the moving-location-of-origin thing:
+
+If we insist that the root plate be (magically) set up not at (0,0) at
+the beginning of the process is NOT the plate root, but is instead AN
+ATOM OF THE OBJECT TO BE COPIED/MOVED..
+
+:70]
+
+:69]
+
+:68]
+
+:67]
+
+:65]
+
+:64]
 :63]
 
 :62]
 
 :61]
+[71:
+
+Thu Mar 18 14:59:46 2021 OK, reset.  Let's get a 3rd gen idea cleaned
+up enough to try, here.
+
+ - Winner: Use implied origin to distinguish kin from non-kin Plate
+
+ - Get Plate, Truck, and Trailer onto SPOT watchdog stuff, for
+   last-ditch cleanup.  Truck progress is moving.  Plate progress
+   is.. what?  Changing state during config and that's it?  The repro
+   has to finish before Plate loses it?
+
+ - Also consider a reverse XTimer, that does the unlikely counts first
+   and the likely counts last.  Make it easier to set something to
+   trigger 'soon'.
+
+:71]
+[72:
+
+[73:
+
+Tue Mar 23 14:33:34 2021 OK, so had a notes file version skew here,
+had to hack out some duplicated note numbers.  The rest of :72: here
+is now several notes from today, merged together into one.
+
+:73]
+
+Tue Mar 23 13:07:04 2021 So it's been days and days with no hacking
+here.  (Did a cut at a selfimage PCB and sent it off to PCBWay
+though.)
+
+So we absolutely want to do the implied origin for Plate kin
+recognition.  What I'm struggling with is whether that means we want
+to move the origin when a swapline passes, or not.
+
+The important event for non-kin recognition is when Plate is scanning
+locally to decide if we need to miscarry.  And we will never be
+scanning across a swapline because it has higher priority.  So it
+"doesn't matter" whether we rewrite Plate coordinates when we swap
+them or not.
+
+I guess my instinct would be for swapline not to mess with atoms when
+it moves them, if possible.  Is there any reason we really need it to?
+
+Ah: One issue is the border plate.  Since swaplines are NOT swapping
+them, if we don't rewrite coordinates on the stuff we DO swap, they
+will get out of sync with the border.
+
+So that's an argument for saying the border gives us an 'absolute'
+frame of reference independent of reproduction-related movement, so we
+SHOULD rewrite the Plate we move, to stay consistent with that
+space-time-fixed reference frame.  Otherwise, a border Plate looking
+at a moved internal Plate will perceive an inconsistent origin.
+
+
+
+Tue Mar 23 13:20:02 2021 So then, issue #2: So if we rewrite coords,
+that means the root of the Plate tree -- which HAD been located at
+(0,0) -- will no longer be at (0,0) once it's moved.
+
+And does that matter?  As far as I can think, we weren't using that
+identity for anything.
+
+And we had an idea of saying: How about we break that relationship
+immediately, by having the creator of the root Plate be required to
+set the origin to point at itself.  And in principle, Plate could use
+that to establish some kind of identity rule for what to plate.  Like
+having to be a Moore-neighborhood-connected component to that source
+atom. 
+
+
+
+Tue Mar 23 13:31:03 2021 And all that sounds plausible again
+rehearsing it now, but it does sound like a big redo.
+
+But do we see any show-stoppers in it?
+
+ - Instigator points Plate origin at self.
+
+ - Plate scans von Neumann ngb for any (matching) Content.  For each
+   found, scan Moore ngb around that content, plating any empties
+
+ - Once no growth is found, leaves advance and the bounding box
+   propagates up.
+
+ - Final bounding box is broadcast from the Plate root, and box fill
+   commences
+
+ - All through this process, whenever a Plate sees another Plate, it
+   performs a kin/non-kin check.
+
+ - How it responds to non-kin depends on what phase it's in, I guess.
+
+ - If it's surrounding content, it miscarries
+
+ - If it's box filling, it checks if the non-kin is located in the
+   box, and miscarries if so.  Otherwise it ignores it.
+
+ - Trucks swapping parent Plate update the plate's coords.
+
+ - Trucks unpacking kid Plate do what?  Do the trucks even know the
+   destination coord?  I guess they do, since they have to know their
+   dropoff column.  Do they know their row?
+
+Tue Mar 23 13:59:57 2021 At the moment Trucks have mStepsTilDropoff
+and DON'T have an absolute column number.  So unpacking kid plate is a
+problem.
+
+Wait.  Do the child plate coords even change?  Doesn't the kid end up
+right where the parent was, until the final strip-out-the-plate pass?
+
+I think so!
+
+DOH!
+
+Tue Mar 23 13:53:35 2021 Kind of sounds like a plan.
+
+[74:
+
+Tue Mar 23 14:35:44 2021 So, kid plate coords don't change, ever --
+although the final clean-up advances the kid one column, it kills the
+plate so plate coords are moot.
+
+[75:
+
+Tue Mar 23 14:51:59 2021 So in checking that just now, it did remind
+me of one additional issue: The fact that we don't interlock the box
+filling and the truck starting.
+
+Which, in previous design thinking, lead us towards thinking about
+abandoning strict numeric phases in favor of a rock-paper-scissors
+progression that was going to be modular in time so we could stack
+tree-pass computations together without having to assign specific
+numbers to them all up front.
+
+But it really seems more like two phases in the tree case, down and
+up.  On the down, trees grow and broadcast and what-not.  Leaves
+switch to up and specify the base case of the reduction.  Once the
+reduction reaches the root, another down phase can begin?  No third
+color needed?
+[76:
+
+Tue Mar 23 15:13:45 2021 I guess so, because the tree relationship
+provides extra structure.  Although, could the second color be "I've
+gone down".
+
+  All are initted to RED
+
+  Root goes GREEN to trigger operation
+
+  GREEN node performs operation (e.g., flood empty with RED kids), and
+  turns all RED kids GREEN.  Once there are no more RED kids (or
+  convertible empties, etc), node goes BLUE
+
+  BLUE nodes wait for all their kids to be RED, and then reduces and
+  goes RED.
+
+Red Root reduction complete / map can start
+
+Red above green: This map must be seen
+
+Blue above red: It goes to your head
+
+Green leaf means map is (locally) complete / reduction can start
+
+[77:
+
+Tue Mar 23 18:14:19 2021 So that seems plausible dunnit.
+
+:77]
+
+:76]
+
+:75]
+
+:74]
+
+:72]
+[78:
+
+Wed Mar 24 02:03:34 2021 OK so let's implement RPS map reduce.  Tree
+map reduce.  (And it doesn't have to be a tree, does it?  E.g., once
+we have the final bounding box at the root, we could, I'd think, flood
+the box via manhattan distance rather than parent links.)
+[79:
+
+Wed Mar 24 02:14:41 2021 Could we cleanly transfer control to the head
+commander?  That's still an outstanding issue here, yes?  [80:
+
+Wed Mar 24 02:24:26 2021 Come on this is a big enough step without
+trying to get smart here too.
+
+So the overall plan is:
+
+ root starts red.  goes green on RXTimer.
+
+ case Green:
+   mapGreen
+   if ! kidsAllRed() wait
+   mapOut();
+   turn Blue;
+
+ case Blue
+   waitBlue
+   if kidsAllRed() {
+     reduceIn();
+     turn Red;
+   }
+
+ case Red:
+   if 
+   
+kidsAllRed
+  scan and decide
+
+doGreen()
+  if (invalid(max)) plateContentWithRed()
+
+doBlue()
+ ;
+
+
+mapOut()
+  if (invalid(max)) turnKidsGreen
+
+plateContentWithRed
+  makeNewRedKidsNearContent
+
+  
+
+:80]
+
+:79]
+
+:78]
+[81:
+
+Wed Mar 24 03:53:06 2021 Hmm always complications.  Another issue is:
+when the truck unloads, there's TWO sites it has to fill, and the
+carried atom only provides one.[82:
+
+Wed Mar 24 04:15:48 2021 Just trying the existing code: And even when
+the truck is carrying a Plate, after unloading it calls helloClone()
+on the offspring, which currently reinitializes its fields, so even
+though it could know its correct position in the plate grid, it
+doesn't.
+
+[83:
+
+Wed Mar 24 04:19:00 2021 So I'm thinking we're going to need to blank
+screen this thing yet again, and import as we build..  We'd like
+trucks to know where they are, for example: Can we afford that?[84:
+
+Wed Mar 24 04:20:18 2021 Currently it's:
+
+      __________________________________________________
+      | COMPONENTS of Truck (28) (61 bits total) are: 
+      | 
+      | Pos	| Bits	| Name	| Type (classid)
+      | 0	| 8	| mPlateHeight	| Int(8)
+      | 8	| 8	| mOurRow	| Int(8)
+      | 16	| 8	| mStepsTilDropoff	| Int(8)
+      | 24	| 2	| mReadyBits	| Bits(2)
+      | 26	| 2	| mTruckPhase	| Unsigned(2)
+      | 28	| 1	| mGarbageTruck	| Bool(1)
+      | 29	| 0	| super	| TruckBase (3)
+      | 29	| 0	| base	| UrSelf (0)
+      | 29	| 2	| base	| RotateSPOT (15)
+      | 31	| 0	| base	| Printer (23)
+      | 31	| 0	| base	| PrintBase (32)
+      | 31	| 0	| base	| Parms (33)
+      | 31	| 0	| base	| SPOTStage (40)
+      | 31	| 0	| base	| SPOT (39)
+      | 31	| 2	| base	| SPOTStageBits(2u) (41)
+      | 33	| 28	| base	| PackedFront (43)
+      | 61	| 0	| base	| PackedAtom (44)
+      |___________________________________________________
+
+and
+      __________________________________________________
+      | COMPONENTS of UnloadedTrailer (29) (14 bits total) are: 
+      | 
+      | Pos	| Bits	| Name	| Type (classid)
+      | 0	| 1	| mDeparted	| Bool(1)
+      | 1	| 8	| mStepsTilPickup	| Int(8)
+      | 9	| 1	| super	| Trailer (8)
+      | 10	| 0	| base	| UrSelf (0)
+      | 10	| 2	| base	| RotateSPOT (15)
+      | 12	| 0	| base	| Printer (23)
+      | 12	| 0	| base	| PrintBase (32)
+      | 12	| 0	| base	| Parms (33)
+      | 12	| 0	| base	| AtomUtils (34)
+      | 12	| 0	| base	| SPOTStage (40)
+      | 12	| 0	| base	| SPOT (39)
+      | 12	| 2	| base	| SPOTStageBits(2u) (41)
+      |___________________________________________________
+
+
+and
+      __________________________________________________
+      | COMPONENTS of LoadedTrailer (35) (64 bits total) are: 
+      | 
+      | Pos	| Bits	| Name	| Type (classid)
+      | 0	| 1	| super	| Trailer (8)
+      | 1	| 27	| base	| PackedMid (36)
+      | 28	| 32	| base	| PackedBack (37)
+      | 60	| 0	| base	| UrSelf (0)
+      | 60	| 2	| base	| RotateSPOT (15)
+      | 62	| 0	| base	| Printer (23)
+      | 62	| 0	| base	| PrintBase (32)
+      | 62	| 0	| base	| Parms (33)
+      | 62	| 0	| base	| AtomUtils (34)
+      | 62	| 0	| base	| SPOTStage (40)
+      | 62	| 0	| base	| SPOT (39)
+      | 62	| 2	| base	| SPOTStageBits(2u) (41)
+      | 64	| 0	| base	| PackedAtom (44)
+      |___________________________________________________
+
+[85:
+
+Wed Mar 24 04:37:46 2021 Blank screening.
+
+:85]
+
+:84]
+
+:83]
+
+:82]
+
+:81]
