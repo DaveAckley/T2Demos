@@ -1,0 +1,49 @@
+quark WatchDog4 : RXTimer(cDOG_BITS,Unsigned(cDOG_BITS).maxof,1u) + Update {
+  constant Unary(5) cDOG_BITS = 4u;
+  constant Unsigned cDOG_MAXOF = Unsigned(cDOG_BITS).maxof;
+  constant Unsigned cDOG_TRIGGER = triggerLevel;
+
+  Void progress() { reset(); }
+
+  Unsigned boredom() { return current(); }
+
+  Void setBoredom(Unsigned newb) { super.set((Super.Counter) newb); }
+
+  Bool die() { trigger(); return true; }
+
+  Bool isDead() { return alarm(); }
+
+  virtual Bool update() {
+    if (countAlarm()) {
+      emergencyDeath();
+      return true;
+    }
+    return false;
+  }
+
+  /** Should atom a die if we are dying?  By default the answer is:
+      Yes iff a has the same classid as self
+   */
+  virtual Bool shareFate(Atom & a) {
+    ClassUtils cu;
+    return cu.getClassId(self) == cu.getClassId(a);
+  }
+
+  Void emergencyDeath() {
+    EventWindow ew;
+    for (EventWindow.SiteNum sn = 1; sn <= 41; ++sn) {
+
+      if (!ew.isAccessible(sn)) continue;
+
+      Atom a = ew[sn];
+      if (shareFate(a))
+        if (a as Self)
+          a.die();
+    }
+
+    Fail f;
+    f.fail("emergency death");
+  }
+
+
+}

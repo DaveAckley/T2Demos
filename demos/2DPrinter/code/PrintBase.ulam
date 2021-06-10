@@ -9,5 +9,24 @@ quark PrintBase : RotateSPOT + Parms {
 
   ////PRINTBASE API
   virtual Void helloClone() { /* Nothing by default */ }
+
+  /* death handled by GST
+  Bool update() {
+    if (super.update()) return true;
+    if (processDeath()) return true;
+    return false;
+  }
   
+  Bool processDeath() {
+    if (!isDead()) return false;
+    for (SiteIterator si = neighborhood(); si.hasNext();) {
+      SN sn = si.next();
+      C2D c = md.getSiteCoord(sn);
+      Atom & a = ew[sn];
+      if (a as Self) a.die();
+    }
+    ew[0] = Empty.instanceof;
+    return true;
+  }
+  */
 }

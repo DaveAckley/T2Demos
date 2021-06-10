@@ -1,0 +1,109 @@
+quark QTruck : Printer + Death + Parms {
+  @Override
+  virtual Int priority() { return cTRUCK_PRIORITY; }
+  Bool mDead;
+
+  @Override
+  Bool die() { return mDead = true; }
+
+  @Override
+  Bool isDead() { return mDead; }
+
+  @Override
+  Bool decompose() {
+    EventWindow ew;
+    for (SiteIterator si(cMOOREx); si.hasNext() ; ) {
+      SN sn = si.next();
+      if (!ew.isAccessible(sn)) continue;
+      Atom & a = ew[sn];
+      if (a as Self) a.die();
+    }
+    ew[0] = Empty.instanceof;
+    return true;
+  }
+
+  Bool update() {
+    return isDead() && decompose();
+  }
+}
+
+/** Kill any trucking in the Moore ngb
+    \symbol KD
+    \color #f00
+*/
+element KillDozer : QTruck {
+  Void behave() {
+    update();
+    die();
+  }
+}
+
+element Tractor : QTruck + PackedFront {
+  B2D.BCoord mStepsTilDropoff;
+  typedef Bits(2) ReadyOnTheLine;
+  constant ReadyOnTheLine cREADY_NORTH = 0x1;  // +1 equals SN
+  constant ReadyOnTheLine cREADY_SOUTH = 0x2;  // +1 equals SN
+  constant ReadyOnTheLine cREADY_BOTH =  0x3;
+  ReadyOnTheLine mReadyBits;
+
+  typedef Unsigned(2) TruckPhase;
+  constant TruckPhase cTRUCKPHASE_DEPLOY = 0u; // Deploy the fleet
+  constant TruckPhase cTRUCKPHASE_LOAD   = 1u; // Drive to pickup, and load
+  constant TruckPhase cTRUCKPHASE_HAUL   = 2u; // Drive to dropoff
+  constant TruckPhase cTRUCKPHASE_UNLOAD = 3u; // Unload and vanish
+  TruckPhase mTruckPhase;
+
+  Bool tractorHereOrBehind(SN sn2or3) {
+    C2D chere = md.getSiteCoord(sn2or3);
+    C2D behind = chere + C2D.instanceof(1,0);
+    return ew[chere] is Self || ew[behind] is Self;
+  }
+
+  Bool deployHereIfNeeded(SN sn2or3) {
+    if (tractorHereOrBehind((SN)(sn2or3+3u))) return false; // not needed
+    if (!ew[sn2or3] is Plate) return die();                 // what what?
+    Plate & p = (Plate&) ew[sn2or3];
+    if (p.isBorder()) return false; // Not needed
+
+    Tractor newt = self;
+    if (!ew[4] is UnloadedTrailer) return die();
+    UnloadedTrailer & trail = (UnloadedTrailer&) ew[4];
+    ew[sn2or3] = newt;
+    ew[(SN)(sn2or3+5u)] = trail;
+
+    return false;  // Done
+  }
+
+  Bool phaseDEPLOY() {
+    if (deployHereIfNeeded(2u)) return true;
+    if (deployHereIfNeeded(3u)) return true;
+    mTruckPhase = cTRUCKPHASE_LOAD;
+    return true;
+  }
+
+  virtual Bool update() {
+    if (super.update()) return true;
+    //    if (processDeath()) return true;
+    which (mTruckPhase) {
+    case cTRUCKPHASE_DEPLOY:  { return phaseDEPLOY(); }
+      //    case cTRUCKPHASE_LOAD:    { return phaseLOAD(); }
+      //    case cTRUCKPHASE_HAUL:    { return phaseHAUL(); }
+      //    case cTRUCKPHASE_UNLOAD:  { return phaseUNLOAD(); }
+    }
+    //    return die(); // NOT REACHED
+    return false;
+  }
+
+  Void behave() {
+    if (update()) return; // Check priority
+  }
+}
+
+quark QTrailer : QTruck { }
+
+element UnloadedTrailer : QTrailer {
+  B2D.BCoord mStepsTilPickup;
+}
+
+element LoadedTrailer : QTrailer + PackedMid + PackedBack {
+}

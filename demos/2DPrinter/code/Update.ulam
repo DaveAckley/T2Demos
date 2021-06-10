@@ -1,0 +1,9 @@
+quark Update {
+  //// UPDATE API
+  /** 
+    \return false for processing to continue, true if anything
+    potentially significant was changed, so that further event
+    processing should stop
+   */
+  virtual Bool update() { return false; }
+}

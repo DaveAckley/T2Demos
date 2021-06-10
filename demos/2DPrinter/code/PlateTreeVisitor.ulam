@@ -1,0 +1,72 @@
+transient PlateTreeVisitor : GeneralSpatialTreeVisitor {
+
+  typedef GeneralSpatialTree GST;
+  typedef GST.EWPtr EWPtr;
+
+  @Override
+  virtual Bool beginTraverse(GST& root) {
+    if (root as Plate) {
+      if (root.mPhase != root.cPHASE_ROLL_TRUCKS) {
+        ++root.mPhase;
+        return false;   // Go again
+      }
+    }
+    return true;                // Else block here
+  }
+
+  @Override
+  virtual Bool endTraverse(GST& root) {
+    return false;                // No special business here?
+  }
+
+  @Override
+  virtual Bool preorderStep(GST& gst) {
+    if (gst as Plate) {
+      if (gst.phaseFromParent()) return true;
+      which (gst.mPhase) {
+      case Plate.cPHASE_INIT: {
+        return false;
+      }
+      case Plate.cPHASE_PLATE_CONTENT: {
+        gst.plateNearContentEmptiesWithRed();
+        return false;           // Done
+      }
+      case Plate.cPHASE_FLOOD_BBOX: {
+        if (gst.boundsFromParent()) return true;
+        gst.plateBoundingBoxEmptiesWithRed();
+        return false;
+      }
+      case Plate.cPHASE_ROLL_TRUCKS: {
+        if (gst.maybeBecomeHeadCommander()) return true;
+        return false;
+      }
+      }
+    }
+    return false;
+  }
+
+  @Override
+  virtual Bool postorderStep(GST& gst) {
+    if (gst as Plate) {
+      if (!gst.hasParent()) return false;
+      Plate& parent = gst.getParent();
+      which (gst.mPhase) {
+      case Plate.cPHASE_INIT: {
+        return false;
+      }
+      case Plate.cPHASE_PLATE_CONTENT: {
+        gst.boundsToParent(parent);
+        return false;           // Done
+      }
+      case Plate.cPHASE_FLOOD_BBOX: {
+        return false;
+      }
+      case Plate.cPHASE_ROLL_TRUCKS: {
+        if (gst.doHeadCommanderBusiness()) return true;
+        return false;
+      }
+      }
+    }
+    return false;
+  }
+}

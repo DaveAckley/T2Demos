@@ -1,0 +1,372 @@
+ulam 5;
+
+quark GeneralSpatialTree : Death {
+  constant Unary(4) cRADIUS = 4u;
+  constant Unsigned cBITSNEEDED =
+    (cRADIUS <= 1u ? 3u :
+       (cRADIUS == 2u ? 4u :
+         (cRADIUS == 3u ? 5u : 6u)));
+  typedef Unsigned(cBITSNEEDED) EWPtr;
+
+  typedef Unsigned(2) RGBState;
+  constant RGBState cRED_STATE = 0u;
+  constant RGBState cGREEN_STATE = 1u;
+  constant RGBState cBLUE_STATE = 2u;
+  constant RGBState cDEAD_STATE = 3u;
+
+  // DATA MEMBERS
+  EWPtr mParentSN;
+  RGBState mRGBState = cRED_STATE;
+
+  typedef GeneralSpatialTreeVisitor GSTV;
+
+  // Death API
+  
+  Bool die() { mRGBState = cDEAD_STATE; return true; }
+  Bool isDead() { return mRGBState == cDEAD_STATE; }
+
+  Bool decompose() {
+    if (!isDead()) return false;
+    EventWindow ew;
+    MDist md;
+    
+    // KILL MY PARENT
+    if (hasParent()) {
+      Self & p = (Self&) ew[mParentSN];
+      p.die();
+    }
+    
+    // KILL MY KIDS
+    for (EWPtr ep = md.getFirstIndex(1u); ep <= md.getLastIndex(cRADIUS); ++ep) {
+      Atom & k = ew[ep];
+      if (k as Self) {
+        if (ep == reversePtr(k.mParentSN))
+          k.die();
+      }
+    }
+
+    // AND DECOMPOSE
+    ew[0] = Empty.instanceof;
+    return true;
+  }
+
+  // TREE API
+  Bool hasParentPtr() { return mParentSN != 0u; }
+  Bool hasParent() {
+    EventWindow ew;
+    return hasParentPtr() && ew[mParentSN] is Self;
+  }
+
+  /** Traverse ew[0] using \c gstv
+
+      \return true if modifications made so event should end, false if
+      other processing can continue
+  */
+  Bool traverse(GSTV & gstv) {
+    if (decompose()) return true;              // Yah We Changed Stuff
+    EventWindow ew;
+    MDist md;
+    if (!ew[mParentSN] is Self) return die();  // Inconsistency
+
+    Self & p = (Self&) ew[mParentSN]; // WARNING: p will be self for the root
+    Unsigned cond = mRGBState;
+    which (cond) {
+    case cDEAD_STATE: { /* "unreachable" */ }
+    case cRED_STATE:
+      {
+        if (!hasParentPtr() && gstv.beginTraverse(self))
+          return false;   // Root's got nothing, but OK if caller has other biz
+
+        // Is my parent green?
+        if (hasParent()) {
+          Self & p = (Self&) ew[mParentSN];
+          if (p.mRGBState != cGREEN_STATE) 
+            return false;       // We're waiting but caller can work
+        }
+        
+        if (gstv.preorderStep(self))
+          return false;         // Pre-order wants a retry later; caller biz OK
+
+        mRGBState = cGREEN_STATE;
+        return true;            // We changed state
+      }
+
+    case cGREEN_STATE:
+      {
+        // Are my kids all blue?
+        for (EWPtr ep = md.getFirstIndex(1u); ep <= md.getLastIndex(cRADIUS); ++ep) {
+          Atom & k = ew[ep];
+          if (k as Self) {
+            if (ep == reversePtr(k.mParentSN))
+              if (k.mRGBState != cBLUE_STATE)
+                return false;    // We're blocking on a kid but caller biz OK
+          }
+        }
+
+        if (gstv.postorderStep(self))
+          return false;        // Post-order wants a retry later; caller biz OK
+
+        mRGBState = cBLUE_STATE;
+        return true;          // We changed state
+      }
+
+    case cBLUE_STATE:
+      {
+        // Is my parent blue?
+        if (hasParent()) {
+          Self & p = (Self&) ew[mParentSN];
+          if (p.mRGBState != cBLUE_STATE) 
+            return false;       // We're waiting but caller can work
+        }
+
+        // Are my kids all red?
+        for (EWPtr ep = md.getFirstIndex(1u); ep <= md.getLastIndex(cRADIUS); ++ep) {
+          Atom & k = ew[ep];
+          if (k as Self) {
+            if (ep == reversePtr(k.mParentSN))
+              if (k.mRGBState != cRED_STATE)
+                return false; // We're blocking on a kid but didn't change anything
+          }
+        }
+          
+        if (!hasParentPtr() && gstv.endTraverse(self))
+          return false;   // Root's got nothing, but OK if caller has other biz
+
+        mRGBState = cRED_STATE;
+        return true;          // We changed state
+      }
+    }
+
+    Fail f;
+    f.fail("UNREACHABLE");
+    return false;
+  }
+
+  //// UTILITIES
+  ARGB stateColor() {
+    ColorUtils cu;
+    which (mRGBState) {
+    case cRED_STATE: { return cu.color(0xff0000); }
+    case cGREEN_STATE: { return cu.color(0x00ff00); }
+    case cBLUE_STATE: { return cu.color(0x0000ff); }
+    }
+    return cu.color(0x000000); 
+  }
+
+  EWPtr reversePtr(EWPtr od) {
+    EventWindow ew;
+    MDist md;
+    if (!ew.isAccessible(od)) return EWPtr.maxof; // Illegal reverses to illegal
+    C2D coord = md.getSiteCoord(od);   // Their coord relative to us
+    C2D icoord = coord*(C2D.Coord)-1;  // Our coord relative to them
+    return md.getSiteNumber(icoord);   // Our SN relative to them
+  }
+
+  /**
+     Create a child in an empty site \c at, with ew[0] as its parent.
+     Its \c mParentSN will be set to point to ew[0], but otherwise it
+     will be a copy of ew[0].
+
+     \returns false if ew[at] is not empty, or ew[0] is not a
+     GeneralSpatialTree, otherwise returns true and the child was
+     created
+   */
+  Bool addChild(EWPtr at) {
+    EventWindow ew;
+    MDist md;
+    if (!ew.isLive(at)) return false;
+    if (!ew[at] is Empty) return false;
+    if (!ew[0] is Self) return false;
+    ew[at] = ew[0];
+    Self & a = (Self&) ew[at];
+    a.mParentSN = reversePtr(at);
+    return true;
+  }
+}
+
+quark GeneralSpatialTreeVisitor {
+  constant Unary(4) cRADIUS = 4u;
+  typedef GeneralSpatialTree GST;
+  
+  /** \return false if new traversal set up, true if nothing changed and need to retry this step */
+  virtual Bool beginTraverse(GST & root) ;
+
+  /** \return false if traversal concluded, true if nothing changed and need to retry this step */
+  virtual Bool endTraverse(GST & root) ;
+
+  /** \return false if done, true if nothing changed and need to retry this step*/
+  virtual Bool preorderStep(GST & gst) ;
+
+  /** \return false if done, true if nothing changed and need to retry this step*/
+  virtual Bool postorderStep(GST & gst) ;
+}
+
+/////////DEMOS
+// quark DemoGSTV : GeneralSpatialTreeVisitor {
+//   typedef GeneralSpatialTree GST;
+//   typedef GST.EWPtr EWPtr;
+
+//   @Override
+//   virtual Bool beginTraverse(GST& root) {
+//     typedef DemoGST.Distance Dist;
+//     if (root as DemoGST) {
+//       if (root.mPhase++ < root.mPhase.maxof) {
+//         Dist lim = (Dist) (root.mPhase <= Dist.maxof ? root.mPhase : (root.mPhase.maxof - root.mPhase));
+//         root.mLimit = lim;
+//         return false;
+//       }
+//     }
+//     return true;
+//   }
+
+//   @Override
+//   virtual Bool endTraverse(GST& root) {
+//     return false;
+//   }
+
+//   @Override
+//   virtual Bool preorderStep(GST& gst) {
+//     MDist md;
+//     EventWindow ew;
+//     if (gst as DemoGST) {
+//       if (gst.mLimit > gst.mDist) { // Room to grow?
+//         Random r;
+//         EWPtr ptr = (EWPtr) r.between(1u,12u);
+//         if (ew[ptr] is Empty) {
+//           if (gst.addChild(ptr)) {
+//             DemoGST& kid = (DemoGST&) ew[ptr];
+//             kid.mDist++; // You're one farther than I am
+//           }
+//         } 
+//       }
+
+//       // Push our current limit to the kids
+//       for  (EWPtr ep = md.getFirstIndex(1u); ep <= md.getLastIndex(cRADIUS); ++ep) {
+//         Atom & k = ew[ep];
+//         if (k as DemoGST) {
+//           Utils u;
+//           if (ep == u.reversePtr(k.mParentSN))
+//             k.mLimit = gst.mLimit;
+//         }
+//       }
+//     }
+
+//     return false;
+//   }
+
+//   @Override
+//   virtual Bool postorderStep(GST& gst) {
+//     if (gst as DemoGST) {
+//       if (gst.mLimit < gst.mDist) { // Are we overextended?
+//         EventWindow ew;
+//         ew[0] = Empty.instanceof;   // Yes, die back
+//         return true;            // Need to 'retry' this step
+//       }
+//     }
+//     return false;
+//   }
+// }
+
+// /** Sample GST with separate transient GSTV 
+//     \symbol DG
+//     \color #ece
+//  */
+// element DemoGST : GeneralSpatialTree {
+//   constant Unsigned cPHASE_BITS = 5;
+//   typedef Unsigned(cPHASE_BITS) Phase;
+//   Phase mPhase = Phase.minof;
+
+//   typedef Unsigned(cPHASE_BITS-1u) Distance;
+//   Distance mDist = Distance.minof;
+//   Distance mLimit = Distance.minof;
+
+//   ARGB getColor(Unsigned selector) {
+//     return stateColor();
+//   }
+//   Void behave() {
+//     DemoGSTV gstv;
+//     if (traverse(gstv)) return;
+//   }
+// }
+
+// /** Sample GST + GSTV all-in-one. (If GSTV has little/no state.)
+//   \symbol D2
+//   \color #cec
+//  */
+// element DemoGST2 : GeneralSpatialTree + GeneralSpatialTreeVisitor {
+//   constant Unsigned cPHASE_BITS = 5;
+//   typedef Unsigned(cPHASE_BITS) Phase;
+//   Phase mPhase = Phase.minof;
+
+//   typedef Unsigned(cPHASE_BITS-1u) Distance;
+//   Distance mDist = Distance.minof;
+//   Distance mLimit = Distance.minof;
+
+//   ARGB getColor(Unsigned selector) {
+//     return stateColor();
+//   }
+
+//   @Override
+//   virtual Bool beginTraverse(GST& root) {
+//     if (root as Self) {
+//       if (root.mPhase++ < root.mPhase.maxof) {
+//         Distance lim = (Distance) (root.mPhase <= Distance.maxof ? root.mPhase : (root.mPhase.maxof - root.mPhase));
+//         root.mLimit = lim;
+//         return false;
+//       }
+//     }
+//     return true;
+//   }
+
+//   @Override
+//   virtual Bool endTraverse(GST& root) {
+//     return false;
+//   }
+
+//   @Override
+//   virtual Bool preorderStep(GST& gst) {
+//     MDist md;
+//     EventWindow ew;
+//     if (gst as Self) {
+//       if (gst.mLimit > gst.mDist) { // Room to grow?
+//         Random r;
+//         EWPtr ptr = (EWPtr) r.between(1u,12u);
+//         if (ew[ptr] is Empty) {
+//           if (gst.addChild(ptr)) {
+//             Self& kid = (Self&) ew[ptr];
+//             kid.mDist++; // You're one farther than I am
+//           }
+//         } 
+//       }
+
+//       // Push our current limit to the kids
+//       for  (EWPtr ep = md.getFirstIndex(1u); ep <= md.getLastIndex(cRADIUS); ++ep) {
+//         Atom & k = ew[ep];
+//         if (k as Self) {
+//           Utils u;
+//           if (ep == u.reversePtr(k.mParentSN))
+//             k.mLimit = gst.mLimit;
+//         }
+//       }
+//     }
+
+//     return false;
+//   }
+
+//   @Override
+//   virtual Bool postorderStep(GST& gst) {
+//     if (gst as Self) {
+//       if (gst.mLimit < gst.mDist) { // Are we overextended?
+//         EventWindow ew;
+//         ew[0] = Empty.instanceof;   // Yes, die back
+//         return true;            // Need to 'retry' this step
+//       }
+//     }
+//     return false;
+//   }
+
+//   Void behave() {
+//     if (traverse(self)) return;
+//   }
+// }
+

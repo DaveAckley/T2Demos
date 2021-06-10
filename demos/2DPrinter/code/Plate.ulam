@@ -1,96 +1,261 @@
-/** Plating surrounding item during printing
+/** Plating surrounding item and defining the coordinate system during printing
     \symbol Pl
     \color #722
  */
-element Plate : Printer + Utils {
-  B2D mLocation;  // Our location (source based or zero based depending on PlatePhase)
-  B2D mMin;       // Min coord or object size depending on PlatePhase
-  B2D mMax;       // Max coord (min-origin) or (0-origin) depending on PlatePhase
-  typedef Unsigned(B2D.cBITS-1u) ObjectDimension;
-  ObjectDimension mTruckRolls; // For head commander
-  SN mSource;
-  Bool mHeadCommander; // I release the trucks
-
-  virtual Int priority() { return mHeadCommander ? cTRUCK_PRIORITY : super.priority(); }
-  
-  typedef Unsigned(2) TreePhase;
-  constant TreePhase cTREEPHASE_DNFLOOD = 0u;  // Surrounding content and localizing, new kids
-  constant TreePhase cTREEPHASE_UPBOUND = 1u;  // Min and max bounds up, no kids or kids done
-  constant TreePhase cTREEPHASE_DNBOUND = 2u;  // mMin,mLocation,mMax-=globalmin, down, new kids
-  constant TreePhase cTREEPHASE_UPREADY = 3u;  // Kids are ready
-  TreePhase mTreePhase;
-
-  //// PrintBase API
-  @Override
-  virtual Void helloClone() {
-    mTreePhase = cTREEPHASE_UPREADY;  // Just some safely passive 
-    mHeadCommander = false;           // settings for cloned plating
-    mLocation.init(0,0);
-    mMin.init(0,0);
-    mMax.init(0,0);
-    mTruckRolls = 0;
-    mSource = 0;
+element Plate : GeneralSpatialTree + Printer + Utils {
+  ////SPOT API
+  virtual SiteIterator neighborhood() {    // Only look out two to avoid trucks
+    return SiteIterator.instanceof(cEWR2x);
   }
 
-  //// Printer API
-  virtual Bool die() { mSource = mSource.maxof; return true; }
-  virtual Bool isDead() { return mSource == mSource.maxof; }
+  B2D mLocation;  // Our location
+  B2D mMin;       // Min coord of plated object size
+  B2D mMax;       // Max coord of plated object size
+
+  typedef Unsigned(2) Phase;
+  constant Phase cPHASE_INIT          = 0u; 
+  constant Phase cPHASE_PLATE_CONTENT = 1u; 
+  constant Phase cPHASE_FLOOD_BBOX =    2u; 
+  constant Phase cPHASE_ROLL_TRUCKS =   3u; 
+  Phase mPhase;
+  Bool mHeadCommander;
+  
+  Bool hasParent() {
+    if (!super.hasParent()) return false;
+    if (!ew[mParentSN] is Self) return false;
+    return true;
+  }
+
+  Self& getParent() {
+    if (!hasParent()) {
+      Fail f;
+      f.fail("No parent");
+    }
+    Self& ret = (Self&) ew[mParentSN];
+    return ret;
+  }
+
+  Bool phaseFromParent() {
+    if (hasParent()) {
+      if (!ew[mParentSN] is Self) return die();
+      Self & p = (Self&) ew[mParentSN];
+      mPhase = p.mPhase;
+    }
+    return false;
+  }
+
+  Bool boundsFromParent() {
+    if (hasParent()) {
+      if (!ew[mParentSN] is Self) return die();
+      Self & p = (Self&) ew[mParentSN];
+      mMin = p.mMin;
+      mMax = p.mMax;
+    }
+    return false;
+  }
+
+  Void boundsToParent(Self& parent) {
+    parent.mMin = parent.mMin.min(mMin); 
+    parent.mMax = parent.mMax.max(mMax); 
+  }
+
+  B2D buildPlateMin() {
+    Fail f;
+    if (!mMin.isValid()) f.fail();
+    // Need borders?    B2D ret(mMin.mX - 1, mMin.mY - 1); // Room for borders
+    B2D ret(mMin.mX, mMin.mY); 
+    return ret;
+  }
+
+  Bool iAmTheHeadCommander() {
+    if (mPhase < cPHASE_ROLL_TRUCKS) return false;
+    return mHeadCommander;
+  }
+
+  Bool maybeBecomeHeadCommander() { 
+    if (mPhase < cPHASE_ROLL_TRUCKS) return false;
+    C2D hc = headCommanderLoc();
+    C2D us = mLocation.toC2D();
+    mHeadCommander = hc == us;
+    return false;
+  }
+
+  Bool doHeadCommanderBusiness() {
+    if (!iAmTheHeadCommander()) return false;
+
+    ///// COMMANDER BUSINESS
+    // 0. (We are passivated if any trucks in EWR2.)
+
+    // 1. Ensure there's at least one us Plate ahead
+    if (!ew[4] is Self) return die(); // opps not Plate
+    Self & p4 = (Self&) ew[4];
+    ByteStreamLogger bsl;
+    bsl.printf("hcb 4\n");
+    if (!isKin(p4,4u)) return die();  // opps not us Plate
+
+    // 2. We're (almost) done if it's border plate
+    if (p4.isBorder()) return die(); // XXX FIX ME: CLEANUP CREW
+
+    // 3. If not border, must be two us Plates ahead
+    if (!ew[12] is Self) return die(); // opps not Plate
+    Self & p12 = (Self&) ew[12];
+    bsl.printf("hcb 12\n");
+    if (!isKin(p12,12u)) return die(); // opps not us Plate
+
+    bsl.printf("hcb OK\n");
+    // 4. Compute truck route
+    B2D.BCoord stepsTilPickup = 1u; // XXX FIX ME
+    B2D.BCoord stepsTilDropoff = 1u; // XXX FIX ME
+
+    // 5. Build the truck
+    Tractor tractor;
+    tractor.mStepsTilDropoff = stepsTilDropoff;
+    
+    UnloadedTrailer trailer;
+    trailer.mStepsTilPickup = stepsTilPickup;
+
+    // 6. Release it
+    ew[4] = tractor;
+    ew[12] = trailer;
+
+    return true;  // Block here for more action
+  }
+
+  C2D headCommanderLoc() {
+    Fail f;
+    if (!mMin.isValid()) f.fail();
+    if (mPhase < cPHASE_ROLL_TRUCKS) f.fail();
+    C2D ret(mMax.mX,(mMax.mY-mMin.mY)/2 + mMin.mY);
+    du.print("HCLEI");
+    du.print(ret);
+    return ret;
+  }
+
+  B2D buildPlateMax() {
+    Fail f;
+    if (!mMax.isValid() || !mMax.isValid()) f.fail();
+    Int width = mMax.mX - mMin.mX + 1; // Plated object width
+    /*    B2D ret(mMax.mX + 2*width,  // Room for parent to run
+          mMax.mY + 1);       // Room for border */
+    B2D ret(mMax.mX + 2*width,  // Room for parent to run
+            mMax.mY);       // Room for border
+    return ret;
+  }
+
+  Bool isBorder() {
+    if (mPhase < cPHASE_FLOOD_BBOX) return die(); // Border not defined
+    if (mPhase == cPHASE_FLOOD_BBOX &&
+        mRGBState != cRED_STATE)    return die(); // Border not defined
+
+    // phase is >= FLOOD_BBOX/BLUE; border is defined
+    B2D max = buildPlateMax();
+    B2D min = buildPlateMin();
+    Bool ret =
+      mLocation.mY == max.mY ||
+      mLocation.mY == min.mY ||
+      mLocation.mX == max.mX ||
+      mLocation.mX == min.mX;
+    /*
+    ByteStreamLogger bsl;
+    bsl.printf("isBo=%d %d<=%d<=%d\n",
+               ret, min.mY, mLocation.mY, max.mY);
+    */
+    return ret;
+  }
+
+  typedef Unsigned(B2D.cBITS-1u) ObjectDimension;
+
+  @Override
+  virtual Void renderGraphics() {
+    //    if (!Ulam5StdlibControl.pRENDER_QBONDS) return;
+    if (!hasParentPtr()) return; // Can't use 'hasParent' -- it uses ew!
+    du.printContext();
+    Drawable drawable;
+    if (!drawable.canDraw()) return;
+
+    MDist md; // No ew when rendering!  Can't use ew.getCoordRaw()!
+    C2D bondc = md.getSiteCoord(mParentSN); 
+    C2D start(0,0);
+    C2D end = bondc*(7*Drawable.cUNITS_PER_SITE/8); // Draw 7/8 way parent
+    ColorUtils cu;
+    ARGB oncol = cu.color(0xffffffff);
+    ARGB offcol = cu.color(0x0);
+    drawable.drawMaskedLine(start,end,oncol,offcol,0xf0f0f0f0);
+  }
 
   ARGB getColor(Unsigned selector) {
     ColorUtils cu;
-    if (mHeadCommander) return cu.color(0xbb1122);
+    if (iAmTheHeadCommander()) return cu.color(0xdddd44);
     ARGB base = cu.color(0x33bb33);
-    if (mLocation.isValid() && mMax.isValid()) {
-      Unsigned len = mLocation.toC2D().length();
-      Unsigned max = mMax.toC2D().length();
+    which (mRGBState) {
+      case cRED_STATE: { base = cu.color(0xaa7777);   }
+      case cGREEN_STATE: { base = cu.color(0x77aa77); }
+      case cBLUE_STATE: { base = cu.color(0x7777aa);  }
+    }
+    if (mPhase > cPHASE_FLOOD_BBOX) {
+      C2D loc = mLocation.toC2D();
+      Bool inbox = lessEqual(loc,mMax.toC2D()) && lessEqual(mMin.toC2D(),loc);
+      if (inbox)
+        base = cu.dimmer(base);
+    }
+    return base;
+    /*
+    if (isDispatcherInCharge()) {
+      Unsigned len = (mLocation.toC2D() - mMin.toC2D()).length();
+      Unsigned max = (mMax.toC2D() - mMin.toC2D()).length();
       if (max == 0u) ++max;
       base = cu.between(cu.color(0xaa0000),
                         cu.color(0x0000aa),
                         100u*len/max);
     }
+
+    Unsigned frac = 10u;
+    if (isObjectPlatingCompleted()) frac += 10u;
+    if (isBoundingBoxFlooded()) frac += 10u;
+    if (isDispatcherInCharge()) frac += 10u;
     return cu.between(base,
                       cu.color(0xffff00),
-                      30u*mTreePhase);
+                      frac);
+    */
   }
   
-  Void plateSite(SN sn) {
-    if (!ew.isLive(sn)) { // Needing to plate a non-existent site is bad
-      die();
-      return;
-    }
-    C2D c = md.getSiteCoord(sn);
-    C2D abs = c+mLocation.toC2D();
-    B2D b(abs);
-    if (!b.isValid()) die();
-    Self s = self;              // Be like us
-    s.mSource = reversePtr(sn); // Except we are your parent
-    s.mLocation = b;            // And you are here (in whatever reference prevails)
-    ew[sn] = s;                 // Off you go
-  }
+  virtual Bool update() {
+    if (self.SPOT.update()) return true;
 
-  Bool isMyKid(SN sn) {
-    if (sn == 0u) return false;
-    Atom a = ew[sn];
-    if (a as Self) {
-      return sn == reversePtr(a.mSource);
-    }
+    PlateTreeVisitor ptv;
+    if (traverse(ptv)) return true;
     return false;
   }
+  
+  Bool isKin(Self other, SN sn) { // Is other in same coordinate space as I am?
+    if (sn == 0u) return true;    // doh
+    C2D myloc = mLocation.toC2D();
+    C2D othloc = other.mLocation.toC2D();
+    C2D c = md.getSiteCoord(sn);
+    Bool ret = othloc-c == myloc;
+    du.print("ISKIN");
+    du.print(myloc);
+    du.print(othloc);
+    du.print(sn);
+    du.print(ret);
+    return ret;
+  }
 
-  Bool processDNFLOOD() {
-    ByteStreamLogger bsl;
+  Bool plateNearContentEmptiesWithRed() {
     Unsigned kids = 0;
-    Unsigned donekids = 0;
-    B2D minb(B2D.cMAXVAL,B2D.cMAXVAL);
-    B2D maxb(B2D.cMINVAL,B2D.cMINVAL);
 
     for (SiteIterator si = neighborhood(); si.hasNext();) {
       SN sn = si.next();
+      if (sn == 0u) continue;
       C2D c = md.getSiteCoord(sn);
       Atom & a = ew[sn];
 
-      if (a is Empty) { /* empties are not a problem, deal with them below */ }
-      else if (a is Content) {
+      if (a as Plate) {
+        if (!isKin(a,sn)) {
+          miscarry();
+          return true;
+        }
+      } else if (a is Content) {
         // Scan for empties in Moore ngb around content
         for (SiteIterator sj = SiteIterator.instanceof(cMOOREx); sj.hasNext();) {
           SN snj = sj.next();
@@ -109,202 +274,77 @@ element Plate : Printer + Utils {
           */
           if (aj as Empty) {        /* we care about empties here instead */
             //bsl.printf("snx %d\n",snx);
-            plateSite(snx);
+            plateSite(snx,true);
             ++kids;
           }
         }
       }
-      else if (a as Self) {
-        //bsl.printf("a self sn(%d)\n",sn);
-        if (isMyKid(sn)) { // My kid?
-          ++kids;          // Yes
-          //bsl.printf("iskid kids(%d)\n",kids);
-          if (a.mTreePhase == cTREEPHASE_UPBOUND) { // Has it found bounds yet?
-            ++donekids;                   // Yes
-            minb = minb.min(a.mMin);      // Update our running bounds
-            maxb = maxb.max(a.mMax);
-            //            bsl.printf("donekids(%d)\n",donekids);
-          }
-        }
-      }
-      else {
-        die(); // No Empty, Content, or Self: Can't continue
-        return true;
-      }
     }
 
-    //bsl.printf("kids %d donekids %d\n",kids,donekids);    
-    if (kids == donekids) {            // No kids or all done?
-      mTreePhase = cTREEPHASE_UPBOUND; // Yes, we're moving on
-      mMin = donekids > 0u ? minb : mLocation; // Set our min
-      mMax = donekids > 0u ? maxb : mLocation; // Set our max
-    }
-    return true;
+    return kids > 0u; // Plated anybody
   }
 
-  Bool processUPBOUND() {
-    B2D newmin, newmax; // Start off invalid
-    if (mSource == 0u) {  // I'm the root -> mMin and mMax are the global bounds
-      B2D objectsize = mMax - mMin; // XXX FENCEPOST CHECK
-      mLocation -= mMin;            // Remap root to zero origin
-      mMin = objectsize;
-      mMax.init(objectsize.mX*3 + 1, objectsize.mY); // Extend in max the printing direction (+x)
-      mTreePhase = cTREEPHASE_DNBOUND; // And move on
-      return true;  // Did work
-    }
-
-    // Non-root
-    SN sn = mSource;
-    Atom & a = ew[sn];
-    if (a as Self) {
-      if (a.mTreePhase == cTREEPHASE_DNBOUND) {
-        mMin = a.mMin;     // Pick up object size from parent
-        mMax = a.mMax;     // Pick up build plate size from parent
-        C2D c = md.getSiteCoord(mSource); // Parent coord rel to us
-        mLocation.fromC2D(a.mLocation.toC2D() - c); // Our new (zero origin) pos CHECK
-        mTreePhase = cTREEPHASE_DNBOUND; // And move on
-      }
-      return true; // Did work, or need to wait
-    }
-
-    die();                  // Parent not one of us?
-    return true;
+  Bool lessEqual(C2D cleft, C2D cright) {
+    return
+      cleft.getX() <= cright.getX() &&
+      cleft.getY() <= cright.getY();
   }
 
-  Bool processDNBOUND()  {
-    ByteStreamLogger bsl;
+  Bool plateBoundingBoxEmptiesWithRed() {
     Unsigned kids = 0;
-    Unsigned donekids = 0;
-    C2D box(mMax.mX+1, mMax.mY+1); // +1 to use C2D.contains(..)
-
+    C2D myloc  = mLocation.toC2D();
+    C2D bpmin = buildPlateMin().toC2D();
+    C2D bpmax = buildPlateMax().toC2D();
+    
     for (SiteIterator si = neighborhood(); si.hasNext();) {
       SN sn = si.next();
       if (sn == 0u) continue;
       C2D c = md.getSiteCoord(sn);
+
+      C2D themloc = myloc + c;
+      Bool inbox = lessEqual(themloc,bpmax) && lessEqual(bpmin,themloc);
+
+      if (!inbox) continue;     // Don't even look outside the box
+
       Atom & a = ew[sn];
 
-      if (a is Empty) {
-        C2D abs = mLocation.toC2D() + c;
-        //bsl.printf("abs (%d,%d)\n",abs.getX(), abs.getY());
-        if (box.contains(abs)) { // This empty on the print plate?
-          // Ensure only empty or plate in Moore ngb around empty
-          for (SiteIterator sj = SiteIterator.instanceof(cMOOREx); sj.hasNext();) {
-            SN snj = sj.next();                // snj relative to sn
-            C2D cj = md.getSiteCoord(snj) + c; // cj relative to ew[0]
-            C2D ngb = mLocation.toC2D()+cj;    // ngb relative to box
-            /*
-            bsl.printf("sn %d snj %d c(%d,%d) cj(%d,%d) mLoc(%d,%d) box(%d,%d) ngb(%d,%d)\n",
-                       sn, snj,
-                       c.getX(), c.getY(),
-                       cj.getX(), cj.getY(),
-                       mLocation.mX, mLocation.mY,
-                       box.getX(), box.getY(),
-                       ngb.getX(), ngb.getY()
-                       );
-            */
-            if (!box.contains(ngb)) continue;  // Skip it if not on plate
-            //du.print("dnb13");
-            if (!ew.isAccessible(cj)) continue; // Find it later if outside ew (possible?)
-            //du.print("dnb14");
-            if (ew[cj] is Empty || ew[cj] is Plate) continue; // That stuff's okay
-            //du.print("dnb15");
-            return die(); // Uh-oh: Ran into something while filling the bounding box
-          }
-          //du.print("dnb16");
-
-          plateSite(sn);         // OK to plate over the empty
-          ++kids;
+      if (a as Plate) {         // Plate in box has to be ours
+        if (!isKin(a,sn)) {
+          miscarry();           // opps
+          return true;
         }
-        continue;
+      } else if (a is Empty) {
+        plateSite(sn,false);
+        ++kids;
       }
-
-      if (a as Self) {
-        if (isMyKid(sn)) { // My kid?
-          ++kids;          // Yes
-          if (a.mTreePhase == cTREEPHASE_UPREADY) { // Has it bottomed out yet?
-            ++donekids;                   // Yes
-          }
-        }
-        continue;
-      }
-
-      if (a as Content) {
-        continue; // No action but okay
-      }
-
-      // Not empty, self, or content
-      die();
-      return true;
     }
 
-    //bsl.printf("DNBOUND kids %d donekids %d\n",kids,donekids);    
-    if (kids == donekids) {            // No kids or all done?
-      mHeadCommander = mLocation == B2D.instanceof(mMin.mX, mMin.mY/2);
-      mTreePhase = cTREEPHASE_UPREADY; // Yes, we're moving on
+    return kids > 0u; // Plated anybody
+  }
+
+  Void plateSite(SN sn,Bool resetBounds) {
+    if (mPhase == cPHASE_INIT ||  // If haven't started yet, or
+        !addChild(sn)) {          // we fail to plate
+      die();                      // that's bad
+      return;
     }
-    return true;
-  }
+    Self & kid = (Self&) ew[sn];
+        
+    C2D c = md.getSiteCoord(sn); 
+    C2D abs = c+mLocation.toC2D();
+    B2D b(abs);
+    if (!b.isValid()) die();
 
-  Void hcOnly() { if (!mHeadCommander) { Fail f; f.fail(); } } 
-
-  Bool rollTruck() {
-    hcOnly();
-    Truck k;
-    k.mRot = mRot; // Set rotation by hand
-    k.mPlateHeight = mMax.mY;
-    k.mOurRow = mLocation.mY;
-    k.mStepsTilDropoff = (B2D.BCoord) (2u*mTruckRolls+1u);
-    UnloadedTrailer ut;
-    ut.mRot = mRot; // Ditto
-    ut.mStepsTilPickup = (B2D.BCoord) (mMin.mX-mTruckRolls-1u);
-    ew[4] = k;
-    ew[12] = ut;
-    ++mTruckRolls;
-    return true;
-  }
-
-  Bool sendInTheCleaner() {
-    hcOnly();
-    Sweeper g;
-    g.mRot = mRot; // Set rotation by hand
-    g.mPlateHeight = (B2D.BCoord) (mMax.mY+2);
-    g.mOurRow = (B2D.BCoord) (mLocation.mY+1);
-    g.mStepsToSweep = (B2D.BCoord)(3*mTruckRolls+1);
-    ew[4] = g;
-    return true;
-  }
-
-  Bool processUPREADY() {
-    if (!mHeadCommander) return false;  // We got nothing to do now
-    for (SiteIterator si = SiteIterator.instanceof(cMOOREx); si.hasNext();) {
-      SN sn = si.next();
-      if (ew[sn] is Truck || ew[sn] is Trailer) return true; // Wait
+    kid.mPhase = (Phase) (mPhase - 1u); // Kid starts on previous phase
+    kid.mRGBState = cRED_STATE;   // And you're red
+    kid.mLocation = b;            // And you are here (in whatever reference prevails)
+    if (resetBounds) {
+      kid.mMin = kid.mMax = kid.mLocation; // For minning and maxing, start with yourself
     }
-    if (mTruckRolls < mMin.mX) 
-      return rollTruck();
-    if (mTruckRolls == mMin.mX)
-      return sendInTheCleaner();
-    return false;
-  }
-
-  virtual Bool update() {
-    if (super.update()) return true;
-    if (processDeath()) return true;
-
-    Bool ret = false;
-    which (mTreePhase) {
-    case cTREEPHASE_DNFLOOD: { ret = processDNFLOOD(); }
-    case cTREEPHASE_UPBOUND: { ret = processUPBOUND(); }
-    case cTREEPHASE_DNBOUND: { ret = processDNBOUND(); }
-    case cTREEPHASE_UPREADY: { ret = processUPREADY(); }
-      otherwise: { }
-    }
-    return ret;
   }
 
   Void behave() {
     if (update()) return; // Check priority
-    
   }
-}
 
+}

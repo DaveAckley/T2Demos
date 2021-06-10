@@ -13,23 +13,26 @@ quark QID(Bits speciesID, Unsigned(5) myTagBits, Unsigned(5) myProgressBits, Uns
   typedef Bits(cQID_TAG_BITS) MyTag;
   MyTag mTag;
 
-  constant Unsigned(5) cQID_DOG_BITS = myProgressBits;
+  constant Unary(5) cQID_DOG_BITS = myProgressBits;
   constant Unsigned cQID_DOG_MAXOF = Unsigned(cQID_DOG_BITS).maxof;
   constant Unsigned cQID_DOG_TRIGGER = triggerLevel;
-  typedef XTimer(cQID_DOG_BITS,cQID_DOG_TRIGGER, 1) MyDog;
+  typedef RXTimer(cQID_DOG_BITS,cQID_DOG_TRIGGER, 1) MyDog;
   MyDog mDog;
 
   Void progress() { mDog.reset(); }
 
   Unsigned boredom() { return mDog.current(); }
 
-  Void setBoredom(Unsigned newb) { mDog.set((MyDog.Counter) newb); }
+  Void setBoredom(Unsigned newb) { mDog.set((RXTimer(cQID_DOG_BITS,cQID_DOG_TRIGGER, 1).Counter) newb); }
 
   Bool isDead() { return mDog.alarm(); }
 
-  Void behave() {
-    if (mDog.countAlarm())
+  Bool update() {
+    if (mDog.countAlarm()) {
       emergencyDeath();
+      return true;
+    }
+    return false;
   }
 
   virtual Bool shareFate(Atom & a)

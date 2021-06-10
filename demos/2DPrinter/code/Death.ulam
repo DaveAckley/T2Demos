@@ -1,0 +1,7 @@
+quark Death {
+  virtual Bool die() ;
+  virtual Bool isDead() ;
+  virtual Bool decompose() ;
+
+}
+

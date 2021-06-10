@@ -4,6 +4,11 @@ quark Parms {
   DebugUtils du;
   MDist md;
   
+  typedef Unary(2) RGBState;
+  constant RGBState cRED_STATE =   0u;
+  constant RGBState cGREEN_STATE = 1u;
+  constant RGBState cBLUE_STATE =  2u;
+
   typedef EventWindow.SiteNum SN;
 
   constant Int cCONTENT_PRIORITY = 1;

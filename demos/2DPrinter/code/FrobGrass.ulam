@@ -1,12 +1,13 @@
+use WatchDog4;
 local typedef EventWindow.SiteNum SiteNum;
-local typedef QID(0xFEEDF00Du, 5, 4, 15) MyQID;
+local typedef WatchDog4 MyDog;
 
 /** 'Intelligent' Grass inspired by FrobWorld growth dynamics.
   \symbol Gf
   \color #3c3
   \radius 2
 */
-element FrobGrass : Content + MyQID {
+element FrobGrass : Content + MyDog + Update {
   typedef Unsigned(3) Distance;
   Distance mRootDistance;
   Bool mDead;
@@ -23,14 +24,12 @@ element FrobGrass : Content + MyQID {
   }
 
   Void behave() {
-    self.Content.behave();
-    self.MyQID.behave();
-    if (self.MyQID.isDead()) return;
     if (update()) return;
   }
 
   Bool update() {
     if (super.update()) return true;
+    if (self.MyDog.update()) return true;
 
     // Scan neighborhood
     FrobGrassState state;
@@ -49,18 +48,28 @@ element FrobGrass : Content + MyQID {
       progress(); 
     } else {
       // Root considers kids
-      if (boredom() >= 10u) {
+      if (boredom() >= 12u) {
         SiteNum sn = state.chosenEmpty();
         if (sn != sn.maxof) {  // Have spot?
           typedef RotateSPOT.WindowRotation Rot;
           Random r;
           Rot rot = (Rot) r.between(Rot.minof, Rot.maxof);
-          which (rot) {
-            case 0u: { ew[sn] = NorthPlateGen.instanceof; }
-            case 1u: { ew[sn] = EastPlateGen.instanceof; }
-            case 2u: { ew[sn] = SouthPlateGen.instanceof; }
-            case 3u: { ew[sn] = WestPlateGen.instanceof; }
-          }
+          DebugUtils du;
+          du.print("LAKIMHEER");
+          du.printContext();
+          du.print(sn);
+          du.print(ew.getSymmetry());
+          Plate p;
+          p.setWindowRotation(0u/*rot*/); // NORMAL ROT FOR DEBUG
+          p.mParentSN = 0u;             // You are the root!
+          p.mLocation.init(0,0); // And (at least for now) the center!
+          p.mMin = p.mMax = p.mLocation;
+          du.print("PLAKCIN");
+          du.print(rot);
+          du.print(sn);
+          du.print(ew[sn]);
+          ew[sn] = p;
+          du.print(ew[sn]);
           progress(); // We tried
         }
       }
@@ -135,8 +144,7 @@ transient FrobGrassState : SiteVisitor {
       if (a is Empty) ws.categorize(sn, mEmptyCat);
       else if (a as FrobGrass) {
         ws.categorize(sn, mGrassCat);
-        if (a.getMyTag() == mCenterGrass.getMyTag())
-          ws.categorize(sn, mRootDCat, FrobGrass.Distance.maxof - a.mRootDistance);
+        ws.categorize(sn, mRootDCat, FrobGrass.Distance.maxof - a.mRootDistance);
       }
     }
   }

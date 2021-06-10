@@ -7,27 +7,15 @@
 element S {
   Void behave() {
     EventWindow ew;
+    Random random;
     FrobGrass fg;
-    fg.setBoredom(9u);
+    EventWindow.Symmetry sym = (EventWindow.Symmetry) random.between(0u,3u);
+    ew.changeSymmetry(sym);
+    fg.setBoredom(10u);
     ew[0] = fg;
     fg.progress();
     fg.mRootDistance++;
     ew[1] = fg;
     ew[4] = fg;
-
-    /*
-    Block b;
-    RotateSPOT.WindowRotation wr = b.setRandomWindowRotation();
-    //RotateSPOT.WindowRotation wr = b.getWindowRotation();
-    ew[0] = b;
-    ew[2] = b;
-    ew[5] = b;
-    ew[33] = b;
-    Plate p;
-    p.setWindowRotation(wr);
-    p.mSource = 0u;         // You are the root!
-    p.mLocation.init(0,0);  // And for now the center!
-    ew[1] = p;
-    */
   }
 }

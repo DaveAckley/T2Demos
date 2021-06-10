@@ -1,18 +1,26 @@
 quark Printer : PrintBase + SPOTStageBits(2u) {
   virtual Int priority() { return cPRINTER_PRIORITY; }
-  virtual Bool die() ;    // However you do it, and return true when done
-  virtual Bool isDead() ; // However you tell
+  Bool mMiscarried;
 
-  Bool processDeath() {
-    if (!isDead()) return false;
+  Bool miscarry() { return mMiscarried = true; }        // Take out just Printer materials
+  Bool isMiscarried() { return mMiscarried; }
+
+  Bool processMiscarry() {
+    if (!isMiscarried()) return false;
     for (SiteIterator si = neighborhood(); si.hasNext();) {
       SN sn = si.next();
       C2D c = md.getSiteCoord(sn);
       Atom & a = ew[sn];
-      if (a as Self) a.die();
+      if (a as Self) a.miscarry();
     }
     ew[0] = Empty.instanceof;
     return true;
+  }
+
+  Bool update() {
+    if (super.update()) return true;
+    if (processMiscarry()) return true;
+    return false;
   }
 
 }

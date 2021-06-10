@@ -24,7 +24,7 @@ quark RotateSPOT : SPOT {
 
   Void setWindowRotation(WindowRotation wr) { 
     mRot = wr; 
-    applyCurrentWindowRotation();
+    //NO! We have no idea who's rotation is getting set here or why!    applyCurrentWindowRotation();
   }
 
   Void applyCurrentWindowRotation() {

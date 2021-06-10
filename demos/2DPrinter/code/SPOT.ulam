@@ -36,7 +36,7 @@ quark SPOTStageBits(Unsigned(5) bits) : SPOTStage {
     \author Dave Ackley
     \license GPL3
  */
-quark SPOT + SPOTStage {
+quark SPOT : SPOTStage + Update {
   typedef EventWindow.SiteNum SN;
 
   /** The priority of this SPOT */
@@ -69,6 +69,7 @@ quark SPOT + SPOTStage {
   virtual Bool reportOut(Atom & ar) ;
   
   virtual Bool update() {
+    
     ByteStreamLogger log;
     EventWindow ew;
     
