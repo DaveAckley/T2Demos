@@ -1,0 +1,83 @@
+/** Plate Deployer.  Create a plate then decay into something else.
+    \symbol PD
+    \color #fa5
+ */
+element PlateDeployer : B2DPlate2 + TransportOperator {
+  @Override
+  Bool notify(Bool skip) { return false; }
+
+  typedef AtomUtils.Type ElementType;
+  typedef EventWindow.SiteNum SN;
+  typedef Unsigned(5) Tag;
+  ElementType mPlateType; //< Specific type of B2DPlate to deploy
+  SN mDeploySN;           //< Where to deploy it
+  B2D mSize;              //< Size of that plate
+  B2D mPos;               //< Position of created plate
+  Bool mDecay;            //< true to decay after successful deployment
+  Tag mTag;
+  Self(Unsigned ptype, SN deploysn, B2D siz, B2D pos, Bool decay, Tag tag) {
+    setSizeOfPlate(C2D.instanceof(1,1));
+    setPositionOnPlate(C2D.instanceof(0,0));
+    mPlateType = (ElementType) ptype;
+    mDeploySN = deploysn;
+    mSize = siz;
+    mPos = pos;
+    mDecay = decay;
+    mTag = tag;
+  }
+  Void die(String msg) {
+    DebugUtils du;
+    du.print(msg);
+    Fail f;
+    f.fail("PlateDeployment failed");
+  }
+  Bool isLegalElementType(ElementType type) {
+    AtomUtils au;
+    if (au.getEmptyType() == type) return true;  
+    Atom a = au.new(type);
+    return !(a is Empty);
+  }
+
+  Void behave() {
+    DebugUtils du;
+    du.print("PDBV 10");
+    if (mPlateType == 0u) return die("Nothing to deploy");
+    du.print("PDBV 11");
+    EventWindow ew;
+    if (!ew.isAccessible(mDeploySN)) return die("Inaccessible");
+    du.print("PDBV 12");
+    Bool deployOnSelf = mDeploySN == 0u;
+    if (!isLegalElementType(mPlateType)) return die("Illegal plate type");
+    du.print("PDBV 13");
+
+    C2D peerewc;
+    Bool isleft;
+    if (!findStationEWC(peerewc,isleft)) return;
+    du.print("PDBV 14");
+
+    TransportPlate & tp = (TransportPlate&) ew[peerewc];
+    SingleQuote.BufferStatus bs;
+    SN sn1, sn2;
+    if (!tp.getBufferStatus(bs,sn1,sn2)) return;
+    du.print("PDBV 15");
+    if (bs != SingleQuote.cBUFFER_EMPTY) return;
+    du.print("PDBV 16");
+
+    Atom receipt = self.atomof;
+    if (!tp.send(!isleft,receipt)) return;
+    du.print("PDBV 17");
+
+    AtomUtils au;
+    Atom a = au.new(mPlateType);
+    if (a as B2DPlate) {
+      a.setSizeOfPlate(mSize.toC2D());
+      a.setPositionOnPlate(mPos.toC2D());
+    }
+    
+
+    ew[mDeploySN] = a;
+    if (!deployOnSelf && mDecay)
+      ew[0] = Empty.instanceof;
+  }
+}
+

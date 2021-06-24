@@ -1,0 +1,418 @@
+/** ColorPlate
+    \symbol CP
+    \color #666
+ */
+element ColorPlate : B2DStreamPlate + CategorizedSite + B2DStreamPayload {
+
+  typedef EventWindow.SiteNum SN;
+  DebugUtils du;
+
+  //// B2DPlate API
+  @Override
+  virtual Atom copyOf() { 
+    Self s = self;
+    if (s.hasPayload()) { // And we don't dupe communications!
+      RawBits dump;
+      s.storeTo(dump);
+      s.mBufferStatus = QStream12.cBUFFER_EMPTY;
+  }
+    return s.atomof;
+  }
+
+  typedef Unsigned(6) Color6;
+  typedef Color6 RGB6[3];
+  RGB6 mColor = { 50u, 50u, 10u };
+
+  //// Plate API
+
+  //// UrSelf API
+  @Override
+  ARGB getColor(Unsigned selector) {
+    ColorUtils cu;
+
+    if (self.hasPayload()) {
+      return cu.color((Unsigned) (0xff0000|self.peekAtPayload()));
+    }
+
+    ARGB ret = cu.color((ASCII) (mColor[0]<<2u),
+                        (ASCII) (mColor[1]<<2u),
+                        (ASCII) (mColor[2]<<2u));
+
+    ret = cu.between(cu.color(0x808080),ret,25);
+    return ret;
+  }
+
+  Bool die() {
+    du.printContext();
+    du.print("DIIDDIDIEEEE");
+    return true;
+  }
+
+  Bool tryInsertAtom(Bool front, Atom atom) {
+    EventWindow ew;
+    SN sn1 = plateCoordToEWSN(C2D.instanceof(2, front ? 1 : 3));
+    if (sn1 == sn1.maxof) return false;
+    C2D ewc = ew.getCoord(sn1);
+    QuotationManager qm;
+    return qm.quoteAtomIntoEW(ewc, atom, self);
+  }
+
+  Bool tryRemoveAtom(Bool front, Atom & atom) {
+    if (tryRemoveAtomAt(front,atom,2)) return true;
+    if (tryRemoveAtomAt(front,atom,3)) return true;
+    return false;
+  }
+
+  Bool tryRemoveAtomAt(Bool front, Atom & atom, Int xcol) {
+    EventWindow ew;
+    SN sn1 = plateCoordToEWSN(C2D.instanceof((C2D.Coord) xcol, front ? 1 : 3));
+    if (sn1 == sn1.maxof) return false;
+    C2D ewc = ew.getCoord(sn1);
+    QuotationManager qm;
+    return qm.dequoteAtomFromEW(ewc, atom, true);
+  }
+
+  /** Check if site at plate (columnx,rowy) is accessible via the
+   * current event window.  Note this routine can be called when self
+   * is not located at ew[0], but self must be in the ew somewhere,
+   * and of course ew accessibility doesn't change.
+   */
+  C2D getEWCoordIfItemAccessible(Int columnX, Int rowy) {
+    EventWindow ew;
+    EventWindow.SiteNum sn = ew.getSiteNumber(self); // Find ourselves
+    if (sn != sn.maxof) {
+      C2D sat = ew.getCoord(sn); // Us as coord
+      C2D siz = sizeOfPlate();
+      if (columnX >= 0 && columnX < siz.getX() && siz.getY() > 3) {
+        C2D pos = positionOnPlate();
+        C2D pci((C2D.Coord) columnX,(C2D.Coord) rowy);
+        C2D ewci = pci - pos + sat;
+        if (ew.isAccessible(ewci)) {
+          return ewci;
+        }
+      } else {
+        //        du.print("gewD15");
+        //        du.print(columnX);
+        //        du.print(siz);
+        //        du.print(sat);
+      }
+    }
+    return C2D.instanceof(100,100); // Not in ew
+  }
+
+  Bool isOurBorderOrControlZoneOrAnItem(C2D ewc) {
+    return 
+      isOurBorder(ewc) || isOurControlZone(ewc) || isAnItem(ewc);
+  }
+
+  Bool isOurBorder(C2D ewc) {
+    EventWindow ew;
+    if (!ew.isAccessible(ewc)) return false;
+    ByteStreamLogger bsl;
+    Atom & a = ew[ewc];
+//    bsl.printf("isIRFBOB10(%d,%d)\n",ewc.getX(),ewc.getY());
+    if (a as Plate) {
+      EventWindow.SiteNum ssn = ew.getSiteNumber(self);
+      if (ssn == ssn.maxof) { Fail f; f.fail("NOT IN EW ISANT"); return false; }
+      C2D selfc = ew.getCoord(ssn);     // Where self is in ew
+
+      PlateUtils pu;
+      PlateUtils.PlateRelation rel = pu.relationTo(self, selfc, a, ewc);
+      if (rel == PlateUtils.cSAME_PLATE_AS) {
+        if (a.isPlateBorder()) return true;
+      }
+    }
+    return false;    // Didn't find our border
+  }
+
+  Bool isOurControlZone(C2D givenewc) {
+    EventWindow ew;
+    EventWindow.SiteNum ssn = ew.getSiteNumber(self);
+    if (ssn == ssn.maxof) { Fail f; f.fail("NOT IN EW ISANT"); return false; }
+    C2D selfewc = ew.getCoord(ssn);     // Where self is in ew
+    C2D selfplatepos = positionOnPlate();  // Where self is in its plate
+    C2D selfplatesiz = sizeOfPlate();  // Size of self's plate
+    
+    C2D ewcoff = givenewc - selfewc; // Where given ewc is relative to us
+    C2D givenplatepos = selfplatepos + ewcoff; // Absolute plate pos of given ewc
+    return                                   
+      givenplatepos.getX() == 1 &&    // Control zone is first column 
+      givenplatepos.getY() > 0 &&     // and not on either 
+      givenplatepos.getY() < selfplatesiz.getY() - 1; // border
+  }
+
+  Bool isAnItemSN(SN sn) {
+    EventWindow ew;
+    if (!ew.isAccessible(sn)) return false;
+    return isAnItem(ew.getCoord(sn));
+  }
+
+  Bool isAnItem(C2D ewc) {
+    EventWindow ew;
+    if (!ew.isAccessible(ewc)) return false;
+    //    du.printContext();
+    //    du.print("iSANT10");
+    //    du.print(ewc);
+    Atom & a = ew[ewc];
+    if (a as Plate) { // XXX as AtomPlate ?
+      EventWindow.SiteNum ssn = ew.getSiteNumber(self);
+      if (ssn == ssn.maxof) { Fail f; f.fail("NOT IN EW ISANT"); return false; }
+      C2D selfc = ew.getCoord(ssn);     // Where self is in ew
+      PlateUtils pu;
+      PlateUtils.PlateRelation rel = pu.relationTo(self, selfc, a, ewc);
+    //      du.print((Unsigned) rel);
+      if (rel == PlateUtils.cCONTAINS_PLATE && a.sizeOfPlate().getX() == 1)
+        return true; // Found width 1 contained plate (== 'item')
+    //      du.print("iSANT12");
+    }
+    return false;    // Didn't find an item
+  }
+
+  Bool isNonControlZoneEmptyOrField(SN sn) {
+    if (sn == sn.maxof) return false;
+    MDist md;
+    return isNonControlZoneEmptyOrField(md.getSiteCoord(sn));
+  }
+
+  Bool isNonControlZoneEmptyOrField(C2D ewc) {
+    if (isOurControlZone(ewc)) return false;
+    EventWindow ew;
+    EventWindow.SiteNum sn = ew.getSiteNumber(self); // Find ourselves
+    if (sn == sn.maxof) { Fail f; f.fail("self not in EW"); return false; }
+    C2D sat = ew.getCoord(sn); // Us as coord
+
+//    du.printContext();
+//    du.print("iEOF10");
+    if (!ew.isAccessible(ewc)) return false;
+//    du.print("iEOF11");
+//    du.print(sat);
+    Atom & a = ew[ewc];
+    if (a is Empty) return true;
+//    du.print("iEOF12");
+    if (a as Plate) {
+      PlateUtils pu;
+      PlateUtils.PlateRelation rel = pu.relationTo(self, sat, a, ewc);
+//      du.print("iEOF13");
+//      du.print((Unsigned) rel);
+
+      if (rel == PlateUtils.cSAME_PLATE_AS && !a.isPlateBorder()) {
+        return true; // Found TestStack15 field
+      }
+//      du.print("iEOF14");
+    }
+    return false;  // Not empty or field
+  }
+
+  Bool checkLocalActions() {
+    return false;
+  }
+
+  Void behave() {
+    if (mustBlockOrDie()) {
+      return;
+    }
+    checkGrowthAndHealing();
+    updateStream();
+    if (checkLocalActions()) return;
+  }
+
+}
+
+
+
+/** Seed ColorPlate
+    \symbol SC
+ */
+element SeedColorPlate {
+  Void behave() {
+    EventWindow ew;
+    ColorPlate ad;
+    Random random;
+    Int w = 12, h = 6;
+    ad.mSizeOfPlate = B2D.instanceof(w,h);
+    ad.mPosOnPlate = B2D.instanceof(0,0);
+    for (Unsigned i = 0; i < ad.mColor.lengthof; ++i)
+      ad.mColor[i] = (ColorPlate.Color6) random.between(ad.mColor[i].minof,ad.mColor[i].maxof);
+
+    ew[0] = ad;
+  }
+}
+
+
+/** Super Seed ColorPlate
+    \symbol CS
+    \color #ff0
+ */
+element SuperSeedColorPlate {
+  typedef EventWindow.SiteNum SN;
+  Bool mSeeded;
+  Bool mBreeded;
+  Bool mSucceeded;
+  Bool mPleaded;
+  Void behave() {
+    EventWindow ew;
+    Random random;
+    for (EventWindow.SiteNum i = 1u; i < 41u; ++i) {
+      if (ew[i] is Tecton) return; // Brute force deterrence
+    }
+    if (!mSeeded) {
+      Unsigned ecount = 0;
+      EventWindow.SiteNum epick;
+      Bool alle = true;
+
+      for (EventWindow.SiteNum i = 1u; i < 41u; ++i) {
+        if (ew[i] is Tecton) return; // Brute force deterrence
+        if (ew.isAccessible(i) && ew[i] is Empty) {
+          if (i <= 4u && random.oneIn(++ecount))
+            epick = i;
+        } else alle = false;
+      }
+      if (!alle) {
+        if (random.oddsOf(999,1000) && ecount > 0u) { // .1% random death if crowded
+          ew[epick] = ew[0];
+        }
+        ew[0] = Empty.instanceof;
+        return;
+      }
+
+      PlateOperator po;
+      po.mDesiredPlateSize = B2D.instanceof(30,30);
+      ew[2] = po.atomof;
+
+      ColorPlate ad;
+      ad.mSizeOfPlate = B2D.instanceof(3,4);
+      for (Unsigned i = 0; i < ad.mColor.lengthof; ++i)
+        ad.mColor[i] = (ColorPlate.Color6) random.between(ad.mColor[i].minof,ad.mColor[i].maxof);
+
+      ad.mPosOnPlate = B2D.instanceof(0,0);
+
+      ew[15] = ad.atomof;
+
+      // PlateOperator needs to see plate(0,0) and plate(0,1)
+      ad.mPosOnPlate = B2D.instanceof(0,1);
+      ew[5] = ad.atomof;
+
+      mSeeded = true;
+    } else if (!mBreeded) {
+      Atom & a = ew[15];
+      Self me = self;
+      if (a as ColorPlate) {
+        // Has it grown enough to pop a nose?
+        if (a.mSizeOfPlate.mY >= 7 && a.mSizeOfPlate.mX >= 7) {
+          ColorPlate ad;
+          ad.mSizeOfPlate = B2D.instanceof(3,4);
+          for (Unsigned i = 0; i < ad.mColor.lengthof; ++i)
+            ad.mColor[i] = (ColorPlate.Color6) random.between(ad.mColor[i].minof,ad.mColor[i].maxof);
+          for (C2D.Coord x = 0; x < 3; ++x) {
+            for (C2D.Coord y = 0; y < 4; ++y) {
+              C2D ewc(x,y);
+              if (ew.isAccessible(ewc)) {
+                ad.mPosOnPlate.fromC2D(ewc);
+                ew[ewc] = ad.atomof;
+              }
+            }
+          }
+          SubplateOperator so;
+          so.mRelativeSize.init(1,2);
+          so.mRelativePos.init(6,7);
+          ew[8] = so.atomof;
+          me.mBreeded = true;
+          ew[18] = me;
+        }
+      }
+    } else if (!mSucceeded) {
+      Atom & a = ew[9];
+      Self me = self;
+      if (a as ColorPlate) {
+        if (a.mSizeOfPlate.mY >= 10 && a.mSizeOfPlate.mX >= 12) {
+          ColorPlate ad;
+          ad.mSizeOfPlate = B2D.instanceof(3,3);
+          for (Unsigned i = 0; i < ad.mColor.lengthof; ++i)
+            ad.mColor[i] = (ColorPlate.Color6) random.between(ad.mColor[i].minof,ad.mColor[i].maxof);
+          for (C2D.Coord x = 0; x < 3; ++x) {
+            for (C2D.Coord y = 0; y < 3; ++y) {
+              C2D pc(x,y);
+              C2D ewc((C2D.Coord) (x+2),y);
+              if (ew.isAccessible(ewc)) {
+                ad.mPosOnPlate.fromC2D(pc);
+                ew[ewc] = ad.atomof;
+              }
+            }
+          }
+          SubplateOperator so;
+          so.mRelativeSize.init(1,2);
+          so.mRelativePos.init(10,3);
+          ew[36] = so.atomof;
+          Atom & usso = ew[2];
+          if (usso as SubplateOperator) {
+            usso.mRelativePos.init(2,8);
+            self.mSucceeded = true;
+          }
+        }      
+      }
+    } else if (!mPleaded) {
+      Atom & a = ew[9];
+      Self me = self;
+      if (a as ColorPlate) {
+        if (a.mSizeOfPlate.mY >= 14 && a.mSizeOfPlate.mX >= 14) {
+          ColorPlate ad;
+          ad.mSizeOfPlate = B2D.instanceof(3,3);
+          for (Unsigned i = 0; i < ad.mColor.lengthof; ++i)
+            ad.mColor[i] = (ColorPlate.Color6) random.between(ad.mColor[i].minof,ad.mColor[i].maxof);
+          for (C2D.Coord x = 0; x < 3; ++x) {
+            for (C2D.Coord y = 0; y < 3; ++y) {
+              C2D pc(x,y);
+              C2D ewc((C2D.Coord) (x+2),y);
+              if (ew.isAccessible(ewc)) {
+                ad.mPosOnPlate.fromC2D(pc);
+                ew[ewc] = ad.atomof;
+              }
+            }
+          }
+          SubplateOperator so;
+          so.mRelativeSize.init(12,1);
+          so.mRelativePos.init(7,13);
+          ew[36] = so.atomof;
+          Atom & usso = ew[2];
+          if (usso as SubplateOperator) {
+            usso.mRelativePos.init(3,3);
+            self.mPleaded = true;
+          }
+        }      
+      }
+    } else if (random.oneIn(2000)) {
+      SN start = (SN) random.between(9,40);
+      if (ew[start] is ColorPlate) {
+        JumpSeeder js;
+        js.mNextSN = start;
+        ew[start] = js.atomof;
+      }
+    }
+  }
+}
+
+/** Run and dump a CS
+    \symbol JS
+    \color #f33
+*/
+element JumpSeeder {
+  typedef EventWindow.SiteNum SN;
+  SN mNextSN;
+  Void behave() {
+    EventWindow ew;
+    Random random;
+    Bool alle = true;
+    for (EventWindow.SiteNum i = 1u; i < 41u; ++i) {
+      if (ew[i] is Tecton) return; // Brute force deterrence
+      if (!(ew[i] is Empty)) alle = false;
+    }
+    if (alle) {
+      ew[0] = SuperSeedColorPlate.instanceof;
+    } else if (!ew.isAccessible(mNextSN) || random.oneIn(500)) {
+      ew[0] = Empty.instanceof;
+    } else {
+      ew[mNextSN] = ew[0];
+      ew[0] = Empty.instanceof;
+    }
+  }
+}

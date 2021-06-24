@@ -35,6 +35,11 @@ element AtomDeque : B2DStreamPlate + CategorizedSite + B2DStreamPayload {
 
 
     ARGB ret = cu.color(0xff444433);
+    C2D siz = self.sizeOfPlate();
+    typedef Unsigned(10) Area;
+    Area area = (Area) (siz.getX() * siz.getY());
+    ret = cu.between(cu.color(0xff808085),ret,100u*area/Area.maxof);
+
     if (mEmptyEast) {
       ret = cu.brighter(ret);
     }
@@ -647,7 +652,7 @@ element SuperSeedAtomDeque {
       Bool alle = true;
 
       for (EventWindow.SiteNum i = 1u; i < 41u; ++i) {
-        if (ew[i] is Empty) {
+        if (ew.isAccessible(i) && ew[i] is Empty) {
           if (i <= 4u && random.oneIn(++ecount))
             epick = i;
         } else alle = false;

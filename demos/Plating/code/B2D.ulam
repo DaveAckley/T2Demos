@@ -103,4 +103,14 @@ quark B2DT(Unary(8) cBITS_PER_COORD) {
   }
 }
 
-quark B2D : B2DT(7) { }
+quark B2D : B2DT(7) {
+  constant BCoord cMAXVAL = Super.cMAXVAL;
+  constant BCoord cMINVAL = Super.cMINVAL;
+  constant Super cMAX = { .mX = cMAXVAL, .mY = cMAXVAL };
+}
+
+quark B2D4 : B2DT(4) {
+  constant BCoord cMAXVAL = Super.cMAXVAL;
+  constant BCoord cMINVAL = Super.cMINVAL;
+  constant Super cMAX = { .mX = cMAXVAL, .mY = cMAXVAL };
+}

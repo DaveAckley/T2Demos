@@ -1,4 +1,11 @@
 quark PlateUtils {
+  constant C2D c0x0 = { .x = 0, .y = 0 };
+  constant C2D c0x1 = { .x = 0, .y = 1 };
+  constant C2D c1x1 = { .x = 1, .y = 1 };
+  constant C2D c1x2 = { .x = 1, .y = 2 };
+  constant C2D c2x2 = { .x = 2, .y = 2 };
+  constant C2D c3x3 = { .x = 3, .y = 3 };
+
   typedef Unsigned(2) PlateDir;
   constant PlateDir cPLATE_GOES_W = 0u;
   constant PlateDir cPLATE_GOES_N = 1u;
@@ -64,7 +71,9 @@ quark PlateUtils {
     return false;
   }
 
-  C2D stepInDir(PlateDir pd) {
+  C2D stepInDir(PlateDir pd) { return stepInDir(pd, false); }
+  
+  C2D stepInDir(PlateDir pd, Bool toshrink) {
     C2D ret;
     which (pd) {
     case cPLATE_GOES_W: { ret.set(-1,0); }
@@ -72,6 +81,7 @@ quark PlateUtils {
     case cPLATE_GOES_E: { ret.set(1,0); }
     case cPLATE_GOES_S: { ret.set(0,1); }
     }
+    if (toshrink) ret = ret * -1;
     return ret;
   }
 
@@ -147,9 +157,11 @@ quark PlateUtils {
     DebugUtils du;
     du.printContext();
     du.print("PRREL2 OVRLPS");
-    du.print(tbl);
+    C2D sl = pl.sizeOfPlate(); du.print(sl);
+    C2D xl = pl.positionOnPlate(); du.print(xl);
     du.print(offsetl);
-    du.print(tbr);
+    C2D sr = pr.sizeOfPlate(); du.print(sr);
+    C2D xr = pr.positionOnPlate(); du.print(xr);
     du.print(offsetr);
     return cOVERLAPS_PLATE;
   }
@@ -193,12 +205,21 @@ quark PlateUtils {
     C2D myewc = us.getOurEWCoord();
     C2D sc = md.getSiteCoord(sn);
     C2D c = sc + mypos; 
+    //    du.print("CATEGIFIT 10");
+    //        du.print(mysize);
+    //        du.print(mypos);
+    //        du.print(myewc);
+    //        du.print(sc);
+    //        du.print(c);
     if (!mysize.contains(c)) return pu.cSC_UNWANTED;   // Not in our bbox
+    //        du.print("CATEGIFIT 11");
     if (ew.isAccessible(sn)) {
+    //          du.print("CATEGIFIT 12");
       theirpos = c;                                // Return plate pos of sn
       Atom & a = ew[sn];
       if (a is Empty) return pu.cSC_CAN_GROW_INTO; // Is Empty
       if (a as Plate) {
+    //            du.print("CATEGIFIT 13");
         PlateUtils.PlateRelation rel = pu.relationTo(us, myewc, a, sc);
         if (rel == pu.cSAME_PLATE_AS)
           return pu.cSC_ALREADY_OURS;             // Is already our plate
@@ -210,6 +231,28 @@ quark PlateUtils {
       }
     }
     return pu.cSC_WANT_NOT_GOT; // Inaccessible or blocked
+  }
+
+  C2D hadamard(C2D a, C2D b) { //< Component-wise multiplication
+    return C2D.instanceof((C2D.Coord) (a.getX()*b.getX()),
+                          (C2D.Coord) (a.getY()*b.getY()));
+  }
+  C2D hadamardiv(C2D a, C2D b) { //< Component-wise division
+    return C2D.instanceof((C2D.Coord) (a.getX()/b.getX()),
+                          (C2D.Coord) (a.getY()/b.getY()));
+  }
+
+  //// Relative size and positions
+  C2D relativeToAbsolute(C2D amount, B2D4 relative) {
+    return (hadamard(amount, relative.toC2D())+C2D.instanceof(B2D4.cMAXVAL/2,B2D4.cMAXVAL/2)) / ((C2D.Coord) B2D4.cMAXVAL);
+  }
+
+  B2D4 absoluteToRelative(C2D size, C2D pos) {
+    size = size.max(c1x1);         // size now (>0,>0)
+    pos = pos.max(c0x0).min(size); // pos now (0..sx,0..sy)
+    C2D cmax((C2D.Coord) B2D4.cMAXVAL,(C2D.Coord) B2D4.cMAXVAL);
+    B2D4 ret(hadamardiv(hadamard(pos,cmax)+size/2, size));
+    return ret;
   }
 
 }

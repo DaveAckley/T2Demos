@@ -1,4 +1,4 @@
-{184}  -*- text -*-
+{187}  -*- text -*-
 [0:
 
 Sat May 15 05:50:17 2021 OK:
@@ -2192,8 +2192,58 @@ codon:
 
 Thu Jun 10 14:22:11 2021 We're going to need a way to generate the
 initial code string.  How much help can we get from culam there?
-Initialized constant classes?  Constant class arrays?
+Initialized constant classes?  Constant class arrays?[184:
+
+Thu Jun 10 14:55:52 2021 Ooh this appears to work:
+
+    quark Foo {
+      Unsigned(3) mDM1;
+      Bool mDM2;
+    }
+
+    quark Code {
+      constant Foo mOps[2] =
+        { { .mDM1 = 3u, .mDM2 = true },
+          { .mDM1 = 1u, .mDM2 = false } };
+    }
+
+It's still like where does the code come from, though??  If we have to
+start from a single atom of element S, we can't have the initial code
+just lying around in the universe.  So we have to have a 'code seed'
+that squirts out the initial code that's already represented in the
+code base.
+
+So WTF do we need to copy the code, when we can just squeeze out
+another copy via S any time we want to?
+
+Because the code is going to get modified by experience.  Somehow.
+And we'll want to copy the modified code, not just pop out a new
+primordial replicator.
+
+[185:
+
+Thu Jun 10 15:06:22 2021 That doesn't have to mean evolution in the
+full-blown sense.  It could just be 'methylation'.  Or it could be
+Lamarckian.
+
+And hmm, isn't Darwin vs Lamarck, in principle, 'just' arguing about
+what constitutes the 'germ line'.
+
+If some 'acquired characteristics' happen to be in the germ line,
+you're suddenly Darwinian again.
+
+:185]
+:184]
 
 :183]
 
 :182]
+[186:
+
+Fri Jun 11 12:03:29 2021 Actually, I think it's time to move on to
+another notes file, to engage more vigorously with the whole 'code'
+line of development.
+
+Will stay here in the Plating demo, though, I think.
+
+:186]

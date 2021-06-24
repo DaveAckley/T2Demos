@@ -1,42 +1,89 @@
 transient QuotationManager {
   EventWindow ew;
   typedef EventWindow.SiteNum SN;
+  /*
   constant C2D c0x0 = { .x = 0, .y = 0 };
   constant C2D c0x1 = { .x = 0, .y = 1 };
   constant C2D c1x2 = { .x = 1, .y = 2 };
+  */
   Bool quoteAtomIntoEW(C2D ewc1, Atom atom, Plate & intoPlate) {
     DebugUtils du;
-    if (!intoPlate.isEmptyOrField(ewc1)) return false;
+    if (!intoPlate.isEmptyOrPlate(ewc1)) return false;
 
-    C2D ewc2 = ewc1+c0x1;
-    if (!intoPlate.isEmptyOrField(ewc2)) return false;
+    C2D ewc2 = ewc1+PlateUtils.c0x1;
+    if (!intoPlate.isEmptyOrPlate(ewc2)) return false;
 
-    SingleQuote sq;
-    sq.setSizeOfPlate(c1x2);
-    sq.setPositionOnPlate(c0x0);
-    ew[ewc1] = sq;
-    sq.setPositionOnPlate(c0x1);
-    ew[ewc2] = sq;
+    return quoteAtomIntoAtoms(atom, ew[ewc1], ew[ewc2]);
+  }
 
-    SingleQuote & sqr = (SingleQuote&) ew[ewc1];
-    return sqr.insertAtomIntoPlate(atom);
+  Void initAtomsToSQPair(Atom& dest1, Atom& dest2) {
+    SingleQuote sq1;
+    sq1.setSizeOfPlate(PlateUtils.c1x2);
+    sq1.setPositionOnPlate(PlateUtils.c0x0);
+    dest1 = sq1;
+
+    SingleQuote sq2;
+    sq2.setSizeOfPlate(PlateUtils.c1x2);
+    sq2.setPositionOnPlate(PlateUtils.c0x1);
+    dest2 = sq2;
+  }
+
+  Bool quoteAtomIntoAtoms(Atom source, Atom & dest1, Atom & dest2) {
+    SingleQuote sq1;
+    sq1.setSizeOfPlate(PlateUtils.c1x2);
+    sq1.setPositionOnPlate(PlateUtils.c0x0);
+
+    SingleQuote sq2;
+    sq2.setSizeOfPlate(PlateUtils.c1x2);
+    sq2.setPositionOnPlate(PlateUtils.c0x1);
+
+    if (!sq1.writeAtomIntoSQs(source,sq2)) return false;
+
+    dest1 = sq1.atomof;
+    dest2 = sq2.atomof;
+    return true;
+  }
+
+  Bool isDequotableFromEW(C2D ewc) {
+    SN sn1 = ew.getSiteNumber(ewc);
+    SN sn2 = ew.getSiteNumber(ewc+PlateUtils.c0x1);
+    if (!ew.isAccessible(sn1) || !ew.isAccessible(sn2))
+      return false;
+    return isDequotableFromAtoms(ew[sn1], ew[sn2]);
+  }
+
+  Bool isDequotableFromAtoms(Atom& a1, Atom& a2) {
+    if (a1 as SingleQuote) {
+      if (a1.positionOnPlate() == PlateUtils.c0x0) {
+        if (a2 as SingleQuote) {
+          if (a2.positionOnPlate() == PlateUtils.c0x1)
+            return true;
+        }
+      }
+    }
+    return false;
   }
 
   Bool dequoteAtomFromEW(C2D ewc, Atom & atom, Bool deleteIt) {
+    if (!isDequotableFromEW(ewc)) return false;
     SN sn1 = ew.getSiteNumber(ewc);
-    SN sn2 = ew.getSiteNumber(ewc+c0x1);
-    if (!ew.isAccessible(sn1) || !ew.isAccessible(sn2))
-      return false;
-    if (!(ew[sn1] is SingleQuote) || !(ew[sn2] is SingleQuote))
-      return false;
-    
-    SingleQuote & sqr = (SingleQuote&) ew[sn1];
-    if (!sqr.removeAtomFromPlate(atom)) return false;
+    SN sn2 = ew.getSiteNumber(ewc+PlateUtils.c0x1);
+    if (!dequoteAtomFromAtoms(atom, ew[sn1], ew[sn2])) return false;
     if (deleteIt) {
       ew[sn1] = Empty.instanceof;
       ew[sn2] = Empty.instanceof;
     }
     return true;
+  }
+
+  Bool dequoteAtomFromAtoms(Atom& dest, Atom& a1, Atom& a2) {
+    if (a1 as SingleQuote) {
+      if (a2 as SingleQuote) {
+        if (a1.readAtomFromSQs(a1.getNonemptyMask(), dest,a2,true))
+          return true;
+      }
+    }
+    return false;
   }
 }
 
@@ -44,9 +91,35 @@ transient QuotationManager {
     \symbol SQ
     \color #6a6
 */
-element SingleQuote : B2DPlate2 + CategorizedSite + Payload {
-  typedef B2DTPlate(2u) B2DPlate2;
+element SingleQuote : B2DPlate2 + CategorizedSite {
   typedef EventWindow.SiteNum SN;
+
+  typedef Unsigned(2) BufferStatus;
+  constant BufferStatus cBUFFER_EMPTY = 0u;      //< mPacketBuffer is empty
+  constant BufferStatus cLEFTBOUND_PACKET = 1u;  //< mPacketBuffer contains a leftbound packet
+  constant BufferStatus cRIGHTBOUND_PACKET = 2u; //< mPacketBuffer contains a rightbound packet
+  constant BufferStatus cBUFFER_FULL = 3u;       //< mPacketBuffer contains a stationay packet
+  BufferStatus mBufferStatus;
+  typedef Bits(4) StatusMask;
+  BufferStatus getStatus() { return mBufferStatus; }
+  StatusMask getNonemptyMask() {
+    return
+      (1u<<cLEFTBOUND_PACKET) |
+      (1u<<cRIGHTBOUND_PACKET) |
+      (1u<<cBUFFER_FULL);
+  }
+  StatusMask getDirMask(Bool left) {
+    return (StatusMask) (1u<<(left ? cLEFTBOUND_PACKET : cRIGHTBOUND_PACKET));
+  }
+  Bool inState(StatusMask mask) {
+    return ((1u<<mBufferStatus)&mask)!=0u;
+  }
+  Bool isEmpty() {
+    return mBufferStatus == cBUFFER_EMPTY;
+  }
+  Void setStatus(BufferStatus bs) {
+    mBufferStatus = bs;
+  }
 
   constant Unsigned cPAYLOAD_BITS = 48u;
   typedef Bits(cPAYLOAD_BITS) Bits48;
@@ -54,12 +127,13 @@ element SingleQuote : B2DPlate2 + CategorizedSite + Payload {
 
   constant Unsigned cPAYLOAD_TO_RAWBITS_SHIFT = 64u - cPAYLOAD_BITS;
   MyPayload mPayload;
-  Bool mHasPayload;
+
+
   //// URSELF API
   @Override
   virtual ARGB getColor(Unsigned selector) {
     ARGB ret = super.getColor(selector);
-    if (mHasPayload) {
+    if (!isEmpty()) {
       ColorUtils cu;
       MyPayload paysmash = 0xff000000 |
         (((mPayload >> 24)&0xffffff) ^
@@ -69,32 +143,23 @@ element SingleQuote : B2DPlate2 + CategorizedSite + Payload {
     return ret;
   }
 
-  //// PAYLOAD API
-  @Override
-  virtual Bool loadFrom(RawBits bits) {
-    if (mHasPayload) return false;
-    mPayload = (MyPayload) (bits>>cPAYLOAD_TO_RAWBITS_SHIFT);
-    mHasPayload = true;
-    return true;
-  }
-
-  @Override
-  virtual Bool storeTo(RawBits & bits) {
-    if (!mHasPayload) return false;
-    bits = ((RawBits) mPayload)<<cPAYLOAD_TO_RAWBITS_SHIFT;
-    mHasPayload = false;
-    return true;
-  }
-
   Void writeAtomToPayloads(Atom atom, MyPayload & pay1, MyPayload & pay2) {
+    DebugUtils du;
+    du.print("WATPLD 10");
     AtomUtils au;
     Bits b1,b2;
     b1 = au.read(atom,0u,32u);
     b2 = au.read(atom,32u,16u);
+    du.print((Unsigned) b1);
+    du.print((Unsigned) b2);
+
     pay1 = (MyPayload) ((((Bits48) b1) << 16) | b2);
     b1 = au.read(atom,48u,32u);
     b2 = au.read(atom,80u,16u);
+    du.print((Unsigned) b1);
+    du.print((Unsigned) b2);
     pay2 = (MyPayload) ((((Bits48) b1) << 16) | b2);
+    du.print("WATPLD 11");
   }
 
   Atom readAtomFromPayloads(MyPayload pay1, MyPayload pay2) {
@@ -124,29 +189,67 @@ element SingleQuote : B2DPlate2 + CategorizedSite + Payload {
     return true;
   }
 
-  Bool insertAtomIntoPlate(Atom atom) {
+  Bool writeAtomIntoPlate(Atom atom) {
     SN sn1, sn2;
     if (!getSNPair(sn1,sn2)) return false;
     EventWindow ew;
     Self & s1 = (Self&) ew[sn1];
     Self & s2 = (Self&) ew[sn2];
-    if (s1.mHasPayload || s2.mHasPayload) return false;
-    writeAtomToPayloads(atom, s1.mPayload, s2.mPayload);
-    return s1.mHasPayload = s2.mHasPayload = true;
+    return s1.writeAtomIntoSQs(atom, s2);
   }
 
+  Bool writeAtomIntoSQs(Atom atom, Self& s2) {
+    DebugUtils du;
+    du.print("ISAISQ 10");
+    du.printContext();
+    du.print((Unsigned) self.mBufferStatus);
+    du.print((Unsigned) s2.mBufferStatus);
+    if (!self.isEmpty() || !s2.isEmpty()) return false;
+    du.print("ISAISQ 11");
+    du.print(atom);
+    writeAtomToPayloads(atom, self.mPayload, s2.mPayload);
+    self.setStatus(cBUFFER_FULL);
+    s2.setStatus(cBUFFER_FULL);
+    return true;
+  }
+
+  Bool readAtomFromPlate(Bool leftbound, Atom & atom, Bool delete) {
+    SN sn1, sn2;
+    if (!getSNPair(sn1,sn2)) return false;
+    EventWindow ew;
+    Self & s1 = (Self&) ew[sn1];
+    Self & s2 = (Self&) ew[sn2];
+    return s1.readAtomFromSQs(s1.getDirMask(leftbound), atom, s2, delete);
+  }
+
+  Bool readAtomFromSQs(StatusMask statusmask, Atom& atom, Self& s2, Bool delete) {
+    if (!self.inState(statusmask)) return false;
+    atom = readAtomFromPayloads(self.mPayload,s2.mPayload);
+    if (delete) {
+      self.setStatus(cBUFFER_EMPTY);
+      s2.setStatus(cBUFFER_EMPTY);
+    }
+    return true;
+  }
+
+  /*
   Bool removeAtomFromPlate(Atom & atom) {
     SN sn1, sn2;
     if (!getSNPair(sn1,sn2)) return false;
     EventWindow ew;
     Self & s1 = (Self&) ew[sn1];
     Self & s2 = (Self&) ew[sn2];
-    if (!s1.mHasPayload || !s2.mHasPayload) return false;
-    atom = readAtomFromPayloads(s1.mPayload,s2.mPayload);
-    s1.mHasPayload = s2.mHasPayload = false;
-    return true;
+    return s1.removeAtomFromSQs(atom, s2);
   }
 
+  Bool removeAtomFromSQs(Atom& atom, Self& s2) {
+    if (self.isEmpty() || s2.isEmpty()) return false;
+    atom = readAtomFromPayloads(self.mPayload,s2.mPayload);
+    self.setStatus(cBUFFER_EMPTY);
+    s2.setStatus(cBUFFER_EMPTY);
+    return true;
+  }
+  */
 }
 
 quark SingleQuoteUtils {
@@ -192,9 +295,10 @@ quark SingleQuoteUtils {
     ap1.setSizeOfPlate(C2D.instanceof(1,2));
     ap0.setPositionOnPlate(C2D.instanceof(0,0));
     ap1.setPositionOnPlate(C2D.instanceof(0,1));
-    return ap0.insertAtomIntoPlate(inatom);
+    return ap0.writeAtomIntoPlate(inatom);
   }
     
+  /*
   Bool destroySingleQuoteAt(C2D ewc0, Atom & outatom) {
     EventWindow ew;
     if (!ew.isAccessible(ewc0)) return false;
@@ -211,7 +315,7 @@ quark SingleQuoteUtils {
     if (ap0.positionOnPlate() != C2D.instanceof(0,0)) return false;
     if (ap1.positionOnPlate() != C2D.instanceof(0,1)) return false;
     Atom a;
-    Bool ret = ap0.removeAtomFromPlate(a);
+    Bool ret = ap0.readAtomFromPlate(a,false);
     if (ret) {
       outatom = a;
       a0 = Empty.instanceof;
@@ -219,6 +323,7 @@ quark SingleQuoteUtils {
     }
     return ret;
   }
+  */
 
 
 }

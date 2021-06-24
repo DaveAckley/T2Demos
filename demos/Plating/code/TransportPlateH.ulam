@@ -1,0 +1,213 @@
+//use TransportPlate;
+
+/** Transport Plate Horizontal.  
+    Target dimensions for K stops: [K+2,3]
+    <code>
+    Y COORD
+     0         Operator or manager
+     1         (addl opr) or payload 0
+     2         (addl opr) or payload 1
+
+    X COORD
+     0         L operator slot
+     1         Station K-1 TPh manager  (and Left peer)
+     .
+     .
+     K         Station 0 TPh manager (and Right peer)
+     K+1       R operator slot 
+    </code>
+   \symbol Th
+   \color #3d5
+ */
+element TransportPlateH : TransportPlate {
+  ////UrSelf API
+  @Override
+  ARGB getColor(Unsigned selector) {
+    ColorUtils cu;
+    ARGB ret = super.getColor(selector);
+    if (isOperatorSlot(true) || isOperatorSlot(false))
+      ret = cu.between(cu.color(0x0000ff), ret, 33);
+    if (isTransportStation())
+      ret = cu.between(cu.color(0xff0000), ret, 33);
+    return ret;
+  }
+
+  ////TransportPlate API
+  @Override
+  virtual Unsigned getK() { // Number of stops on this track
+    C2D siz = sizeOfPlate();
+    Int mx = siz.getX();
+    return (Unsigned) (mx - 2);
+  }
+
+  @Override
+  virtual C2D getStationPC(Unsigned k) { //< Location of station k (0..K-1) in plate coords
+    C2D siz = sizeOfPlate();
+    return C2D.instanceof((C2D.Coord) ((Unsigned) siz.getX()-2u-k),(C2D.Coord) 0);
+  }
+
+  @Override
+  virtual C2D getOperatorPC(Bool left) {
+    return C2D.instanceof((C2D.Coord) (left ? 0u : (getK() + 1u)),(C2D.Coord) 0);
+  }
+
+  @Override
+  Bool isTransportStation() {
+    C2D pos = positionOnPlate();
+    if (pos.getY() != 0) return false;
+    return !isOperatorSlot(true) && !isOperatorSlot(true);
+  }
+
+  @Override
+  virtual C2D interStationIncrement(Bool left) {    //< stationPC+this == next station left/rightward 
+    return C2D.instanceof(left ? -1 : 1, 0);
+  }
+
+  @Override
+  virtual C2D stackingOrderIncrement() { 
+    return C2D.instanceof(0,1);
+  }
+
+  //// AtomPairPayload API
+  /*
+  @Override
+  virtual Bool atomPairAccessible() {
+    SN sn1, sn2;
+    return managedSNs(sn1,sn2);
+  }
+  */
+  Bool advanceTransport() {
+    DebugUtils du;
+    EventWindow ew;
+    du.print("hADVTRP AKSRKTPRT 0");
+    if (advance()) return true;
+    for (Unsigned i = 0; i < 2u; ++i) {
+      Bool left = i==0u;
+      if (!isPeerTP(left)) continue;
+      du.printContext();
+      du.print("hAKSRKTPRT 10");
+      du.print(left);
+      C2D oppl = getOperatorPC(left); // Operator slot in plate coords
+      du.print(oppl);
+      SN opsn = plateCoordToEWSN(oppl);
+      if (opsn == SN.maxof) continue;
+      du.print("hAKSRKTPRT 1010");
+      du.print((Unsigned) opsn);
+      Atom & opa = ew[opsn];
+      // opsn is known accessible
+      C2D opewc = ew.getCoord(opsn);
+      if (isEmptyOrPlate(opewc)) {
+        du.print("hAKSRKTPRT 11");
+
+        Atom a;
+        if (recv(left, a, false)) { // Check for inbound
+          du.print("hAKSRKTPRT 12");
+          if (a is TransportOperator) {
+            // OK, we found something to put in our operator slot
+            du.print("hAKSRKTPRT 13");
+            opa = a;
+            recv(left,a,true); // Discard used receivable
+            return true;
+          }
+        }
+      } else if (opa as TransportOperator) {
+        du.print("hAKSRKTPRT 14");
+        Atom a;
+        if (recv(left, a, false)) { // Check for inbound
+          du.print("hAKSRKTPRT 15");
+          return opa.notify(false);
+        }
+      } // else continue;
+    }
+    return false;
+  }
+
+  Bool installCars() {
+    SN sn1, sn2;
+    if (!managedSNs(sn1,sn2)) return false;
+    EventWindow ew;
+    C2D ewc1 = ew.getCoord(sn1);
+    C2D ewc2 = ew.getCoord(sn2);
+    if (isEmptyOrPlate(ewc1) && isEmptyOrPlate(ewc2)) {
+      QuotationManager qm;
+      Atom & a1 = ew[sn1];
+      Atom & a2 = ew[sn2];
+      qm.initAtomsToSQPair(a1,a2);
+
+      return true;
+    }
+    return false;
+  }
+
+  Bool growAndHeal() {
+    if (checkGrowthAndHealing()) return true;
+    if (installCars()) return true;
+    return false;
+  }
+
+  Void behave() {
+    if (mustBlockOrDie()) return;
+    if (growAndHeal()) return;
+    if (advanceTransport()) return;
+  }
+}
+
+/** Seed TPH
+    \symbol H3
+*/
+element SeedTransportPlateH : TransportOperator {
+  typedef EventWindow.SiteNum SN;
+  Once mOnce;
+  
+  @Override
+  virtual Bool notify(Bool writeNotRead) {
+    DebugUtils du;
+    du.print("NOFITH");
+    return false;
+  }
+
+  Bool trySend() {
+    EventWindow ew;
+    DebugUtils du;
+    SN oursn = ew.getSiteNumber(self);
+    if (oursn == SN.maxof) return false;
+    C2D ourewc = ew.getCoord(oursn);
+    C2D peerewc = ourewc + C2D.instanceof(1,0);
+    if (!ew.isAccessible(peerewc)) return false;
+    Atom & a = ew[peerewc]; // Right one from us
+    if (a as TransportPlateH) {
+      du.print("hODOTPE 10");
+      du.print(a.positionOnPlate());
+      du.print("hODOTPE 11");
+      if (mOnce.new()) {
+        if (a.send(false,self.atomof)) {
+          du.print("hEPLABNEESTA");
+          return true;
+        } else mOnce.reset();
+      }
+    }
+    du.print("hODOTPE 14");
+
+    return false;
+  }
+
+  Void behave() {
+    setSizeOfPlate(C2D.instanceof(1,1));
+    setPositionOnPlate(C2D.instanceof(0,0));
+    EventWindow ew;
+    Atom & a = ew[3];
+    if (a is Empty) {
+      TransportPlateH tv;
+      tv.setSizeOfPlate(C2D.instanceof(5,3));
+      tv.setPositionOnPlate(C2D.instanceof(0,1));
+      a = tv.atomof;
+    } else {
+      Atom & a2 = ew[4];
+      if (a2 as TransportPlateH) {
+        if (!mOnce.initted()) trySend();
+      }
+    }
+  }
+
+  
+}

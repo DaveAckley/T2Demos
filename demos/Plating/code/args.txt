@@ -1,3 +1,0 @@
-{{2H2}} -p 30 -e 0 --accelerate 120 --surge 120 -a 0 -d /data/ackley/SIMDATA
-
-

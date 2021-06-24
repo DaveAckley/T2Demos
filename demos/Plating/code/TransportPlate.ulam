@@ -1,0 +1,247 @@
+quark TransportPlate : B2DPlate {
+
+  ////TransportPlate API
+  virtual Unsigned getK() ;     //< Number of stops on this track
+  virtual C2D getStationPC(Unsigned k) ; //< Location of station K in plate coords
+  virtual C2D getOperatorPC(Bool left) ; //< Location of operators in plate coords
+  virtual Bool isTransportStation() ;     //< This transport site is a station
+  virtual C2D interStationIncrement(Bool left) ;    //< stationPC+this == next station left/rightward 
+  virtual C2D stackingOrderIncrement() ;   //< stationPC+N*this == managed site N=[1,2]
+
+  ////TransportPlate SERVICES
+  // virtual SN QStream14.getNextSN(Bool left)    //< SN of next site toward left (right) Peer, or SN.maxof if none
+  // virtual Bool QStream14.isPeer(Bool left)     //< true if we are the left (right) Peer
+  // virtual Bool isOperatorSlot(Bool left)       //< true if we are the left (right) operator slot
+  // virtual BufferStatus getStatus() ;      //< Occupancy
+  // virtual Void setStatus(BufferStatus bs) ;
+
+  virtual Bool isPeerTP(Bool left) {        //< true if we are the left (right) Peer
+    DebugUtils du;
+    du.print("ISPEREE 10");
+    du.print(left);
+    Unsigned k = getK();                  // How many stops on this train
+    du.print(k);
+    Unsigned check = left ? k - 1u : 0u;  // Which one we want
+    du.print(check);
+    C2D endstn = getStationPC(check);     // Find relevant station
+    du.print(endstn);
+    du.print(positionOnPlate());
+    return endstn == positionOnPlate();   // True if it's where we are
+  }
+
+  typedef SingleQuote.BufferStatus WhyNeedTypedef;
+  virtual Bool getBufferStatus(WhyNeedTypedef & bs, SN & asn1, SN & asn2) {
+    SN sn1, sn2;
+    DebugUtils du;
+    du.print("GBSTTT 10");
+    if (managedSNs(sn1,sn2)) {
+      EventWindow ew;
+      du.print("GBSTTT 11");
+      Atom & a1 = ew[sn1];
+      Atom & a2 = ew[sn2];
+      if (a1 as SingleQuote) {
+        bs = a1.getStatus();
+        du.print("GBSTTT 12");
+        du.print((Int) bs);
+        asn1 = sn1;
+        asn2 = sn2;
+        return true;
+      }
+    }
+    du.print("GBSTTT 13");
+    return false;
+  }
+
+  virtual Bool send(Bool left, Atom & from) {
+    DebugUtils du;
+    SN sn1, sn2;
+    du.print("TPSEND 10");
+    if (!managedSNs(sn1,sn2)) return false;
+    du.print("TPSEND 11");
+    EventWindow ew;
+    Atom & a1 = ew[sn1];
+    Atom & a2 = ew[sn2];
+    if (a1 as SingleQuote) {
+      du.print("TPSEND 12");
+      if (a2 as SingleQuote) {
+        du.print("TPSEND 13");
+        if (a1.writeAtomIntoSQs(from,a2)) {
+          du.print("TPSEND 14");
+          SingleQuote.BufferStatus bs = left ? a1.cLEFTBOUND_PACKET : a1.cRIGHTBOUND_PACKET;
+          a1.setStatus(bs);
+          a2.setStatus(bs);
+          return true;
+        }
+      }
+    }
+    du.print("TPSEND 15");
+    return false;
+  }
+
+  virtual Bool recv(Bool left, Atom & to, Bool consume) {
+    DebugUtils du;
+    SN sn1, sn2;
+    du.print("TPRECVV 10");
+    if (!managedSNs(sn1,sn2)) return false;
+    du.print("TPRECVV 11");
+    EventWindow ew;
+    Atom & a1 = ew[sn1];
+    Atom & a2 = ew[sn2];
+    if (a1 as SingleQuote) {
+      du.print("TPRECVV 12");
+      if (a2 as SingleQuote) {
+        du.print("TPRECVV 13");
+        return a1.readAtomFromSQs(a1.getDirMask(left),to,a2,consume);
+      }
+    }
+    du.print("TPRECVV 14");
+    return false;
+  }
+
+  virtual Bool advance() {
+    DebugUtils du;
+    SN sn1, sn2;
+    SingleQuote.BufferStatus bs;
+    du.print("ADTPB 10");
+    if (!getBufferStatus(bs,sn1,sn2)) return false;
+
+    du.print("ADTPB 11");
+    SN rn1 = getNextSN(false); // Check for next station right
+    if (rn1 == SN.maxof) return false; // none?
+    du.print("ADTPB 12");
+    du.print((Unsigned) rn1);
+    EventWindow ew;
+    Atom & r1 = ew[rn1];
+    if (r1 as Self) {
+      du.print("ADTPB 13");
+      SN sn21, sn22;
+      SingleQuote.BufferStatus bs2;
+      if (!r1.getBufferStatus(bs2,sn21,sn22)) return false;
+      du.print("ADTPB 14");
+      if ((bs == SingleQuote.cBUFFER_EMPTY || bs == SingleQuote.cRIGHTBOUND_PACKET) &&
+          (bs2 == SingleQuote.cBUFFER_EMPTY || bs2 == SingleQuote.cLEFTBOUND_PACKET)) {
+        du.print("ADTPB 15");
+        if (bs == SingleQuote.cBUFFER_EMPTY && bs2 == SingleQuote.cBUFFER_EMPTY)
+          return false;
+
+        // CAN SWAP
+        du.print("ADTPB 16");
+        du.print((Unsigned) bs);
+        du.print((Unsigned) bs2);
+        Atom tmp1 = ew[sn1]; ew[sn1] = ew[sn21]; ew[sn21] = tmp1;
+        Atom tmp2 = ew[sn2]; ew[sn2] = ew[sn22]; ew[sn22] = tmp2;
+        return true;
+      }
+    }
+    return false;
+
+    /*
+    // Have we arrived?
+    BufferStatus cur = getStatus();
+    if (isPeer(cur == cLEFTBOUND_PACKET)) {
+      setStatus(cARRIVED_PACKET);
+      return true;
+    }
+
+    // Keep on trucking
+    Self & a = (Self&) ew[destSN];
+    if (!swapPayload(a)) return false;
+
+    BufferStatus bstmp = getStatus();
+    setStatus(a.getStatus());
+    a.setStatus(bstmp);
+    return true;
+    */
+  }
+
+  /*
+  @Override
+  virtual Bool clear() {
+    return self.AtomPairPayload.clear();
+  }
+  */
+
+  ////UrSelf API
+  @Override
+  ARGB getColor(Unsigned selector) {
+    ColorUtils cu;
+    ARGB ret = super.getColor(selector);
+    if (isTransportStation())
+      ret = cu.between(cu.color(0xff0000), ret, 33);
+    return ret;
+  }
+
+  Bool isOperatorSlot(Bool left) {
+    C2D pos = positionOnPlate();
+    return pos == getOperatorPC(left);
+  }
+
+  Bool managedSNs(SN & sn1, SN & sn2) {
+    if (!isTransportStation()) return false;
+    EventWindow ew;
+    SN selfsn = ew.getSiteNumber(self);
+    if (selfsn == SN.maxof) return false;
+    C2D selfewc = ew.getCoord(selfsn);
+    C2D incr = stackingOrderIncrement();
+    C2D sn1ewc = selfewc + incr;
+    C2D sn2ewc = sn1ewc + incr;
+    if (!ew.isAccessible(sn1ewc) || !ew.isAccessible(sn2ewc)) return false;
+    sn1 = ew.getSiteNumber(sn1ewc);
+    sn2 = ew.getSiteNumber(sn2ewc);
+    return true;
+  }
+
+  //// QStream API
+  virtual SN getNextSN(Bool left) {       //< SN of next site toward left (right) Peer, or SN.maxof if none
+    DebugUtils du;
+    du.print("GXSN 10");
+    du.print(left);
+    if (!isTransportStation()) return SN.maxof; // Only transport managers participate in streaming
+    du.print("GXSN 11");
+    if (isPeerTP(left)) return SN.maxof;          // But Peers don't have nexts at their end 
+    du.print("GXSN 12");
+
+    C2D ourpos = positionOnPlate();
+    C2D incr = interStationIncrement(left);
+    
+    EventWindow ew;
+    SN selfsn = ew.getSiteNumber(self);
+    if (selfsn == SN.maxof) return selfsn; // And if we're not in the ew, heck with you
+    du.print("GXSN 13");
+
+    C2D ourewc = ew.getCoord(selfsn);
+    C2D nextewc = ourewc + incr;
+    SN nextsn = ew.getSiteNumber(nextewc);
+    if (ew.isAccessible(nextsn)) return nextsn; // That's the next sn
+    du.print("GXSN 14");
+    return SN.maxof;
+  }
+
+  /*
+  //// AtomPairPayload API
+  @Override
+  virtual Bool atomPairAccessible() {
+    SN sn1, sn2;
+    return managedSNs(sn1,sn2);
+  }
+  */
+
+  /*
+  @Override
+  virtual Atom & getAtomRef(Bool firstAtom) { //< get ref to first or second atom or fail
+    DebugUtils du;
+    Fail f;
+    SN sn1, sn2;
+    if (!managedSNs(sn1,sn2)) f.fail("GETATOMREF");
+    EventWindow ew;
+    du.print("GETAROF 10");
+    du.print((Int) sn1);
+    du.print((Int) sn2);
+    du.print(firstAtom);
+    return firstAtom ? ew[sn1] : ew[sn2];
+  }
+  */
+
+
+
+}

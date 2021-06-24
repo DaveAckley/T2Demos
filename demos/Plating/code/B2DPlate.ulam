@@ -110,3 +110,7 @@ quark B2DTPlate(Unary(8) cBITS_PER_COORD) : Plate {
 
 quark B2DPlate : B2DTPlate(7) {
 }
+
+quark B2DPlate2 : B2DTPlate(2) {
+}
+

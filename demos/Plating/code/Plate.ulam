@@ -14,6 +14,21 @@ quark Plate {
 
   //// Plate Services
 
+  /** Are we contained by our own plate, based on our pos and size?
+   */
+  Bool isInPlate() {
+    return isInPlateCoord(positionOnPlate());
+  }
+
+  /** Is pos contained by our own plate, based on our size?
+   */
+  Bool isInPlateCoord(C2D pos) {
+    C2D siz = sizeOfPlate();
+    return
+      pos.getX() >= 0 && pos.getY() >= 0 &&
+      pos.getX() < siz.getX() && pos.getY() < siz.getY();
+  }
+
   /** Are we on the border of our plate, based on our pos and size?
    */
   Bool isPlateBorder() {
@@ -30,8 +45,9 @@ quark Plate {
       ours?
    */
   Bool isPlateBorderCoord(C2D pos) {
-    if (pos.getX() == 0 || pos.getY() == 0) return true;
     C2D siz = sizeOfPlate();
+    if (siz.getX() <= 1 || siz.getY() <= 1) return false; // too skinny to have a border
+    if (pos.getX() == 0 || pos.getY() == 0) return true;
     if (pos.getX() == siz.getX() - 1 || pos.getY() == siz.getY() - 1) return true;
     return false;
   }
@@ -51,15 +67,14 @@ quark Plate {
   }
   
   /** Is plate coordinate \c pos in the field (i.e., strictly within
-      the border) of a plate the size of ours?
+      the border) of a plate the size of ours?  Note that plates with
+      width or height == 1 do not have a border, so the entire plate
+      is considered field.
    */
   Bool isPlateFieldCoord(C2D pos) {
-    C2D siz = sizeOfPlate();
     return
-      pos.getX() > 0 &&
-      pos.getY() > 0 &&
-      pos.getX() < siz.getX() - 1 &&
-      pos.getY() < siz.getY() - 1;
+      isInPlateCoord(pos) &&
+      !isPlateBorderCoord(pos);
   }
 
   /** Get our own event window site number, or fail if we are not
@@ -167,6 +182,22 @@ quark Plate {
       or contains a field site of the same Plate as self
    */
   Bool isEmptyOrField(C2D ewc) {
+    return isEmptyOrField(ewc, false);
+  }
+
+  /** Return true iff \c ewc is an accessible site that's either empty
+      or contains a plate site (border or field) of the same Plate as self
+   */
+  Bool isEmptyOrPlate(C2D ewc) {
+    return isEmptyOrPlate(ewc, false);
+  }
+
+  /** Return true iff \c ewc is an accessible site that's either (1)
+      empty or (2) contains a field site that's on the same Plate as
+      self, or (3) on the containing Plate if \c allowContainer is
+      true.
+   */
+  Bool isEmptyOrField(C2D ewc, Bool allowContainer) {
     EventWindow ew;
     EventWindow.SiteNum sn = ew.getSiteNumber(self); // Find ourselves
     if (sn == sn.maxof) { Fail f; f.fail("self not in EW"); return false; }
@@ -186,8 +217,48 @@ quark Plate {
 //      du.print("iEOF13");
 //      du.print((Unsigned) rel);
 
-      if (rel == PlateUtils.cSAME_PLATE_AS && !a.isPlateBorder())
-        return true; // Found TestStack15 field
+      if (a.isPlateBorder()) return false; // Border is 'never' empty
+      if (rel == PlateUtils.cSAME_PLATE_AS)
+        return true;            // Found our field
+      if (allowContainer &&
+          rel == PlateUtils.cCONTAINED_BY_PLATE &&
+          !a.isPlateBorder())
+        return true;            // Found container field
+//      du.print("iEOF14");
+    }
+    return false;  // Not empty or field
+  }
+
+  /** Return true iff \c ewc is an accessible site that's either (1)
+      empty or (2) is a site on the same Plate as self, or (3) on the
+      containing Plate if \c allowContainer is true.
+   */
+  Bool isEmptyOrPlate(C2D ewc, Bool allowContainer) {
+    EventWindow ew;
+    EventWindow.SiteNum sn = ew.getSiteNumber(self); // Find ourselves
+    if (sn == sn.maxof) { Fail f; f.fail("self not in EW"); return false; }
+    C2D sat = ew.getCoord(sn); // Us as coord
+
+//    du.printContext();
+//    du.print("iEOF10");
+    if (!ew.isAccessible(ewc)) return false;
+//    du.print("iEOF11");
+//    du.print(sat);
+    Atom & a = ew[ewc];
+    if (a is Empty) return true;
+//    du.print("iEOF12");
+    if (a as Plate) {
+      PlateUtils pu;
+      PlateUtils.PlateRelation rel = pu.relationTo(self, sat, a, ewc);
+//      du.print("iEOF13");
+//      du.print((Unsigned) rel);
+
+      if (rel == PlateUtils.cSAME_PLATE_AS)
+        return true;            // Found our field
+      if (allowContainer &&
+          rel == PlateUtils.cCONTAINED_BY_PLATE &&
+          !a.isPlateBorder())
+        return true;            // Found container field
 //      du.print("iEOF14");
     }
     return false;  // Not empty or field

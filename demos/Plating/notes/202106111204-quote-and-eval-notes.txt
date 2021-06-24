@@ -1,0 +1,1126 @@
+{72}  -*- text -*-
+[0:
+
+Fri Jun 11 12:04:39 2021 And here we are, to think about code
+representations and operations in the plating line of development.
+
+Can we do an array of constant atoms in ulam?[1:
+
+Fri Jun 11 12:17:36 2021 Fudge, looks like not:
+
+    quark AtomCtor {
+      constant Atom mAtoms[] = { Empty.instanceof, DReg.instanceof, Res.instanceof };
+    }
+
+gets
+
+    ./AtomCtor.ulam:2:12: ERROR: Invalid constant definition Type 'Atom'.
+
+So I guess that means we'd have to do it via code, with something
+like:
+
+[2:
+
+Sat Jun 12 02:34:44 2021 Well, currently it's like:
+
+      constant Unsigned cSEQ_LEN = 4u;
+      Atom mAtoms[cSEQ_LEN];
+      Void initAtoms() {
+        mAtoms[0] = Empty.instanceof;
+        mAtoms[1] = DReg.instanceof;
+        mAtoms[2] = Res.instanceof;
+        mAtoms[3] = EAC.instanceof;
+      }
+
+which isn't great but what are you going to do.  The particularly sad
+part is that initAtoms() has to be called on EVERY event that needs to
+refer to the atom sequence.  (Since AtomCtor is necessarily a
+transient and there's no place to store the array of atoms between
+events.)
+
+In fact it would be better to do a which(index) instead of an array, I
+guess, and only generate the atom that's currently being asked for.
+[3:
+
+Sat Jun 12 03:48:06 2021 OK, now it's like:
+
+      Atom get(Unsigned index) {
+        which (index) {
+        case 0u: { return Empty.instanceof; }
+        case 1u: { return DReg.instanceof; }
+        case 2u: { return Res.instanceof; }
+        case 3u: { return EAC.instanceof; }
+        }
+        Fail f; f.fail(); return Empty.instanceof; // NOT REACHED
+      }
+
+
+:3]
+:2]
+
+:1]
+
+:0]
+[4:
+
+Sat Jun 12 11:30:20 2021 Transfer from overnight notes:
+
+:4]
+[5:
+
+Sun Jun 13 07:48:04 2021 Trying to make SQForwarder to produce a chain
+of SQ-carrying locations that will grow from the tip by dequoting the
+SQ when it reaches the end.  But wondering about the EW reach of it --
+Was planning on doing 2x2 plates so how far apart can they get and
+still forward an SQ?
+
+
+              . . . . . . . . . . . . .
+              . . . . . . . . . . . . .
+              . . . . 3 _ . . . . . . .
+              . . . . 3 _ . . . . . . .
+              . . . . . . . . . . . . .
+              1 _ . . 0 s 2 _ . . . . .
+              1 _ . . 0 q 2 _ . . . . .
+              . . . . 4 _ . . . . . . .
+              . . . . 4 _ . . . . . . .
+              . . . . . . . . . . . . .
+              . . . . . . . . . . . . .
+              . . . . . . . . . . . . .
+
+
+so it's pretty anisotropic for sure.  To the east and south, the
+forwarding location has to be directly adjacent (in plate terms); the
+north can have a gap of one, the west can have a gap of two.
+
+Well at least it's even possible to do the forwarding in all
+directions.  I suppose the fair thing is to limit all directions to
+adjacent only.  But that's a pretty big restriction, and (in my mind
+I'm thinking that) not all uses of mForwardSN need to target (1,0:1)
+of a [2,2].  In particular I want some kind of way to dequote to
+mForwardSN instead of transfer to another SQF there.
+
+[6:
+
+Sun Jun 13 08:08:15 2021 If we hook into a (0,1) operator concept, we
+could have dynamic forwarding and stuff.  Maybe set an explicit Bool
+mDequoteToSN data member stating intentions for the next SQ passing
+through?  At first I thought dequote-if-dest-Empty, but that's way
+fragile given that QuotationManager.dequoteAtomFromEW(..) will be
+leaving our plate(1,0:1) Empty.
+
+But a atom sequence like
+ Initial condition: dequote to 9 // by magic
+
+ SQF(destSN=9,dequote=once)  // extend SQF tip west then fwd
+ SQF(destSN=10,dequote=once) // extend SQF tip north then fwd
+ SQF(destSN=3,dequote=once)  // prepare to receive operator
+ SQFOperator(defaultSN=9,opargs..)  // operator moves into position
+
+(man all these different levels are so confusing..)
+
+which would unfold something like this, maybe? --
+
+a SQF(destSN=9,dequote=once)  // extend SQF tip west then fwd
+b SQF(destSN=10,dequote=once) // extend SQF tip north then fwd
+c SQF(destSN=3,dequote=once)  // prepare to receive operator
+d SQFOperator(defaultSN=9,opargs..)  // operator moves into position
+
+           . . . . . . . . . . .
+M ships a  . . . . . . . . a . Magic source
+           . . . . . . . . . . .
+
+           . . . . . . . . . . .
+a heals    . . . . . . . . a a Magic source
+ dSN 9     . . . . . . . . a a .
+ dqt 1     . . . . . . . . . . .
+
+           . . . . . . . . . . .
+M ships b  . . . . . . . . a b Magic source
+           . . . . . . . . a b .
+           . . . . . . . . . . .
+
+           . . . . . . . . . . .
+a ships    . . . . . . b . a _ Magic source
+ dSN 9     . . . . . . . . a _ .
+ dqt no    . . . . . . . . . . .
+
+(let's say..)
+
+           . . . . . . . . . . .
+a heals    . . . . . . b . a a Magic source
+ dSN 9     . . . . . . . . a a .
+ dqt no    . . . . . . . . . . .
+
+           . . . . . . . . . . .
+M ships c  . . . . . . b . a c Magic source
+           . . . . . . . . a c .
+           . . . . . . . . . . .
+
+a blocks: it can't ship because dSN 9 isn't empty or SQF ready
+
+           . . . . . . . . . . .
+b heals    . . . . . . b b a c Magic source
+ dSN 10    . . . . . . b b a c .
+ dqt 1     . . . . . . . . . . .
+
+a ships c  . . . . . . . . . . .
+ dSN 9     . . . . . . b c a a Magic source
+ dqt no    . . . . . . b c a a .
+ (& heals) . . . . . . . . . . .
+
+           . . . . . . . . . . .
+           . . . . . . c . . . .
+b ships c  . . . . . . . . . . .
+ dSN 10    . . . . . . b b a a Magic source
+ dqt no    . . . . . . b b a a .
+ (& heals) . . . . . . . . . . .
+
+           . . . . . . . . . . .
+c heals    . . . . . . c c . . .
+ dSN 3     . . . . . . c c . . .
+ dqt 1     . . . . . . b b a a Magic source
+           . . . . . . b b a a .
+           . . . . . . . . . . .
+
+           . . . . . . . . . . .
+           . . . . . . c c . . .
+           . . . . . . c c . . .
+M ships d  . . . . . . b b a d Magic source
+           . . . . . . b b a d .
+           . . . . . . . . . . .
+
+           . . . . . . . . . . .
+           . . . . . . c d . . .
+a & b      . . . . . . c d . . .
+fwd and    . . . . . . b b a a Magic source
+heal       . . . . . . b b a a .
+           . . . . . . . . . . .
+
+           . . . . . . . . . . .
+           . . . . . . c c . . .
+c ships d  . . . . . . d c . . .
+and heals  . . . . . . b b a a Magic source
+           . . . . . . b b a a .
+           . . . . . . . . . . .
+
+[7:
+
+Sun Jun 13 09:38:42 2021 Seems like a pain to have to have deployment
+decisions all running ahead of the deployed.  Could we dequote to a
+local, ask the dequote what it wants to do, and pack it back up for
+further transport if it wants?
+
+Another thing is: If all the transported stuff is subclass Codon or
+whatever, then why do they need to be quoted at all?  Can't they just
+stay passive until their moment arrives?
+
+I guess the point is it won't always be subclass Codon that's getting
+held, and we have to be ready for it.
+
+Do we want an AtomStream API to manage this?  Like QStream but for
+(quoted) Atoms instead of absolutely pooping out at Bits(64).  Then
+we'd have Peer concepts to deal with ends vs streams.
+
+I think let's give that a try.[8:
+
+Sun Jun 13 10:24:16 2021 How general is AtomStream?  Does it inherit
+from SingleQuote or some shared base?[9:
+
+Sun Jun 13 12:24:42 2021 Make AtomPayload, what the heck?
+
+:9]
+
+:8]
+
+:7]
+:6]
+
+
+:5]
+[10:
+
+Sun Jun 13 17:17:53 2021 Man I'm having trouble getting going with
+this stuff.  I really don't know what I want.  The supposed use case
+was a program that directs a replication process.[11:
+
+Mon Jun 14 06:20:46 2021 So, um, is code supposed to be smaller than
+the thing it codes for?  Blowing atoms up to 2x their size and calling
+it code seems kind of odd unless each atom is going to multiply during
+its 'execution'
+
+[12:
+
+Mon Jun 14 06:30:03 2021 So if we restrict to 'plate chemistry'
+(perhaps plus 'accidentals'), we could maybe define a bunch of
+properties like size and pos and type that could be treated as
+registers or state of the processor.  Then we could do load stores and
+ALU ops on those registers, plus 'output' ops that generate an atom
+based on the current register states.
+
+[13:
+
+Mon Jun 14 06:39:39 2021 The processor state could have mappings to
+types rather than assume a hardcoding -- ops use short 'type indices'
+and the processor has a palette of things to build.  Change the
+palette and the same code will produce something different.  (And
+that's .. good?)
+
+:13]
+
+:12]
+
+:11]
+
+:10]
+[14:
+
+Mon Jun 14 12:46:22 2021 What might a 'plate processor' bit budget
+look like?
+
+ - 4 bits for type?  Hardcode a table of classids?  Are they const?
+
+:14]
+[15:
+
+Tue Jun 15 03:45:55 2021 Going with subplate layout stuff as a source
+of something configurable, based on stuff from 202106141340-fresh:
+
+    [:
+
+     - Desired size and position in parent
+
+     - 3 bit w,h,x,y in terms of the desired margins wrt parent from min 0
+       to max 7
+
+     - Automatic move/grow toward the desired.  adjusting as parent grows
+
+     - Size-dependent triggering: deploy subthing.  type change
+
+     - patch junctions for switching packets between siblings
+
+     - parent junctions?
+
+     - switching packets between plate borders, more generally?
+
+     - build a box-of-boxes with some geometry to it
+
+     - have a special first gen switch that creates some random block of
+       colors or something.  Then copy that to subsequent generations of
+       boxes of boxes.  So different original seeds will be detectable by
+       their different random patterns down the generations.
+
+    :]
+
+    [:
+
+    Mon Jun 14 16:09:52 2021
+
+    trigger 3x3
+     - deploy plateOperator at p(1,1)
+
+
+    :]
+    [:
+
+    Mon Jun 14 16:25:16 2021
+
+    Let's try for just the relative size and position in parent stuff. [4:
+
+    Mon Jun 14 16:26:21 2021 OK, PlateOperator has already got
+    mDesiredPlateSize as a B2D.  It's got 18 free bits at the moment..
+
+    What about something like B2DPlate4, for 0..15 == ~7% relative plate
+    granularity w & h.
+
+     Our size target = ((parentsize - 2*parentborder) *
+                        (mDesiredSizeFrac + 1u)) / 16u
+
+     Our pos target =  ((parentsize - 2*parentborder) *
+                        (mDesiredPosFrac + 1u)) / 16u
+
+    [:
+
+    Mon Jun 14 16:54:36 2021 Then do bp and the whole thing and grow/move
+    towards targets.  Just a next generation PlateOperator for general use.
+
+    :]
+
+    :]
+
+    :]
+
+:15][16:
+
+Tue Jun 15 04:01:59 2021 So the SubplateOperator is a little weird
+because it needs to reach outside its containing plate, to get the
+size of its container's container, and to infer its container's
+position within its container's container.  And where do we think of
+looking to try to find that information?  At its container's
+plate(-1,-1) perhaps?  We need to check that whatever's there is
+actually our container's containing plate, and then we get container's
+container size from it, and we infer the position of container's
+plate(0,0) from its pos.[17:
+
+Tue Jun 15 08:48:34 2021 Working on SubplateOperator.getOuterTargets.
+How do we want to express the 'desired position' of a subplate within
+its containing plate, given a 'relative position' specification in
+(0..15, 0..15)?
+
+Our idea was to answer the question 'How much of the available padding
+should be on the left/top?' with 0 meaning all on right/bottom and 15
+meaning all on left/top.
+
+So let's say we've computed that, call it targetPaddingWN.  But that's
+not really actionable for the subplate operator.  I guess we want to
+turn that into a targetPosDelta somehow.  I guess that would be like:
+
+  desiredPos = targetPaddingWN + c1x1; // Reinclude W&N border
+  targetPosDelta = desiredPos - r1Pos; // How far r1 is from desired
+
+and let caller decide based on that (especially since it needs to
+factor in clearance as well).
+[18:
+
+Tue Jun 15 11:11:54 2021 OK so it's getting to be time for caller to
+'decide based on that', and how do we want that to go?
+
+1 - We're doing outer only at the moment
+2 - Consider four possible moves
+3 - Consider just two grows?  Are we sticking to that for now?
+4 - Determine the 'move dir' -- the direction of a move/grow
+5 - Compute the resulting siz/pos of each move
+6 - Score a point if the result reduces (targetsize-size) (grow can)
+7 - Score a point if the result reduces deltapos (grow & move can)
+8 - Apply bonus by multiplying by clearance[movedir] (might be zero!)
+9 - Weighted random pick with total*total
+
+[19:
+
+Tue Jun 15 11:46:44 2021 Actually, can a grow reduce deltapos?  What
+does targetPosDelta actually mean?  Is it distance of plate(0,0) from
+its ideal?  Then a grow could improve it.
+
+:19]
+:18]
+:17]
+
+:16]
+[20:
+
+Thu Jun 17 01:29:26 2021 OK so we appear to have a plausible
+SubplateOperator, flexibly positioning and sizing a
+plate-within-a-plate.  For demo next T2s, I want:
+
+ - Plate with a few bits of programmable color for field and border so
+   we can see what's going on.
+
+ - SubplateOperator that can seed other Plates & SpOs based on
+   instructions fetched from a deque or something.[23:
+
+   Thu Jun 17 01:59:37 2021 How about focusing on interplate transfer
+   for a bit?
+
+ - Copy-transfer of content from a rolling deque into another plate:
+   how could we do that?
+
+:23]
+
+[21:
+
+Thu Jun 17 01:37:21 2021 What's the SpO bit budget looking like?[22:
+
+Thu Jun 17 01:37:57 2021 16 bits unused.
+
+:22]
+
+:21]
+
+:20]
+[24:
+
+Thu Jun 17 02:00:48 2021 Issue with interplate is we're all oriented
+the same way, so we can't put two plate roots in one event window
+unless one of the plates is vewwwy vewwy smol.
+
+So we need a wire or something.  What about releasing a
+ConnectedPlate?  Or a PlateConnector thing, whose job it is is to
+maintain a path/gradient between two plates.  Idea is PlateConnector
+has to be pretty flexible, updating or reconfirming its connected
+plates' positions each event -- and spawning additional
+PlateConnectors as needed to maintain connectivity, if the plates
+begin to get too far apart.
+
+Now basically it might be enough to just touch both plates anywhere,
+but for the deque copying task it seems it would be more useful to
+connect root-to-root, even though that can mean a lot more wire might
+need to be generated.
+
+       R P
+     C P P
+       r p p p p
+       p o . .
+       p . .
+       p .
+       p
+
+Or what if we stick an explicit 'anchor' inside each plate, that the
+connector tracks, and that anchor can be anywhere it wants.  Instead
+of hardcoding the root as the implicit anchor.  That could allow us to
+have subplate-to-containing plate connections as well as intersibling
+connections.[25:
+
+Thu Jun 17 03:14:11 2021 OK trying to make Anchor.ulam.  First
+question: Absolute or relative coordinates?  I think we want to commit
+to Anchors being 'border related' so we want to express that.  But
+that still doesn't resolve whether we want to be absolute or relative
+along whatever our chosen border.
+
+Well, for now let's say relative, with the argument that the exact
+Anchor position shouldn't be that critical, since the whole point is
+that PlateConnector-ish stuff will search locally for the anchor
+anyway.  So let's steal the new SpO relative-positionish stuff for
+Anchor.[26:
+
+Thu Jun 17 09:07:00 2021 OK, so now I'm asking how to initialize
+Anchor.mRelativePosition.  'Ideally of course' it would be initialized
+by the creator, but we could imagine trying to infer it from whereever
+it finds itself.  Plop it down in a plate and it 'stays put' even as
+the plate moves and grows around it.
+
+The problem is, if the creating plate is tiny there are very few
+possible positions to place the anchor.  Like a [3,3] std border plate
+has to put the anchor at (1,1) and symmetry means we'd then stay in
+the center forever.  Which is about the least appealing place for us
+to anchor.
+
+By the time the container gets to [5,5] the picture's better..  Hey,
+what if we let creator put the anchor IN THE BORDER and have it
+migrate inward after inferring its relative position?  Then just [3,3]
+is enough to specify corners, faces, and center.
+
+   stdpl stdpl
+   [2,2] [2,2]
+   (0,0) (1,0)
+
+   anchr stdpl
+   [1,1] [2,2]
+   (0,0) (1,1)
+
+Still tight for initting atomically from a parent plate..
+
+What about starting it outside but adjacent to a plate and letting it
+migrate through the border and in?  Getting too complicated, I think.
+
+[27:
+
+Thu Jun 17 09:51:12 2021 If we're focusing on getting two sibling
+plates tethered for communications let's get serious about it.  What
+do we really think the sibling seed will look like?  Hmm could it just
+START with the anchor?  If we imagine routing packets over the
+connecting wire we really don't need to connect root-to-root.
+
+We could imagine an AnchorOperator as a DATA MEMBER of an anchor
+rather than a base class or just a bunch of config.[28:
+
+Thu Jun 17 10:27:28 2021 A reason for a more complex creation is to do
+more parameterization.  In our theoretical demo we are going to have:
+
+ - A subplate in the mother containing subplate specs -- 'germ line'
+
+ - Some initiation of an attempt to reproduce
+
+ - Spawning of anchored sibling plate to hold the germ line
+
+ - Growth of sibling plate + transfer of germ line into it
+
+ - Detaching of sibling plate + independent development according to
+   its subplate specs.
+
+So this is like an 'external fertilization' scenario.
+
+Issue: We were thinking that the germ line plate WAS going to be a
+subplate in the mother, not the top-level mother itself -- so there'd
+need to be communications from the germ line to the mother border as
+well as from the mother border to the sibling offspring.
+
+Really seems like it would be better to clone the germline internally
+then make a special tecton that splits the mother at some selected
+coordinate.
+
+[29:
+
+Thu Jun 17 10:48:52 2021 Getting time to move the flag.
+
+Let's have anchor infer its relative position if it doesn't have one,
+and just demo it manually for now after the containing plate has grown
+a bit.[30:
+
+Thu Jun 17 11:57:36 2021 Well, the relative position inference still
+isn't quite right, but it's on its way.  Pushing this and packing up.
+
+[31:
+
+Thu Jun 17 14:37:28 2021 Flag moved.  Rebuilding.[32:
+
+Thu Jun 17 15:27:49 2021 OK first bug identified: The Anchor
+initializes itself on its first event -- but if a plate neighbor
+queries it before it gets its first event, they blow up because the
+Anchor doesn't have a valid size/pos.  Need to init on first use
+rather than first event.[33:
+
+Thu Jun 17 15:46:28 2021 OK that's working, and a couple NE and SE
+anchors seem to be holding position pretty well as the plate grows.
+[34:
+
+Fri Jun 18 00:12:53 2021 So okay pop pop how is an Anchor actually
+supposed to help us transfer the germ line?  I was vaguely imagining
+a packet stream running Anchor to Anchor, or through Anchors and on,
+but that means we need a reasonably stable getNextSN(Bool) and how are
+we going to have that?
+
+Was just blithely imagining the users of Anchor would track changes
+when an Anchor moved, and Anchor did not have to care about the
+positioning of its users.
+
+But now that we're getting closer to using the damn thing it seems
+like we need
+
+(1) Admit Anchor is point-to-point
+(2) Give it mLeftSN and mRightSN
+(3) Develop stream growth code to allow inserting additional stream
+    nodes when an existing L/R relationship gets strained.
+
+So we want like a MovableGrowableStream API that Anchor subclasses,
+and uses it to (generally) allow itself to move as we've just
+implemented.
+
+Now, even if we do left and right updating as we move, we have to
+accept the possibility of broken paths, because we're operating
+between sibling plates and (therefore) tectons won't respect our
+links.
+
+[35:
+
+Fri Jun 18 00:38:08 2021 Could we do belt-and-suspenders by having
+both mLeftSN and mRightSN plus some kind of Int(n) mLeftTag and Int(n)
+mRightTag that we match up to confirm.
+
+We use mLeftSN (mRightSN) as the starting point for a search to find
+the matching tag pointing back at us.
+
+This all seems so tiring but given the need to interact between
+siblings -- inevitably, eventually, somehow -- means we need something
+here.
+
+Now, when a tecton passes, there's going to be a long period where an
+(in plate) Anchor will be blocking, while an external (off plate)
+observer will not be.  Maybe that's a basis for a division of
+responsibilities: The external observer be responsible for repairing
+broken links in itself and on the inside.
+
+Except the Anchor moves itself when it's active, not when it's
+blocking..
+
+We need to expect ugliness in sibling comms.  Maybe we shouldn't be
+thinking reliable channels so much.  Fire and forget seems more in the
+spirit of things.
+
+And we'd been thinking about 'cloud gradients' and individual messages
+that climb the gradient.
+
+[36:
+
+Fri Jun 18 01:01:54 2021 What about an interconnecting Plate?  If we
+want two Plates to communicate west-to-west, stack them and grow a
+side plate to connect them:
+
+          D D D
+    C C C D . .
+    C . C D D D
+    C . C
+    C . C M M M M
+    C C C M . . .
+          M . .
+          M .
+
+
+It's like the von Neumann constructor arm.  And it's our beloved
+Plate.
+
+Now how does it pass the sibling decoupling test?  For example, in the
+current code, M (and D) will both try to head east to create clearance
+away from C.  How does C react to that?  We want temporary suppression
+of M & D's 'natural' instincts for the duration of the interaction?
+
+[37:
+
+Fri Jun 18 01:25:30 2021 Bledge.
+
+This all pushes me back towards 'border router' ideas.  Build off of
+the pretty solid border packet stuff, extending it so packets can
+somehow swap between sibling plate borders.
+
+How big are our border packets?[38:
+
+Fri Jun 18 01:35:35 2021 Looks like only 16 bits per
+B2DStreamPlate.B2DStreamPayload?
+[39:
+
+Fri Jun 18 02:31:07 2021 Maybe I'm (once again, still) looking at this
+wrong; maybe I shouldn't be looking for 'general' 'long-distance'
+communications and influence schemes.  Maybe I should be looking for
+specific close-in schemes.  Can seed a plate above root, and make
+special purpose SQ that automatically enter the plate above.
+
+             ADADADAD
+             ADLO. .
+             AD. . .
+           RTAD. SQ.
+           SQAD. SQ.
+           SQADADADAD
+           RTM M M M M
+           SQMPO SQ.
+           SQMOa SQ
+             M .
+             M
+
+[40:
+
+Fri Jun 18 02:38:55 2021 Well that's a mess but it's maybe an idea.
+Could Oa make a 1x3 'RT' atomically?  Probably not..
+
+        R
+        S A O
+        S
+
+Hmm I guess it can, with room to spare:
+RT@ewc(-2,-1)
+SQ@ewc(-2,0)
+SQ@ewc(-2,1)
+[41:
+
+Fri Jun 18 02:46:28 2021 Ah but that only works if the AD holding the
+germline is naked.  But we can use up the extra room?
+
+         M M M M M
+       R M O
+       S M
+       S M A A A A
+       R M A O
+       S M A a
+       S M A
+         M A
+         M
+         M
+
+So, from 'a' on the inner plate, it's
+
+RT@ewc(-3,-1)
+SQ@ewc(-3, 0)
+SQ@ewc(-3, 1)
+
+and we just barely make it
+
+:41]
+And we replace the PO/Oa combo in the daughter with a special
+LoadOperator that:
+
+ - Is the seed to start the daughter
+
+ - Manages growth to Nx6
+
+ - Does special border patrol interpretation to stay close/adjacent to
+   the mother
+
+ - Accepts RTs that happen by, and inserts
+
+
+:40]
+
+:39]
+:38]
+
+:37]
+
+:36]
+:35]
+:34]
+:33]
+:32]
+:31]
+:30]
+
+:29]
+
+:28]
+
+:27]
+
+:26]
+
+:25]
+
+:24]
+[42:
+
+Fri Jun 18 04:39:30 2021 OK, TransportPlate.  [1,3*k] for k steps.
+Say k==3 for starters
+
+Seed [1,9]
+     (0,8)
+
+and let it heal if it can.  Have (0,0) send a flag once it exists and
+is in communication with LO.  Have the two ends/peers of the
+TransportPlateV send HELO msgs if they have nothing better to send.
+Or the left peer says HELO and the right peer says HERO so we know
+which way things are going.
+
+
+PlateDeployer
+  Unsigned(16) mElementType;
+  Unsigned(6)  mDeploySN;
+  B2D          mSize;
+  B2D          mPos;
+
+(+ 16 6 (* 2 7) (* 2 7)) == 50
+[44:
+
+Sat Jun 19 04:45:49 2021 How about also have 'Unsigned(16)
+mDecayIntoType' for after the PlateDeployer manages to deploy.
+
+:44]
+:42]
+[43:
+
+Sat Jun 19 03:35:51 2021 OK, so TransportPlateV is starting to look
+plausible, although it hasn't actually transported anything yet.  But
+it spawned the creation of APayload and AtomPairPayLoad and related
+classes, which 'ought to' make something like TransportPlateH pretty
+minimal.  Now :42: above had us sending msgs internally but we're not
+doing that.
+
+I wonder if we should make room for an operator at each end of the
+TransportPlateV, before things get too nailed down.  Easier to have
+one just at the bottom (left peer) end
+
+:43]
+[45:
+
+Sat Jun 19 12:20:23 2021 OK so a fundamental issue as we try to build
+a 'constructor arm' kind of thing is: "How do we keep having an
+interpreter at the end of the arm?"  When we build a TransportPlateV,
+say, we end up with an 'information highway' that just sits there,
+passive.  If we send payloads down the highway, they just clog it up,
+because there's no exit to anywhere at the far end and no mechanism
+for building one.
+
+In the more vNish constructor arm, the end of the arm is an evaluator,
+and messages going down the arm are interpreted at the end.
+
+It does make me want to think again about having 'operator slots' at
+the ends of the TPv (and TPh).
+
+But we could say, if we dared, that an unconnected TPx peer should
+just dequote an arrived SQ.. and stick it where?  In the operator
+slot, if it's empty?  So it's not about being unconnected, but about
+being uncontrolled.
+
+Maybe.
+
+Back in :43: I (eventually) put off doing operator slots in TPv.. go
+back and try again?  The argument is we need programmable control at
+the ends of a pipeline.
+
+Time is getting really low here..  But let's take another look at it.
+
+[46:
+
+Sat Jun 19 12:35:55 2021 We're suggesting the geometry is going to be
+like 
+
+           0         R operator slot
+           1         First TPv manager
+           2         payload 0
+           3         payload 1
+           .
+           .
+           3K+1      Last TPv manager
+           3K+2      payload 0
+           3K+3      payload 1
+           3K+4      L operator slot 
+
+
+:46]
+
+:45]
+[47:
+
+Sun Jun 20 04:55:48 2021 OK, have made a lot of progress but looking
+grim on hopes for 'constructor arm'-ish demo.
+
+Current issue is when QStream13 calls swapPayload,
+AtomPairPayload.swapPayload answers the call, and it just blindly
+swaps the atoms, meaning it's perfectly happy to swap SQs with
+underlying TransportPlateVs, corrupting the latter's plate info in the
+process, with PRRELs (overlapping plates) being the typical
+consequence.
+
+Now, SingleQuote has mHasPayload..  We could fill up all the
+non-station Tv sites with SingleQuote pairs all the time, so that we'd
+always be swapping complete plates so no inconsistencies would be
+created or need to be fixed up.
+
+But super tired at the moment.
+[48:
+
+Sun Jun 20 10:52:27 2021 Well fudge.  A little bit screwed here
+because we have too many notions of empty and full:
+
+ - QStream13 has mBufferStatus cBUFFER_EMPTY vs three other choices
+ - APayloadT(bits) has mHasPayload (though not using APayloadT ATM)
+ - SingleQuote has mHasPayload
+
+and the current issue is that an SQ pair with mHasPayload == false
+looks like a non-cBUFFER_EMPTY state to QStream13.[49:
+
+Sun Jun 20 12:00:38 2021 Maybe 'the' problem is AtomPairPayload --
+being, as it is, expressed in terms of mere Atoms?  If we had
+SQAtomPayload or something, that would swap SQA guts without touching
+the overall atoms, that would take out one level anyway.
+[50:
+
+Sun Jun 20 16:51:11 2021 Going to try deleting QStream13.mBufferStatus
+in favor of API calls instead.  In QStream14 I guess.
+
+:50]
+:49]
+
+:48]
+:47]
+[51:
+
+Mon Jun 21 10:07:37 2021 OK trying to get TransportPlateH.ulam going.
+Current issue is which way do we number the stations?  In TPv, max k
+is at left end, while in TPh, currently, max k is at right end, and
+that causes TransportPlate.isPeer(Bool) to screw up.
+
+Choose your own adventure.  Do you:
+
+ - Try to reverse the k ordering in TPh?  Affects increment too?
+
+ - Delegate isPeer(Bool) to subclasses?
+
+ - Change TPv so left is on top therefore min k?
+[52:
+
+Mon Jun 21 10:53:28 2021 OK well I chose to try to reverse the k
+ordering in TPh and it sorts of seems to be mostly working.  It
+doesn't do the chain reaction that TPv does because (unlike with TPv)
+the transport plate fills in the site the second seed would spawn
+into.
+
+Going to sleep a bit more, but next issue is starting to pump some
+more interesting and varied transport operators -- and non-transport
+operators -- through the transport plates..
+
+:52]
+:51]
+[53:
+
+Mon Jun 21 13:35:54 2021 Working on operators to ship.  What 
+
+:53]
+[54:
+
+Mon Jun 21 14:23:45 2021 Changed Bool TransportOperator.operate() to
+operate(Atom), and only calling it when there's an inbound packet to
+handle, but now there are any because operate() was what was sending
+the packet..  Split the API?  Have the sending happen in behave()
+instead of operate?
+
+ -> Splitting the API seems natural:
+      Bool consume(Atom)
+      Bool produce(Atom &)
+    but it means when produce() is running the TO is not ew[0], so
+    its range can be reduced.  It might be unable to reach into an
+    AtomDeque, for example, to get the next thing to ship.
+
+    But that's also true on the consume() side, so that issue is not
+    purely about splitting the API
+
+ -> Of course, trying to send during behave() seems natural, because
+    behave() is the most natural thing an element can do.  Maybe we
+    should ditch all the methods in TransportOperator, and just let it
+    be a flag type meaning it's ready to get placed in a
+    TransportPlate operator slot.
+
+    Then the TO has to poll the TP for both sending and receiving.
+    But that's pretty much officially Business As Usual in MFM land.
+
+ -> Perhaps operate(Bool) could just be called as an advisory, for the
+    TO to capture if they wanted.
+
+[55:
+
+Mon Jun 21 14:55:22 2021 Well, I think we have to move the action to
+TO.behave().. [56:
+
+Mon Jun 21 15:36:58 2021 OK that's starting to work.  I think we're
+back to new/addtl operators to get stuff jumping.  Did we bring
+PlateDeployer into this spike already?[57:
+
+Mon Jun 21 15:38:27 2021 Yes.. Did we bring in AtomDeque?[58: Not
+yet.. [59:
+
+Mon Jun 21 16:48:14 2021 OK, so we have a TPv receiving a
+PlateDeployer that deploys an AtomDeque, which heals to (11,6).  But
+the AD has no operators so it just sits there.
+
+I think we'd really like it, if we could figure a quick way to have
+it, if distal TransportOperators could send back status information so
+the source could interlock with it.  There's no way we'll be happy
+with open loop dynamics on something this big and articulated.
+
+But that pushes us back to acting through the TransportOperator API,
+rather than standalone polling.  It would be a lot more satisfying to
+handle an inbound packet and atomically replace it with an outbound
+one.
+
+How bad are the ew issues in the TpV and TpH layouts we're playing
+with?
+
+[60:
+
+Mon Jun 21 17:12:58 2021 Well, at the northbound end of a TpV the
+station is at ewc(0,-1) wrt the TO, so that's not so bad.
+
+At the southbound end it's really tight though.  The TO basically just
+has its von Neumann neighborhood to work with.  In particular, a
+southern TpV TO could not reach into an AtomDeque from inside a TO
+callback.
+
+But hey we could still do an atomic packet turnaround from the TO.
+Let it find its peer station, check for recv and swap out.
+
+Yes.
+
+But time for a very brief evening first.[61:
+
+Mon Jun 21 18:35:18 2021 OK, let's go for TO atomic packet
+  response.[62:
+
+Mon Jun 21 18:36:35 2021 Let's have TO.notify provide.. no, let's
+figure it out from geometry.[63:
+
+Mon Jun 21 18:38:45 2021 Except it's a pain to figure it out from
+geometry when the plates are so small and have no borders.. We can
+hardcode four coords to check for {L|R} {V|H} but that's pretty sad.
+
+But then, it's now Monday evening before T2sday.  We are officially at
+the sad end of the development cycle.
+
+ (0,-3) L V
+ (0,1)  R V
+ (1,0)  L H
+ (-1,0) R H
+[64:
+
+Mon Jun 21 20:25:38 2021 So okay we have Bool TO.lookFor(..) to look
+for a potential peer, and Bool TO.trySend(Atom) that uses it.  But
+there's a snag of course in the 'atomic packet turnaround' idea: The
+PlateDeployer does its deployment in behave(), not in some kind of
+'recv' method.  Because it's never actually received a packet (yet).
+It was just created by a packet.
+
+Well, we could check if the peer is empty before deploying, I
+suppose. [65:
+
+Mon Jun 21 20:44:02 2021 Soo and what are we going to send back, here,
+as an acknowledgment?  Just send the PD back?  How do we avoid
+pingpong? [66:
+
+Mon Jun 21 20:54:57 2021 Well let's just send it back and see what
+happens.. 
+
+:66]
+
+:65]
+
+:64]
+:63]
+
+:62]
+
+:61]
+
+:60]
+
+:59]  :58]
+
+:57]
+
+:56]
+
+:55]
+
+:54]
+[67:
+
+Mon Jun 21 23:23:44 2021 OK well we've gotten a reply back and printed
+stuff about it.
+
+And there's a pretty clear idea about how we'd want this to work: We
+want to deploy two instances of THE SAME ELEMENT at the opposite ends
+of a transport plate, so they know who they're talking to and can work
+together on doing stuff.  They want to be, in effect, a single coupled
+processor that's sending coordinated messages to accomplish stuff over
+a bigger area than any single atom could.
+
+But: We're really close to out of time here.  Really really close.
+[68:
+
+Mon Jun 21 23:33:24 2021 In this case, we'd be talking about a
+long-range deque copier.  We'd like an element that uses
+TransportPlates, and is a TransportOperator.  Now, how would the
+AtomDequeTransporter know when the whole loop has been copied?
+
+[69:
+
+Tue Jun 22 00:41:00 2021 And we'd really like it to be a bit more
+generic, if we could have that.  Like we'd like the transport system
+construction to be controlled by the beginning of the deque program.
+
+:69]
+
+:68]
+
+:67]
+[70:
+
+Tue Jun 22 01:06:48 2021 OK out of time.  What are we going to demo?
+Can we get the relative window sizes going enough to make a demo.[71:
+
+Tue Jun 22 03:23:28 2021 OK, made ColorPlate to use for a demo.  Can
+we cram a smiley face into a single ew seed?
+
+
+                 
+    cp cp cp cp cp cp cp
+    cp po CP C@ CP CP cp
+    cp    CP PO CP PO cp
+    cp    .  CP CP .    
+    cp       CP PO  
+                    
+
+
+        cp            
+           CP CP CP 
+           CP SO CP 
+        cp CP S@ CP 
+           CP CP CP 
+
+
+:71]
+
+:70]

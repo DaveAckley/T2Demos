@@ -47,18 +47,18 @@ quark B2DPacketSense {
       if (!outer && p.isPlateCorner()) continue; // Skip corners for inner measurements
       // Here twice for corners, once for borders
       Unsigned mindist = mDirData[pd];
-    //      bsl.printf("SNDNDEEOOPPP12(pd=%d,mindist=%d)\n",pd,mindist);
+      //      bsl.printf("SNDNDEEOOPPP12(pd=%d,mindist=%d)\n",pd,mindist);
       if (mindist == 0u) continue;
       C2D us; // XXX ASSUMES ew[0]
       C2D incr = pu.stepInDir(pd);
       if (!outer) incr = incr*(C2D.Coord)-1;
       for (Unsigned dist = 0; dist < mindist; ++dist) {
         us += incr;
-    //        bsl.printf("SNDNDEEOOPPP13(%d)(%d,%d)\n",dist,us.getX(),us.getY());
+        //        bsl.printf("SNDNDEEOOPPP13(%d)(%d,%d)\n",dist,us.getX(),us.getY());
         Bool knowndead = ew.isLegal(us) && !ew.isLive(us);
-        if (knowndead || !p.isEmptyOrField(us)) {
+        if (knowndead || !p.isEmptyOrField(us,outer)) {
           mDirData[pd] = (Clearance) dist;
-    //          bsl.printf("SNDNDEEOOPPP14(%d)\n",mDirData[pd]);
+          //          bsl.printf("SNDNDEEOOPPP14(%d)\n",mDirData[pd]);
           changes = true;
           break;
         }

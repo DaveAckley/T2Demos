@@ -1,0 +1,62 @@
+quark TransportOperator : B2DPlate2 {
+  typedef EventWindow.SiteNum SN;
+  /** Called to notify a TransportOperator in an operator that IO is
+      currently possible: Output is possible if \c writeNotRead is \c
+      true, and input is possible if it's false.  \returns \c true if
+      TO did IO, \c false otherwise
+   */
+  virtual Bool notify(Bool writeNotRead) ;
+
+  Bool lookFor(Int ewx, Int ewy, Bool left, Bool vert, C2D & ret) {
+    EventWindow ew;
+    SN ourewsn = ew.getSiteNumber(self);
+    if (ourewsn == SN.maxof) return false;
+    C2D ourewc = ew.getCoord(ourewsn);
+    C2D ewc((C2D.Coord) ewx, (C2D.Coord) ewy);
+    if (!ew.isAccessible(ewc)) return false;
+    Atom & a = ew[ewc];
+    if (a as Plate) {
+      PlateUtils pu;
+      PlateUtils.PlateRelation rel = pu.relationTo(self,ourewc,a,ewc);
+      if (rel != pu.cCONTAINED_BY_PLATE) return false;
+    }
+    if (a as TransportPlateV) {
+      if (!vert) return false;
+      if (a.isPeerTP(left)) { ret = ewc; return true; }
+    } else if (a as TransportPlateH) {
+      if (vert) return false;
+      if (a.isPeerTP(left)) { ret = ewc; return true; }
+    }
+    return false;
+  }
+
+  //// SERVICES
+  /** \returns \c true and sets \c ret and \c left if a matching
+     TransportPlate peer is found for this TransportOperator
+   */
+  Bool findStationEWC(C2D & ret, Bool & left) {
+    if (lookFor(0,-3, true, true, ret) ||
+        lookFor(1, 0, true,false, ret)) { left = true;  return true; }
+    if (lookFor(0, 1,false, true, ret) ||
+        lookFor(-1,0,false,false, ret)) { left = false; return true; }
+    return false;
+  }
+
+  Bool trySend(Atom a) {
+    EventWindow ew;
+    C2D peerewc;
+    Bool left;
+    if (!findStationEWC(peerewc,left)) return false;
+    TransportPlate & tp = (TransportPlate &) ew[peerewc];
+    return tp.send(!left,a);
+  }
+
+  Bool tryRecv(Atom & a, Bool consume) {
+    EventWindow ew;
+    C2D peerewc;
+    Bool left;
+    if (!findStationEWC(peerewc,left)) return false;
+    TransportPlate & tp = (TransportPlate &) ew[peerewc];
+    return tp.recv(left,a,consume);
+  }
+}

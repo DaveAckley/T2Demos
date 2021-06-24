@@ -1,4 +1,0 @@
-union Foo {
-  String mString;
-  Bits(String.sizeof) mBits;
-}

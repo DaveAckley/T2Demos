@@ -18,8 +18,8 @@ element PlateOperator {
   typedef B2D SizeCoord;
   SizeCoord mDesiredPlateSize;
 
-  constant Unsigned cTIMER_BITS = 3u;
-  typedef XTimer(cTIMER_BITS,Unsigned(cTIMER_BITS).maxof,8u) CommandTimer;
+  constant Unsigned cTIMER_BITS = 4u;
+  typedef XTimer(cTIMER_BITS,Unsigned(cTIMER_BITS).maxof,16u) CommandTimer;
   CommandTimer mCmdTimer;
 
   //// UrSelf API

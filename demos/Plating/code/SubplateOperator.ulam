@@ -1,0 +1,364 @@
+/** SubplateOperator.  A plate operator emphasizing packing and layout within a containing plate.
+    \symbol SO
+    \color #33a
+ */
+element SubplateOperator {
+  typedef B2DStreamPlate MyContainer;
+  typedef B2DStreamPlate.B2DStreamPayload MyPayload;
+  DebugUtils du;
+  Random random;
+  EventWindow.SiteNum mRootSN;
+  EventWindow.SiteNum mRPeerSN;
+
+  B2D4 mRelativeSize; //< ~proportion of container's available size
+  B2D4 mRelativePos;  //< ~distribution of our margin within container
+
+  typedef Unsigned(3) Clearance;
+  typedef Clearance DirClearance[4];
+  DirClearance mInnerClearance;
+  DirClearance mOuterClearance;
+
+  /*
+  typedef B2D SizeCoord;
+  SizeCoord mDesiredPlateSize;
+  */
+
+  constant Unsigned cTIMER_BITS = 4u;
+  typedef XTimer(cTIMER_BITS,Unsigned(cTIMER_BITS).maxof,16u) CommandTimer;
+  CommandTimer mCmdTimer;
+
+  //// UrSelf API
+  @Override
+  ARGB getColor(Unsigned selector) {
+    ARGB ret = super.getColor(selector);
+    ColorUtils cu;
+    //ret = cu.between(ret,cu.color(0xffff0000),75);
+    return ret;
+  }
+
+  // Look for container plate root site
+  Bool lookForContainerRootAt(Int x, Int y) {
+    EventWindow ew;
+    C2D c((C2D.Coord) x, (C2D.Coord) y);
+    if (!ew.isAccessible(c)) return false;
+    Atom & a = ew[c];
+    if (a as MyContainer) {
+      C2D spos = a.positionOnPlate();
+      if (spos.length() == 0u) {
+        mRootSN = ew.getSiteNumber(c);
+        C2D c0x1(0,1);
+        C2D rpc = c+c0x1;
+        if (ew.isAccessible(rpc)) {
+          Atom & a2 = ew[rpc];
+          if (a2 as MyContainer) {
+            C2D spos2 = a2.positionOnPlate();
+            if (spos2 == c0x1) {
+              mRPeerSN = ew.getSiteNumber(rpc);
+              return true;
+            }
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  Bool findContainer() {
+    EventWindow ew;
+    if (mRootSN != 0u) {
+      // Once bonded to a container, just die if it's gone
+      C2D c = ew.getCoord(mRootSN);
+      return lookForContainerRootAt(c.getX(),c.getY());
+    }
+    if (lookForContainerRootAt(-1,-1)) return true;
+    if (lookForContainerRootAt(-1,-2)) return true;
+    return false;
+  }
+
+  Bool mustBlock() {
+    EventWindow ew;
+
+    DebugUtils du;
+    for (EventWindow.SiteNum sn = 1u; sn < 41u; ++sn) {
+      if (!ew.isAccessible(sn)) continue;
+      Atom & a = ew[sn];
+      if (a is Tecton) return true;
+    }
+    return false;
+  }
+
+  Bool getOuterTargets(C2D & targetSizeDelta, C2D & targetPosDelta) {
+    DebugUtils du;
+    EventWindow ew;
+    PlateUtils pu;
+    //    du.print("GTOTGS10");
+    if (!(ew[mRootSN] is MyContainer)) return false;
+    MyContainer & r1 = (MyContainer&) ew[mRootSN];
+    C2D rootewc = ew.getCoord(mRootSN);
+    C2D root2ewc;
+    C2D r2offset;
+    Bool foundContainingPlate = false;
+    for (C2D.Coord x = 0; !foundContainingPlate && x >= -2; --x) {
+      for (C2D.Coord y = 0; !foundContainingPlate && y >= -2; --y) {
+        if (x == 0 && y == 0) continue;
+        r2offset.set(x,y);
+        root2ewc = rootewc + r2offset; // check above and left
+        //        du.print("GTOTGS11");
+        //        du.print(root2ewc);
+        if (!ew.isAccessible(root2ewc)) continue;
+        //        du.print("GTOTGS12");
+        if (!(ew[root2ewc] is Plate)) continue;
+        Plate & r2 = (Plate&) ew[root2ewc];
+        PlateUtils pu;
+        PlateUtils.PlateRelation rel = pu.relationTo(r2, root2ewc, r1, rootewc);
+        //        du.print("GTOTGS13");
+        //        du.print((Unsigned) rel);
+        if (rel != PlateUtils.cCONTAINS_PLATE) continue;
+        //        du.print("GTOTGS14");
+        foundContainingPlate = true;
+      }
+    }
+    if (!foundContainingPlate)
+      return false;
+
+    Plate & r2 = (Plate&) ew[root2ewc];
+    // OK: plate r2 contains plate r1 (which contains us)
+
+    C2D r1pos = r2.positionOnPlate() - r2offset;   // Pos of r1 in r2 platecoords
+    C2D r2siz = r2.sizeOfPlate();              // Total r2 size
+    C2D availsize = (r2siz - pu.c2x2).max(pu.c0x0);  // r2 non-border size
+    //    du.print("GTOTGS15");
+    //    du.print(r1pos);
+    //    du.print(r2siz);
+    //    du.print(availsize);
+
+    // Compute r1 target size (w,h) as 0..14 fourteenths of available (w,h)
+    C2D desiredSize = pu.relativeToAbsolute(availsize, mRelativeSize);
+    C2D r1siz = r1.sizeOfPlate();              // Current r1 size
+    targetSizeDelta = desiredSize - r1siz;     // Current r1 size error
+
+    //    du.print("GTOTGS16");
+    //    du.print(desiredSize);
+    //    du.print(r1siz);
+    //    du.print((C2D) targetSizeDelta);
+
+    C2D availpadding = (availsize - r1siz).max(pu.c0x0); // Current room to grow
+    // Compute r1 W&N target padding as 0..14 fourteenths of available padding
+    C2D targetPaddingWN = pu.relativeToAbsolute(availpadding, mRelativePos);
+    C2D desiredPos = targetPaddingWN + pu.c1x1; // Reinclude W&N border
+    targetPosDelta = desiredPos - r1pos;     // Current positioning error
+
+    //    du.print("GTOTGS17");
+    //    du.print(availpadding);
+    //    du.print(targetPaddingWN);
+    //    du.print(desiredPos);
+    //    du.print((C2D) targetPosDelta);
+
+    return true;
+  }
+
+  Void considerOuter() {  // We just got new outer data.  Should we act on it?
+    DebugUtils du;
+    C2D targetdeltasiz;
+    C2D targetdeltapos;
+    //    du.printContext();
+    if (!getOuterTargets(targetdeltasiz, targetdeltapos)) return;
+    //    du.print("CONSDR10");
+
+    EventWindow ew;
+    MyContainer & root = (MyContainer&) ew[mRootSN];
+    C2D rootsiz = root.sizeOfPlate();
+
+    PlateUtils.PlateDir actdir;
+    PlateUtils pu;
+    Random random;
+
+    Unsigned totalscore = 1u; // 1 vote for nothing.
+    Unsigned pickdir = Unsigned.maxof;
+    Bool pickgrow;
+    for (Unsigned idx = 0u; idx < 6u; ++idx) {
+      Unsigned i = idx%4u;      // 0 & 1 == W & N appear twice
+      Bool isGrow = idx >= 4u;   // First w/o isGrow then with
+      PlateUtils.PlateDir pd = (PlateUtils.PlateDir) i;
+      PlateUtils.PlateDir oppd = (PlateUtils.PlateDir) ((i+2u)%4u);
+      C2D incr = pu.stepInDir(pd);
+      //      du.print("CONSDR11");
+      //      du.print(pd);
+      //      du.print(isGrow);
+
+      Unsigned thisscore = 0u;
+      if ((incr * targetdeltapos) > 0u) ++thisscore;
+      if (isGrow) {
+        // Shrinking NYI
+        if ((incr.abs() * targetdeltasiz) > 0u) ++thisscore;
+        else continue; // Skip this possibility entirely if deltasiz < 0 in dir
+      }
+      //      du.print("CONSDR12");
+      //      du.print(thisscore);
+      thisscore *= mOuterClearance[i]; // Apply bonus multiplier
+      thisscore *= thisscore; // Emphasize advantage
+      //      du.print("CONSDR13");
+      //      du.print(thisscore);
+      if (thisscore > 0u) {
+        if (random.oddsOf(thisscore, totalscore += thisscore)) {
+          //          du.print("CONSDR14");
+          pickdir = pd;
+          pickgrow = isGrow;
+        }
+      }
+    }
+    //    du.print("CONSDR15");
+
+    if (pickdir != Unsigned.maxof) {
+      //      du.print("CONSDR16");
+      B2DPacket pkt;
+      B2DPacketAct.ActOp op = B2DPacketAct.cAOP_SIDE_MOVE;
+      if (pickgrow && pickdir != pu.cPLATE_GOES_E && pickdir != pu.cPLATE_GOES_S)
+        op = B2DPacketAct.cAOP_SIDE_GROW;
+      pkt.initAct(op,(B2DPacket.ActSide) pickdir,3u);
+      MyPayload pay;
+      pay.mBits = (MyPayload.MyBits) pkt;
+      pay.mHasPayload = true;
+      //      bsl.printf("CONSIDROO13:%x -- ",pay.mBits);
+      //      pkt.print(bsl);
+      //      bsl.printf("\n");
+      //      du.print("CONSDR17");
+
+      if (root.trySendPayload(true,pay)) {
+        //        du.print("CONSDR18");
+        mCmdTimer.set(1u);
+        return;
+      }
+      //      bsl.printf("CONSIDROO14\n");
+    }
+    //    du.print("CONSDR19");
+  }
+
+  Bool receivePacket(B2DPacket bp) {
+    if (!bp.isSense()) return false;
+    ByteStreamLogger bsl;
+    bsl.printf("RECVOO:");
+    bp.print(bsl);
+    bsl.printf("\n");
+    B2DPacketSense & sp = bp.asSense();
+    Bool outer = sp.mSenseDir == sp.cSDIR_OUTWARD;
+    for (Unsigned i = 0; i < 4u; ++i) {
+      B2DPacketSense.Clearance c = sp.mDirData[i];
+      if (c > 4u) continue;
+      if (outer)
+        mOuterClearance[i] = c;
+      else
+        mInnerClearance[i] = c;
+    }
+
+    if (outer)
+      considerOuter();
+    return true;
+  }
+
+  Void behave() {
+    EventWindow ew;
+    if (mustBlock()) return;
+    if (!findContainer()) ew[0] = Empty.instanceof;
+    else {
+      ByteStreamLogger bsl;
+      // PLATEOPS
+      MyContainer & root = (MyContainer&) ew[mRootSN];
+      MyContainer & rpeer = (MyContainer&) ew[mRPeerSN];
+      MyPayload pay;
+      Random random;
+      DebugUtils du;
+      B2DPacket bp;
+      if (rpeer.tryRecvPayload(false,pay)) {
+        mCmdTimer.reset();
+        bp = (B2DPacket) pay.mBits;
+        receivePacket(bp);
+      } else if (mCmdTimer.current() == 0u) {
+        bp.initSense(random.oddsOf(4,5), 1u);
+        bsl.printf("SENDOO:");
+        bp.print(bsl);
+        bsl.printf("\n");
+        pay.mBits = (MyPayload.MyBits) bp;
+        pay.mHasPayload = true;
+        //        du.printContext();
+        //        du.print("RELKEKLASKLAKRKEN");
+        //        du.print((Unsigned) pay.mBits);
+        mCmdTimer.set(1u);
+        if (root.trySendPayload(true,pay)) return;
+        //        du.print("AWAYRELKEKLASKLAKRKEN");
+      } else if (mCmdTimer.countAlarm()) {
+        du.printContext();
+        du.print("LOST CMD TIMER RESET");
+        mCmdTimer.reset();
+      }
+    }
+  }
+}
+
+/**
+   \symbol SS
+   \color #f11
+   Set up a structure like this:
+
+     AD. . .    size 5x6
+     . PO. .    desired size 15x10
+     . SSAD.    size 3x3
+     . . . SO   desired size/pos random
+
+ */
+
+element SeedSubplateOperator {
+  Unsigned(10) mEvents;
+  Void behave() {
+    EventWindow ew;
+    {
+      C2D at(1,0);
+      if (ew[at] is Empty) {
+        AtomDeque ad;
+        ad.setPositionOnPlate(C2D.instanceof(0,0));
+        ad.setSizeOfPlate(C2D.instanceof(3,3));
+        ew[at] = ad.atomof;
+        return;
+      }
+    }
+    if (++mEvents < 25u) return;
+    {
+      C2D at(-1,-2);
+      if (ew[at] is Empty) {
+        AtomDeque ad;
+        ad.setPositionOnPlate(C2D.instanceof(0,0));
+        ad.setSizeOfPlate(C2D.instanceof(7,6));
+        ew[at] = ad.atomof;
+        return;
+      }
+    }
+    if (mEvents < 50u) return;
+    {
+      C2D at(0,-1);
+      if (ew[at] is AtomDeque) {
+        PlateOperator po;
+        po.mDesiredPlateSize.init(15,10);
+        ew[at] = po.atomof;
+      }
+    }
+    if (mEvents < 75u) return;
+    {
+      C2D at(2,1);
+      if (ew[at] is AtomDeque) {
+        SubplateOperator sp;
+        sp.mRelativeSize.init(rando(), rando());
+        sp.mRelativePos.init(rando(), rando());
+        //        sp.mRelativeSize.init(7, 7);  // about half size
+        //        sp.mRelativePos.init(14, 14); // in the lower right corner
+        ew[at] = sp.atomof;
+        ew[0] = Empty.instanceof; // My work is done.
+      }
+    }
+  }
+  B2D4.BCoord rando() {
+    Random r;
+    return (B2D4.BCoord)
+      r.between(B2D4.cMINVAL,
+                B2D4.cMAXVAL);
+  }
+}
