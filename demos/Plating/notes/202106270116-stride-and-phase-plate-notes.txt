@@ -1,0 +1,1781 @@
+{104}  -*- text -*-
+[0:
+
+Sun Jun 27 01:17:06 2021 And here we are.  Interpolating relevant
+clips from other notes files here:
+
+FROM 202106240259-fresh/202106240259-notes.txt
+
+    [:
+
+    Thu Jun 24 05:26:50 2021 What about 'DIFFUSE PLATES'  That are on some
+    period spacing other than 1.
+
+    A period 2 diffuse tile could reproduce in place -- into one of the
+    other three period 2 phases -- and then separate.  No muss no fuss.
+
+    If it was small enough a period-changing tecton could hope to pass
+    over it successfully.
+
+    No, could pass modified GROW tectons over it, and it would swap with
+    phase 2 plate but when it encountered the phase 1 frontier it would
+    convert that row to phase 2 and vanish in the process.
+
+    [:
+
+    Thu Jun 24 05:40:46 2021 Just like I thought of CPlate as temporary
+    thing for reproduction and then realized its enduring value.  I
+    thought of tractor-trailer tecton space-injection as a temporary thing
+    for reproduction but now I'm wondering about its enduring value in
+    DIFFUSE PLATES.
+
+    Do a full crossbar by overlapping two period-2 plates at right angles.
+
+    Do a completely connected weight matrix same way.
+
+    Tectonic period change would mean have to have support for different
+    periods in different directions, that's a pain.  The period-change
+    tecton would need to be durable, to keep the frontier passivated, and
+    addtl tectons would bring addtl space, allowing the frontier to
+    advance layer by layer until it reached plate edge.
+
+    :]
+
+    :]
+
+And from 202106111204-quote-and-eval-notes.txt:
+
+    [:
+
+    Sat Jun 26 03:42:51 2021 What about tectons on another phase!?  Would
+    have to be a containing plate too I'd think.
+
+    But it seems you could do forward grow -- maybe even without a tecton?
+    Just by propagating a phase change wave?  Stick with tecton for now.
+
+    :]
+    [:
+
+    Sat Jun 26 13:59:32 2021 Flag moved again.
+
+    I think we should plan out a new spike oriented around phased Plates.
+    (Even if we call them just Plates.)
+
+    We should head for four-way growth and movement via phased Tectons as
+    example (1).
+
+    And a crossbar switch or KV store made of interphased plates as
+    example (2).  (Yeah sure.)
+
+    :]
+    [:
+
+    Sun Jun 27 00:26:43 2021 New spike into code/ for phase Plates go go
+    go. [:
+
+    Sun Jun 27 00:33:48 2021 OK in Plate.ulam we've added
+
+      virtual C2D stride() { return PlateUtils.c1x1; } //< Map plate coord diffs to ew coord diffs
+      virtual C2D phase() { return PlateUtils.c0x0; }  //< Our relative coord within stride
+
+    and have gotten code/ to buildable with just:
+
+       B2D.ulam
+       Plate.ulam
+       PlateUtils.ulam
+       TBox.ulam
+       Makefile
+
+    Let's
+
+     - Inspect Plate and PlateUtils for obvious stride/phase mods
+
+     - Head for a Phase4Plate demo element
+
+    :]
+
+    :]
+    [:
+
+    Sun Jun 27 00:42:19 2021 So a key part of this whole notion is that
+    stride/phase is only relevant when mapping between plate coords and ew
+    coords.  We're saying that all the purely plate coord code should be
+    *unaffected*.
+
+    :][:
+
+    Sun Jun 27 00:46:43 2021 For now skipping over Plate.mustBlockOrDie()
+    but we need to understand how we're going to iterate over ew now.
+
+    :][:
+
+    Sun Jun 27 00:50:48 2021 OK so Plate.plateCoordToEWSN(C2D plateCoord)
+    is obviously a key stride/phase player..[:
+
+    Sun Jun 27 01:10:28 2021 Well the apparent changes there look pretty
+    clean..  We'll see.[:
+
+    Sun Jun 27 01:13:59 2021 But now here's Plate.isEmptyOrField(..)
+    calling PlateUtils.relationTo(..) and that's going to be a main
+    event..  The rest of isEmptyOrField seems plausible as is?  ..Think so
+    maybe. [:
+
+    Sun Jun 27 01:15:54 2021 Same business in isEmptyOrPlate.
+
+    You know?  Should we really be doing all this in a notes file called
+    'quote-and-eval-notes'?  Let's start a new one and migrate this
+    lead-in..
+    :]
+    :]
+    :]
+    :]
+
+[1:
+
+Sun Jun 27 02:17:00 2021 OK well, finding the original
+DIFFUSE PLATES note took longer than it should have,
+even though it's from all of three days ago..  Anyway.
+
+(I wonder if moving to a tighter default column, like
+I've made it 50 here, would be better all things
+considered -- for quoting and clipping and
+screen-shotting and so forth..)
+
+:1]
+:0]
+[2:
+
+Sun Jun 27 02:28:32 2021 On to PlateUtils.ulam.  Still
+building clean but all untried.
+[3:
+
+Sun Jun 27 02:29:17 2021 OK so there's a question
+perhaps with PlateUtils.stepInDir(..) which is
+currently returning a unit vector on the x or y axis --
+(+-1,0) or (0,+-1).
+
+Should that return something depending on the stride?
+
+Let's leave it for now, and see if callers get cranky
+about that later.
+
+(But we do note that 'stepInDir', as a name, does not
+make clear whether it's for stepping in plate coords or
+ew coords -- bad bad.  Vs stepInDirPC or stepInDirEW or
+both.)
+[4:
+
+Sun Jun 27 02:33:41 2021 PlateUtils.reversePtr() is
+clearly reversePtrEW() but that's not the name either..
+
+And lineForwardSN.. lineForwardOffset.. none being
+explicit about their coord space.
+
+[5:
+
+Sun Jun 27 02:39:36 2021 OK, here we are at the
+PlateUtils.relationTo family of methods..
+
+This guy takes SNs so it's plenty obvious that's EW coords..
+
+  PlateRelation relationTo(EventWindow.SiteNum snl, EventWindow.SiteNum snr) {
+
+Changing this one
+
+  PlateRelation relationTo(C2D offsetl, C2D offsetr)
+
+to
+
+  PlateRelation relationTo(C2D ewoffsetl, C2D ewoffsetr)
+
+just to rub it in a bit.
+
+Ditto to
+
+  PlateRelation relationTo(Atom& al, C2D ewoffsetl,
+  Atom& ar, C2D ewoffsetr)
+
+[6:
+
+Sun Jun 27 02:42:43 2021 OK, at
+
+  PlateRelation relationTo(Plate& pl, C2D ewoffsetl, Plate& pr, C2D ewoffsetr)
+
+itself.  This tbox computation:
+
+    TBox tbr(pr.sizeOfPlate(), -pr.positionOnPlate() + ewoffsetr - ewoffsetl);
+
+is the first thing we encounter that's mixing PC and
+EWC.  Looks like it wants to be.. well.. one first
+question seems to be:
+
+  Are pl and pr on the same stride/phase?
+
+And we're probably going to need at least one more
+PlateRelation, something like
+
+  cINTERPHASE_PLATE //< L and R are on different phases
+
+or maybe
+
+  cPHASES_PLATE //< L is on a higher phase that R
+  cPHASED_BY_PLATE //< L is on a lower phase that R
+
+depending on how or if all the interphase stuff settles
+out.
+
+And that's even before we get to:
+
+  Are ewoffsetr and ewoffsetl on the same phase?
+
+As each other?  As pl and pr?  And those interact too
+-- pl and pr might say they're on different phases but
+given ewoffsetr and ewoffsetl their phases might
+actually be compatible.
+[7:
+
+Sun Jun 27 03:03:37 2021 Well, this is all feeling
+pretty complex, in my youthful inexperience with it.
+But it's the complexity we signed up for.
+
+Let's start out strict: If pl and pr aren't the same
+stride and phase, just return cINTERPHASE_PLATE (or
+some better name) and be done with it.
+
+Do that first.  Do it now.[8:
+
+Sun Jun 27 03:08:28 2021 OK, that's just:
+
+    if (pl.stride() != pr.stride() || pl.phase() != pr.phase())
+      return cINTERPHASE_PLATE;
+
+at the top..
+
+Now incorporate the stride into (ewoffsetr -
+ewoffsetl).
+
+[9:
+
+Sun Jun 27 03:36:31 2021 Well, made a cut at it.  Will
+need to revisit when stuff starts running for sure.
+
+Now on to categorizeSite.  Adding cSC_INTERPHASE
+prospectively..[10:
+
+Sun Jun 27 11:55:19 2021 OK, got to the bottom of
+PlateUtils, with a range of more and less dubious
+hacks.  Are we now at make a demo diffuse plate?
+[11:
+
+Sun Jun 27 12:03:34 2021 Guess so..  Does that mean we
+want to bring in B2DPlate.ulam now?[12:
+
+Sun Jun 27 12:27:33 2021 And there's changes in
+there..  Now healing out to +-stride rather than SN 12.
+
+Thinking getC[C]WPlate is all plate coords?[13:
+
+Sun Jun 27 12:29:30 2021 Hmm no, it consults the
+  ew.[14:
+
+Sun Jun 27 12:32:33 2021 OK got to the bottom of
+B2DPlate.  Trying to build.  [15:
+
+Sun Jun 27 12:33:43 2021 Oh fog, here we go:
+
+   ERROR: Trying to exceed allotted bit size (32) for quark B2DTPlate(7) with 34 bits.
+
+because we added four bits for stride and phase.
+    ./B2DPlate.ulam:145:18: NOTE: Components of B2DTPlate(7) are..
+    ./B2DPlate.ulam:4:3: NOTE: (14 of 34 bits, at 0) B2DT(7) mSizeOfPlate.
+    ./B2DPlate.ulam:5:3: NOTE: (14 of 34 bits, at 14) B2DT(7) mPosOnPlate.
+    ./B2DPlate.ulam:6:3: NOTE: (2 of 34 bits, at 28) Bits(2) mDeathBits.
+    ./B2DPlate.ulam:8:3: NOTE: (2 of 34 bits, at 30) Unsigned(1) mStride[2].
+    ./B2DPlate.ulam:9:3: NOTE: (2 of 34 bits, at 32) Unsigned(1) mPhase[2].
+    ./Plate.ulam:1:7: NOTE: (0 of 34 bits, at 34) from super base class: Plate.
+
+So.. we 'want' to make a separate implementation class
+for StridePhase, and have all the concrete classes
+inherit from that?[16:
+
+Sun Jun 27 12:58:39 2021 Well OK TestPlate10.ulam just
+built..  Theoretically, SeedTestPlate10 will give us a
+7x5 plate with a random (1-2,1-2) stride?  We Shall
+See![17:
+
+Sun Jun 27 13:00:43 2021 Oops forgot to actually stick
+the thing into the ew.  Going again..[18:
+
+Sun Jun 27 13:02:08 2021 Blew up in categorizeSite..
+
+[19:
+
+Sun Jun 27 13:50:31 2021 OK, TestPlate10 is working,
+growing and healing plates with strides of (1,1),
+(1,2), (2,1), and (2,2).  Everybody is phase (0,0).
+[20:
+
+Sun Jun 27 16:24:49 2021 OK, so: How would a
+PhasedTecton actually work?  Let's say on a (2,2)
+stride to make it easiest, for starters.
+
+It'd be something like.. OK, A is [3,4]{2,2}<0,0>
+
+   W . . . . . .    W . . . . . .   W . . . . . .
+   . A . A . A .    . A 1 A 1 A 1   . . . A 1 A 1
+   . . . . . . .    . . . . . . .   . A 3 . . . .
+   . A . A . A .    . A . A . A .   . A . A . A .
+   . . . . . . .    . . . . . . .   . . . . . . .
+   . A . A . A .    . A . A . A .   . A . A . A .
+   . . . . . . .    . . . . . . .   . . . . . . .
+   . A . A . A .    . A . A . A .   . A . A . A .
+   . . . . . . .    . . . . . . .   . . . . . . .
+
+   W . . . . . .    W . . . . . .   W . . . . . .
+   . . . . . A 1    . . . . . A 1   . . . . . . .
+   . A 3 A 3 . .    . A . A 3 . .   . A . A 3 A 3
+   . A . A . A .    . A 1 A . A .   . A 1 A . A .
+   . . . . . . .    . . . . . . .   . . . . . . .
+   . A . A . A .    . A . A . A .   . A . A . A .
+   . . . . . . .    . . . . . . .   . . . . . . .
+   . A . A . A .    . A . A . A .   . A . A . A .
+   . . . . . . .    . . . . . . .   . . . . . . .
+
+   W . . . . . .    W . . . . . .   W . . . . . .
+   . . . . . . .    . . . . . . .   . . . . . . .
+   . A . A . A .    . A . A . A .   . A . A . A .
+   . . . A 1 A 1    . . . . . . .   . . . . . . .
+   . A 3 . . . .    . A 3 A 3 A 3   . A . A . A .
+   . A . A . A .    . A . A . A .   . A 1 A 1 A 1
+   . . . . . . .    . . . . . . .   . . . . . . .
+   . A . A . A .    . A . A . A .   . A . A . A .
+   . . . . . . .    . . . . . . .   . . . . . . .
+
+   W . . . . . .    W . . . . . .   W . . . . . .
+   . . . . . . .    . . . . . . .   . . . . . . .
+   . A . A . A .    . A . A . A .   . A . A . A .
+   . . . . . . .    . . . . . . .   . . . . . . .
+   . A . A . A .    . A . A . A .   . A . A . A .
+   . . . A 1 . .    . . . . . . .   . . . . . . .
+   . A 3 . . A 3    . A . A 3 A .   . A . A . A .
+   . A . A . A .    . A 1 A . A 1   . A 1 A 1 . .
+   . . . . . . .    . . . . . . .   . . . . . A 3
+
+   W . . . . . .    W . . . . . .   W . . . . . .
+   . . . . . . .    . . . . . . .   . . . . . . .
+   . A . A . A .    . A . A . A .   . A . A . A .
+   . . . . . . .    . . . . . . .   . . . . . . .
+   . A . A . A .    . A . A . A .   . A . A . A .
+   . . . . . . .    . . . . . . .   . . . . . . .
+   . A . A . A .    . A . A . A .   . A . A . A .
+   . A 1 . . . .    . . . . . . .   . . . . . . .
+   . . . A 3 A 3    . A 3 A 3 A .   . A . A . A .
+
+[21:
+
+Sun Jun 27 16:39:28 2021 Or something like that?  It
+kind of depends on phase 1 and phase 3 slots all being
+empty, or else the tecton will tear stuff up.
+[23:
+
+Sun Jun 27 17:51:42 2021 Where I guess we're talking
+
+     01
+     23
+
+as the phase representation on a {2,2} stride.  x+2y.
+
+Can we do it without two steps, though?
+
+Advance A one and move ahead two, like that?
+
+
+  W . . . .   W . . . .  W . . . .
+  . A . A .   . A T A T  . . . A T
+  . . . . .   . . . . .  . A . . .
+  . A . A .   . A . A .  . A T A .
+  . . . . .   . . . . .  . . . . .
+  . A . A .   . A . A .  . A . A .
+  . . . . .   . . . . .  . . . . .
+
+  W . . . .   W . . . .  W . . . .
+  . . . . .   . . . . .  . . . . .
+  . A . A .   . A . A .  . A . A .
+  . A T A T   . A T . .  . . . . .
+  . . . . .   . . . A .  . A . A .
+  . A . A .   . A . A T  . A T A T
+  . . . . .   . . . . .  . . . . .
+
+
+  W . . . .   W . . . .
+  . . . . .   . . . . .
+  . A . A .   . A . A .
+  . . . . .   . . . . .
+  . A . A .   . A . A .
+  . . . A T   . . . . .
+  . A . . .   . A . A .
+
+[24:
+
+Sun Jun 27 17:56:20 2021 Now either way, here, so far,
+we're changing A's phase wrt, say, W.  You'd think
+you'd want to keep the phase at least by default.
+
+Try again?
+
+  W . . . .   W . . . .  W . . . .
+  . A . A .   . A T A T  . . . A T
+  . . . . .   . . . . .  . A . . .
+  . A . A .   . A . A .  . A T A .
+  . . . . .   . . . . .  . . . . .
+  . A . A .   . A . A .  . A . A .
+  . . . . .   . . . . .  . . . . .
+  . . . . .   . . . . .  . . . . .
+
+  W . . . .   W . . . .  W . . . .
+  . . . . .   . . . . .  . . . . .
+  . A . A .   . A . A .  . A . A .
+  . A T A T   . A T . .  . . . . .
+  . . . . .   . . . A .  . A . A .
+  . A . A .   . A . A T  . A T A T
+  . . . . .   . . . . .  . . . . .
+  . . . . .   . . . . .  . . . . .
+
+
+What if we skip the tecton but say phase K plate
+passivates phase J plate for K > J?  Then it could be
+like:
+
+  W . . . .  W . . . .  W . . . .  W . . . .
+  . 0 . 0 .  . . . 0 .  . . . . .  . . . . .
+  . . . . .  . 2 . . .  . 2 . 2 .  . . . 2 .
+  . 0 . 0 .  . 0 . 0 .  . 0 . 0 .  . 0 . 0 .
+  . . . . .  . . . . .  . . . . .  . 2 . . .
+  . 0 . 0 .  . 0 . 0 .  . 0 . 0 .  . 0 . 0 .
+  . . . . .  . . . . .  . . . . .  . . . . .
+  . . . . .  . . . . .  . . . . .  . . . . .
+
+
+  W . . . .  W . . . .  W . . . .  W . . . .
+  . . . . .  . . . . .  . . . . .  . . . . .
+  . . . . .  . . . . .  . . . . .  . . . . .
+  . 0 . 0 .  . 0 . 0 .  . 0 . 0 .  . 0 . 0 .
+  . 2 . 2 .  . 2 . . .  . . . . .  . . . . .
+  . 0 . 0 .  . 0 . 0 .  . 0 . 0 .  . 0 . 0 .
+  . . . . .  . . . 2 .  . 2 . 2 .  . . . . .
+  . . . . .  . . . . .  . . . . .  . 0 . 0 .
+
+Where the phase 2 plates act like tectons because
+they're in phase 2?  How would we move W or N in this
+scheme?  The 'squeezed' state would be outside any of
+the phases of the unsqueeded plate site.[25:
+
+Sun Jun 27 18:22:42 2021 The good thing about doing it
+without a tecton is {1,2} and {2,1} strides become
+'fully movable' (on their wider dimension).[26:
+
+Sun Jun 27 20:50:03 2021 Now I'm wondering if we could
+move on {1,2} and {2,1} even with a tecton.
+
+  W  W  W  W  W  W  W  W  W
+  a  a  .  .  .  .  .  .  .
+  .  T  a  .  .  .  .  .  .
+  b  b  T  a  a  a  a  a  a
+  .  .  b  T  b  .  .  .  .
+  c  c  c  b  T  b  b  b  b
+  .  .  .  c  c  T  c  .  .
+  d  d  d  d  d  c  T  c  c
+  .  .  .  .  .  d  d  T  .
+  .  .  .  .  .  .  .  d  d
+  .  .  .  .  .  .  .  .  .
+
+  I  N  P  P  S  P  W  P  X
+
+..so it's
+
+(1) shift forward with fore and aft
+(2) swap with fore
+(3) repeat until done
+
+  W  W  W  W  W  W  W  W  W  W
+  a  T  .  .  .  .  .  .  .  .
+  .  a  T  a  .  .  .  .  .  .
+  b  b  a  T  a  a  a  a  a  a
+  .  .  b  b  T  b  .  .  .  .
+  c  c  c  c  b  T  b  b  b  b
+  .  .  .  .  c  c  T  c  .  .
+  d  d  d  d  d  d  c  T  c  c
+  .  .  .  .  .  .  d  d  T  .
+  .  .  .  .  .  .  .  .  d  d
+  .  .  .  .  .  .  .  .  .  .
+
+  I  N  P  S  P  S  P  S  P  X
+
+
+[27:
+
+Sun Jun 27 21:12:54 2021 So it can be alternating Push
+and Swap moves so long as each Push pushes two or three
+plate at a time, so we end up with a net two advance
+for each plate.
+
+Seems bogus to swap with the back bein until the swap
+puts it in its final location.  On the other hand, a
+swap always involves *somebody* going backwards.
+
+
+[28:
+
+Sun Jun 27 21:34:17 2021
+
+
+  W  W  W  W  W  W  W  W
+  a  .  .  .  .  .  .  .
+  .  a  .  .  .  .  .  .
+  b  T  a  a  a  a  a  a
+  .  b  T  b  .  .  .  .
+  c  c  b  T  b  b  b  b
+  .  .  c  c  T  c  .  .
+  d  d  d  d  c  T  c  c
+  .  .  .  .  d  d  T  .
+  .  .  .  .  .  .  d  d
+  .  .  .  .  .  .  .  .
+
+  I  N  P  S  P  S  P  X
+[30:
+
+Mon Jun 28 02:24:00 2021 OK let's try again here:
+
+  W...a.b.c.d.e.... Initial state
+  W...Tab.c.d.e.... Deploy T
+  W....Tabc.d.e.... Push2
+  W.....Tabcd.e.... Push3
+  W.....aTbcd.e.... Swap
+  W.....a.Tbcde.... Push3
+  W.....a.bTcde.... Swap
+  W.....a.b.Tcde... Push3
+  W.....a.b.cTde... Swap
+  W.....a.b.c.Tde.. Push2
+  W.....a.b.c.dTe.. Swap
+  W.....a.b.c.d.Te. Push1
+  W.....a.b.c.d.eT. Swap
+  W.....a.b.c.d.e.. Dismount
+
+and can we do push&swap at the same time?
+
+  W...a.b.c.d.e.... Initial state
+  W...Tab.c.d.e.... T mount
+  W....Tabc.d.e.... Push
+  W.....aTbcd.e.... Push & Swap
+  W.....a.bTcde.... Push & Swap
+  W.....a.b.cTde... Push & Swap
+  W.....a.b.c.dTe.. Push & Swap
+  W.....a.b.c.d.eT. Push & Swap
+  W.....a.b.c.d.e.. T dismount
+
+Still glitchy at the ends.  But maybe.  What could it
+look like in SPLAT (or SPLATe)?
+
+  0_1_2 -> _T012    # T mount
+
+  T345_ -> _3T45    # Push & swap
+
+  T89_ -> _8_9      # T dismount
+
+with like
+
+given 0 is plate min in dir
+given 1-8 is plate non-min in dir
+given 9 is plate max in dir
+
+[31:
+
+Mon Jun 28 03:15:38 2021 Does that really work?  Try it
+on a smaller plate?
+
+  W...a.b.c...
+  W....Tabc...  mount
+  W...._aTbc..  p & s
+  W...._a_b_c.  dismount
+
+Well it seems to deal with three wide, but two wide
+won't init.  Break the mount into two moves or cases?
+
+  0_1_ -> _T01      # T mount
+
+  T345_ -> _3T45    # Push & swap
+
+  T89_ -> _8_9      # T dismount
+
+Hmm
+
+  W...a.b...
+  W..._Tab..  T mount
+  W...._a_b.  T dismount
+
+Kinda appears to work for two wide.  Can we do
+something to include one wide?
+
+  0_ -> T0          # T mount
+
+  T9 -> _9          # T dismount
+
+  T23_ -> _T23      # Push
+
+  T34_ -> _3T4      # Push & swap
+
+Hmm?  On two:
+
+  W...a.b...
+  W...Tab...  T mount
+  W..._Tab...  T mount
+
+[32:
+
+Mon Jun 28 04:32:26 2021 OK fell off the rails there
+for a few.
+
+If we're doing it with a two-rule mount -- to try to
+handle more edge cases uniformly -- the idea is the
+first step moves the lead item one ('compress'), and
+the second step moves it the second part, hops over it,
+and moves the next item the first step.
+
+  0_ -> T0      # (1) Mount / compress
+
+  T01_ -> _T01  # (2) Push (0 to final position)
+
+  T01_ -> _0T1  # (3) Hop / compress
+
+  T12_ -> _T12  # (4) Push
+
+  T12_ -> _1T2  # (5) Hop / compress
+
+  T89_ -> _8_9
+
+..(2/3) and (4/5) look the same, but the LHS 0 is
+off-phase in (2) and on-phase in (3)?
+
+
+   a_  ->  TA
+
+   TAb_ -> _TaB       # push
+
+   TaBc_ -> _aTbC     # hop / push
+
+   TyZ_ -> _y.z
+
+
+  W...j.k.l.m...     a_  ->  TA
+      ||
+  W...TJk.l.m...     TAb_ -> _TaB
+      ||||
+  W....TjKl.m...     TaBc_ -> _aTbC
+       |||||
+  W.....jTkLm...     TaBc_ -> _aTbC
+         |||||
+  W.....j.kTlM..     TyZ_ -> _y.z
+           ||||
+  W.....j.k.l.m.
+
+
+Still doesn't deal with two wide.
+
+
+[33:
+
+Mon Jun 28 05:32:54 2021
+
+  W...j.k.l.m...     x. -> .X
+      ||
+  W....Jk.l.m...     Xy. -> .xY
+       |||
+  W.....jKl.m...     Xy. -> .xY
+         |||
+  W.....j.kLm...     Xy. -> .xY
+           |||
+  W.....j.k.lM..     X.  -> .x
+             ||
+  W.....j.k.l.m.     X.  -> .x
+
+a lot cleaner without the T?  Three rules
+
+  W...j.k.......     x_ -> _X  hmm need some start case too
+      ||
+  W....Jk.......     Xy_ -> _xY
+       |||
+  W.....jK......     X_ -> _x
+         ||
+  W.....j.k.....     X_ -> _x
+[34:
+
+Mon Jun 28 05:58:52 2021
+
+   a_ -> _A        # Start rule
+
+   Xy_ -> _xY      # Shift rule
+
+   Z_  -> _z       # End rule
+
+Works on one wide --
+
+  W...j........     a_ -> _A
+      ||
+  W....J.......     Z_ -> _z
+       ||
+  W.....j......
+
+Works on two wide --
+
+  W...j.k......     a_ -> _A
+      ||
+  W....Jk......     Xy_ -> _xY
+       |||
+  W.....jK.....     Z_  -> _z
+         ||
+  W.....j.k....
+
+Works on three wide --
+
+  W...j.k.l....     a_ -> _A
+      ||
+  W....Jk.l....     Xy_ -> _xY
+       |||
+  W.....jKl....     Xy_ -> _xY
+         |||
+  W.....j.kL...     Z_  -> _z
+           ||
+  W.....j.k.l..
+
+[35:
+
+Mon Jun 28 06:13:19 2021 So the idea could be, maybe,
+that -- under 'traveling' conditions, however that's
+represented -- phase 0 passivates to higher phases.  So
+once a motion 'a_ -> _A' has been initiated, only the
+upper case letters are active until 'Z_ -> _z' runs.
+And the upper case beins could do swapline with each
+other to avoid leakage.
+
+[36:
+
+Mon Jun 28 06:32:30 2021 Can we move the other
+direction -- the 'swapline easy' direction -- in an
+analogous way?
+
+# Moving from the back
+
+   a_ -> _A        # Start rule
+
+   Xy_ -> _xY      # Shift rule
+
+   Z_  -> _z       # End rule
+
+
+# Moving from the front
+
+  __a -> a_A       # Start rule
+
+  X_y -> y_X       # Shift rule
+
+  X__ -> x         # End rule
+
+So that's kind of explicitly using the up-phase as a
+tecton.  There's an 'a' and an 'A' on the grid after
+the start rule.  Ah but wait, that second 'A' is on the
+same phase.  So those rules don't work.
+
+  __a -> _Aa        # Start pull
+
+  _Xx_y -> x__Yy    # Shift pull
+
+  _Xx -> x__        # End pull
+
+
+  W...j.k.l....  __a -> _Aa
+    |||
+  W..Jj.k.l....  _Xx_y -> x__Yy
+    |||||
+  W.j..Kk.l....  _Xx_y -> x__Yy
+      |||||
+  W.j.k..Ll....  _Xx -> x__
+        |||
+  W.j.k.l......
+
+
+  W...j........  __a -> _Aa
+    |||
+  W..Jj........  _Xx -> x__
+    |||
+  W.j..........
+
+
+
+:36]
+
+ :35]
+
+ :34]
+
+:33]
+
+
+  :32]
+
+:31]
+
+
+And pull (the 'easy' case)?
+
+  W...a.b.c.d.e.... Initial state
+  W.T.a.b.c.d.e.... T mount
+  W.a.T.b.c.d.e.... Swap
+  W.a.b.T.c.d.e.... Swap
+  W.a.b.c.T.d.e.... Swap
+  W.a.b.c.d.T.e.... Swap
+  W.a.b.c.d.e.T.... Swap
+  W.a.b.c.d.e...... T dismount
+
+:30]
+[29:
+
+Sun Jun 27 21:43:54 2021 Well maybe.  Nap time.
+
+:29]
+
+:28]
+
+:27]
+
+:26]
+
+:25]
+
+
+:24]
+
+
+
+:23][22:
+
+Sun Jun 27 17:51:25 2021 (Dinner in oven.)
+
+:22]
+:21]
+
+:20]
+:19]
+
+:18]
+
+:17]
+
+:16]
+
+:15]
+
+:14]
+
+:13]
+
+:12]
+
+:11]
+:10]
+
+:9]
+
+:8]
+
+:7]
+:6]
+
+
+:5]
+
+:4]
+:3]
+
+:2]
+[37:
+
+Mon Jun 28 15:32:03 2021 OK, so the following SPLAT
+code successfully demos the pull:
+
+    given M isa Mover
+    given @ isa Phase0
+    change O isa Phase1
+
+      _M@ -> _O@
+
+      @ -> @   # Phase 0 is stable
+
+and
+
+    given @ isa Phase1
+    given x isa Phase0
+    given y isa Phase0
+
+     _@x_y -> x__@y    # Shift pull
+
+     _@x   -> x__      # End pull
+
+[38:
+
+Mon Jun 28 16:29:35 2021 OK we sort of got push working
+too, using 'Phase2', but it's bogus because it doesn't
+preserve the identities of the phase0s, recreating them
+from scratch instead.  Because element 'Phase2' is
+morally a tecton, and when pushing there isn't room to
+hold a 'pushee-in-progress' plus a tecton.
+
+We'd need to take two extra phases for pushing, or
+genuinely do it with phases or other Plate-internal
+storage -- go to the other end and pull, as we are
+doing now.
+
+For the record here's excerpts of the SPLAT for push:
+
+    given S isa Pusher
+    given @ isa Phase0
+    change T isa Phase2
+
+      @S -> _T    # Start push
+
+and
+
+    given @ isa Phase2
+    change x isa Phase0
+    given y isa Phase0
+
+     @y_ -> _x@    # Shift push
+
+     @_   -> _x    # End push
+
+[39:
+
+Mon Jun 28 17:02:45 2021 So.  What do we actually do
+here?  Moving (and growing, don't forget) was just one
+potential use of stride and phase.  We were also
+thinking about reproduction and interleaved plates.
+[40:
+
+Mon Jun 28 17:05:08 2021 Well, let's try to get
+genuinely phase-based 'internal' movement going on
+TestPlate10, and see how bad it gets how fast.
+
+But, after the evening.
+
+[41:
+
+Tue Jun 29 00:57:09 2021 OK, let's go go go.
+TestPlate11 to demonstrate a 4 way street.[42:
+
+Tue Jun 29 00:59:07 2021 First issue: Blocking and
+phase priority. [43:
+
+Tue Jun 29 01:01:43 2021 OK, made a Plate service:
+
+      Int stridePhasePriority(C2D stride, C2D phase) {
+        return stride.getY()*phase.getX() + phase.getY();
+      }
+
+which for {2,2} gives:
+    <0,0> -> 0
+    <0,1> -> 1
+    <1,0> -> 2
+    <1,1> -> 3
+
+[44:
+
+Tue Jun 29 01:04:45 2021 But we also need to get
+specific about how interphase blocking is going to
+work.
+
+VAGUE THOUGHTS:
+
+ - Pay attention to other plate with sz/ps/st/ph
+   that's consistent with ours.  Have a service to
+   check consistency, as (for example) a component
+   of relationTo
+
+ - Size and stride have to match exactly, while
+   position and phase have to be consistent given
+   ewc.
+
+:44]
+
+
+:43]
+
+:42]
+
+:41]
+
+:40]
+
+:39]
+
+
+:38]
+
+
+:37]
+[45:
+
+Tue Jun 29 03:24:05 2021 OK what are the rules of
+'phase compatibility'?  Let's look at some cases:
+
+  stride {2,2}
+
+        00   10   00   10   00   10
+      -2,-1 -1,-1 0,-1 1,-1 2,-1 3,-1
+
+        01   11   01   11   01   11
+       -2,0 -1,0  0,0  1,0  2,0  3,0
+
+        00   10   00   10   00   10
+       -2,1 -1,1  0,1  1,1  2,1  3,1
+
+        01   11   01   11   01   11
+       -2,2 -1,2  0,2  1,2  2,2  3,2
+
+
+a:ewc   b:phs   c:a%str    d:a mod str  e: (d+b) mod str  f: (a+b) mod str
+0,0      <01>     0,0        0,0              0,1             0,1
+1,0      <11>     1,0        1,0              0,1             0,1
+0,2      <01>     0,0        0,0              0,1             0,1
+3,1      <10>     1,1        1,1              0,1             0,1
+2,2      <01>     0,0        0,0              0,1             0,1
+-1,-1    <10>    -1,-1       1,1              0,1             0,1
+1,-1     <10>     1,-1       1,1              0,1             0,1
+-2,1     <00>     0,1        0,1              0,1             0,1
+-1,1     <10>    -1,1        1,1              0,1             0,1
+3,-1     <10>     1,-1       1,1              0,1             0,1
+
+[46:
+
+Tue Jun 29 04:37:51 2021 Well apparently ulam %
+follows screwed-up C/C++ % as far as returning a
+negative remainder, but with % fixups as in
+
+     C2D PlateUtils.mod(C2D, C2D)
+via  Int PlateUtils.mod(Int, Int)
+
+then we can compute the 'ew phase' of any
+ewc,phs,str combo:
+
+  C2D PlateUtils.ewPhase(C2D ewc, C2D phs, C2D stride) {
+    return mod(ewc+phs, stride);
+  }
+
+and if the ew phase of two sites match, they are
+phase compatible.
+
+Then, within sites that are phase compatible with
+ew[0], we have to block (in addition to any other
+rules) when anybody's phase priority is bigger
+than ours.
+
+[47:
+
+Tue Jun 29 05:12:22 2021 Now how does an up-phase
+Plate know what it's doing -- know why it's
+up-phase?  That's not Plate's responsibility?
+Plate's responsibility ends with blocking and
+dying?  If we want our concrete Plates to move
+themselves they'll have to allocate bits to
+remember that?[48:
+
+Tue Jun 29 11:17:35 2021 I guess so..
+
+:48]
+
+:47]
+
+
+
+:46]
+:45]
+[49:
+
+Tue Jun 29 13:35:39 2021 OK so working in
+TestPlate11.checkPhaseMotion().  What all do we
+want to implement?
+
+[51:
+DONE :51] - Initiate motion by somehow moving a border
+   TestPlate11 from <00> to <01> (for vertical) or
+   <10> (for horizontal) motion.
+
+ - Infer the value of mPhaseReverse (true for
+   north or west, false for south or east) based
+   on which border is involved.
+
+ - Have the up-phased border plate spread to
+   neighbors.  Do we spring for two bits to dress
+   the line before starting?  Feel like that was
+   important but can't remember exactly what locks
+   up without it.
+
+ - Do the swapline await-the-back-main among
+   up-phase neighbors.
+
+ - Do whatever push/pull steps are implied by
+   phase and mPhaseReverse
+
+ - Dress the line again at the end?
+
+ - Drop down to standard phase in the last step.
+
+:49]
+[50:
+
+Wed Jun 30 22:36:54 2021 OK, we have the 'Initiate
+motion' going with MoveV and MoveH.  Should claim
+it I guess; progress so slow.[52:
+
+Wed Jun 30 22:44:14 2021 But, we haven't inferred
+mPhaseReverse yet, and I'm concerned going north
+and west doesn't make sense: If you squeeze north,
+say, you end up in <01> of the PREVIOUS row,
+right?  [53:
+
+Wed Jun 30 23:02:06 2021 Yeah and the motion
+initiator is messed up: It's leaving the phase at
+<00> for north or west moves, but changing it to
+<01>/<10> for south or east moves.
+
+So how are we claiming this is really supposed to
+work?  Do we even believe it does work?
+[54:
+
+Wed Jun 30 23:11:20 2021 Basically, our current
+notion of phase is this:
+
+   <00>  <10>
+
+   <01>  <11>
+
+so if we view phase 0 as being the base or default
+phase, we privilege moving east and south over
+north and west.
+
+Could we use still use <01> / <10> even for N / W,
+when that means we start out by moving AWAY from
+the direction we're heading?
+
+That seems really pretty sad.  We require extra
+free space to 'wind up' before moving, because of
+an internal coordinate limitation?[55:
+
+Wed Jun 30 23:37:33 2021 Well, but that allegedly
+'extra' allegedly 'free' space is really part of
+the 'phase box' that we are claiming for the east
+and south borders.
+
+Just because south and east have two or three
+parts of their 'phase box' exposed to the world,
+while north and west have only one or two, we're
+saying S/E are to be denied use of their full
+phase boxes?  That seems unfair.
+
+So suppose we do say 'wind up' by moving to <10>
+for east and <01> for north.  Can we make the
+geometry work out anyway?  How different are the
+rules?[56:
+
+Thu Jul  1 00:13:16 2021 Well it really seems
+wrong, even though 'fair' in some tortured sense,
+to have push from the east start by heading west.
+We don't get the iteration started that way.  It
+really seems like we're going to have to violate
+the 'sanctity of the phase box' somehow.
+
+I was wondering why we were simultaneously moving
+and changing our stateful phase representation,
+when changing either one would be enough to make
+the point.
+
+So the questions at issue include:
+
+ - Do we need an internal stateful phase at all?
+
+ - If so, what does it mean when a plate phase
+   declaration is inconsistent with its neighbor's
+   phases?
+
+ - 'Wouldn't it be better' if phase was implicit
+   by matching size & stride, with consistent pos?
+
+ - Is 'phase' really even the right abstraction
+   here?  It's really more like 'stigmergic
+   signaling'.  It's more like an offset, a
+   tendency.  You want the plate to move west, you
+   crowd west while keeping size/pos/stride.
+
+So the stride is about the nominal position of
+your plate neighbors, and we're going to have to
+search around the nominal position to know whether
+the ngb is actually there.  And we're going to let
+offsets like that signal actions.
+
+[57:
+
+Thu Jul  1 01:04:35 2021 Well, this seems vaguely
+plausible at an extremely vague level of
+description. [58:
+
+Thu Jul  1 01:46:02 2021 Try a spike?  What-all
+changes?
+
+ - C2D Plate.phase() changes from an abstract
+   method to a service.[62: Thu Jul  1 10:50:16
+   2021 Not really; can't have no args unless it's
+   the really expensive 'consensus phase'.  Make
+   more sense to be PlateUtils.phase(C2D plc) or
+   something along those lines.  :62]
+
+ - phase() can return negative coords.  Coord
+   range is +-stride-1?  +- stride?  Really kind
+   of up to us, I guess.  We're locking on size
+   and consistent relative pos.
+
+ - phase() is relative to just us.  It should
+   probably be called relativePhase().  We might
+   be the weird one.  If we want a consensus phase
+   sense of things, we'd have to ask the ngbs and
+   build one.
+[59:
+
+Thu Jul  1 09:46:43 2021 So part of the hard thing
+of this 'sloppy' approach is to know if and when
+(and perhaps where) to grow a replacement ngb, if
+it might be possible for an existing ngb to 'phase 
+out' of existence by being squeezed say right while
+you're squeezed say left.
+
+We'd need a way to coalesce redundant plate sites
+when one discovers a 'ngb' that's really a
+clone.[60:
+
+Thu Jul  1 09:56:35 2021 Maybe for now say we'll
+only create ngbs out to stride-1 but we'll search
+out to stride.
+
+This is all feeling scary complicated though,
+especially to be starting so late.  Argh.[61:
+
+Thu Jul  1 10:43:32 2021 How can we try this?
+It's a really big change.  Spike?
+[63:
+
+Thu Jul  1 10:52:11 2021 Let's empty code/ again
+and start pulling files really gingerly..[64:
+
+Thu Jul  1 10:54:33 2021 OK tearing up
+Plate.ulam -- mostly by tearing out the phase
+stuff.  First big change looks to be
+plateCoordToEWSN, which started taking an
+'onPhase' argument a few days ago -- but now,
+presumably loses that and becomes a local search
+process instead.[65:
+
+Thu Jul  1 10:56:12 2021 We could maybe leave the
+onPhase arg and use it to bias the search?  Or the
+starting location for the search?  Who knows.[66:
+
+Thu Jul  1 10:56:57 2021 Simplify, simplify: Let's
+tear out onPhase for now, put it back in if and
+when. [67:
+
+Thu Jul  1 10:58:02 2021 Dammit though, if we do
+have some reason to believe our own phase is
+whatever, it would make sense to tell
+plateCoordToEWSN about it.  Putting it back in,
+but calling it asOurPhase instead.
+
+:67]
+
+:66]
+
+:65]
+
+:64]
+
+:63]
+:61]
+
+:60]
+
+:59]
+:58]
+
+:57]
+
+:56]
+
+:55]
+
+:54]
+
+:53]
+
+
+:52]
+
+:50]
+[68:
+
+Thu Jul  1 11:08:54 2021 Let's hardcode to stride
+{2,2} for this test?  I'd like to search from the
+center out but combining that with the potential
+for individually variable x,y strides is a
+pain.[69:
+
+Thu Jul  1 11:33:00 2021 Gah now it's feeling like
+having plateCoordToEWSN do search is wrong.  Its
+documentation explicity says 'would' meaning the
+resulting site might be empty or anything.  The
+analog if we were trying to do this would be just
+leave it alone but document it as returning the
+'stride center' location (possibly given our
+assumed phase offset).  Then let caller (use other
+services to) search if it wants to.
+
+[70:
+
+Thu Jul  1 11:36:10 2021 The bigger picture is it
+feels like trying to have 'self moving' plate is a
+bridge too far, at least for now.  We're asking
+for like a full floating bond-based mesh
+here.. and we've died on that cross before.  Like
+around a year ago, for example, IIRC.
+
+We should stick with tectons and priority, which
+means the plate<->ew mapping can be rigid at
+default priority.  It also means we give up on the
+walking-while-chewing-gum fantasy that the
+self-moving diffuse plate was dangling before us.
+
+Does it mean that the whole stride idea is void?
+If we have the tectons running offphase, we can
+still hope for 4-way push/pull.. which is
+something.. ?  And the reproduce-in-place would
+surely be something.  But we don't see that
+happening in the next three days.
+[71:
+
+Thu Jul  1 15:05:11 2021 Well, sigh, but I'm
+thinking push the whole diffuse plate business and
+return to connecting plates and distribution for
+the rest of our time here.[72:
+
+Thu Jul  1 15:14:48 2021 Which basically puts us
+back to last Sunday, and back in
+202106111204-quote-and-eval-notes.txt.
+[73:
+
+Thu Jul  1 15:26:19 2021 What about -- before we
+truly abandon ship here -- what about completely
+rigid {2,2} plates, with motion by tecton and no
+significant notion of phase at all?
+[74:
+
+Thu Jul  1 15:43:26 2021 OK, now we're back to
+SeedTestPlate10 popping up various strides.  Let's
+bring it Tecton and see it moving various
+strides.[75:
+
+Thu Jul  1 15:46:20 2021 Wow, a Tecton.ulam from
+two-mini-spikes back compiled unmodified.  How do
+we generate them manually again?[76:
+
+Thu Jul  1 16:11:06 2021 OK, imported the ton of
+stuff needed to support ColorPlate, but we're back
+to CP being active.  It's not using stride stuff,
+so that's the next goal, but it's time to move the
+flag again.
+[77:
+
+Fri Jul  2 00:47:10 2021 OK, still trying to get
+CP to support non-{1,1} strides in an effective
+way.  Currently the CP builds okay, but
+PlateOperator is lost trying to drive it.
+
+I'm going to take PO's trouble as an 'opportunity'
+to get rid of its hardcoded mRootSN and mRPeerSN
+and try to replace it with a per-event scan at
+start-up.[78:
+
+Fri Jul  2 01:22:54 2021 OK well that's working a
+little better.  We kept mRootSN and mRPeerSN but
+now treat them as advisory -- we check to see if
+they're still good and use them if they are, but
+fall back on searching if not.  An approach like
+that, in combination with active location
+management, would allow plate growth from any
+direction, as far as PO is concerned.
+
+Now the issue is Tecton hasn't been updated for
+stride() -- and, it appears, that CP don't
+passivate before Tc because they don't look like
+they're on the same or containing plate.[79:
+
+Fri Jul  2 01:34:27 2021 OK, now the initial Tc
+creation looks plausible, but it's spreading solid
+instead of by stride.[80:
+
+Fri Jul  2 03:06:49 2021 OK, had some issues in
+seeding and PlateUtils, but Tc initial line
+creation seems plausible, but it sees PRREL2
+trying to move.[81:
+
+Fri Jul  2 03:11:07 2021 Tc spread is incrementing
+ngb plate coords by stride somewhere instead of
+unit vector, causing PRREL2.[82:
+
+Fri Jul  2 03:28:53 2021 OK fixed that and now Tc
+is incrementing its own position by stride when it
+advances.. [83:
+
+Fri Jul  2 03:38:26 2021 OK so now Tc appears to
+be working for moving and growing.
+
+Bang.
+
+[84:
+
+Fri Jul  2 03:39:00 2021 Next issue is the PO,
+which planted itself assuming a {1,1} stride, so
+it was offstride for {2,2}, and the Tc didn't move
+it and so it lost the root and eventually erased
+itself.
+
+Now I can see two or three ways on this.
+
+(1) The PO should stay onstride, and get moved as
+    normal.  But that reduces its range and crowds
+    a spot that a second operator might want.
+(2) The Tc should move the offstride sites too,
+    not just the even stride multiple sites, so
+    the PO would get carried along anyway.  But
+    that makes interphase interactions a lot
+    harder, and they were a main potential win of
+    adding stride.
+(3) The PO can stay wherever it likes but will
+    have to not only search more broadly for the
+    root, but be willing to move to get the root
+    where it wants it.
+
+And we're assuming, I guess, (3) is what we want
+to go for.[85:
+
+Fri Jul  2 05:09:53 2021 OK so we started a try at
+(3) and got it to reposition itself successfully a
+couple of times after Tc moved through.
+
+But: The offstride PO didn't recognize the
+onstride Tc as having priority.  The PO didn't
+passivate, and -- in the first instance --
+basically jumped over a Tc in the process of
+repositioning itself.
+
+And it got away with it that time.  But in the
+second instance, the PO ran while Tc had moved
+plate(0,0) but not plate(0,1), which meant that
+the PO could never find p(0,0) and p(0,1) in the
+proper relationship, so the PO erased itself.
+
+Now, PO is just using the standard
+Plate.mustBlockOrDie() for the passivation
+decision, so what do we want to do?[86:
+
+Fri Jul  2 05:29:16 2021 Well we made
+PO.iSeeTecton(), because we're super duper bogus.
+
+And now we're seeing a {2,2} ColorPlate growing
+and moving fairly plausibly.  The current flaw is
+that the CS SuperSeedColorPlate controller isn't
+yet adaptive and it soon gets left behind --
+because in a {2,2} it's not onstride.  Let's try
+for a {1,2} CP and see what happens there.[87:
+
+Fri Jul  2 05:33:20 2021 OK, in a {1,2} the CS
+stayed in place as expected, and eventually it
+tried to pop the left eye, but:
+
+(1) It didn't copy the stride, so it made a {1,1}
+    subplate, and
+
+(2) There's NO FOGGEN WAY CS will be able to
+    deploy any significant chunk of a subplate in
+    a {2,2} environment!  How are we going to pop
+    the plates?
+
+[88:
+
+Fri Jul  2 05:40:03 2021 Could we try to explore
+the distributed self by making a CS copy closer to
+the action, that was somehow set to pop the
+subplate on its next event?  To avoid creating a
+whole new element to be the intermediate state.
+
+I guess part of that story is we want this
+'distributed self', somehow, to know what to do
+when it gets an event.  And that means either
+stigmergically or via internal state -- and those
+are the only two choices.  So if a second CS sees
+a first CS -- probably in a particular position or
+configuration family, whatever -- that could be a
+basis for a stigmergic decision.
+
+Now, since this 'distributed self' IS distributed,
+creating that second CS also puts an obligation
+onto the first: It needs to waste events (within
+reason), until the second CS has gotten an event
+and gotten a chance to see the first and make its
+stigmergic action decision.  So the first CS needs
+to see (== check for and detect) the second, just
+as the second uses the existence of the first to
+disambiguate itself.
+
+[89:
+
+Fri Jul  2 06:03:08 2021 Well, this doesn't write
+any code, but it seems like a nice
+conceptualization to keep in mind.  To extend your
+reach, make a copy of yourself in the direction
+you're reaching, and use that direction (however
+generalized) to distinguish when you're an
+'extender' vs a 'reacher'.[90:
+
+Fri Jul  2 12:38:14 2021 OK so we're going with
+internal state instead of stigmergy for
+SuperSeedColorPlate.  Because we've got bits
+available and we suck.  But our new Unsigned(2)
+FacialFeature is being reasonably clean and in
+fact helping clean up the pre-existing sprawl in
+behave().
+
+Currently dealing with spawning the CS for
+cFACE_LEFT_EYE.  It's not respecting stride and
+stuff.  And it needs to understand it's starting
+out in the upper left of the left eye, not in the
+center. [91:
+
+Fri Jul  2 16:50:31 2021 OK fixed lots of bugs;
+currently up to SubplateOperator needs to do the
+stride-compliant root search that PlateOperator is
+now doing.[92:
+
+Sat Jul  3 01:19:20 2021 OK getting into pretty
+fine details now.  Current issue: border patrol is
+returning data in ew units but
+SubplateOperator.considerOuter() uses it to make
+decisions that are in plate units.  Not sure how
+all the interactions work out but the current code
+is willing to keeping jumping the left eye in and
+out of the north border (and eventually killing the
+border patrol in the process).
+
+I guess that's because the north border is being
+seen as having some clearance when it in this
+{1,2} plate condition it really doesn't.
+
+Seems like we'll need to hadamardiv the returned
+clearance by the stride.  I'd do that at data
+collection time but it doesn't really help[93:
+
+Sat Jul  3 01:30:59 2021 Except the returned
+clearance isn't in C2Ds.  Maybe consider stride at
+collection time?[94:
+
+Sat Jul  3 03:20:26 2021 Well, doing it at
+collection time is a pain.  Doing it in
+SubplateOperator is a pain because
+SubplateOperator currently isn't a plate, so we
+have to hunt for a stride.[95:
+
+Sat Jul  3 04:28:32 2021 Well SubplateOperator did
+have its hands on the plate root, so I got the
+stride() there and threaded it down to
+considerOuter(C2D), and now, conceivably, things
+may be working better.  Still haven't seen anybody
+go successfully to seed, yet, so we'll see.[96:
+
+Sat Jul  3 05:03:44 2021 OK, the current movie run
+is up to 50KAEPS and 3KAER and three second
+generation faceplants have been seeded, including
+a {2,1}.  (The rest are {1,1}.)
+[97:
+
+Sat Jul  3 12:04:49 2021 OK the movie run's about
+half-filled a {{5H5}} grid, and we have lots of
+examples of both plates interpenetrating
+successfully, and plates jamming up against each
+other due to clearance problems.
+
+It makes me think (1) border patrol needs to be
+redone to produce stride-aware data directly, and
+(2) that we need to sense beyond the event window
+to produce clearance data at large strides.
+
+And then we're like 'ooh beyond the event
+window.. but that's impossible'
+
+But of course we've seen this cycle how it's
+totally not impossible.  We 'just' have to deploy
+an intermediate particle to work on our behalf, as
+we did to deploy the subplates, and were imagining
+we could do for the remote transfer plates and
+such.
+
+The key is how to do whatever we want to do in a
+relatively clean and robust way, given that the
+process won't complete atomically.  The case of
+subplate deployment was particularly nice because:
+
+(1) It was all within a plate we controlled
+(2) It was essentially ballistic, with no feedback
+
+The 'extended sensing' border patrol task lacks
+both those features.  We'd like it to be:
+
+(1) Lightweight: Doesn't take up much space and
+    doesn't slow things down much
+
+(2) Transparent: The occurence of a 'sensor' atom
+    itself does not count as determining the end
+    of the open range.
+
+(3) Clean: The sensors eliminate themselves after
+    a brief period of time.
+
+[98:
+
+Sat Jul  3 14:03:54 2021 Suppose we did make a
+ProbeClearance element that:
+
+ - Implements some Ephemeral API to indicate that:
+   It can be stomped on with impunity; it counts
+   as 'empty' for things like isEmptyOrField, etc.
+   
+ - On each event, computes 8 numbers representing
+   what it sees: Four for on-axis NSEW, and four
+   for the non-axis quadrants.  It also increments
+   an event counter.
+
+ - When its event counter reaches
+   EventCouner.maxof -- 3 or 7 or 15 perhaps --
+   the Probe erases itself, and that's that.
+
+Then when a border patrol comes along that wants
+to see if things are clear out to a distance of
+four on a stride of two, it looks for a
+ProbeClearance atom on the axis it's scanning.  If
+it finds one, and the PC's event count is greater
+than zero, it uses the PC data to infer the
+clearance data it's looking for.
+
+If it doesn't find one, it deploys one and then
+blocks.  And that's it..
+[99:
+
+Sun Jul  4 02:03:38 2021 OK we have Ephemeron.ulam
+for an (empty) API, and SpaceProbe.ulam using it.
+No deployments yet.[100:
+
+Sun Jul  4 04:13:11 2021 What about having
+SpaceProbe auto-seed a SpaceProbe grid, as long as
+it doesn't see anything non-Ephemeral?  How many
+bits could it have?[101:
+
+Sun Jul  4 04:15:14 2021 Well there's 43 bits
+available at the moment, so that could be another
+5 bits for each of eight counts, so it could be
+255 max in each direction.
+[102:
+
+Sun Jul  4 11:52:35 2021 Well, sigh, ditching the
+SpaceProbe approach, for now anyway, in favor of
+increasing the minimum clearance needed for
+move/grow attempts.
+
+But also going to try to extend Tecton to detect
+when it's blocked while growing the initial line,
+and to blow up cleanly if that happens.[103:
+
+Mon Jul  5 10:35:14 2021 Well, there's still
+collisions happening -- maybe more rarely, but
+still -- and it's possible for the Tecton to have
+started advancing before the rest of it blows up,
+creating partially-size-changed regions in the
+plate that messes up future behavior.  So not
+great. 
+
+:103]
+
+:102]
+:101]
+
+:100]
+
+:99]
+:98]
+
+:97]
+:96]
+
+:95]
+
+:94]
+
+:93]
+
+:92]
+
+:91]
+
+:90]
+
+:89]
+
+:88]
+
+:87]
+
+:86]
+
+
+:85]
+
+:84]
+
+:83]
+
+:82]
+
+:81]
+
+:80]
+
+:79]
+
+:78]
+
+:77]
+:76]
+
+:75]
+
+:74]
+:73]
+:72]
+
+:71]
+:70]
+
+:69]
+
+:68]

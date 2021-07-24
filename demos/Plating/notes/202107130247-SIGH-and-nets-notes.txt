@@ -1,0 +1,481 @@
+{31}  -*-  mode: text; fill-column: 50;  -*-
+[0:
+
+Tue Jul 13 02:47:36 2021 So I want to demo foggen
+SIGH a week from today.  That involves:
+
+ - Inbound weight matrix with edge units
+
+Do we do like spike atoms or internal activation
+levels?
+
+It could really be just a single plate, except for
+bit budget..
+
+Are we doing symmetric weights, necessarily?
+
+Let's do two plates, so we can stage deltas across
+the interface.
+
+Output row/col just tracks changes in its decision
+unit, as fast as possible, spreading changes
+downstream to the edge of the ew.
+
+Input unit has running sum from above, and adds
+its touching output to that, to produce the
+running sum to below.
+
+Tempted to put the weights on the output units --
+feels like the input units will be shorter on
+bits.
+
+Input reads running sum from above, adds
+weight*state from touching output, writes new
+running sum on itself.
+
+[1:
+
+Tue Jul 13 03:17:43 2021 And it the order of the
+input and output units on the plate edges
+absolutely WILL matter, because (1) changes in
+outputs near the input row will affect input units
+more quickly that changes far from the input row,
+and (2) inputs near the output column will see
+those changes sooner than inputs far from the
+output column.
+
+And we LIKE that.  We'll want to use that 'hot
+corner', that intersection of Input and Output
+where they almost touch, for reflex arcs and stuff
+like that.
+[2:
+
+Tue Jul 13 03:34:32 2021 And we'll have the
+decision units.  We'll have SIGH three-state units
+on one side, and probably two state[3:
+
+Tue Jul 13 07:37:21 2021 OK, so I'd like this to
+be moderately 'general' at the plate level.  Like:
+Have the SIGH decision units separate from weight
+matrix plate.
+
+Let's make some layouts!  Let's make layouts!
+
+                              VT: Voter
+  Iv O< Iv O< Iv O< Iv O< VT  PQ: Poll Question
+  RN RN RN RN RN RN RN RN RN  RT: Reinforcement Term
+  Iv O< Iv O< Iv O< Iv O< VT  RS: Reinforcement Sum
+  RN RN RN RN RN RN RN RN RN  RC: Reinforcement Comparator
+  Iv O< Iv O< Iv O< Iv O< VT  RN: Reinforcement Network
+  RN RN RN RN RN RN RN RN RN
+  PQ PQ PQ PQ PQ PQ PQ PQ RC RS .
+  .  .  .  .  .  .  .  .  .     .
+  Ov I> Ov I> Ov I> Ov I> RT I^ O>
+  .  .  .  .  .  .  .  .  .  .  .
+  Ov I> Ov I> Ov I> Ov I> RT I^ O>
+  .  .  .  .  .  .  .  .  .  .  .
+  Ov I> Ov I> Ov I> Ov I> RT I^ O>
+  .  .  .  .  .  .  .  .  .
+
+[4:
+
+Tue Jul 13 08:00:58 2021 Well, that's very
+probably too ambitious, as usual, but perhaps not
+absurd.
+
+The flow is counter-clockwise.  Starting from
+upper right, say:
+
+VT: Voters vote: SUPPORT, OPPOSE, or APATHY.
+O<: Output units carry the voter choices left
+Iv: Where they are weighted and summed downwards
+PQ: Poll questions decided given weighted sums
+Ov: Output units carry results downward
+I>: Results are weighted and summed to the right
+RT: Reinforcement terms: GOOD, BAD, or IRRELEVANT
+O>: Output units carry results (one step) right
+I^: Results are weighted and summed upwards
+RS: The (linear) reinforcement sum unit updates
+RC: The reinforcement comparison unit judges
+RN: Reinforcment network floods to the weights
+
+[5:
+
+Tue Jul 13 08:18:21 2021 Now, that's not the whole
+story, there's also:
+
+PQ: Poll question results need to flow back
+    clockwise, against the Iv/O< flow to reach the
+    voters
+
+And there's nothing here yet about sequencing.
+Right now the voters will have long since moved on
+before the RC results get broadcast back to their
+weights.
+
+[6:
+
+Tue Jul 13 08:23:48 2021 I think two things:
+
+(1) Symmetric weight matrices will probably need
+    to be their own thing
+
+(2) We need to start with something much simpler.
+
+[7:
+
+Tue Jul 13 08:29:29 2021 Let's just do
+asymmetric weight matrix plates first, and just
+look at that for a little bit.
+
+[8:
+
+Tue Jul 13 08:53:10 2021 So what could that mean?
+
+Well for starters we need sums and weights and not
+to pay too many bits for them.
+
+quark Link {
+ typedef Int(8) Weight;
+ typedef Int(14) Sum;
+ typedef Int(2) State; // +1,0,-1, ill
+
+}
+[9:
+
+Tue Jul 13 16:35:06 2021 OK working through
+
+    quark LinkT(PD stateDir, PD sumDir)
+
+and
+
+    quark Linker(PD stateDir, PD sumDir) {
+      typedef LinkT(stateDir,sumDir) MyLink;
+      virtual Bool hasLink(Bool inNotOut) ;
+      virtual MyLink & getLink(Bool inNotOut) ;
+    }
+
+and getting complex enough to start confusing
+myself.  [10:
+
+Tue Jul 13 16:45:35 2021 In particular, I was
+thinking that one atom might have both an 'in'
+Link and and 'out' Link, so we had to do data
+members for Links rather than base classes.  But
+that's causing pain in Link processing (of
+course), and -- given that Links are currently 22
+bits a pop -- it's not clear that having multiple
+links in a Plate atom is that realistic an idea
+anyway.
+
+Let's bail out and commit to a single Link base
+class? [11:
+
+Wed Jul 14 01:28:50 2021 Working on getting Link
+v2 building.  Currently we're (trying to be)
+propagating 0 for a state if we're on the stateDir
+border.. wondering how actual state values are
+going to jump in there.  We should probably be
+just trusting our state if we're at the beginning?
+So outside forces can set it and have it run?[12:
+
+Wed Jul 14 01:32:04 2021 (Setting it to 1 to
+hopefully see some non-0 sums propagating.)
+
+:12]
+
+:11]
+
+:10]
+
+:9]
+:8]
+:7]
+
+:6]
+
+:5]
+
+:4]
+
+
+:3]
+
+:2]
+:1]
+
+:0]
+[13:
+
+Wed Jul 14 04:23:56 2021 OK, so we seem to have
+state*weight summing happening, although the
+directions seem weird.  With the template:
+
+    quark LinkT(PD stateDir, PD sumDir) : Link ..
+
+and then
+
+ typedef LinkT(PlateUtils.cPLATE_GOES_W,
+               PlateUtils.cPLATE_GOES_S) WMLink;
+
+gets us:
+ - State flows from the west to the east
+ - Sums flow from the south to the north
+
+Let's turn it around.[14:
+
+Wed Jul 14 04:54:13 2021 Well I guess it's easier
+just to get used to the orientation.
+
+Now we've states flowing west and sums flowing
+down on {2,2}.  I think it's time to get a
+decision unit vector/plate going.
+
+:14]
+
+
+:13]
+[15:
+
+Thu Jul 15 03:11:32 2021 OK, it seems we now have
+two interleaved weight matrices, one inbound to
+the voters at the bottom, and the other inbound to
+the poll questions on the left.  The former
+propagates states to the right and sums down, the
+latter propagates states up and sums to the left.
+
+:15]
+[16:
+
+Thu Jul 15 11:40:29 2021 Getting to be time to
+move the flag again.  Buuut..
+
+:16]
+[17:
+
+Thu Jul 15 11:40:39 2021 So we're trying to do a
+'ReinforcementMatrix' that's supposed to flood
+reinforcement signals over the weight matrices,
+which then update weights based on their local
+circumstances.
+
+Do we need/want a UMod to tell when upstream is
+fresh?  If we do have a UMod do we even need an
+upstream direction, rather than just believing
+UMod?
+
+Also: Are we going to have a 'reinforce now' edge
+event, that automatically clears once each site
+applies it?
+[18:
+
+Thu Jul 15 12:48:04 2021 So the 'overall' picture
+such as we're imagining it, for now, is we'll have
+a single SIGHOperator atom somewhere down around
+plate(minx,maxy), where (at the moment) we are
+seeding two interleaved weight matrices plus two
+node vectors.[19:
+
+Thu Jul 15 13:07:42 2021 So we think the
+reinforcment matrix would init at maybe ew[4]
+relative to the seed.. and where would the
+SIGHOperator go?  ew[6] I guess.  That would make
+our initial layout be something like:
+
+                   PQ: Poll question vector
+     PQ W<         VV: Voter vector
+     S1 Wv RM      W<: Weight matrix summing toward PQ
+     SO VV S2      Wv: Weight matrix summing toward VV
+                   S1: StateGate routing PQ out to Wv
+                   S2: StateGate routing VV out to W<
+                   RM: Reinforcement matrix
+                   SO: SIGHOperator
+
+[20:
+
+Thu Jul 15 13:34:33 2021 So, the SO would be doing
+the following, at least in the 'fully sequenced'
+case:
+
+ - Alternately opening the S1 and S2 state gates
+   to perform the vote/react cycle
+
+ - 'Somehow' coming up with a function value and
+   reinforcement signal (probably want an
+   additional element left of the SO to manage
+   that stuff.)
+
+ - Injecting the reinforcement into the RM to
+   update the weights.
+
+Hmm how does SO know when it's okay to carry on?
+There's no interlock back from RM.
+
+We could do full tick-tock updates to the RM if we
+wanted?
+
+[21:
+
+Thu Jul 15 13:45:02 2021 (I really really want to
+do the unclocked version, where we try to make it
+a feature that the stuff closer to the VV/PQ
+corner votes/reacts/learns faster than the more
+remote stuff.  I really really want to do that.
+But I know it's going to look like utter chaos
+when we first deal with it, and I also want
+something with a prayer of working.)
+
+:21]
+
+:20]
+
+:19]
+
+:18]
+
+:17]
+[22:
+
+Sat Jul 17 16:08:07 2021 OK so what could we do
+for the StageGate command processing?  Basically
+just 'everybody sample state now', and otherwise
+just leave the out WM state injection unchanged.
+
+And the 'everybody' makes it a sync point in some
+fashion.
+
+So we're saying that you propagate gatestate and
+incremented command count, but you don't 'execute'
+the gatestate until all your downstream is on the
+same command count.  Which means we have to know
+downstream.
+
+So what if it's just a Bool mPass or something,
+with the rule:
+
+ - if (upstream.mPass) self.mPass = true;
+ - if (self.mPass && allDownstreamMpass()) {
+     executeMpass
+     self.mPass = false;
+   }
+
+Not good enough, need tristate of course.
+Ready/armed/fired
+
+ root READY -> root.ARMED
+ self.READY && up.ARMED -> self.ARMED
+ self.ARMED && all down FIRED -> fire && self.FIRED
+ self.FIRED && all up FIRED -> self.READY
+ root.FIRED -> root.READY
+
+..except we want to fire locally first not last
+
+external: ( root READY -> fire && root.FIRED )
+ self.READY && all up FIRED -> fire && self.FIRED
+ self.FIRED && all down RELOAD -> self.RELOAD
+ self.RELOAD && all up RELOAD -> self.READY[25:
+
+Sun Jul 18 12:30:10 2021 Currently it's more like:
+
+external: ( root.READY -> root.FIRING )
+ self.FIRING -> fire && self.FIRED
+ self.READY && upcount > 0 && all up FIRED -> self.FIRING
+ self.FIRED && all down RECOVERED -> self.RECOVERED
+ self.RECOVERED && all down READY -> self.READY
+
+:25]
+[23:
+
+Sun Jul 18 08:31:33 2021 OK we're close to having
+that distribution state machine implemented.  Now
+what exactly happens when we call fire()?
+
+..aand when do we propagate mGateState, here?  Do
+we just copy it from any and every upstream source
+we see, willy-nilly?[24:
+
+Sun Jul 18 08:38:04 2021 Actually, are we
+revisiting mGateState as well?  Do we need
+GateState cGATE_ARMED as well as CommandState
+cSTATE_FIRED ?
+
+Or maybe cGATE_ARMED should become cGATE_SYNC or
+something -- and NOT locally change after firing
+-- meaning pass state when you see your upstream
+has done so.
+
+:24]
+
+:23]
+:22]
+[26:
+
+Mon Jul 19 02:15:01 2021 OK so we saved an example
+of interleaved asymmetric weight matrices updating
+each other, in SIMDATA_ARCHIVE/20210718145724
+
+Let's take a crack at a cheap-ass evaluator, based
+on Node vector and StateGate technology.  Let's
+just hardcode a bitvector..
+
+..or should we do a slightly less bogus evaluation
+matrix with preset weights?
+
+It seems that either way we're going to need the
+reinforcement matrix so maybe we should do that
+first.
+
+:26]
+[27:
+
+Mon Jul 19 18:44:07 2021 OK well, weight update is
+looking vaguely plausible, considering that the
+reinforcement is currently random.
+
+We're really low on time, and we've got to commit
+to some kind of scheme for eval and reinforcement
+comparison. [28:
+
+Mon Jul 19 19:44:39 2021 Let's make another
+stategate that merges the bits into a bit vector
+at the root?
+
+:28]
+
+:27]
+[29:
+
+Tue Jul 20 00:20:08 2021 OK where do we put this
+Evaluator thing?
+
+                   PQ: Poll question vector
+  Ev PQ W<         VV: Voter vector
+     S1 Wv RM      W<: Weight matrix summing toward PQ
+  FU SO VV S2      Wv: Weight matrix summing toward VV / SeedWeightMatrix
+                   S1: StateGate routing PQ out to Wv
+                   S2: StateGate routing VV out to W<
+                   RM: Reinforcement matrix
+                   SO: SIGHOperator
+                   Ev: Evaluator
+                   FU: Function Under Test
+
+so ew[13]?
+
+:29]
+[30:
+
+Sat Jul 24 04:01:44 2021 OK so lost kind of three
+days with the SFI workshop.
+
+First thing I want here is to see about modifying
+the rules for cSAME_PLATE_AS so that a containing
+Plate's stride can be different from the
+contained, so long as every site in the contained
+plate is present in the containing plate.  Goal is
+to use tectons to move a SIGH machine.
+
+Actually that's the second thing I want.  First
+thing I want is to do absolutely minimal cleanup
+here and commit all this.
+
+:30]
