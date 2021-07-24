@@ -1,0 +1,67 @@
+/** SpaceProbe: Temporary element to assess clear space around itself
+    \symbol SP
+    \color #3d5
+    \symmetries none
+ */
+
+element SpaceProbe : Plate1 + Ephemeron {
+  typedef EventWindow.SiteNum SN;
+  typedef Unsigned(3) Clearance;
+  Clearance mAxisSpace[4];  //WNES
+  Clearance mQuadrantSpace[4]; //--, +-, ++, -+
+
+  typedef Unsigned(4) EventCount;
+  EventCount mEventCount;
+
+  Bool validCount() {
+    return mEventCount > EventCount.minof && mEventCount < EventCount.maxof;
+  }
+
+  Bool onAxis(C2D ewc, PlateUtils.PlateDir & axis) {
+    if (ewc.getX() == 0) {
+      axis = ewc.getY() < 0 ? PlateUtils.cPLATE_GOES_N : PlateUtils.cPLATE_GOES_S;
+      return true;
+    }
+    if (ewc.getY() == 0) {
+      axis = ewc.getX() < 0 ? PlateUtils.cPLATE_GOES_W : PlateUtils.cPLATE_GOES_E;
+      return true;
+    }
+    return false;
+  }
+
+  Bool inQuadrant(C2D ewc, PlateUtils.PlateDir & quadrant) {
+    Int x = ewc.getX(), y = ewc.getY();
+    if (x == 0 && y == 0) return false;
+    else if (x < 0 && y < 0) quadrant = PlateUtils.cPLATE_GOES_W; /*NW really*/
+    else if (x > 0 && y < 0) quadrant = PlateUtils.cPLATE_GOES_N; /*NE really*/
+    else if (x > 0 && y > 0) quadrant = PlateUtils.cPLATE_GOES_E; /*SE really*/
+    else /* (x<0  &&  y>0)*/ quadrant = PlateUtils.cPLATE_GOES_S; /*SW really*/
+    return true;
+  }
+
+  Void probeSpace() {
+    EventWindow ew;
+    for (Unsigned i = 0u; i < 4u; ++i)
+      mAxisSpace[i] = mQuadrantSpace[i] = Clearance.maxof;
+    for (SN sn = 1u; sn < 41u; ++sn) {
+      if (isEphemeral(ew[sn])) continue;
+      C2D ewc = ew.getCoord(sn);
+      Clearance len = (Clearance) ewc.length();
+      PlateUtils.PlateDir ad, qd;
+      if (onAxis(ewc, ad) && len < mAxisSpace[ad])
+        mAxisSpace[ad] = len;
+      else if (inQuadrant(ewc, qd) && len < mQuadrantSpace[qd])
+        mQuadrantSpace[qd] = len;
+    }
+  }
+
+  Void behave() {
+    EventWindow ew;
+    SN oursn = ew.getSiteNumber(self);
+    if (oursn != 0u || mEventCount++ == EventCount.maxof) {
+      ew[oursn] = Empty.instanceof;
+      return;
+    }
+    probeSpace();
+  }
+}

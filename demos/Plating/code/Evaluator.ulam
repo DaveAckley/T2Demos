@@ -1,0 +1,99 @@
+/**
+   \symbol Ev
+   \color #a3a
+ */
+element Evaluator : B2DPlate + Flood + Stride2x2FP {
+  typedef EventWindow.SiteNum SN;
+  typedef PlateUtils.PlateDir PD;
+
+  //// Flood API
+  @Override
+  virtual C2D getRoot() {
+    PlateUtils pu;
+    C2D siz = sizeOfPlate();
+    return pu.relativeToAbsolute(siz, mRootPos);
+  }
+  B2D4 mRootPos;
+  Void setRootRelPos(B2D4 relpos) {
+    mRootPos = relpos;
+  }
+
+  typedef Bits(24) FuncBits;
+  FuncBits mFuncBits;
+
+  @Override
+  virtual Bool consider(Flood& ngb, Bool isUp) {
+    if (!isUp) {  // Always merge funcbits from down
+      if (ngb as Self) {
+        if (mCommandState == Flood.cSTATE_RECOVERED)
+          mFuncBits = mFuncBits | ngb.mFuncBits;
+      } else return false; // WTH
+    }
+    return true;
+  }
+
+  @Override
+  virtual Bool fire() {
+    return doPQCapture();
+  }
+
+  SN mNodeSN;
+  Void setNode(SN nodesn) {
+    mNodeSN = nodesn;
+  }
+
+  Bool checkNode() {
+    return checkNode(mNodeSN);
+  }
+
+  Bool checkNode(SN node) {
+    EventWindow ew;
+    if (!ew.isAccessible(node)) return false;
+    return ew[node] is Node;
+  }
+
+  FuncBits getFuncBits() {
+    return mFuncBits;
+  }
+
+  Void setFuncBits(FuncBits r) {
+    mFuncBits = r;
+  }
+
+  Bool doPQCapture() {
+    DebugUtils du;
+    //    du.print("EVPQAP 10");
+    if (!checkNode()) return false; // XXX Block whole show on this?
+    //    du.print("EVPQAP 11");
+    EventWindow ew;
+    Node & n = (Node &) ew[mNodeSN];
+    Node.State s = n.getState();
+    C2D pos = n.positionOnPlate();
+    Unsigned bitno = pos.length();
+    if (bitno >= mFuncBits.sizeof) {
+      ByteStreamLogger bsl;
+      bsl.printf("PQAPOV %d -> %d\n", bitno, mFuncBits.sizeof);
+      Fail f;
+      f.fail();
+      return false;
+    }
+    // Reset to just our bit; let consider merge up.
+    mFuncBits = (s < 0) ? (FuncBits) 0u : (FuncBits) (1u<<bitno);
+    return true;
+  }
+
+  ARGB getColor(Unsigned selector) {
+    ColorUtils cu;
+    PlateUtils pu;
+    if (selector > 1u) return getFloodColor();
+    return super.getColor(selector);
+  }
+
+  Void behave() {
+    if (mustBlockOrDie()) {
+      return;
+    }
+    checkGrowthAndHealing();
+    floodUpdate();
+  }
+}

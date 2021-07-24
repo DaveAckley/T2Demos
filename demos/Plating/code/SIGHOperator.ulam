@@ -1,0 +1,212 @@
+/** SIGHOperator
+    \symbol So
+    \color #ff0
+ */
+element SIGHOperator : Plate1 {
+  typedef ReinforcementMatrix.Reinforcement Reinforcement;
+  typedef Evaluator.FuncBits FuncBits;
+
+  typedef Unary(4) State;
+  constant State cREACT =   0u; //< PQ fixed, VV update
+  constant State cVOTE =    1u; //< VV fixed, PQ update
+  constant State cEVAL =    2u; //< PQ/VV fixed, score(PQ)
+  constant State cCOMPARE = 3u; //< R = score(PQ) - backavg
+  constant State cREWARD =  4u; //< distribute R
+
+  State mState = cREACT;
+  Bool mEnter = true;
+
+  typedef EventWindow.SiteNum SN;
+  SN mPQStateGate;
+  SN mVVStateGate;
+  SN mRMRoot;
+  SN mEVRoot;
+  SN mFUT;
+
+  Void findSites() {
+    PlateUtils pu;
+    mPQStateGate =
+      pu.findTypeAlongOffset(mPQStateGate,
+                             C2D.instanceof(0,-1),
+                             StateGate.classidof);
+    mVVStateGate =
+      pu.findTypeAlongOffset(mVVStateGate,
+                             C2D.instanceof(1,0),
+                             StateGate.classidof);
+    mRMRoot = 
+      pu.findTypeAlongOffset(mRMRoot,
+                             C2D.instanceof(2,-1),
+                             ReinforcementMatrix.classidof);
+    mEVRoot = 
+      pu.findTypeAlongOffset(mEVRoot,
+                             C2D.instanceof(-1,-2),
+                             Evaluator.classidof);
+    mFUT = 
+      pu.findTypeAlongOffset(mFUT,
+                             C2D.instanceof(-1,0),
+                             FUT.classidof);
+
+  }
+
+  Bool getReinforcement(Reinforcement & r) { //< Ready from mEVRoot, compute via mFUT
+    DebugUtils du;
+    if (mEVRoot == 0u || mEVRoot == SN.maxof) return false;
+    EventWindow ew;
+    if (!ew.isAccessible(mEVRoot)) return false;
+    Atom & a = ew[mEVRoot];
+    FuncBits fb;
+    if (a as Evaluator) {
+      fb = a.getFuncBits();
+    } else return false;
+
+    if (mFUT == 0u || mFUT == SN.maxof) return false;
+    if (!ew.isAccessible(mFUT)) return false;
+    Atom & a2 = ew[mFUT];
+    if (a2 as FUT) {
+      r = a2.judge(fb);
+    } else return false;
+
+    return true;
+  }
+
+  Bool readyStateGate(SN sgsn) {
+    DebugUtils du;
+    if (sgsn == SN.maxof) return false;
+    EventWindow ew;
+    if (!ew.isAccessible(sgsn)) return false;
+    Atom & a = ew[sgsn];
+    if (a as StateGate) {
+      return a.getCommandState() == a.cSTATE_READY;
+    }
+    return false;
+  }
+  Bool fireStateGate(SN sgsn) {
+    DebugUtils du;
+    //    du.print("FSGFING 10");
+    du.print(sgsn);
+    if (sgsn == SN.maxof) return false;
+    EventWindow ew;
+    if (!ew.isAccessible(sgsn)) return false;
+    Atom & a = ew[sgsn];
+    if (a as StateGate) {
+      //      du.print("FSGFING 11");
+      return a.fire();
+    }
+    return false;
+  }
+
+  Bool startEvaluation() {
+    DebugUtils du;
+    if (mEVRoot == 0u || mEVRoot == SN.maxof) return false;
+    EventWindow ew;
+    if (!ew.isAccessible(mEVRoot)) return false;
+    Atom & a = ew[mEVRoot];
+    if (a as Evaluator) {
+      return a.floodTrigger();
+    }
+    return false;
+  }
+
+  Bool evaluationComplete() {
+    DebugUtils du;
+    if (mEVRoot == 0u || mEVRoot == SN.maxof) return false;
+    EventWindow ew;
+    if (!ew.isAccessible(mEVRoot)) return false;
+    Atom & a = ew[mEVRoot];
+    if (a as Evaluator) {
+      if (a.getCommandState() != a.cSTATE_READY) return false;
+      return true;
+    }
+    return false;
+  }
+
+
+  Bool startReinforcement(Reinforcement r) {
+    DebugUtils du;
+    if (mRMRoot == 0u || mRMRoot == SN.maxof) return false;
+    EventWindow ew;
+    if (!ew.isAccessible(mRMRoot)) return false;
+    Atom & a = ew[mRMRoot];
+    if (a as ReinforcementMatrix) {
+      a.setReinforcement(r);
+      return a.floodTrigger();
+    }
+    return false;
+  }
+
+  Bool reinforcementComplete() {
+    DebugUtils du;
+    if (mRMRoot == 0u || mRMRoot == SN.maxof) return false;
+    EventWindow ew;
+    if (!ew.isAccessible(mRMRoot)) return false;
+    Atom & a = ew[mRMRoot];
+    if (a as ReinforcementMatrix) {
+      return a.getCommandState() == a.cSTATE_READY;
+    }
+    return false;
+  }
+
+  Bool advanceStateMachine() {
+    which(mState) {
+      case cREACT: {
+        if (mEnter && fireStateGate(mVVStateGate)) {
+          mEnter = false;
+          return true;
+        }
+        if (!mEnter && readyStateGate(mVVStateGate)) {
+          mState = cVOTE;
+          mEnter = true;
+          return true;
+        }
+
+      }
+      case cVOTE: {
+        if (mEnter && fireStateGate(mPQStateGate)) {
+          mEnter = false;
+          return true;
+        }
+        if (!mEnter && readyStateGate(mPQStateGate)) {
+          mState = cEVAL;
+          mEnter = true;
+          return true;
+        }
+      }
+      case cEVAL: {
+        if (mEnter && startEvaluation()) {
+          mEnter = false;
+          return true;
+        }
+        if (!mEnter && evaluationComplete()) {
+          mState = cREWARD; 
+          mEnter = true;
+          return true;
+        }
+      }
+      case cCOMPARE: { }
+      case cREWARD: {
+        if (mEnter) {
+          Reinforcement rmr;
+          if (!getReinforcement(rmr)) return false;
+          if (!startReinforcement(rmr)) return false;
+          mEnter = false;
+          return true;
+        }
+        if (!mEnter && reinforcementComplete()) {
+          mState = cREACT;
+          mEnter = true;
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  Void behave() {
+    if (mustBlockOrDie()) {
+      return;
+    }
+    findSites();
+    if (advanceStateMachine())
+      return;
+  }
+}

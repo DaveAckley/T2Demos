@@ -1,0 +1,57 @@
+/**
+   \symbol FU
+   \color #33aaaa
+ */
+element FUT {
+  typedef ReinforcementMatrix.Reinforcement Reinforcement;
+  typedef Evaluator.FuncBits FuncBits;
+
+  constant Int cDELTA = 1; //< Unsatisfiability
+  constant Int cRHO = 9;   //< Backavging rate
+  constant Unsigned cFUNC_VAL_BITS = 20u;
+  constant Unsigned cSCALE_BITS = 8u;
+  constant Unsigned cTOTAL_SCALED_VAL_BITS = cFUNC_VAL_BITS + cSCALE_BITS;
+
+  typedef Int(cTOTAL_SCALED_VAL_BITS) ScaledVal;
+
+  ScaledVal mLastVal = ScaledVal.maxof;
+  ScaledVal mBackAvg = ScaledVal.maxof;
+  Reinforcement mLastR;
+
+  ScaledVal evaluate(FuncBits bits) {
+    bits >>= 1u; // discard true unit
+    Unsigned ones = (Unary) bits;          // count 1 bits
+    Int base = (Int) ones * 10;            // 10 points per 1 bit
+    Int score = base;
+    Unsigned bottoms = (Unsigned) (ones & 0x3u); // Remainder mod 4
+    score -= (Int) (15u*(3u-bottoms));     // Penalty unless remainder 3
+    ByteStreamLogger bsl;
+    bsl.printf("SCFUTEV fb(%x) ones(%d) base(%d) score(%d)\n",
+               bits,ones,base,score);
+    return (ScaledVal) (score<<cSCALE_BITS);
+  }
+
+  Reinforcement judge(FuncBits bits) {
+    ByteStreamLogger bsl;
+    bsl.printf("fb(%x) ",bits);
+    ScaledVal newval = evaluate(bits);
+    if (mLastVal == ScaledVal.maxof) // 'Hopefully' OoB
+      mBackAvg = newval;
+    bsl.printf("nv(%d) ",newval);
+    bsl.printf("av(%d) ",mBackAvg);
+    mLastVal = newval;
+    
+    ScaledVal delta = (ScaledVal) (newval - mBackAvg); // +ive is good
+    ScaledVal newavg = (ScaledVal) ((newval + (cRHO-1) * mBackAvg) / cRHO); // update backavg
+    if (newavg == mBackAvg) newavg = newval; // Below scaling limit
+    mBackAvg = newavg;
+    bsl.printf("nav(%d) ",mBackAvg);
+
+    Reinforcement ret = (Reinforcement) (delta/(Int)(1<<(cSCALE_BITS-1)));
+    ret -= cDELTA;
+    bsl.printf("ret(%d) ",ret);
+    bsl.printf("\n");
+    mLastR = ret;
+    return ret;
+  }
+}

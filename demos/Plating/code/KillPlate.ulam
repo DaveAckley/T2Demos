@@ -1,0 +1,18 @@
+/**
+   \symbol KP
+   \color #f00
+ */
+element KillPlate {
+  Void behave() {
+    EventWindow ew;
+    for (Unsigned i = 1u; i <= 4u; ++i) {
+      EventWindow.SiteNum sn = (EventWindow.SiteNum) i;
+      if (!ew.isAccessible(sn)) continue;
+      Atom & a = ew[sn];
+      if (a as Plate) {
+        a.setDeathBits(a.cDIE_AND_DOWN);
+      }
+    }
+    ew[0] = Empty.instanceof;
+  }
+}

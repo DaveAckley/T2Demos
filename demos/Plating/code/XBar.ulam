@@ -1,0 +1,108 @@
+quark QXBar : B2DPlate {
+  typedef QCData.Data Data;
+  virtual C2D targetPos() ;
+  virtual C2D shiftOffset() ;
+  //// SERVICES
+  Unsigned colorPos(Data data, Unsigned range) {
+    return (Unsigned) (data * range + Data.maxof/2u) / (1u+Data.maxof);
+  }
+
+  Bool update() {
+    if (mustBlockOrDie()) return true;
+    if (checkGrowthAndHealing()) return true;
+    return false;
+  }
+}
+
+/** \symbol XI
+    \color #555
+ */
+element XBarIn : QXBar + B2DPlate + Stride2x2F {
+  constant C2D cTARG = { .x = 0, .y = 1 };
+  constant C2D cSHIFT = { .x = -2, .y = 1 };
+  constant C2D cSWITCH = { .x = -1, .y = 1 };
+  @Override
+  C2D targetPos() { return cTARG; }
+  @Override
+  C2D shiftOffset() { return cSHIFT; }
+
+  Bool doProcess() {
+    EventWindow ew;
+    C2D c = targetPos();
+    if (!ew.isAccessible(c)) return false;
+    Atom & a = ew[c];
+    if (a as CData) {
+      Unsigned mypos = (Unsigned) positionOnPlate().getX();
+      Unsigned range = (Unsigned) (sizeOfPlate().getY()-1); // Y for min
+      QCData.Data col = a.getData();
+      if (colorPos(col,range) == mypos) {  // Time to switch!
+        if (ew.isAccessible(cSWITCH) && ew[cSWITCH] is Empty) { // SWITCH
+          ew.swap(c,cSWITCH);  
+          return false;
+        }
+        return true;  // Else must block
+      }
+      if (ew.isAccessible(cSHIFT) && ew[cSHIFT] is Empty) {
+        ew.swap(c,cSHIFT);
+        return false;
+      }
+      return true;
+    }
+    return false;
+  }
+
+  Void behave() {
+    if (update()) return;
+    if (doProcess()) return;
+  }
+}
+
+/** \symbol XO
+    \color #222
+ */
+element XBarOut : QXBar + B2DPlate + Stride2x2F {
+  constant C2D cTARG = { .x = 0, .y = 1 };
+  constant C2D cSHIFT = { .x = 0, .y = 3 };
+  @Override
+  C2D targetPos() { return cTARG; }
+  @Override
+  C2D shiftOffset() { return cSHIFT; }
+
+  Void behave() {
+    if (update()) return;
+    EventWindow ew;
+    if (!ew.isAccessible(cTARG) ||
+        !ew.isAccessible(cSHIFT))
+      return;
+    if (ew[cTARG] is CData && ew[cSHIFT] is Empty)
+      ew.swap(cTARG,cSHIFT);
+  }
+}
+
+quark XBarT(C2D.Coord cSWITCH_SIZE,C2D.Coord cEXTENSION_SIZE) {
+  Void behave() {
+    PlateUtils pu;
+    XBarIn xi;
+    XBarOut xo;
+    constant C2D.Coord cFULL_SIZE = cSWITCH_SIZE + cEXTENSION_SIZE;
+    constant C2D cCORE_DIM = { .x = cSWITCH_SIZE, .y = cSWITCH_SIZE };
+    constant C2D cXI_DIM = { .x = cFULL_SIZE, .y = cSWITCH_SIZE };
+    constant C2D cXO_DIM = { .y = cFULL_SIZE, .x = cSWITCH_SIZE };
+    xi.setSizeOfPlate(cXI_DIM);
+    xo.setSizeOfPlate(cXO_DIM);
+    xi.setPositionOnPlate(pu.c0x0);
+    xo.setPositionOnPlate(pu.c0x0);
+    EventWindow ew;
+    ew[0] = xi.atomof;
+    ew[1] = xo.atomof;
+  }
+}
+
+
+/** \symbol XB
+ */
+element XBar : XBarT(16u,4u) { }
+
+/** \symbol X2
+ */
+element XBar2 : XBarT(30u,6u) { }

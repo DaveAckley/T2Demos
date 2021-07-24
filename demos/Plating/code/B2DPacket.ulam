@@ -27,6 +27,41 @@ quark B2DPacketSense {
              mSenseTag);
   }
 
+  /**
+     \returns < 0 if need to block, else 0..todistance, indicating the
+     number of clear sites along the given \c incr path
+   */
+  Int scanDist(PlateUtils.PlateDir pd, Unsigned todistance) {
+    EventWindow ew;
+    PlateUtils pu;
+    Ephemeron e;
+    C2D incr = pu.stepInDir(pd);
+    C2D at(0,0);
+    C2D lastavail;
+    Int count;
+    for (count = 0; count < (Int) todistance; ++count) {
+      at = at + incr;
+      if (!ew.isLegal(at)) break;
+      if (!ew.isLive(at)) return count; // Non-live site ends scan for sure
+      Atom & a = ew[at];
+      if (a as SpaceProbe) { //
+        return a.validCount() ? count + a.mAxisSpace[pd] : -1;
+      }
+      if (!e.isEphemeral(a)) return count; // Found solid something.
+      lastavail = at;
+    }
+    if (count >= (Int) todistance) 
+      return count;             // All clear as far as caller cares
+
+    // If we're here, we fell off the ew without finding (1) a solid
+    // object or (2) a valid spaceprobe, or (3) clearance all the way
+    // to todistance.  So we need to make a spaceprobe and wait.
+    if (lastavail.length() > 0u) {
+      ew[lastavail] = SpaceProbe.instanceof;
+    }
+    return -1;
+  }
+
   /** Return true if packet changed in any way */
   Bool sense(Plate & p) {
     ByteStreamLogger bsl;
@@ -40,6 +75,7 @@ quark B2DPacketSense {
     PlateUtils pu;
     C2D pos = p.positionOnPlate();
     C2D siz = p.sizeOfPlate();
+    C2D str = p.stride();
     Bool changes = false;
     for (Unsigned d = pu.cPLATE_GOES_W; d <= pu.cPLATE_GOES_S; ++d) {
       PlateUtils.PlateDir pd = (PlateUtils.PlateDir) d;
@@ -72,7 +108,7 @@ quark B2DPacketSense {
 quark B2DPacketAct {
   typedef Unsigned(3) ActOp;
   constant ActOp cAOP_NONE         = 0u; //< No command
-  constant ActOp cAOP_NOP          = 1u; //< Command that does nothing
+  constant ActOp cAOP_NOP          = 1u; //< Command that does nothing (but has a tag)
   constant ActOp cAOP_SENSE_OUTER  = 2u; //< Min clearance to mDirData[side]
   constant ActOp cAOP_SENSE_INNER  = 3u; //< Min clearance to mDirData[side]
   constant ActOp cAOP_SIDE_MOVE    = 4u; //< Move toward != 0 mDirData[side]
@@ -113,6 +149,7 @@ quark B2DPacketAct {
     PlateUtils pu;
     C2D pos = p.positionOnPlate();
     C2D siz = p.sizeOfPlate();
+    C2D str = p.stride();
     //    bsl.printf("LKOIACT10(%d,%d)-(%d,%d)[%d]\n",
     //               pos.getX(),pos.getY(),
     //               siz.getX(),siz.getY(),
@@ -127,11 +164,11 @@ quark B2DPacketAct {
     if (!doMOVE && !doGROW) return false; //XXX OTHER OPS UNIMPLEMENTED
  
     Tecton tc;
-    C2D off = tc.initFromOpCmd(doGROW, mActSide, pos, siz);
+    C2D offewc = tc.initFromOpCmd(doGROW, mActSide, pos, siz, str);
     //    bsl.printf("LKOIACT12(%d,%d)\n",off.getX(),off.getY());
-    if (off.length() > 0u) {
+    if (offewc.length() > 0u) {
       EventWindow ew;
-      ew[off] = tc;
+      ew[offewc] = tc;
       //      bsl.printf("LKOIACT13\n");
       return true;
     }

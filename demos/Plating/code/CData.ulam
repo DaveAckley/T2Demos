@@ -1,0 +1,134 @@
+quark QCData {
+  typedef Unsigned(10) Data;
+  Data mData;
+
+  Data getData() {
+    return mData;
+  }
+  Void setData(Data d) {
+    mData = d;
+  }
+
+  Void randomizeData() {
+    Random random;
+    mData = (Data) random.between(Data.minof,Data.maxof);
+  }
+
+  ARGB getColor(Unsigned selector) {
+    typedef Bits(8) Byte;
+    Unsigned rev = mData.maxof - mData;
+    Unsigned group = (Unsigned) ((rev >> 8u) & 0x3);
+    Unsigned val = (Unsigned) (rev & 0xff);
+    ColorUtils cu;
+    ARGB c;
+    which (group) {
+    case 0u: { c = cu.color((Byte) 0xff,      (Byte) val,       (Byte) 0x00); }
+    case 1u: { c = cu.color((Byte) (0xff-val),(Byte) 0xff,      (Byte) 0x00); }
+    case 2u: { c = cu.color((Byte) 0x00,      (Byte) 0xff,      (Byte) val);  }
+    case 3u: { c = cu.color((Byte) 0x00,      (Byte) (0xff-val),(Byte) 0xff); }
+    }
+    ARGB grey = cu.color(0x808080);
+    //c = cu.between(grey, c, 2);
+    return c;
+  }
+}
+
+/**
+   \symmetries all
+ */
+element CData : QCData {
+  typedef EventWindow.SiteNum SN;
+  Once mOnce;
+  Void behave() {
+    if (mOnce.new()) randomizeData();
+
+    EventWindow ew;
+    Random random;
+
+    Unsigned count = 0;
+    SN swap;
+    for (SN sn = 1u; sn <= 8u; ++sn) {
+      if (ew[sn] is Self) continue;
+      if (ew[sn] is Empty) {
+        if (random.oneIn(++count))
+          swap = sn;
+        continue;
+      }
+      if (random.oneIn(1000u))
+        ew[0] = Empty.instanceof;  // Very slow evaporation
+      return;                      // Anything but empty or us, passivate
+    }
+
+    if (count > 0u) {
+      if (random.oneIn(10u))
+        ew[0] = Empty.instanceof;  // Slow evaporation
+      else
+        ew.swap(0,swap);           // while diffusing
+    }
+  }
+}
+      
+/** \symbol CE
+    \color #ce0
+ */
+element CDataEmitter  {
+  Void behave() {
+    EventWindow ew;
+    Random random;
+    if (ew[1] is Empty && random.oneIn(25)) {
+      CData cd;
+      cd.mOnce.new();
+      cd.randomizeData();
+      ew[1] = cd.atomof;
+    }
+  }
+}
+
+/** \symbol CB
+    \color #00F
+ */
+element CBlueEmitter  {
+  typedef QCData.Data Data;
+  Void behave() {
+    EventWindow ew;
+    Random random;
+    CData cd;
+    ColorUtils cu;
+    cd.mOnce.new();
+    cd.setData(Data.minof);
+    ew[0] = cd.atomof;
+  }
+}
+
+/** \symbol CG
+    \color #0F0
+ */
+element CGreenEmitter  {
+  typedef QCData.Data Data;
+  Void behave() {
+    EventWindow ew;
+    Random random;
+    CData cd;
+    ColorUtils cu;
+    cd.mOnce.new();
+    cd.setData(Data.maxof/2);
+    ew[0] = cd.atomof;
+  }
+}
+
+/** \symbol CR
+    \color #F00
+ */
+element CRedEmitter  {
+  typedef QCData.Data Data;
+  Void behave() {
+    EventWindow ew;
+    Random random;
+    CData cd;
+    ColorUtils cu;
+    cd.mOnce.new();
+    cd.setData(Data.maxof);
+    ew[0] = cd.atomof;
+  }
+}
+

@@ -1,0 +1,235 @@
+quark Link : Plate {
+  typedef Int(8) Weight;
+  typedef Int(12) Sum;
+  typedef Int(2) State; // +1,0,-1, ill
+  typedef PlateUtils.PlateDir PD;
+
+  ////Link API
+  virtual Bool initIfNecessary() ;
+  virtual Void init() ;
+  virtual Weight getWeight() ;
+  virtual Void setWeight(Weight w) ;
+  virtual Sum getSum() ;
+  virtual State getState() ;
+  virtual Bool setState(State newstate) ;
+  virtual PD getStateDir() ;
+  virtual PD getSumDir() ;
+}
+
+quark StdLink : Link {
+  
+  Weight mWeight;
+  Sum mSum;
+  State mState;
+
+  //// Link API
+  @Override
+  Weight getWeight() { return mWeight; }
+
+  @Override
+  Void setWeight(Weight w) { mWeight = w; }
+
+  @Override
+  Sum getSum() { return mSum; }
+
+  @Override
+  State getState() { return mState; }
+
+  @Override
+  Bool setState(State newstate) {
+    mState = newstate;
+    return true;
+  }
+
+  ////
+
+  constant State cINVALID_STATE = State.minof;
+
+  Bool initIfNecessary() {
+    if (mState == cINVALID_STATE) {
+      init();
+      return true;
+    }
+    return false;
+  }
+
+  Void init() {
+    Random random;
+    mState = 0;
+    mSum = 0;
+    mWeight = (Weight) random.between(Weight.minof/4, Weight.maxof/4);
+  }
+
+  Bool propagate() {
+    EventWindow ew;
+    ByteStreamLogger bsl;
+    typedef EventWindow.SiteNum SN;
+    Bool changed = false;
+    C2D siz = sizeOfPlate();
+    C2D pos = positionOnPlate();
+    C2D str = stride();
+    Sum insum;
+    PlateUtils pu;
+    bsl.printf("PRPG:");
+    PD sumDir = getSumDir();
+    PD stateDir = getStateDir();
+    if (pu.onBorderForDir(pos,siz,sumDir)) insum = 0;
+    else {
+      C2D ngbpc = pos + pu.stepInDir(sumDir);
+      SN ngbsn = plateCoordToEWSN(ngbpc);
+      if (ngbsn == ngbsn.maxof) return false;
+      bsl.printf("SUsn(%d)",ngbsn);
+      Atom & a = ew[ngbsn];
+      if (a as Self) {
+        insum = a.mSum;
+        bsl.printf("insum(%d)",insum);
+      } else return false;
+    }
+    State instate;
+    if (pu.onBorderForDir(pos,siz,stateDir)) { /* external drives us */ }
+    else {
+      C2D ngbpc = pos + pu.stepInDir(stateDir);
+      SN ngbsn = plateCoordToEWSN(ngbpc);
+      if (ngbsn == ngbsn.maxof) return false;
+      bsl.printf("STsn(%d)",ngbsn);
+      Atom & a = ew[ngbsn];
+      if (a as Self) {
+        instate = a.mState;
+        bsl.printf("instate(%d)",instate);
+      } else return false;
+      if (instate != mState) {
+        mState = instate;
+        changed = true;
+      }
+    }
+    Sum outsum = (Sum) (mWeight * mState + insum);
+    if (outsum != mSum) {
+      mSum = outsum;
+      bsl.printf("mSum(%d)",mSum);
+      changed = true;
+      // bsl.printf("\n");
+    }
+    return changed;
+  }
+}
+
+
+
+quark LinkT(PD stateDir, PD sumDir) : Link {
+  
+  Weight mWeight;
+  Sum mSum;
+  State mState;
+
+  //// Link API
+  @Override
+  Weight getWeight() { return mWeight; }
+
+  @Override
+  Sum getSum() { return mSum; }
+
+  @Override
+  State getState() { return mState; }
+
+  @Override
+  Bool setState(State newstate) {
+    mState = newstate;
+    return true;
+  }
+
+  @Override
+  PD getStateDir() { return stateDir; }
+
+  @Override
+  PD getSumDir() { return sumDir; }
+
+  ////
+
+  constant State cINVALID_STATE = State.minof;
+  constant C2D cSTATE_FROM = { // equiv to pu.stepInDir(stateDir)
+    .x = (stateDir == PlateUtils.cPLATE_GOES_W) ? -1 :
+          ((stateDir == PlateUtils.cPLATE_GOES_N) ? 0 :
+          ((stateDir == PlateUtils.cPLATE_GOES_E) ? 1 :
+           /*((stateDir == PlateUtils.cPLATE_GOES_N)*/ 0))
+    , .y = (stateDir == PlateUtils.cPLATE_GOES_W) ? 0 :
+          ((stateDir == PlateUtils.cPLATE_GOES_N) ? -1 :
+          ((stateDir == PlateUtils.cPLATE_GOES_E) ? 0 :
+           /*((stateDir == PlateUtils.cPLATE_GOES_N)*/ 1))
+  };
+  constant C2D cSUM_FROM =  { // equiv to pu.stepInDir(sumDir)
+    .x = (sumDir == PlateUtils.cPLATE_GOES_W) ? -1 :
+          ((sumDir == PlateUtils.cPLATE_GOES_N) ? 0 :
+          ((sumDir == PlateUtils.cPLATE_GOES_E) ? 1 :
+           /*((sumDir == PlateUtils.cPLATE_GOES_N)*/ 0))
+    , .y = (sumDir == PlateUtils.cPLATE_GOES_W) ? 0 :
+          ((sumDir == PlateUtils.cPLATE_GOES_N) ? -1 :
+          ((sumDir == PlateUtils.cPLATE_GOES_E) ? 0 :
+           /*((sumDir == PlateUtils.cPLATE_GOES_N)*/ 1))
+  };
+  Bool initIfNecessary() {
+    if (mState == cINVALID_STATE) {
+      init();
+      return true;
+    }
+    return false;
+  }
+
+  Void init() {
+    Random random;
+    mState = 0;
+    mSum = 0;
+    mWeight = (Weight) random.between(Weight.minof/4, Weight.maxof/4);
+  }
+
+  Bool propagate() {
+    EventWindow ew;
+    ByteStreamLogger bsl;
+    typedef EventWindow.SiteNum SN;
+    Bool changed = false;
+    C2D siz = sizeOfPlate();
+    C2D pos = positionOnPlate();
+    C2D str = stride();
+    Sum insum;
+    PlateUtils pu;
+    bsl.printf("PRPG:");
+    if (pu.onBorderForDir(pos,siz,sumDir)) insum = 0;
+    else {
+      C2D ngbpc = pos + cSUM_FROM;
+      SN ngbsn = plateCoordToEWSN(ngbpc);
+      if (ngbsn == ngbsn.maxof) return false;
+      bsl.printf("SUsn(%d)",ngbsn);
+      Atom & a = ew[ngbsn];
+      if (a as Self) {
+        insum = a.mSum;
+        bsl.printf("insum(%d)",insum);
+      } else return false;
+    }
+    State instate;
+    if (pu.onBorderForDir(pos,siz,stateDir)) instate = 1;
+    else {
+      C2D ngbpc = pos + cSTATE_FROM;
+      SN ngbsn = plateCoordToEWSN(ngbpc);
+      if (ngbsn == ngbsn.maxof) return false;
+      bsl.printf("STsn(%d)",ngbsn);
+      Atom & a = ew[ngbsn];
+      if (a as Self) {
+        instate = a.mState;
+        bsl.printf("instate(%d)",instate);
+      } else return false;
+    }
+    if (instate != mState) {
+      mState = instate;
+      changed = true;
+    }
+    Sum outsum = (Sum) (mWeight * mState + insum);
+    if (outsum != mSum) {
+      mSum = outsum;
+      bsl.printf("mSum(%d)",mSum);
+      changed = true;
+    }
+    //    bsl.printf("\n");
+    return changed;
+  }
+}
+
+  //quark Link : LinkT(PlateUtils.cPLATE_GOES_W, PlateUtils.cPLATE_GOES_S) { }

@@ -1,4 +1,5 @@
 quark Plate {
+  typedef EventWindow.SiteNum SN;
   typedef Bits(2) DeathBits;
   constant DeathBits cDIE_AND_DOWN = 1u<<0u; //< This and its subplates die
   constant DeathBits cDIE_AND_UP =   1u<<1u; //< This and its superplates die
@@ -7,12 +8,26 @@ quark Plate {
   //// Plate API
   virtual C2D sizeOfPlate() ;                 //< Overall size of self's plate
   virtual C2D positionOnPlate() ;             //< Position of self in plate (0,0)..size-(1,1)
+  virtual C2D stride() { return PlateUtils.c1x1; } //< Map plate coord diffs to ew coord diffs
+  virtual C2D phase() { return PlateUtils.c0x0; }  //< Our relative coord within stride
   virtual Bool blockSubplates() { return false; } //< Blocks all priorities in contained plates
   virtual Int priority() { return 0; }        //< Default priority within containment rules
   virtual DeathBits getDeathBits() ;          //< Current DeathBits status of Plate
   virtual Void setDeathBits(DeathBits bits) ; //< Update DeathBits status of Plate
 
   //// Plate Services
+
+  /** Priority due to stride and phase
+   */
+  Int stridePhasePriority(C2D stride, C2D phase) {
+    return stride.getY()*phase.getX() + phase.getY();
+  }
+
+  /** C2D of lower-rightmost position on this plate
+   */
+  C2D lastPosOnPlate() {
+    return sizeOfPlate()-PlateUtils.c1x1;
+  }
 
   /** Are we contained by our own plate, based on our pos and size?
    */
@@ -79,9 +94,9 @@ quark Plate {
 
   /** Get our own event window site number, or fail if we are not
       located in the event window. */
-  EventWindow.SiteNum getOurSN() {
+  SN getOurSN() {
     EventWindow ew;
-    EventWindow.SiteNum selfsn = ew.getSiteNumber(self);
+    SN selfsn = ew.getSiteNumber(self);
     if (selfsn == selfsn.maxof) {
       Fail f;
       f.fail("Not in EW");
@@ -101,7 +116,7 @@ quark Plate {
     EventWindow ew;
     PlateUtils pu;
 
-    EventWindow.SiteNum selfsn = getOurSN();
+    SN selfsn = getOurSN();
     C2D offsetl = md.getSiteCoord(selfsn);
     
     Int ourpriority = self.priority();
@@ -110,7 +125,7 @@ quark Plate {
     Bool dieDown = (db & cDIE_AND_DOWN) != 0;
     Bool dieUp = (db & cDIE_AND_UP) != 0;
 
-    for (EventWindow.SiteNum sn = 1u; sn < 41u; ++sn) {
+    for (SN sn = 1u; sn < 41u; ++sn) {
       if (!ew.isAccessible(sn)) continue;
       C2D offsetr = md.getSiteCoord(sn);
       Atom & a = ew[sn];
@@ -123,14 +138,12 @@ quark Plate {
 
         if (weAreDying) {
           Bool killit = false;
-          if (rel == pu.cSAME_PLATE_AS)
-            killit = true;
-          else if (rel == pu.cCONTAINS_PLATE && dieDown)
-            killit = true;
-          else if (rel == pu.cCONTAINED_BY_PLATE && dieUp)
-            killit = true;
-          if (killit) 
-            a.setDeathBits(db);
+
+          if (rel == pu.cSAME_PLATE_AS) killit = true;
+          else if (rel == pu.cCONTAINS_PLATE && dieDown) killit = true;
+          else if (rel == pu.cCONTAINED_BY_PLATE && dieUp) killit = true;
+
+          if (killit) a.setDeathBits(db);
         } else if (rel == pu.cSAME_PLATE_AS) {
 
           if (a.priority() > ourpriority) { // outranked on plate: you must hodl
@@ -138,6 +151,11 @@ quark Plate {
           }
         } else if (rel == pu.cCONTAINED_BY_PLATE) {
           if (a.blockSubplates()) return true;  // regardless of priority comparison
+        } else if (rel == pu.cOVERLAPS_PLATE) {
+          DebugUtils du;
+          du.print("KILL OVERLAPPING PLATE");
+          a.setDeathBits(cDIE_EITHER);
+          return true;  // And you must hold this time.
         }
       }
     }
@@ -154,26 +172,47 @@ quark Plate {
    * the ew somewhere, and of course ew accessibility doesn't change.
    *
    * \returns site number where plateCoord would be located, or
-   * EventWindow.SiteNum.maxof if \c plateCoord is outside our plate
+   * SN.maxof if \c plateCoord is outside our plate
    * or inaccessible in the ew
    */
-  EventWindow.SiteNum plateCoordToEWSN(C2D plateCoord) {
+  SN plateCoordToEWSN(C2D plateCoord) {
+    return plateCoordToEWSN(plateCoord, PlateUtils.c0x0);
+  }
+  
+  SN plateCoordToEWSN(C2D plateCoord, C2D onPhase) {
+    DebugUtils du;
+    PlateUtils pu;
     C2D plateSize = sizeOfPlate();       // Our plate size
-    if (!plateSize.contains(plateCoord))
-      return EventWindow.SiteNum.maxof;  // Not on our plate
-
+    if (!plateSize.contains(plateCoord)) {
+      du.print("PC2ESN NOT ON PLATE");
+      return SN.maxof;  // Not on our plate
+    }
     EventWindow ew;
-    EventWindow.SiteNum ourSN = ew.getSiteNumber(self); // Find ourselves
-    if (ourSN == ourSN.maxof)
-      return EventWindow.SiteNum.maxof;  // We are not in the ew
+    SN ourSN = ew.getSiteNumber(self); // Find ourselves
+    if (ourSN == ourSN.maxof) {
+      du.print("PC2ESN NOT IN EW");
+      return SN.maxof;  // We are not in the ew
+    }
 
+    C2D ourStride = stride();            // Our plate->ew coord scaling
+    if (!ourStride.contains(onPhase)) {
+      du.print("PC2ESN NO SUCH PHASE");
+      return SN.maxof;  // We don't have that phase
+    }
+    C2D ourPhase = phase();
     C2D ourEWc = ew.getCoord(ourSN);       // Location in ew coords
     C2D ourPlatePos = positionOnPlate();   // Location in plate coords
-    C2D offset = plateCoord - ourPlatePos; // Where they are relative to us
-    C2D theirEWc = offset + ourEWc;        // Where they'd be in the ew
+    C2D offset = plateCoord - ourPlatePos; // Plate coord offset us to them
+    C2D phaseOffset = onPhase - ourPhase;  // phase difference us to them
+    C2D theirEWc = pu.hadamard(offset,ourStride) + ourEWc + phaseOffset; // Where they'd be in the ew
 
-    if (!ew.isAccessible(theirEWc))
-      return EventWindow.SiteNum.maxof;  // Inaccessible
+    if (!ew.isAccessible(theirEWc)) {
+      du.print("PC2ESN INACCESSIBLE");
+      du.print(plateCoord);
+      du.print(ourEWc);
+      du.print(theirEWc);
+      return SN.maxof;  // Inaccessible
+    }
 
     return ew.getSiteNumber(theirEWc);
   }
@@ -199,9 +238,9 @@ quark Plate {
    */
   Bool isEmptyOrField(C2D ewc, Bool allowContainer) {
     EventWindow ew;
-    EventWindow.SiteNum sn = ew.getSiteNumber(self); // Find ourselves
+    SN sn = ew.getSiteNumber(self); // Find ourselves
     if (sn == sn.maxof) { Fail f; f.fail("self not in EW"); return false; }
-    C2D sat = ew.getCoord(sn); // Us as coord
+    C2D sat = ew.getCoord(sn); // Us as ewcoord
 
 //    du.printContext();
 //    du.print("iEOF10");
@@ -235,9 +274,9 @@ quark Plate {
    */
   Bool isEmptyOrPlate(C2D ewc, Bool allowContainer) {
     EventWindow ew;
-    EventWindow.SiteNum sn = ew.getSiteNumber(self); // Find ourselves
+    SN sn = ew.getSiteNumber(self); // Find ourselves
     if (sn == sn.maxof) { Fail f; f.fail("self not in EW"); return false; }
-    C2D sat = ew.getCoord(sn); // Us as coord
+    C2D sat = ew.getCoord(sn); // Us in ewcoord
 
 //    du.printContext();
 //    du.print("iEOF10");
@@ -267,11 +306,11 @@ quark Plate {
 
   //// DClock predicates
   Bool isRoot() {
-    return positionOnPlate() == C2D.instanceof(0,0);
+    return positionOnPlate() == PlateUtils.c0x0;
   }
 
   Bool isMax() {
-    return positionOnPlate() + C2D.instanceof(1,1) == sizeOfPlate();
+    return positionOnPlate() + PlateUtils.c1x1 == sizeOfPlate();
   }
 
 }

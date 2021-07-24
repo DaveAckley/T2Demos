@@ -26,9 +26,9 @@ element TransportPlateH : TransportPlate {
     ColorUtils cu;
     ARGB ret = super.getColor(selector);
     if (isOperatorSlot(true) || isOperatorSlot(false))
-      ret = cu.between(cu.color(0x0000ff), ret, 33);
+      ret = cu.between(cu.color(0xff0000ff), ret, 33);
     if (isTransportStation())
-      ret = cu.between(cu.color(0xff0000), ret, 33);
+      ret = cu.between(cu.color(0xffff0000), ret, 33);
     return ret;
   }
 

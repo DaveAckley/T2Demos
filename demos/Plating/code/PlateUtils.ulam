@@ -1,6 +1,9 @@
 quark PlateUtils {
+  typedef EventWindow.SiteNum SN;
+  
   constant C2D c0x0 = { .x = 0, .y = 0 };
   constant C2D c0x1 = { .x = 0, .y = 1 };
+  constant C2D c1x0 = { .x = 1, .y = 0 };
   constant C2D c1x1 = { .x = 1, .y = 1 };
   constant C2D c1x2 = { .x = 1, .y = 2 };
   constant C2D c2x2 = { .x = 2, .y = 2 };
@@ -71,6 +74,17 @@ quark PlateUtils {
     return false;
   }
 
+  Unsigned strideInDir(PlateDir pd, C2D stride) {
+    Int v;
+    which (pd) {
+    case cPLATE_GOES_W: { v = stride.getX(); }
+    case cPLATE_GOES_N: { v = stride.getY(); }
+    case cPLATE_GOES_E: { v = stride.getX(); }
+    case cPLATE_GOES_S: { v = stride.getY(); }
+    }
+    return (Unsigned) v;
+  }
+
   C2D stepInDir(PlateDir pd) { return stepInDir(pd, false); }
   
   C2D stepInDir(PlateDir pd, Bool toshrink) {
@@ -85,7 +99,7 @@ quark PlateUtils {
     return ret;
   }
 
-  EventWindow.SiteNum reversePtr(EventWindow.SiteNum sn) {
+  SN reversePtr(SN sn) {
     EventWindow ew;
     MDist md;
     if (!ew.isAccessible(sn)) return sn.maxof; // Illegal reverses to illegal
@@ -94,7 +108,8 @@ quark PlateUtils {
     return md.getSiteNumber(icoord);   // Our SN relative to them
   }
 
-  EventWindow.SiteNum lineForwardSN(PlateDir dir) {  // Next site forward in line direction
+  /*
+  SN lineForwardSN(PlateDir dir, C2D stride) {  // Next site in line direction given stride
     which (dir) {
     case cPLATE_GOES_W: { return 4u; }
     case cPLATE_GOES_N: { return 3u; }
@@ -102,80 +117,126 @@ quark PlateUtils {
     case cPLATE_GOES_S: { return 2u; }
     }
     // NOT REACHED
-    return EventWindow.SiteNum.maxof;
+    return SN.maxof;
+  }
+  */
+
+  C2D lineForwardOffsetEWC(PlateDir dir, C2D stride) {
+    C2D.Coord sx = stride.x;
+    C2D.Coord sy = stride.y;
+    which (dir) {
+    case cPLATE_GOES_W: { return C2D.instanceof(sx,0); }
+    case cPLATE_GOES_N: { return C2D.instanceof(0,sy); }
+    case cPLATE_GOES_E: { return C2D.instanceof(-sx,0); }
+    case cPLATE_GOES_S: { return C2D.instanceof(0,-sy); }
+    }
+
+    return c0x0; // FAIL?
   }
 
-  C2D lineForwardOffset(PlateDir dir) {
-    MDist md;
-    return md.getSiteCoord(lineForwardSN(dir));
+  Bool inStride(C2D ew1, C2D ew2, C2D str) {
+    C2D wastepc;
+    return inStride(ew1,ew2,str,wastepc);
   }
 
-  typedef Unary(5) PlateRelation;
+  Bool inStride(C2D ew1, C2D ew2, C2D str, C2D & pcdiff) {
+    C2D ewdiff = ew1 - ew2;
+    C2D pcdf = hadamardiv(ewdiff,str);
+    Bool ret = hadamard(pcdf,str) == ewdiff;
+    if (ret) pcdiff = pcdf;
+    return ret;
+  }
+
+  typedef Unary(6) PlateRelation;
   constant PlateRelation cSAME_PLATE_AS = 0u;     //< L same size and net origin as R
   constant PlateRelation cCONTAINS_PLATE = 1u;    //< L wholly contains R 
   constant PlateRelation cCONTAINED_BY_PLATE = 2u;//< L wholly contained by R
   constant PlateRelation cUNRELATED_TO_PLATE = 3u;//< L disjoint from R (might be adjacent)
   constant PlateRelation cOVERLAPS_PLATE = 4u;    //< L partially overlaps R (ooh bad?)
   constant PlateRelation cNOT_PLATE = 5u;         //< L and/or R is inaccessible or not a Plate
+  constant PlateRelation cINTERPHASE_PLATE = 6u;  //< L and R have different strides and/or phases
 
-  PlateRelation relationTo(EventWindow.SiteNum snl, EventWindow.SiteNum snr) {
+  PlateRelation relationTo(SN snl, SN snr) {
     MDist md;
     C2D offsetl = md.getSiteCoord(snl);
     C2D offsetr = md.getSiteCoord(snr);
     return relationTo(offsetl,offsetr);
   }
 
-  PlateRelation relationTo(C2D offsetl, C2D offsetr) {
+  PlateRelation relationTo(C2D ewoffsetl, C2D ewoffsetr) {
     EventWindow ew;
-    if (ew.isAccessible(offsetl) && ew.isAccessible(offsetr)) {
-      return relationTo(ew[offsetl], offsetl, ew[offsetr], offsetr);
+    if (ew.isAccessible(ewoffsetl) && ew.isAccessible(ewoffsetr)) {
+      return relationTo(ew[ewoffsetl], ewoffsetl, ew[ewoffsetr], ewoffsetr);
     }
     return cNOT_PLATE;
   }
 
-  PlateRelation relationTo(Atom& al, C2D offsetl, Atom& ar, C2D offsetr) {
+  PlateRelation relationTo(Atom& al, C2D ewoffsetl, Atom& ar, C2D ewoffsetr) {
     if (al as Plate) {
       if (ar as Plate) {
-        return relationTo(al,offsetl,ar,offsetr);
+        return relationTo(al,ewoffsetl,ar,ewoffsetr);
       }
     }
     return cNOT_PLATE;
   }
   
-  PlateRelation relationTo(Plate& pl, C2D offsetl, Plate& pr, C2D offsetr) {
+  PlateRelation relationTo(Plate& pl, C2D ewoffsetl, Plate& pr, C2D ewoffsetr) {
+    DebugUtils du;
+    C2D str = pl.stride();
+    C2D phs = pl.phase();
+    
+    if (str != pr.stride() || phs != pr.phase())
+      return cINTERPHASE_PLATE; 
+
+    //    du.print("PLRLT 10");
+    //    du.print(str);
+    //    du.print(phs);
+
+    C2D pcdiff;
+    if (!inStride(ewoffsetr, ewoffsetl, str, pcdiff))
+      return cINTERPHASE_PLATE;         // XXX return something different?
+
+    //    du.print("PLRLT 11");
+    //    du.print(pcdiff);
+
     TBox tbl(pl.sizeOfPlate(), -pl.positionOnPlate());
-    TBox tbr(pr.sizeOfPlate(), -pr.positionOnPlate() + offsetr - offsetl);
+    TBox tbr(pr.sizeOfPlate(), -pr.positionOnPlate() + pcdiff);
           
+    //    du.print("PLRLT 12");
+    //    tbl.dprint("L");
+    //    tbr.dprint("R");
     if (tbl == tbr) return cSAME_PLATE_AS;
           
     TBox inter = tbl.intersectionWith(tbr);
     if (inter == tbr) return cCONTAINS_PLATE;
-          
+    //    du.print("PLRLT 13");
+    //    inter.dprint("I");
+
     if (inter == tbl) return cCONTAINED_BY_PLATE;
     if (inter.volume() == 0u) return cUNRELATED_TO_PLATE;
 
-    DebugUtils du;
     du.printContext();
     du.print("PRREL2 OVRLPS");
     C2D sl = pl.sizeOfPlate(); du.print(sl);
     C2D xl = pl.positionOnPlate(); du.print(xl);
-    du.print(offsetl);
+    du.print(ewoffsetl);
     C2D sr = pr.sizeOfPlate(); du.print(sr);
     C2D xr = pr.positionOnPlate(); du.print(xr);
-    du.print(offsetr);
+    du.print(ewoffsetr);
     return cOVERLAPS_PLATE;
   }
 
-  typedef Unary(4) SiteCategory;
+  typedef Unary(5) SiteCategory;
   constant SiteCategory cSC_UNWANTED = 0u;      //< Outside our plate
   constant SiteCategory cSC_ALREADY_OURS = 1u;  //< Contains same plate as we are
   constant SiteCategory cSC_ON_SUBPLATE = 2u;   //< Contains a subplate of our plate
   constant SiteCategory cSC_CAN_GROW_INTO = 3u; //< Is empty or contains our container
   constant SiteCategory cSC_WANT_NOT_GOT = 4u;  //< Inaccessible or blocked
+  constant SiteCategory cSC_INTERPHASE = 5u;    //< Not in stride, or not in phase
 
-  SiteCategory categorizeSite(Plate & us, EventWindow.SiteNum sn) {
-    C2D theirewc;
-    return categorizeSite(us, sn, theirewc);
+  SiteCategory categorizeSite(Plate & us, SN sn) {
+    C2D theirpc;
+    return categorizeSite(us, sn, theirpc);
   }
   
   /** Determine the status of ew site \c sn relative to us.  Return a
@@ -186,41 +247,52 @@ quark PlateUtils {
       PlateUtils.cSC_ALREADY_OURS, or
       PlateUtils.cSC_ON_SUBPLATE,
 
-      set \c theirpos to the plate coodinate corresponding to \c sn.
+      set \c theirpospc to the plate coodinate corresponding to \c sn.
 
       \sa SiteCategory
    */
-  SiteCategory categorizeSite(Plate & us, EventWindow.SiteNum sn, C2D & theirpos) {
+  SiteCategory categorizeSite(Plate & us, SN sn, C2D & theirpospc) {
     // A site is available for me to grow into if
     // (1) It is accessible, and
-    // (2) It is in my plate's bounding box, and
-    // (3) It is Empty, or
-    // (4) It is on the plate that contains me
+    // (2) Its position matches my stride and phase
+    // (3) It is in my plate's bounding box, and
+    // (4) It is Empty, or
+    // (5) It is on the plate that contains me
     EventWindow ew;
     MDist md;
     PlateUtils pu;
     DebugUtils du;
-    C2D mysize = us.sizeOfPlate();
-    C2D mypos = us.positionOnPlate();
+    C2D mysizepc = us.sizeOfPlate();
+    C2D mypospc = us.positionOnPlate();
+    C2D mystr = us.stride();
+    C2D myphs = us.phase();
+
     C2D myewc = us.getOurEWCoord();
-    C2D sc = md.getSiteCoord(sn);
-    C2D c = sc + mypos; 
+    C2D scewc = md.getSiteCoord(sn);
+
+    C2D pcdiff;
+    if (!inStride(scewc, myewc, mystr, pcdiff))
+      return cSC_INTERPHASE;
+
+    C2D cpc = mypospc+pcdiff; 
     //    du.print("CATEGIFIT 10");
-    //        du.print(mysize);
-    //        du.print(mypos);
-    //        du.print(myewc);
-    //        du.print(sc);
-    //        du.print(c);
-    if (!mysize.contains(c)) return pu.cSC_UNWANTED;   // Not in our bbox
+    //    du.print(mysizepc);
+    //    du.print(mypospc);
+    //    du.print(myewc);
+    //    du.print(scewc);
+    //    du.print(cpc);
+    if (!mysizepc.contains(cpc)) return pu.cSC_UNWANTED;   // Not in our bbox
     //        du.print("CATEGIFIT 11");
     if (ew.isAccessible(sn)) {
     //          du.print("CATEGIFIT 12");
-      theirpos = c;                                // Return plate pos of sn
+      theirpospc = cpc;                            // Return plate pos of sn
       Atom & a = ew[sn];
       if (a is Empty) return pu.cSC_CAN_GROW_INTO; // Is Empty
       if (a as Plate) {
     //            du.print("CATEGIFIT 13");
-        PlateUtils.PlateRelation rel = pu.relationTo(us, myewc, a, sc);
+        PlateUtils.PlateRelation rel = pu.relationTo(us, myewc, a, scewc);
+        if (rel == pu.cINTERPHASE_PLATE)
+          return pu.cSC_INTERPHASE;               // Mismatching in stride or phase
         if (rel == pu.cSAME_PLATE_AS)
           return pu.cSC_ALREADY_OURS;             // Is already our plate
         if (rel == pu.cCONTAINED_BY_PLATE)
@@ -233,6 +305,33 @@ quark PlateUtils {
     return pu.cSC_WANT_NOT_GOT; // Inaccessible or blocked
   }
 
+  /** \return the implied phase of ew[0], according to a plate with
+     the given \c stride and \c phase, located at \c ewc.  Note this
+     result does not depend on whether ew[0] actually contains Plate.
+
+     All ew sites containing the same plate will return the same value
+     here, regardless of their phase.  But two sites with matching
+     values here are not guaranteed to be on the same plate, unless
+     caller ensures that their size and pos also match.
+   */
+  C2D ewPhase(C2D stride, C2D phase, C2D ewc) {
+    return mod(ewc + phase, stride);
+  }
+
+  
+  /** Mod with non-negative remainder grr
+   */
+  Int mod(Int a, Int b) {
+    a %= b;
+    if (a < 0) a += b;
+    return a;
+  }
+
+  C2D mod(C2D a, C2D b) {
+    return C2D.instanceof((C2D.Coord) mod(a.getX(),b.getX()),
+                          (C2D.Coord) mod(a.getY(),b.getY()));
+  }
+
   C2D hadamard(C2D a, C2D b) { //< Component-wise multiplication
     return C2D.instanceof((C2D.Coord) (a.getX()*b.getX()),
                           (C2D.Coord) (a.getY()*b.getY()));
@@ -243,16 +342,77 @@ quark PlateUtils {
   }
 
   //// Relative size and positions
-  C2D relativeToAbsolute(C2D amount, B2D4 relative) {
-    return (hadamard(amount, relative.toC2D())+C2D.instanceof(B2D4.cMAXVAL/2,B2D4.cMAXVAL/2)) / ((C2D.Coord) B2D4.cMAXVAL);
+  C2D relativeToAbsolute(C2D plateAmount, B2D4 relative) {
+    return
+      (hadamard(plateAmount, relative.toC2D()) +
+       C2D.instanceof(B2D4.cMAXVAL/2,B2D4.cMAXVAL/2)) /
+      ((C2D.Coord) B2D4.cMAXVAL);
   }
 
-  B2D4 absoluteToRelative(C2D size, C2D pos) {
-    size = size.max(c1x1);         // size now (>0,>0)
-    pos = pos.max(c0x0).min(size); // pos now (0..sx,0..sy)
+  B2D4 absoluteToRelative(C2D plateSize, C2D pos) {
+    plateSize = plateSize.max(c1x1);         // size now (>0,>0)
+    pos = pos.max(c0x0).min(plateSize); // pos now (0..sx,0..sy)
     C2D cmax((C2D.Coord) B2D4.cMAXVAL,(C2D.Coord) B2D4.cMAXVAL);
-    B2D4 ret(hadamardiv(hadamard(pos,cmax)+size/2, size));
+    B2D4 ret(hadamardiv(hadamard(pos,cmax)+plateSize/2, plateSize));
     return ret;
+  }
+
+  /* SHOULD MOVE TO ColorUtils.ulam in ulam 5 */
+  ARGB rainbow(Int min, Int max, Int v) {
+    DebugUtils du;
+    ColorUtils cu;
+    typedef Unsigned(10) Range;
+    typedef Unsigned(48) BigU; // More than Int.sizeof + Range.sizeof;
+    typedef Bits(8) Byte;
+    if (min >= max) return cu.color(0xffffff); // WTH
+    //    du.print("RNHDDOW 10");
+    if (v < min) v = min;
+    else if (v > max) v = max;
+
+    BigU scale = (BigU) (max - min);
+    BigU rev = (BigU) ((((BigU) (v - min)) * Range.maxof) / scale);
+
+    //    du.print(min);
+    //    du.print(v);
+    //    du.print(max);
+    //    du.print((Unsigned) scale);
+    //    du.print((Unsigned) rev);
+
+    Unsigned group = (Unsigned) ((rev >> 8u) & 0x3);
+    Unsigned val = (Unsigned) (rev & 0xff);
+
+    //    du.print(group);
+    //    du.print(val);
+    
+    ARGB c;
+    which (group) {
+    case 0u: { c = cu.color((Byte) 0xff,      (Byte) val,       (Byte) 0x00); }
+    case 1u: { c = cu.color((Byte) (0xff-val),(Byte) 0xff,      (Byte) 0x00); }
+    case 2u: { c = cu.color((Byte) 0x00,      (Byte) 0xff,      (Byte) val);  }
+    case 3u: { c = cu.color((Byte) 0x00,      (Byte) (0xff-val),(Byte) 0xff); }
+    }
+    ARGB grey = cu.color(0x808080);
+    //c = cu.between(grey, c, 2);
+    return c;
+  }
+
+  SN findTypeInDir(SN cached, PlateDir dir, Unsigned classid) {
+    PlateUtils pu;
+    return findTypeAlongOffset(cached,pu.stepInDir(dir),classid);
+  }
+
+  SN findTypeAlongOffset(SN cached, C2D diroff, Unsigned classid) {
+    ClassUtils cu;
+    EventWindow ew;
+    if (cached != 0 && cached != SN.maxof && ew.isAccessible(cached)) {
+      if (cu.isBase(cu.getClassId(ew[cached]),classid)) return cached;
+    }
+    PlateUtils pu;
+    C2D ewc = PlateUtils.c0x0;
+    while (ew.isAccessible(ewc = ewc + diroff)) {
+      if (cu.isBase(cu.getClassId(ew[ewc]),classid)) return ew.getSiteNumber(ewc);
+    }
+    return SN.maxof;
   }
 
 }

@@ -1,0 +1,112 @@
+/** 
+    \symbol RM
+    \color #666
+ */
+element ReinforcementMatrix : B2DPlate + Flood/* + CategorizedSite*/ + Stride2x2FP {
+  typedef EventWindow.SiteNum SN;
+  typedef PlateUtils.PlateDir PD;
+
+  //// B2DPlate API
+  @Override
+  virtual Atom copyOf() { //< A copy of self suitable for healing
+    Self s = self;        // start with us
+    return s.atomof;      // Use that
+  }
+  //// Flood API
+  @Override
+  virtual C2D getRoot() {
+    PlateUtils pu;
+    C2D siz = sizeOfPlate();
+    return pu.relativeToAbsolute(siz, mRootPos);
+  }
+  B2D4 mRootPos;
+  Void setRootRelPos(B2D4 relpos) {
+    mRootPos = relpos;
+  }
+
+  @Override
+  virtual Bool consider(Flood& ngb, Bool isUp) {
+    if (isUp) {
+      if (ngb as Self)
+        mReinforcement = ngb.mReinforcement;
+      else return false; // WTH
+    }
+    return true;
+  }
+
+  @Override
+  virtual Bool fire() {
+    return doReinforcement();
+  }
+
+  SN mLink1SN;
+  SN mLink2SN;
+  Void setLinks(SN link1sn, SN link2sn) {
+    mLink1SN = link1sn;
+    mLink2SN = link2sn;
+  }
+
+  Bool checkLinks() {
+    return checkLink(mLink1SN) && checkLink(mLink2SN);
+  }
+
+  Bool checkLink(SN link) {
+    EventWindow ew;
+    if (!ew.isAccessible(link)) return false;
+    return ew[link] is Link;
+  }
+
+  typedef Int(3) Reinforcement;
+  Reinforcement mReinforcement;
+  Reinforcement getReinforcement() {
+    return mReinforcement;
+  }
+  Void setReinforcement(Reinforcement r) {
+    mReinforcement = r;
+  }
+
+  Bool doReinforcement() {
+    DebugUtils du;
+    //    du.print("RIFNDORE 10");
+    if (!checkLinks()) return false; // XXX Block whole show on this?
+    //    du.print("RIFNDORE 11");
+    EventWindow ew;
+    Link & l1 = (Link &) ew[mLink1SN];
+    Link & l2 = (Link &) ew[mLink2SN];
+    Int sisj = l1.getState() * l2.getState();
+    Int deltaij = mReinforcement*sisj;
+    Int w1 = l1.getWeight();
+    Int w2 = l2.getWeight();
+    Int avgw = (w1 + w2) / 2;
+    Int neww = avgw + deltaij;
+    if (neww != avgw) {
+      ByteStreamLogger bsl;
+      //      bsl.printf("WUP %d -> %d\n", avgw, neww);
+    }
+    l1.setWeight((Link.Weight) neww);
+    l2.setWeight((Link.Weight) neww);
+    return true;
+  }
+  
+  ARGB getColor(Unsigned selector) {
+    ColorUtils cu;
+    PlateUtils pu;
+    if (selector > 1u) return getFloodColor();
+    return super.getColor(selector);
+    /*
+    if (selector == 2u) {
+      Reinforcement w = getReinforcement();
+      return pu.rainbow(w.minof/2,w.maxof/2,w);
+    }
+    return super.getColor(selector);
+    */
+  }
+
+  Void behave() {
+    if (mustBlockOrDie()) {
+      return;
+    }
+    checkGrowthAndHealing();
+    floodUpdate();
+  }
+}

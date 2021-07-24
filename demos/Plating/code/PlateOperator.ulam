@@ -2,13 +2,13 @@
     \symbol PO
     \color #33a
  */
-element PlateOperator {
-  typedef B2DStreamPlate MyContainer;
+element PlateOperator : PlOpUtils + Plate1 + Stride2x2 {
+  typedef EventWindow.SiteNum SN;
   typedef B2DStreamPlate.B2DStreamPayload MyPayload;
   DebugUtils du;
   Random random;
-  EventWindow.SiteNum mRootSN;
-  EventWindow.SiteNum mRPeerSN;
+  SN mRootSN;
+  SN mRPeerSN;
 
   typedef Unsigned(3) Clearance;
   typedef Clearance DirClearance[4];
@@ -19,8 +19,35 @@ element PlateOperator {
   SizeCoord mDesiredPlateSize;
 
   constant Unsigned cTIMER_BITS = 4u;
-  typedef XTimer(cTIMER_BITS,Unsigned(cTIMER_BITS).maxof,16u) CommandTimer;
+  typedef XTimer(cTIMER_BITS,Unsigned(cTIMER_BITS).maxof,1u) CommandTimer;
   CommandTimer mCmdTimer;
+
+  typedef UMod(8,3) CommandSpinner;
+  CommandSpinner mCommandSpinner;
+
+  typedef B2DPacketAct.ActTag CommandTag;
+
+  CommandTag nextCommandTag() {
+    ++mCommandSpinner;
+    return (CommandTag) mCommandSpinner.get();
+  }
+
+  Unsigned(2) nextSenseTag() {
+    Unsigned v = nextCommandTag();
+    return (Unsigned(2)) (v&0x3);
+  }
+
+  /** \returns < 0 to indicate incomparability; caller should take extreme measure like dying.
+      \returns == 0 to indicate exact command tag expected
+      \returns > 0 to indicate \c tag is obsolete, but not invalid.
+   */
+  Int interpretCommandTag(CommandTag tag) {
+    CommandSpinner tmp;
+    tmp.set(tag);
+    if (!mCommandSpinner.isComparable(tmp)) return -1;
+    if (mCommandSpinner.isEqual(tmp)) return 0;
+    return 1;
+  }
 
   //// UrSelf API
   @Override
@@ -29,57 +56,6 @@ element PlateOperator {
     ColorUtils cu;
     //ret = cu.between(ret,cu.color(0xffff0000),75);
     return ret;
-  }
-
-  // Look for container plate root site
-  Bool lookForContainerRootAt(Int x, Int y) {
-    EventWindow ew;
-    C2D c((C2D.Coord) x, (C2D.Coord) y);
-    if (!ew.isAccessible(c)) return false;
-    Atom & a = ew[c];
-    if (a as MyContainer) {
-      C2D spos = a.positionOnPlate();
-      if (spos.length() == 0u) {
-        mRootSN = ew.getSiteNumber(c);
-        C2D c0x1(0,1);
-        C2D rpc = c+c0x1;
-        if (ew.isAccessible(rpc)) {
-          Atom & a2 = ew[rpc];
-          if (a2 as MyContainer) {
-            C2D spos2 = a2.positionOnPlate();
-            if (spos2 == c0x1) {
-              mRPeerSN = ew.getSiteNumber(rpc);
-              return true;
-            }
-          }
-        }
-      }
-    }
-    return false;
-  }
-
-  Bool findContainer() {
-    EventWindow ew;
-    if (mRootSN != 0u) {
-      // Once bonded to a container, just die if it's gone
-      C2D c = ew.getCoord(mRootSN);
-      return lookForContainerRootAt(c.getX(),c.getY());
-    }
-    if (lookForContainerRootAt(-1,-1)) return true;
-    if (lookForContainerRootAt(-1,-2)) return true;
-    return false;
-  }
-
-  Bool mustBlock() {
-    EventWindow ew;
-
-    DebugUtils du;
-    for (EventWindow.SiteNum sn = 1u; sn < 41u; ++sn) {
-      if (!ew.isAccessible(sn)) continue;
-      Atom & a = ew[sn];
-      if (a is Tecton) return true;
-    }
-    return false;
   }
 
   Void considerOuter() {  // We just got new outer data.  Should we act on it?
@@ -106,10 +82,13 @@ element PlateOperator {
     PlateUtils.PlateDir actdir;
     PlateUtils pu;
     Random random;
+    C2D str = self.Stride2x2.stride();
     for (Unsigned i = 0; i < 4u; ++i) {
-      if (mOuterClearance[i] < 2u) continue;
       PlateUtils.PlateDir pd = (PlateUtils.PlateDir) i;
       PlateUtils.PlateDir oppd = (PlateUtils.PlateDir) ((i+2u)%4u);
+      Unsigned strindir = pu.strideInDir(pd,str);
+      if (mOuterClearance[i] < strindir+1u) continue;
+
       C2D incr = pu.stepInDir(pd);
       //      bsl.printf("CONSIDROO11:%d=%d/%d=%d(%d,%d)\n",
       //                 pd,mOuterClearance[pd],
@@ -133,7 +112,7 @@ element PlateOperator {
       B2DPacketAct.ActOp op = B2DPacketAct.cAOP_SIDE_MOVE;
       if (actwantsgrow && actdir != pu.cPLATE_GOES_E && actdir != pu.cPLATE_GOES_S)
         op = B2DPacketAct.cAOP_SIDE_GROW;
-      pkt.initAct(op,actdir,3u);
+      pkt.initAct(op,actdir,nextCommandTag());
       MyPayload pay;
       pay.mBits = (MyPayload.MyBits) pkt;
       pay.mHasPayload = true;
@@ -149,33 +128,68 @@ element PlateOperator {
 
   }
 
-  Bool receivePacket(B2DPacket bp) {
-    if (!bp.isSense()) return false;
+  Void receivePacket(B2DPacket bp) {
     ByteStreamLogger bsl;
-    bsl.printf("RECVOO:");
-    bp.print(bsl);
-    bsl.printf("\n");
-    B2DPacketSense & sp = bp.asSense();
-    Bool outer = sp.mSenseDir == sp.cSDIR_OUTWARD;
-    for (Unsigned i = 0; i < 4u; ++i) {
-      B2DPacketSense.Clearance c = sp.mDirData[i];
-      if (c > 4u) continue;
-      if (outer)
-        mOuterClearance[i] = c;
-      else
-        mInnerClearance[i] = c;
-    }
+    if (bp.isSense()) {
+      //    bsl.printf("RECVOO:");
+      //bp.print(bsl);
+      //bsl.printf("\n");
+      B2DPacketSense & sp = bp.asSense();
+      Bool outer = sp.mSenseDir == sp.cSDIR_OUTWARD;
+      for (Unsigned i = 0; i < 4u; ++i) {
+        B2DPacketSense.Clearance c = sp.mDirData[i];
+        if (c > 4u) continue;
+        if (outer)
+          mOuterClearance[i] = c;
+        else
+          mInnerClearance[i] = c;
+      }
 
-    if (outer)
-      considerOuter();
-    return true;
+      if (outer) {
+        Unsigned tagbits = sp.mSenseTag;
+        Unsigned lasttag = mCommandSpinner.get();
+        Unsigned mask = ((Unsigned) (1u << sp.mSenseTag.sizeof))-1u;
+        if ((tagbits & mask) == (lasttag & mask))
+          considerOuter();
+        else {       
+          bsl.printf("Mismatch sense tag %x vs %x (on %x)\n",
+                     (tagbits & mask), (lasttag & mask), lasttag);
+          mCmdTimer.set(1u); // don't ship anything in response to this.
+        }
+      }
+    } else if (bp.isAct()) {
+      B2DPacketAct & ap = bp.asAct();
+      Unsigned tagbits = ap.mActTag;
+      Unsigned lasttag = mCommandSpinner.get();
+      Unsigned mask = ((Unsigned) (1u << ap.mActTag.sizeof))-1u;
+
+      if ((tagbits & mask) != (lasttag & mask)) {
+          bsl.printf("Mismatch act tag %x vs %x (on %x)\n",
+                     (tagbits & mask), (lasttag & mask), lasttag);
+          mCmdTimer.set(1u); // don't ship anything in response to this.
+      }
+    }
+  }
+
+  /** search the ew for any tecton, regardless of plate relationships.
+     This is big bogus hammer by the way.
+   */
+  Bool iSeeTecton() {
+    EventWindow ew;
+    for (SN sn = 1u; sn < 41u; ++sn) {
+      if (!ew.isAccessible(sn)) continue;
+      Atom & a = ew[sn];
+      if (a as Tecton) return true;
+    }
+    return false;
   }
 
   Void behave() {
     EventWindow ew;
-    if (mustBlock()) return;
-    if (!findContainer()) ew[0] = Empty.instanceof;
-    else {
+    if (mustBlockOrDie()) return;
+    if (iSeeTecton()) return;
+    if (findContainerOrDie(mRootSN, mRPeerSN)) return;
+    {
       ByteStreamLogger bsl;
       // PLATEOPS
       MyContainer & root = (MyContainer&) ew[mRootSN];
@@ -189,18 +203,18 @@ element PlateOperator {
         bp = (B2DPacket) pay.mBits;
         receivePacket(bp);
       } else if (mCmdTimer.current() == 0u) {
-        bp.initSense(random.oddsOf(4,5), 1u); 
-        bsl.printf("SENDOO:");
-        bp.print(bsl);
-        bsl.printf("\n");
+        bp.initSense(random.oddsOf(4,5), nextSenseTag()); 
+        //        bsl.printf("SENDOO:");
+        //        bp.print(bsl);
+        //        bsl.printf("\n");
         pay.mBits = (MyPayload.MyBits) bp;
         pay.mHasPayload = true;
-        du.printContext();
-        du.print("RELKEKLASKLAKRKEN");
-        du.print((Unsigned) pay.mBits);
+        //        du.printContext();
+        //        du.print("RELKEKLASKLAKRKEN");
+        //        du.print((Unsigned) pay.mBits);
         mCmdTimer.set(1u);
         if (root.trySendPayload(true,pay)) return;
-        du.print("AWAYRELKEKLASKLAKRKEN");
+        //        du.print("AWAYRELKEKLASKLAKRKEN");
       } else if (mCmdTimer.countAlarm()) {
         du.printContext();
         du.print("LOST CMD TIMER RESET");

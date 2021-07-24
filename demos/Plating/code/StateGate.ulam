@@ -1,0 +1,170 @@
+/**
+   \symbol SG
+   \color #5e5
+*/
+element StateGate : B2DPlate + CategorizedSite + Stride2x2FP {
+  typedef EventWindow.SiteNum SN;
+  SN mFromSN;  // Source Node
+  SN mToSN;    // Dest link
+
+  Bool mMaxRoot; // if true, plate max is upstream
+  Bool isMaxRoot() { return mMaxRoot; }
+  Void setMaxRoot(Bool maxroot) { mMaxRoot = maxroot; }
+
+  Void setSNs(SN nodeSN, SN linkSN) {
+    mFromSN = nodeSN;
+    mToSN = linkSN;
+  }
+
+  typedef Unary(2) GateState;
+  constant GateState cGATE_CLOSED = 0u; //< State does not pass
+  constant GateState cGATE_SYNC = 1u;   //< State will pass when upstream passes
+  constant GateState cGATE_OPEN = 2u;   //< State passes ad lib
+  GateState mGateState;
+
+  Void setGateState(GateState newgs) { mGateState = newgs; }
+  
+  typedef Unary(3) CommandState;
+  constant CommandState cSTATE_READY     = 0u; //< Ready to fire command
+  constant CommandState cSTATE_FIRING    = 1u; //< Command firing, adv to fired
+  constant CommandState cSTATE_FIRED     = 2u; //< Command fired, pass it down
+  constant CommandState cSTATE_RECOVERED = 3u; //< All fired, pass it up
+  CommandState mCommandState;
+
+  CommandState getCommandState() { return mCommandState; }
+  Void setCommandState(CommandState newcs) { mCommandState = newcs; }
+  
+  ARGB getColor(Unsigned selector) {
+    ColorUtils cu;
+    ARGB ret = cu.color(0xffffffff);
+    ARGB ret2 = cu.color(0xff000000);
+    which (mGateState) {
+      case cGATE_CLOSED: { ret = cu.color(0xaa3333); }
+      case cGATE_SYNC:   { ret = cu.color(0x3333aa); }
+      case cGATE_OPEN:   { ret = cu.color(0x33aa33); }
+    }
+    which (mCommandState) {
+      case cSTATE_READY:    { ret2 = cu.color(0x333333); } // near invisible
+      case cSTATE_FIRING:   { ret2 = cu.color(0xaaaa33); }
+      case cSTATE_FIRED:    { ret2 = cu.color(0xaa3333); }
+      case cSTATE_RECOVERED:{ ret2 = cu.color(0x3333aa); }
+    }
+    if (selector == 0u) return ret2;
+    if (selector == 1u) return cu.between(ret2,ret,30);
+    if (selector == 2u) return cu.between(ret2,ret,80);
+    
+    return super.getColor(selector);
+  }
+
+  Bool passState() { //< true iff state passed
+    DebugUtils du;
+    //    du.print("SGPSSTT 10");
+    EventWindow ew;
+    if (mGateState == cGATE_CLOSED ||
+        !(ew[mFromSN] is Node) ||
+        !(ew[mToSN] is Link))
+      return false;
+    //    du.print("SGPSSTT 11");
+    Node & n = (Node&) ew[mFromSN];
+    Link & l = (Link&) ew[mToSN];
+    Node.State s = n.getState();
+    //    du.print((Int) s);
+    l.setState(s);
+    return true;
+  }
+
+  Bool fire() {
+
+    DebugUtils du;
+    if (mCommandState != cSTATE_READY) {
+      du.print("SGGFRFAL");
+      du.print(mCommandState);
+      return false;
+    }
+    mCommandState = cSTATE_FIRING;
+    return true;
+  }
+
+  // Return true if action
+  Bool checkForCommand() {
+    DebugUtils du;
+    EventWindow ew;
+    MDist md;
+    PlateUtils pu;
+    C2D headwaters = pu.c0x0;
+    if (mMaxRoot) headwaters = sizeOfPlate() - pu.c1x1;
+    SN ssn = ew.getSiteNumber(self);
+    if (ssn == ssn.maxof) { Fail f; f.fail("NOT IN EW ISANT"); return false; }
+    C2D selfc = ew.getCoord(ssn);     // Where self is in ew
+    C2D pos = positionOnPlate();
+    C2D siz = sizeOfPlate();
+    Unsigned mydistance = pos.manhattanDistance(headwaters);
+    Unsigned upcount = 0u;
+    Unsigned upfired = 0u;
+    Unsigned uprecovered = 0u;
+    Unsigned downcount = 0u;
+    Unsigned downrecovered = 0u;
+    Unsigned downready = 0u;
+    for (MDist.Index i = 1u; i <= 4u; ++i) {
+      C2D pcoffset = md.getSiteCoord(i); // PLATE COORD offset
+      C2D pc = pos + pcoffset;
+      if (!siz.contains(pc)) continue;
+      SN ewsn = self.plateCoordToEWSN(pc);
+      if (!ew.isAccessible(ewsn)) continue;
+      Atom & a = ew[ewsn];
+      if (a as Self) {
+        C2D ewc = md.getSiteCoord(ewsn);
+        PlateUtils.PlateRelation rel = pu.relationTo(self, selfc, a, ewc);
+        if (rel != pu.cSAME_PLATE_AS) continue;
+        Unsigned adistance = pc.manhattanDistance(headwaters);
+        if (adistance < mydistance) {
+          ++upcount;
+          if (a.mGateState != mGateState) mGateState = a.mGateState;
+          if (a.mCommandState == cSTATE_FIRED) ++upfired;
+          if (a.mCommandState == cSTATE_RECOVERED) ++uprecovered;
+        } else if (adistance > mydistance) {
+          ++downcount;
+          if (a.mCommandState == cSTATE_RECOVERED) ++downrecovered;
+          if (a.mCommandState == cSTATE_READY) ++downready;
+        }
+      }
+    }
+    //    du.print("SGCFC 12");
+    //    du.print(upcount);
+    //    du.print(upfired);
+    //    du.print(downcount);
+    //    du.print(downrecovered);
+    //    du.print(downready);
+    //// RULES
+    Bool ret = true;
+    if (mCommandState == cSTATE_READY &&
+        upcount > 0u &&
+        upcount == upfired)
+      fire();
+    else if (mCommandState == cSTATE_FIRED && downcount == downrecovered)
+      mCommandState = cSTATE_RECOVERED;
+    else if (mCommandState == cSTATE_RECOVERED && upcount == uprecovered && downcount == downready)
+      mCommandState = cSTATE_READY;
+    else ret = false;
+    return ret;
+  }
+
+  Void behave() {
+    if (mFromSN == 0 || mToSN == 0) {
+      EventWindow ew;
+      ew[0] = Empty.instanceof;
+      return;
+    }
+      
+    if (mustBlockOrDie()) {
+      return;
+    }
+    checkGrowthAndHealing();
+    checkForCommand();
+    if (mGateState == cGATE_OPEN && passState()) return;
+    if (mCommandState == cSTATE_FIRING && passState()) {
+      mCommandState = cSTATE_FIRED;
+      return;
+    }
+  }
+}

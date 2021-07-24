@@ -2,7 +2,7 @@
     \symbol SO
     \color #33a
  */
-element SubplateOperator {
+element SubplateOperator : PlOpUtils {
   typedef B2DStreamPlate MyContainer;
   typedef B2DStreamPlate.B2DStreamPayload MyPayload;
   DebugUtils du;
@@ -98,11 +98,11 @@ element SubplateOperator {
     C2D root2ewc;
     C2D r2offset;
     Bool foundContainingPlate = false;
-    for (C2D.Coord x = 0; !foundContainingPlate && x >= -2; --x) {
-      for (C2D.Coord y = 0; !foundContainingPlate && y >= -2; --y) {
+    for (C2D.Coord x = 2; !foundContainingPlate && x >= -2; --x) {
+      for (C2D.Coord y = 2; !foundContainingPlate && y >= -2; --y) {
         if (x == 0 && y == 0) continue;
         r2offset.set(x,y);
-        root2ewc = rootewc + r2offset; // check above and left
+        root2ewc = rootewc + r2offset; // search all around rootewc
         //        du.print("GTOTGS11");
         //        du.print(root2ewc);
         if (!ew.isAccessible(root2ewc)) continue;
@@ -157,12 +157,14 @@ element SubplateOperator {
     return true;
   }
 
-  Void considerOuter() {  // We just got new outer data.  Should we act on it?
+  Void considerOuter(C2D stride) {  // We just got new outer data.  Should we act on it?
     DebugUtils du;
-    C2D targetdeltasiz;
-    C2D targetdeltapos;
+    ByteStreamLogger bsl;
+    C2D targetdeltasizPL;
+    C2D targetdeltaposPL;
+    C2D mystride = stride;
     //    du.printContext();
-    if (!getOuterTargets(targetdeltasiz, targetdeltapos)) return;
+    if (!getOuterTargets(targetdeltasizPL, targetdeltaposPL)) return;
     //    du.print("CONSDR10");
 
     EventWindow ew;
@@ -181,21 +183,22 @@ element SubplateOperator {
       Bool isGrow = idx >= 4u;   // First w/o isGrow then with
       PlateUtils.PlateDir pd = (PlateUtils.PlateDir) i;
       PlateUtils.PlateDir oppd = (PlateUtils.PlateDir) ((i+2u)%4u);
+      Unsigned axisstride = pu.strideInDir(pd,mystride);
       C2D incr = pu.stepInDir(pd);
       //      du.print("CONSDR11");
       //      du.print(pd);
       //      du.print(isGrow);
 
       Unsigned thisscore = 0u;
-      if ((incr * targetdeltapos) > 0u) ++thisscore;
+      if ((incr * targetdeltaposPL) > 0u) ++thisscore;
       if (isGrow) {
         // Shrinking NYI
-        if ((incr.abs() * targetdeltasiz) > 0u) ++thisscore;
+        if ((incr.abs() * targetdeltasizPL) > 0u) ++thisscore;
         else continue; // Skip this possibility entirely if deltasiz < 0 in dir
       }
       //      du.print("CONSDR12");
       //      du.print(thisscore);
-      thisscore *= mOuterClearance[i]; // Apply bonus multiplier
+      thisscore *= mOuterClearance[i]/axisstride; // Apply bonus multiplier
       thisscore *= thisscore; // Emphasize advantage
       //      du.print("CONSDR13");
       //      du.print(thisscore);
@@ -219,27 +222,27 @@ element SubplateOperator {
       MyPayload pay;
       pay.mBits = (MyPayload.MyBits) pkt;
       pay.mHasPayload = true;
-      //      bsl.printf("CONSIDROO13:%x -- ",pay.mBits);
-      //      pkt.print(bsl);
-      //      bsl.printf("\n");
-      //      du.print("CONSDR17");
+            bsl.printf("CONSIDROO13:%x -- ",pay.mBits);
+            pkt.print(bsl);
+            bsl.printf("\n");
+            //            du.print("CONSDR17");
 
       if (root.trySendPayload(true,pay)) {
-        //        du.print("CONSDR18");
+        //                du.print("CONSDR18");
         mCmdTimer.set(1u);
         return;
       }
-      //      bsl.printf("CONSIDROO14\n");
+            bsl.printf("CONSIDROO14\n");
     }
     //    du.print("CONSDR19");
   }
 
-  Bool receivePacket(B2DPacket bp) {
+  Bool receivePacket(B2DPacket bp,C2D stride) {
     if (!bp.isSense()) return false;
     ByteStreamLogger bsl;
-    bsl.printf("RECVOO:");
-    bp.print(bsl);
-    bsl.printf("\n");
+    //    bsl.printf("RECVOO:");
+    //    bp.print(bsl);
+    //    bsl.printf("\n");
     B2DPacketSense & sp = bp.asSense();
     Bool outer = sp.mSenseDir == sp.cSDIR_OUTWARD;
     for (Unsigned i = 0; i < 4u; ++i) {
@@ -252,19 +255,20 @@ element SubplateOperator {
     }
 
     if (outer)
-      considerOuter();
+      considerOuter(stride);
     return true;
   }
 
   Void behave() {
     EventWindow ew;
     if (mustBlock()) return;
-    if (!findContainer()) ew[0] = Empty.instanceof;
-    else {
+    if (findContainerOrDie(mRootSN, mRPeerSN)) return;
+    {
       ByteStreamLogger bsl;
       // PLATEOPS
       MyContainer & root = (MyContainer&) ew[mRootSN];
       MyContainer & rpeer = (MyContainer&) ew[mRPeerSN];
+      C2D rootStride = root.stride();
       MyPayload pay;
       Random random;
       DebugUtils du;
@@ -272,12 +276,12 @@ element SubplateOperator {
       if (rpeer.tryRecvPayload(false,pay)) {
         mCmdTimer.reset();
         bp = (B2DPacket) pay.mBits;
-        receivePacket(bp);
+        receivePacket(bp,rootStride);
       } else if (mCmdTimer.current() == 0u) {
         bp.initSense(random.oddsOf(4,5), 1u);
-        bsl.printf("SENDOO:");
-        bp.print(bsl);
-        bsl.printf("\n");
+        //        bsl.printf("SENDOO:");
+        //        bp.print(bsl);
+        //        bsl.printf("\n");
         pay.mBits = (MyPayload.MyBits) bp;
         pay.mHasPayload = true;
         //        du.printContext();

@@ -1,0 +1,15 @@
+/** Base class for explicitly temporary or unimportant items that
+    other classes can erase with impunity.
+ */
+quark Ephemeron {
+  // constant Ephemeron cINSTANCE = { };
+
+  //// API
+
+  //// SERVICES
+  Bool isEphemeral(Atom a) {
+    if (a is Self || a is Empty) return true;
+    // XX call Plate.isEmptyOrField() somehow?
+    return false;
+  }
+}

@@ -30,7 +30,7 @@ element AtomDeque : B2DStreamPlate + CategorizedSite + B2DStreamPayload {
     ColorUtils cu;
 
     if (self.hasPayload()) {
-      return cu.color((Unsigned) (0xff0000|self.peekAtPayload()));
+      return cu.color((Unsigned) (0xffff0000|self.peekAtPayload()));
     }
 
 

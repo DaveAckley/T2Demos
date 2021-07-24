@@ -1,0 +1,294 @@
+/** Super Seed ColorPlate
+    \symbol CS
+    \color #ff0
+ */
+element SuperSeedColorPlate : Plate1 + Stride2x2 {
+  typedef Unsigned(2) FacialFeature;
+  constant FacialFeature cFACE_GERM = 0u;
+  constant FacialFeature cFACE_LEFT_EYE = 1u;
+  constant FacialFeature cFACE_RIGHT_EYE = 2u;
+  constant FacialFeature cFACE_MOUTH = 3u;
+  FacialFeature mFacialFeature;
+
+  typedef EventWindow.SiteNum SN;
+  Bool mSeeded;
+  Bool mBreeded;
+  Bool mSucceeded;
+  Bool mPleaded;
+
+  Bool emptyCorner() {
+    EventWindow ew;
+    for (C2D.Coord x = 0; x < 3; ++x) {
+      for (C2D.Coord y = 0; y < 3; ++y) {
+        C2D ewc((C2D.Coord) x,(C2D.Coord) (y+1));
+        if (ew.isAccessible(ewc) && !isEmptyOrPlate(ewc,true))
+          return false;
+      }
+    }
+    return true;
+  }
+
+  /** search the ew for any tecton, regardless of plate relationships.
+     This is big bogus hammer by the way.
+   */
+  Bool iSeeTecton() {
+    EventWindow ew;
+    for (SN sn = 1u; sn < 41u; ++sn) {
+      if (!ew.isAccessible(sn)) continue;
+      Atom & a = ew[sn];
+      if (a as Tecton) return true;
+    }
+    return false;
+  }
+
+  Void killPlate() {
+    killPlate("");
+  }
+
+  Void killPlate(String msg) {
+    DebugUtils du;
+    if (msg.lengthof > 0)
+      du.print(msg);
+    du.print("KILLPLATEBABAHHH");
+    setDeathBits(cDIE_EITHER);
+  }
+
+  Void behave() {
+    if (mSeeded && iSeeTecton()) return;
+
+    EventWindow ew;
+    Random random;
+    which (mFacialFeature) {
+    case cFACE_GERM: { updateGermLine(); }
+    case cFACE_LEFT_EYE: { updateLeftEye(); }
+    case cFACE_RIGHT_EYE: { updateRightEye(); }
+    case cFACE_MOUTH: { updateMouth(); }
+    }
+  }
+
+  Void updateLeftEye() {
+    EventWindow ew;
+    Random random;
+    ColorPlate ad;
+    PlateUtils pu;
+    C2D str = stride();
+    ad.mSizeOfPlate = B2D.instanceof(3,3);
+    ad.setStride(str);
+    for (Unsigned i = 0; i < ad.mColor.lengthof; ++i)
+      ad.mColor[i] = (ColorPlate.Color6) random.between(ad.mColor[i].minof,ad.mColor[i].maxof);
+    for (C2D.Coord x = 0; x <= 2; ++x) {
+      for (C2D.Coord y = 0; y <= 2; ++y) {
+        C2D plc(x,y);
+        C2D ewc(pu.hadamard(plc,str));
+        if (!ew.isAccessible(ewc)) continue; // Die?
+        if (x == 1 && y == 1) {
+          SubplateOperator so;
+          so.mRelativeSize.init(1,2);
+          so.mRelativePos.init(10,3);
+          ew[ewc] = so.atomof;
+        } else {
+          ad.mPosOnPlate.fromC2D(plc);
+          ew[ewc] = ad.atomof;
+        }
+      }
+    }
+  }
+
+  Void updateRightEye() {
+    DebugUtils du;
+    EventWindow ew;
+    Random random;
+    ColorPlate ad;
+    PlateUtils pu;
+    C2D str = stride();
+
+    ad.mSizeOfPlate = B2D.instanceof(3,3);
+    ad.setStride(str);
+    for (Unsigned i = 0; i < ad.mColor.lengthof; ++i)
+      ad.mColor[i] = (ColorPlate.Color6) random.between(ad.mColor[i].minof,ad.mColor[i].maxof);
+    for (C2D.Coord x = 0; x < 3; ++x) {
+      for (C2D.Coord y = 0; y < 3; ++y) {
+        C2D plc(x,y);
+        C2D ewc(pu.hadamard(plc,str));
+        if (!ew.isAccessible(ewc)) continue; // Die?
+        if (x == 1 && y == 1) {
+          SubplateOperator so;
+          so.mRelativeSize.init(1,2);
+          so.mRelativePos.init(3,3);
+          ew[ewc] = so.atomof;
+        } else {
+          ad.mPosOnPlate.fromC2D(plc);
+          ew[ewc] = ad.atomof;
+        }
+      }
+    }
+  }
+
+  Void updateMouth() {
+    DebugUtils du;
+    EventWindow ew;
+    Random random;
+    ColorPlate ad;
+    PlateUtils pu;
+    C2D str = stride();
+
+    ad.mSizeOfPlate = B2D.instanceof(3,3);
+    ad.setStride(str);
+    for (Unsigned i = 0; i < ad.mColor.lengthof; ++i)
+      ad.mColor[i] = (ColorPlate.Color6) random.between(ad.mColor[i].minof,ad.mColor[i].maxof);
+    for (C2D.Coord x = 0; x < 3; ++x) {
+      for (C2D.Coord y = 0; y < 3; ++y) {
+        C2D pc(x,y);
+        C2D ewc(pu.hadamard(pc,str));
+        if (!ew.isAccessible(ewc)) continue; // Die?
+        if (x == 1 && y == 1) {
+          SubplateOperator so;
+          so.mRelativeSize.init(12,1);
+          so.mRelativePos.init(7,13);
+          ew[ewc] = so.atomof;
+        } else {
+          ad.mPosOnPlate.fromC2D(pc);
+          ew[ewc] = ad.atomof;
+        }
+      }
+    }
+  }
+
+  Void updateGermLine() {
+    EventWindow ew;
+    Random random;
+    PlateUtils pu;
+    
+    if (!mSeeded) {
+      // Pick a random stride for self, use for spawn
+      C2D mystride((C2D.Coord) random.between(1,2),
+                    (C2D.Coord) random.between(1,2));
+      setStride(mystride);
+
+      Unsigned ecount = 0;
+      EventWindow.SiteNum epick;
+      Bool alle = true;
+
+      for (EventWindow.SiteNum i = 1u; i < 41u; ++i) {
+        if (ew.isAccessible(i) && ew[i] is Empty) {
+          if (i <= 4u && random.oneIn(++ecount))
+            epick = i;
+        } else alle = false;
+      }
+      if (!alle) {
+        if (random.oddsOf(997,1000) && ecount > 0u) { // .3% random death if crowded
+          ew[epick] = ew[0];                          // Otherwise diffuse looking for space
+        }
+        ew[0] = Empty.instanceof;
+        return;
+      }
+
+
+      ColorPlate ad;
+      ad.mSizeOfPlate = B2D.instanceof(3,4);
+      ad.setStride(mystride);
+      for (Unsigned i = 0; i < ad.mColor.lengthof; ++i)
+        ad.mColor[i] = (ColorPlate.Color6) random.between(ad.mColor[i].minof,ad.mColor[i].maxof);
+
+      ad.mPosOnPlate = B2D.instanceof(0,0);
+
+      C2D rootewc(-1,-2);
+      ew[rootewc] = ad.atomof;
+
+      // PlateOperator needs to see plate(0,0) and plate(0,1)
+      ad.mPosOnPlate = B2D.instanceof(0,1);
+      C2D peerewc = rootewc + C2D.instanceof(0,mystride.y);
+      ew[peerewc] = ad.atomof;
+
+      C2D poewc = peerewc + C2D.instanceof(mystride.x, 0);
+      C2D myewc = poewc + C2D.instanceof(0, mystride.y);
+
+      // Finish setting up me
+      mSeeded = true;
+      setDeathBits(0u); // Clear any pending death now, because..
+
+      if (myewc.length() != 0u) { // Move me out of the way
+        ew[myewc] = ew[0];
+        ew[0] = Empty.instanceof;
+      }
+
+
+      PlateOperator po;
+      po.mDesiredPlateSize = B2D.instanceof(60,60);
+      po.setStride(mystride);
+      ew[poewc] = po.atomof; // So poewc can go there in any case
+
+      return;
+    }
+
+    // ..ONCE SEEDED, MUST OBEY PRIORITY
+    if (mustBlockOrDie()) return;
+
+    constant Int cDIE_SHOT = 50000;
+
+    if (!mBreeded) {
+      if (random.oneIn(cDIE_SHOT)) return killPlate("cDIE_SHOT");
+      C2D str = stride();
+      C2D border(-str.x, 0);
+      Atom & a = ew[border]; // container border adjacent
+      Self me = self;
+      if (a as ColorPlate) {
+        // Has it grown enough to pop its left eye?
+        if (a.mSizeOfPlate.mY >= 7 && a.mSizeOfPlate.mX >= 7) {
+          if (!emptyCorner()) return;
+          C2D pcdest(2,3);
+          SN popSN = a.plateCoordToEWSN(pcdest);
+          if (popSN == SN.maxof) return killPlate("popSN UNMAP");
+          Self delegate = self;
+          delegate.mFacialFeature = cFACE_LEFT_EYE;
+          ew[popSN] = delegate.atomof;
+          mBreeded = true;
+        }
+      }
+    } else if (!mSucceeded) {
+      if (random.oneIn(2*cDIE_SHOT)) return killPlate("2*cDIR_SHOT");
+      C2D str = stride();
+      C2D border(-str.x, 0);
+      Atom & a = ew[border]; // container border adjacent
+      if (a as ColorPlate) {
+        if (a.mSizeOfPlate.mY >= 10 && a.mSizeOfPlate.mX >= 12) {
+          if (!emptyCorner()) return;
+          C2D pcdest(2,3);
+          SN popSN = a.plateCoordToEWSN(pcdest);
+          if (popSN == SN.maxof) return killPlate("popSN UNMAP MOUTH");
+          Self delegate = self;
+          delegate.mFacialFeature = cFACE_MOUTH;
+          ew[popSN] = delegate.atomof;
+          mSucceeded = true;
+        }      
+      }
+    } else if (!mPleaded) {
+      if (random.oneIn(3*cDIE_SHOT)) return killPlate("3*cDIE_SHOT");
+      C2D str = stride();
+      C2D border(-str.x, 0);
+      Atom & a = ew[border]; // container border adjacent
+
+      if (a as ColorPlate) {
+        if (a.mSizeOfPlate.mY >= 12 && a.mSizeOfPlate.mX >= 14) {
+          if (!emptyCorner()) return;
+          C2D pcdest(2,3);
+          SN popSN = a.plateCoordToEWSN(pcdest);
+          if (popSN == SN.maxof) return killPlate("popSN UNMAP RIGHT");
+          Self delegate = self;
+          delegate.mFacialFeature = cFACE_RIGHT_EYE;
+          ew[popSN] = delegate.atomof;
+          self.mPleaded = true;
+        }      
+      }
+    } else if (random.oneIn(5*cDIE_SHOT)) { // Mature death risk
+      return killPlate("5*cDIE_SHOT");
+    } else if (random.oneIn(1000)) { // attempt to spawn
+      C2D str = stride();
+      C2D plc(-2,0);
+      C2D ewc = pu.hadamard(plc,str);
+      if (ew.isAccessible(ewc) && ew[ewc] is Empty) {
+        ew[ewc] = SuperSeedColorPlate.instanceof;
+      }
+    }
+  }
+}

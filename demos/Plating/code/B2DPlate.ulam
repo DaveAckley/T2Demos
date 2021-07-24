@@ -1,10 +1,11 @@
+use EventWindow;
 quark B2DTPlate(Unary(8) cBITS_PER_COORD) : Plate {
   typedef B2DT(cBITS_PER_COORD) MyB2D;
   typedef EventWindow.SiteNum SN;
   MyB2D mSizeOfPlate;
   MyB2D mPosOnPlate;
   DeathBits mDeathBits;
-
+  
   //// B2DPlate API
   virtual Atom copyOf() { //< A copy of self suitable for healing
     return self.atomof;
@@ -32,24 +33,39 @@ quark B2DTPlate(Unary(8) cBITS_PER_COORD) : Plate {
     Random random;
     MDist md;
     C2D mypos = positionOnPlate();
+    C2D mystr = stride();
     Bool grew = false;
     DebugUtils du;
 
-    for (EventWindow.SiteNum i = 1u; i <= 12u; ++i) {
-      PlateUtils.SiteCategory sc = pu.categorizeSite(self, i);
-      if (sc == pu.cSC_UNWANTED) continue;
-      if (sc == pu.cSC_ON_SUBPLATE) continue; // Can't grow into, can't pull stability
-      C2D pc = md.getSiteCoord(i) + mypos; // Plate coord of site
+    for (C2D.Coord y = -2; y <= 2; ++y) {
+      for (C2D.Coord x = -2; x <= 2; ++x) {
+        if (x == 0 && y == 0) continue;
 
-      if (sc == pu.cSC_CAN_GROW_INTO) {
-        if (isPlateBorderCoord(pc) && !isPlateBorder()) // Only border can grow border
+        C2D ewc = pu.hadamard(C2D.instanceof(x,y),mystr);
+        EventWindow.SiteNum sn = md.getSiteNumber(ewc);
+        if (sn == sn.maxof) continue;
+
+        C2D pc;                   // Plate coord of site
+        PlateUtils.SiteCategory sc = pu.categorizeSite(self, sn, pc);
+
+        if (sc == pu.cSC_INTERPHASE) continue; // Impossible by iteration?
+        if (sc == pu.cSC_UNWANTED) continue;
+        if (sc == pu.cSC_ON_SUBPLATE) continue; // Can't grow into, can't pull stability
+
+        if (sc == pu.cSC_CAN_GROW_INTO) {
+          if (isPlateBorderCoord(pc) && !isPlateBorder()) // Only border can grow border
+            continue;
+          Atom copyofus = copyOf();
+          Self & bein = (Self&) copyofus; // Or fail, if copyOf screwed up
+          //          du.printContext();
+          //          du.print("OANZC");
+          //          du.print(ewc);
+          //          du.print(pc);
+          bein.mPosOnPlate.fromC2D(pc);
+          ew[sn] = bein.atomof;
+          grew = true;  // Wanted it and got it
           continue;
-        Atom copyofus = copyOf();
-        Self & bein = (Self&) copyofus; // Or fail, if copyOf screwed up
-        bein.mPosOnPlate.fromC2D(pc);
-        ew[i] = bein.atomof;
-        grew = true;  // Wanted it and got it
-        continue;
+        }
       }
     }
 
@@ -61,21 +77,22 @@ quark B2DTPlate(Unary(8) cBITS_PER_COORD) : Plate {
     C2D pos = positionOnPlate();
     C2D size = sizeOfPlate();
     PlateUtils.PlateDir dir = pu.borderDir(pos,size);
-    C2D incr;
+    C2D incrpc;
     which (dir) {
     case pu.cPLATE_GOES_N: {
-      if (pos.getX() > 0) incr.setX(-1); else incr.setY(+1);
+      if (pos.getX() > 0) incrpc.setX(-1); else incrpc.setY(+1);
     }
     case pu.cPLATE_GOES_E: {
-      if (pos.getY() > 0) incr.setY(-1); else incr.setX(-1);
+      if (pos.getY() > 0) incrpc.setY(-1); else incrpc.setX(-1);
     }
     case pu.cPLATE_GOES_S: {
-      if (pos.getX() < size.getX() - 1) incr.setX(+1); else incr.setY(-1);
+      if (pos.getX() < size.getX() - 1) incrpc.setX(+1); else incrpc.setY(-1);
     }
     case pu.cPLATE_GOES_W: {
-      if (pos.getY() < size.getY() - 1) incr.setY(+1); else incr.setX(+1);
+      if (pos.getY() < size.getY() - 1) incrpc.setY(+1); else incrpc.setX(+1);
     }
     }
+    C2D incr = pu.hadamard(incrpc,stride());
     MDist md;
     EventWindow ew;
     SN ret = md.getSiteNumber(incr); // XXX ASSUMES WE'RE AT ew[0];
@@ -88,21 +105,22 @@ quark B2DTPlate(Unary(8) cBITS_PER_COORD) : Plate {
     C2D pos = positionOnPlate();
     C2D size = sizeOfPlate();
     PlateUtils.PlateDir dir = pu.borderDir(pos,size);
-    C2D incr;
+    C2D incrpc;
     which (dir) {
     case pu.cPLATE_GOES_N: {
-      if (pos.getX() < size.getX() - 1) incr.setX(+1); else incr.setY(+1);
+      if (pos.getX() < size.getX() - 1) incrpc.setX(+1); else incrpc.setY(+1);
     }
     case pu.cPLATE_GOES_E: {
-      if (pos.getY() < size.getY() - 1) incr.setY(+1); else incr.setX(-1);
+      if (pos.getY() < size.getY() - 1) incrpc.setY(+1); else incrpc.setX(-1);
     }
     case pu.cPLATE_GOES_S: {
-      if (pos.getX() > 0) incr.setX(-1); else incr.setY(-1);
+      if (pos.getX() > 0) incrpc.setX(-1); else incrpc.setY(-1);
     }
     case pu.cPLATE_GOES_W: {
-      if (pos.getY() > 0) incr.setY(-1); else incr.setX(+1);
+      if (pos.getY() > 0) incrpc.setY(-1); else incrpc.setX(+1);
     }
     }
+    C2D incr = pu.hadamard(incrpc,stride());
     MDist md;
     return md.getSiteNumber(incr); // XXX ASSUMES WE'RE AT ew[0]
   }

@@ -7,6 +7,11 @@ quark B2DT(Unary(8) cBITS_PER_COORD) {
   BCoord mX = cILLEGAL;
   BCoord mY = cILLEGAL;
 
+  Self(BCoord x, BCoord y) {
+    mX = x;
+    mY = y;
+  }
+
   Self min(Self other) {
     Self ret = self;
     if (other.mX < ret.mX) ret.mX = other.mX;

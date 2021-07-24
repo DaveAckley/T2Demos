@@ -2,7 +2,7 @@
     \symbol CP
     \color #666
  */
-element ColorPlate : B2DStreamPlate + CategorizedSite + B2DStreamPayload {
+element ColorPlate : B2DStreamPlate + CategorizedSite + B2DStreamPayload + Stride2x2 {
 
   typedef EventWindow.SiteNum SN;
   DebugUtils du;
@@ -19,9 +19,13 @@ element ColorPlate : B2DStreamPlate + CategorizedSite + B2DStreamPayload {
     return s.atomof;
   }
 
-  typedef Unsigned(6) Color6;
+  constant Unsigned cTIMER_BITS = 4u;
+  typedef XTimer(cTIMER_BITS,Unsigned(cTIMER_BITS).maxof,4096u) BlockDog;
+  BlockDog mBlockDogTimer; //  About one in half a billion cumulative shot
+
+  typedef Unsigned(5) Color6;
   typedef Color6 RGB6[3];
-  RGB6 mColor = { 50u, 50u, 10u };
+  RGB6 mColor = { 30u, 30u, 5u };
 
   //// Plate API
 
@@ -31,14 +35,14 @@ element ColorPlate : B2DStreamPlate + CategorizedSite + B2DStreamPayload {
     ColorUtils cu;
 
     if (self.hasPayload()) {
-      return cu.color((Unsigned) (0xff0000|self.peekAtPayload()));
+      return cu.color((Unsigned) (0xffff0000|self.peekAtPayload()));
     }
 
-    ARGB ret = cu.color((ASCII) (mColor[0]<<2u),
-                        (ASCII) (mColor[1]<<2u),
-                        (ASCII) (mColor[2]<<2u));
+    ARGB ret = cu.color((ASCII) (mColor[0]<<3u),
+                        (ASCII) (mColor[1]<<3u),
+                        (ASCII) (mColor[2]<<3u));
 
-    ret = cu.between(cu.color(0x808080),ret,25);
+    ret = cu.between(cu.color(0xff808080),ret,25);
     return ret;
   }
 
@@ -209,8 +213,16 @@ element ColorPlate : B2DStreamPlate + CategorizedSite + B2DStreamPayload {
 
   Void behave() {
     if (mustBlockOrDie()) {
+      //// WARNING: self might be erased at this point!
+      EventWindow ew;   
+      Atom & a = ew[0];  // So get a new ref from the ew
+      if (a as Self) 
+        a.mBlockDogTimer.reset(); // If it's still alive, it was blocked
       return;
     }
+    // Block dog alarm means there's been no movement or growth for a looong time
+    if (mBlockDogTimer.countAlarm()) return (Void) die();
+
     checkGrowthAndHealing();
     updateStream();
     if (checkLocalActions()) return;
@@ -231,7 +243,9 @@ element SeedColorPlate {
     Int w = 12, h = 6;
     ad.mSizeOfPlate = B2D.instanceof(w,h);
     ad.mPosOnPlate = B2D.instanceof(0,0);
-    for (Unsigned i = 0; i < ad.mColor.lengthof; ++i)
+    ad.setStride(C2D.instanceof((C2D.Coord) random.between(1,2),
+                                (C2D.Coord) random.between(1,2)));
+    for (Unsigned i = 1; i < ad.mColor.lengthof; ++i)
       ad.mColor[i] = (ColorPlate.Color6) random.between(ad.mColor[i].minof,ad.mColor[i].maxof);
 
     ew[0] = ad;
@@ -239,157 +253,7 @@ element SeedColorPlate {
 }
 
 
-/** Super Seed ColorPlate
-    \symbol CS
-    \color #ff0
- */
-element SuperSeedColorPlate {
-  typedef EventWindow.SiteNum SN;
-  Bool mSeeded;
-  Bool mBreeded;
-  Bool mSucceeded;
-  Bool mPleaded;
-  Void behave() {
-    EventWindow ew;
-    Random random;
-    for (EventWindow.SiteNum i = 1u; i < 41u; ++i) {
-      if (ew[i] is Tecton) return; // Brute force deterrence
-    }
-    if (!mSeeded) {
-      Unsigned ecount = 0;
-      EventWindow.SiteNum epick;
-      Bool alle = true;
 
-      for (EventWindow.SiteNum i = 1u; i < 41u; ++i) {
-        if (ew[i] is Tecton) return; // Brute force deterrence
-        if (ew.isAccessible(i) && ew[i] is Empty) {
-          if (i <= 4u && random.oneIn(++ecount))
-            epick = i;
-        } else alle = false;
-      }
-      if (!alle) {
-        if (random.oddsOf(999,1000) && ecount > 0u) { // .1% random death if crowded
-          ew[epick] = ew[0];
-        }
-        ew[0] = Empty.instanceof;
-        return;
-      }
-
-      PlateOperator po;
-      po.mDesiredPlateSize = B2D.instanceof(30,30);
-      ew[2] = po.atomof;
-
-      ColorPlate ad;
-      ad.mSizeOfPlate = B2D.instanceof(3,4);
-      for (Unsigned i = 0; i < ad.mColor.lengthof; ++i)
-        ad.mColor[i] = (ColorPlate.Color6) random.between(ad.mColor[i].minof,ad.mColor[i].maxof);
-
-      ad.mPosOnPlate = B2D.instanceof(0,0);
-
-      ew[15] = ad.atomof;
-
-      // PlateOperator needs to see plate(0,0) and plate(0,1)
-      ad.mPosOnPlate = B2D.instanceof(0,1);
-      ew[5] = ad.atomof;
-
-      mSeeded = true;
-    } else if (!mBreeded) {
-      Atom & a = ew[15];
-      Self me = self;
-      if (a as ColorPlate) {
-        // Has it grown enough to pop a nose?
-        if (a.mSizeOfPlate.mY >= 7 && a.mSizeOfPlate.mX >= 7) {
-          ColorPlate ad;
-          ad.mSizeOfPlate = B2D.instanceof(3,4);
-          for (Unsigned i = 0; i < ad.mColor.lengthof; ++i)
-            ad.mColor[i] = (ColorPlate.Color6) random.between(ad.mColor[i].minof,ad.mColor[i].maxof);
-          for (C2D.Coord x = 0; x < 3; ++x) {
-            for (C2D.Coord y = 0; y < 4; ++y) {
-              C2D ewc(x,y);
-              if (ew.isAccessible(ewc)) {
-                ad.mPosOnPlate.fromC2D(ewc);
-                ew[ewc] = ad.atomof;
-              }
-            }
-          }
-          SubplateOperator so;
-          so.mRelativeSize.init(1,2);
-          so.mRelativePos.init(6,7);
-          ew[8] = so.atomof;
-          me.mBreeded = true;
-          ew[18] = me;
-        }
-      }
-    } else if (!mSucceeded) {
-      Atom & a = ew[9];
-      Self me = self;
-      if (a as ColorPlate) {
-        if (a.mSizeOfPlate.mY >= 10 && a.mSizeOfPlate.mX >= 12) {
-          ColorPlate ad;
-          ad.mSizeOfPlate = B2D.instanceof(3,3);
-          for (Unsigned i = 0; i < ad.mColor.lengthof; ++i)
-            ad.mColor[i] = (ColorPlate.Color6) random.between(ad.mColor[i].minof,ad.mColor[i].maxof);
-          for (C2D.Coord x = 0; x < 3; ++x) {
-            for (C2D.Coord y = 0; y < 3; ++y) {
-              C2D pc(x,y);
-              C2D ewc((C2D.Coord) (x+2),y);
-              if (ew.isAccessible(ewc)) {
-                ad.mPosOnPlate.fromC2D(pc);
-                ew[ewc] = ad.atomof;
-              }
-            }
-          }
-          SubplateOperator so;
-          so.mRelativeSize.init(1,2);
-          so.mRelativePos.init(10,3);
-          ew[36] = so.atomof;
-          Atom & usso = ew[2];
-          if (usso as SubplateOperator) {
-            usso.mRelativePos.init(2,8);
-            self.mSucceeded = true;
-          }
-        }      
-      }
-    } else if (!mPleaded) {
-      Atom & a = ew[9];
-      Self me = self;
-      if (a as ColorPlate) {
-        if (a.mSizeOfPlate.mY >= 14 && a.mSizeOfPlate.mX >= 14) {
-          ColorPlate ad;
-          ad.mSizeOfPlate = B2D.instanceof(3,3);
-          for (Unsigned i = 0; i < ad.mColor.lengthof; ++i)
-            ad.mColor[i] = (ColorPlate.Color6) random.between(ad.mColor[i].minof,ad.mColor[i].maxof);
-          for (C2D.Coord x = 0; x < 3; ++x) {
-            for (C2D.Coord y = 0; y < 3; ++y) {
-              C2D pc(x,y);
-              C2D ewc((C2D.Coord) (x+2),y);
-              if (ew.isAccessible(ewc)) {
-                ad.mPosOnPlate.fromC2D(pc);
-                ew[ewc] = ad.atomof;
-              }
-            }
-          }
-          SubplateOperator so;
-          so.mRelativeSize.init(12,1);
-          so.mRelativePos.init(7,13);
-          ew[36] = so.atomof;
-          Atom & usso = ew[2];
-          if (usso as SubplateOperator) {
-            usso.mRelativePos.init(3,3);
-            self.mPleaded = true;
-          }
-        }      
-      }
-    } else if (random.oneIn(2000)) {
-      SN start = (SN) random.between(9,40);
-      if (ew[start] is ColorPlate) {
-        JumpSeeder js;
-        js.mNextSN = start;
-        ew[start] = js.atomof;
-      }
-    }
-  }
-}
 
 /** Run and dump a CS
     \symbol JS

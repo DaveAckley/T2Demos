@@ -1,0 +1,20 @@
+element TestPlate10 : B2DPlate + Stride2x2 {
+  Void behave() {
+    if (mustBlockOrDie()) return;
+    if (checkGrowthAndHealing()) return;
+  }
+}
+
+element SeedTestPlate10 {
+  Void behave() {
+    TestPlate10 tp;
+    tp.setSizeOfPlate(C2D.instanceof(7,5));
+    tp.setPositionOnPlate(C2D.instanceof(0,0));
+    Random random;
+    tp.setStride(C2D.instanceof((C2D.Coord) random.between(1,2),
+                                (C2D.Coord) random.between(1,2)));
+    tp.setPhase(PlateUtils.c0x0);
+    EventWindow ew;
+    ew[0] = tp.atomof;
+  }
+}
