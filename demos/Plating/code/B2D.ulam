@@ -106,6 +106,7 @@ quark B2DT(Unary(8) cBITS_PER_COORD) {
       mY = (BCoord) y;
     }
   }
+
 }
 
 quark B2D : B2DT(7) {

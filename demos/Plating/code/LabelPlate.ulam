@@ -1,0 +1,52 @@
+quark ByteBox {
+  //// ByteBox API
+  virtual C2D sizeOfByteBox() ;
+  virtual ASCII getByteFromBox(C2D idx) ;
+}
+
+quark LabelPlate : B2DStreamPlateBase + Flood + ByteBox {
+  typedef EventWindow.SiteNum SN;
+  typedef FontSet.FontNumber FN;
+
+  //// LabelPlate API
+  virtual ARGB getFg() ; //< Ink color for label
+  virtual ARGB getBg() ; //< Paper color for label
+  virtual FN getFontNumber() ; //< FontSet fontnumber for rendering
+  virtual C2D getLabelPos() { return C2D.instanceof(0,0); } //< pixel at plate(0,0)
+
+  //// LabelPlate SERVICES
+  Bool isFgPixel() {
+    PlateUtils pu;
+    C2D sizpc = sizeOfPlate();
+    C2D pospc = positionOnPlate();
+    C2D labelpospc = getLabelPos();
+    C2D sizbb = sizeOfByteBox();
+    FN fn = getFontNumber();
+    FontSet fs;
+    Font & font = fs.getFont(fn);
+    C2D sizfont = font.fontSize();
+
+    /// Find bytebox coord of pospc
+    C2D pixpospc = pospc + labelpospc;
+    C2D byteposbb = pu.hadamardiv(pixpospc,sizfont);
+
+    if (!sizbb.contains(byteposbb)) return false;
+    ASCII byte = getByteFromBox(byteposbb);
+
+    C2D siteinglyph = pu.mod(pixpospc,sizfont);
+    siteinglyph.y = (C2D.Coord) (sizfont.y - 1 - siteinglyph.y);
+    return font.getSiteStatus(siteinglyph,byte) == Font.cON;
+  }
+
+  @Override
+  ARGB getColor(Unsigned selector) {
+    if (isFgPixel()) return getFg();
+    return getBg();
+  }
+
+  Bool checkLocalActions() {
+    floodUpdate();
+    return false;
+  }
+}
+

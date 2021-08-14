@@ -2,7 +2,7 @@
     \symbol WM
     \color #bb8
  */
-element WeightMatrix : B2DPlate + CategorizedSite + StdLink + Stride2x2FP {
+element WeightMatrix : B2DPlate + CategorizedSite + StdLink + Stride2x2 {
   typedef PlateUtils.PlateDir PD;
 
   //// Link API
@@ -35,18 +35,36 @@ element WeightMatrix : B2DPlate + CategorizedSite + StdLink + Stride2x2FP {
     return cu.color(0x0); // NOT REACHED
   }
 
+  typedef Unsigned(2) DisplayMap;
+  constant DisplayMap cSHOW_WEIGHT = 0u;
+  constant DisplayMap cSHOW_SUM =    1u;
+  constant DisplayMap cSHOW_STATE =  2u;
+  constant DisplayMap cSHOW_SUPER =  3u;
+  DisplayMap mDisplays[3] = { cSHOW_STATE, cSHOW_WEIGHT, cSHOW_SUM };
+
+  Void setDisplays(DisplayMap d1, DisplayMap d2, DisplayMap d3) {
+    mDisplays[0] = d1;
+    mDisplays[1] = d2;
+    mDisplays[2] = d3;
+  }
+
   ARGB getColor(Unsigned selector) {
     ColorUtils cu;
     PlateUtils pu;
-    if (selector == 2u) {
+    DisplayMap show = mDisplays[(Unary(2)) selector];
+    ARGB ret;
+    
+    if (show == cSHOW_WEIGHT) {
       Weight w = getWeight();
       return pu.rainbow(w.minof/2,w.maxof/2,w);
     }
-    if (selector == 0u) {
+
+    if (show == cSHOW_SUM) {
       Sum s = getSum();
       return pu.rainbow(s.minof/4,s.maxof/4,s);
     }
-    if (selector == 1u) {
+
+    if (show == cSHOW_STATE) {
       State s = getState();
       ARGB ret;
       if (s < 0) ret = cu.color(0x000000);
@@ -54,7 +72,8 @@ element WeightMatrix : B2DPlate + CategorizedSite + StdLink + Stride2x2FP {
       else ret = cu.color(0x808080);
       return cu.between(getBaseColor(),ret,35);
     }
-    return super.getColor(selector);
+
+    /* if (cSHOW_SUPER) */ return super.getColor(selector);
   }
 
   Void behave() {
@@ -73,170 +92,19 @@ quark NodeNW : NodeImpl {
   virtual PD getStateOutDir() { return PlateUtils.cPLATE_GOES_W; }
 }
 
+quark NodeNE : NodeImpl {
+  typedef PlateUtils.PlateDir PD;
+  virtual PD getSumInDir() { return PlateUtils.cPLATE_GOES_N; }
+  virtual PD getStateOutDir() { return PlateUtils.cPLATE_GOES_E; }
+}
+
 quark NodeES : NodeImpl {
   typedef PlateUtils.PlateDir PD;
   virtual PD getSumInDir() { return PlateUtils.cPLATE_GOES_E; }
   virtual PD getStateOutDir() { return PlateUtils.cPLATE_GOES_S; }
 }
 
-/** 
-    \symbol VV
-    \color #bb8
- */
-element VoterVector : B2DStreamPlate + CategorizedSite + B2DStreamPayload + NodeNW + SIGH + Stride2x2FP {
-  constant Unsigned cAPATHY_PER_VOTER = 10u;
-  //// SIGH API
-  @Override
-  virtual Unsigned getApathy() {
-    return cAPATHY_PER_VOTER;
-  }
-    
-  @Override
-    virtual State decide(Sum insum, Unsigned count) {
-    C2D pos = positionOnPlate();
-    if (pos == lastPosOnPlate()) return 1; // I am the true unit I am true
-    return self.SIGH.decide(insum, count); // Dish to normal processing
-  }
 
-  Void behave() {
-    if (mustBlockOrDie()) {
-      return;
-    }
-    checkGrowthAndHealing();
-    updateStream();
-    if (choose()) return;
-  }
-}
-
-
-/** 
-    \symbol PQ
-    \color #88b
- */
-element PollQuestion : B2DStreamPlate + CategorizedSite + B2DStreamPayload + NodeES + SIGH + Stride2x2FP {
-
-  /*
-  ARGB getColor(Unsigned selector) {
-    ColorUtils cu;
-    PlateUtils pu;
-    State s = getState();
-    ARGB ret;
-    if (s > 0) ret = cu.color(0xffffff);
-    else if (s < 0) ret = cu.color(0x000000);
-    else ret = cu.color(0x808080);
-    return ret;
-    }*/
-
-  //// Decider API
-
-  @Override
-  virtual State decide(Sum insum, Unsigned count) {
-    C2D pos = positionOnPlate();
-    if (pos.length() == 0u) return 1; // I am the true unit I am true
-    return self.SIGH.decide(insum, count); // Dish to normal processing, (default 0 apathy)
-  }
-
-
-  Void behave() {
-    if (mustBlockOrDie()) {
-      return;
-    }
-    checkGrowthAndHealing();
-    updateStream();
-    if (choose()) return;
-  }
-}
-
-
-/**
-   \symbol SW
- */
-element SeedWeightMatrix {
-  Void behave() {
-    EventWindow ew;
-    Random random;
-    PlateUtils pu;
-
-    WeightMatrix wm;
-    C2D dims(17,11);
-    //C2D dims(7,8);
-    C2D ipos(0,(C2D.Coord)(dims.getY()-1));
-    wm.setSizeOfPlate(dims);
-    wm.setPositionOnPlate(ipos);
-
-    // Reaction weights inbound to voters
-    wm.setStateDir(pu.cPLATE_GOES_W);
-    wm.setSumDir(pu.cPLATE_GOES_N);
-    wm.init();
-    ew[0] = wm.atomof;
-
-    // Vote weights inbound to offices
-    wm.setStateDir(pu.cPLATE_GOES_S);
-    wm.setSumDir(pu.cPLATE_GOES_E);
-    wm.init();
-    ew[2] = wm.atomof;
-
-    // Reinforcement matrix to distribute payoffs
-    ReinforcementMatrix rm;
-    rm.setSizeOfPlate(dims);
-    rm.setPositionOnPlate(ipos);
-    rm.setRootRelPos(B2D4.instanceof(B2D4.cMINVAL,B2D4.cMAXVAL));
-    rm.setLinks(1u,5u);
-    ew[4] = rm.atomof;
-
-    // SIGH operator to run the show
-    SIGHOperator so;
-    ew[6] = so.atomof;
-
-    // The voters
-    VoterVector vv;
-    C2D vdims((C2D.Coord) dims.getX(),1);
-    C2D vpos(0,0);
-    vv.setSizeOfPlate(vdims);
-    vv.setPositionOnPlate(vpos);
-    ew[3] = vv.atomof;
-
-    // State gate for voters
-    StateGate sgv;
-    sgv.setSizeOfPlate(vdims);
-    sgv.setPositionOnPlate(vpos);
-    sgv.setSNs(1u, 15u); // In from left, out to knight's up left
-    sgv.setGateState(sgv.cGATE_SYNC); // Pass state when sgo says to
-    ew[8] = sgv.atomof;
-
-    // The Offices
-    PollQuestion pq;
-    vdims.set(1,(C2D.Coord) dims.getY());
-    vpos.set(0,(C2D.Coord) (dims.getY()-1));
-    pq.setSizeOfPlate(vdims);
-    pq.setPositionOnPlate(vpos);
-    ew[5] = pq.atomof;
-
-    // State gate for offices
-    StateGate sgo;
-    sgo.setSizeOfPlate(vdims);
-    sgo.setPositionOnPlate(vpos);
-    sgo.setSNs(2u, 4u); // In from above, out to right
-    sgo.setGateState(sgo.cGATE_SYNC); // Pass state when sgo says to
-    sgo.setMaxRoot(true);
-    ew[1] = sgo.atomof;
-
-    // Evaluator for the vote
-    Evaluator ev;
-    vdims.set(1,(C2D.Coord) dims.getY());
-    vpos.set(0,(C2D.Coord) (dims.getY()-1));
-    ev.setSizeOfPlate(vdims);
-    ev.setPositionOnPlate(vpos);
-    ev.setRootRelPos(B2D4.instanceof(B2D4.cMINVAL,B2D4.cMAXVAL));
-    ev.setNode(4u);
-    ew[13] = ev.atomof;
-
-    // Function Under Test
-    FUT fut;
-    ew[14] = fut.atomof;
-
-  }
-}
 
 
 

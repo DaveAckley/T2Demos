@@ -1,0 +1,165 @@
+/** Build a SIGH system with decentralized FUT/Eval
+   \symbol S2
+ */
+element SeedSIGH2 {
+  typedef EventWindow.SiteNum SN;
+  Void behave() {
+    EventWindow ew;
+    Random random;
+    PlateUtils pu;
+
+    WeightMatrix wm;
+    //    constant C2D cPROBLEM_SIZE = { .x = 17, .y = 11 };
+    //    constant C2D cPROBLEM_SIZE = { .x = 7, .y = 8 };
+    constant Unsigned cVOTER_COUNT = 12u;
+    constant Unsigned cPQ_COUNT = 11u;
+    constant C2D cPROBLEM_SIZE = { .x = cVOTER_COUNT, .y = cPQ_COUNT };
+    C2D dims = cPROBLEM_SIZE;
+    //C2D dims(7,8);
+    C2D ipos(0,(C2D.Coord)(dims.getY()-1));
+    wm.setSizeOfPlate(dims);
+    wm.setPositionOnPlate(ipos);
+    wm.setStride(pu.c2x2);
+
+    // Reaction weights inbound to voters
+    wm.setStateDir(pu.cPLATE_GOES_W);
+    wm.setSumDir(pu.cPLATE_GOES_N);
+    wm.init();
+    wm.setDisplays(wm.cSHOW_WEIGHT,wm.cSHOW_WEIGHT,wm.cSHOW_WEIGHT);
+    ew[0] = wm.atomof;
+
+    // Vote weights inbound to offices
+    wm.setStateDir(pu.cPLATE_GOES_S);
+    wm.setSumDir(pu.cPLATE_GOES_E);
+    wm.init();
+    wm.setDisplays(wm.cSHOW_STATE,wm.cSHOW_STATE,wm.cSHOW_STATE);
+    ew[2] = wm.atomof;
+
+    // Reinforcement matrix to distribute payoffs
+    ReinforcementMatrix rm;
+    rm.setSizeOfPlate(dims);
+    rm.setPositionOnPlate(ipos);
+    rm.setRootRelPos(B2D4.instanceof(B2D4.cMINVAL,B2D4.cMAXVAL));
+    rm.setLinks(1u,5u);
+    ew[4] = rm.atomof;
+
+    // SIGH sequencer to run the show
+    SIGHSequencer2 so;
+    ew[6] = so.atomof;
+
+    // The voters
+    VoterVector vv;
+    C2D vdims((C2D.Coord) dims.getX(),1);
+    C2D vpos(0,0);
+    vv.setSizeOfPlate(vdims);
+    vv.setPositionOnPlate(vpos);
+    ew[3] = vv.atomof;
+
+    // State gate for voters
+    StateGate sgv;
+    sgv.setSizeOfPlate(vdims);
+    sgv.setPositionOnPlate(vpos);
+    sgv.setSNs(1u, 15u, SN.maxof); // In from left, out to knight's up left
+    sgv.setGateState(sgv.cGATE_SYNC); // Pass state when sgo says to
+    ew[8] = sgv.atomof;
+
+    // The Offices
+    PollQuestion pq;
+    vdims.set(1,(C2D.Coord) dims.getY());
+    vpos.set(0,(C2D.Coord) (dims.getY()-1));
+    pq.setSizeOfPlate(vdims);
+    pq.setPositionOnPlate(vpos);
+    ew[5] = pq.atomof;
+
+    // State gate for offices
+    StateGate sgo;
+    sgo.setSizeOfPlate(vdims);
+    sgo.setPositionOnPlate(vpos);
+    sgo.setSNs(2u, 4u, 5u); // In from N, out to E, 2nd out to NW
+    sgo.setGateState(sgo.cGATE_SYNC); // Pass state when sgo says to
+    sgo.setMaxRoot(true);
+    ew[1] = sgo.atomof;
+
+    // Function matrix to compute quality
+    constant Unsigned cFUNCTION_TERMS = 2u*cVOTER_COUNT+5u;
+    constant C2D cFUNCTION_SIZE = { .x = cFUNCTION_TERMS, .y = cPQ_COUNT };
+    dims = cFUNCTION_SIZE;
+    ipos = dims - pu.c1x1;
+    wm.setSizeOfPlate(dims);
+    wm.setPositionOnPlate(ipos);
+    wm.setStride(pu.c1x2);
+    wm.setStateDir(pu.cPLATE_GOES_E);
+    wm.setSumDir(pu.cPLATE_GOES_N);
+    wm.setDisplays(wm.cSHOW_STATE,wm.cSHOW_STATE,wm.cSHOW_SUM);
+    ew[13] = wm.atomof;
+
+    /*
+    // State gate for function input
+    sgo.setSizeOfPlate(vdims);
+    sgo.setPositionOnPlate(vpos);
+    sgo.setSNs(7u, 2u); // In from NE, out to N
+    sgo.setGateState(sgo.cGATE_SYNC); // Pass state when sgo says to
+    sgo.setMaxRoot(true);
+    ew[9] = sgo.atomof;
+    */
+
+    // The function terms
+    FunctionTerms ft;
+    vdims = C2D.instanceof((C2D.Coord) dims.getX(),1);
+    vpos = C2D.instanceof((C2D.Coord) (dims.getX()-1),0);
+    ft.setSizeOfPlate(vdims);
+    ft.setPositionOnPlate(vpos);
+    ew[14] = ft.atomof;
+
+    // The Reinforcement comparator
+    ReinforcementComparison rc;
+    ew[16] = rc.atomof;
+
+    /*
+    // Evaluator for the vote
+    Evaluator ev;
+    vdims.set(1,(C2D.Coord) dims.getY());
+    vpos.set(0,(C2D.Coord) (dims.getY()-1));
+    ev.setSizeOfPlate(vdims);
+    ev.setPositionOnPlate(vpos);
+    ev.setRootRelPos(B2D4.instanceof(B2D4.cMINVAL,B2D4.cMAXVAL));
+    ev.setNode(4u);
+    ew[13] = ev.atomof;
+
+    // Function Under Test
+    FUT fut;
+    ew[14] = fut.atomof;
+
+    */
+
+    NumberPlate ad;
+    ad.configure(0u, 4u);
+    ad.mNumber = 0;
+    C2D npsiz = ad.sizeOfPlate();
+    C2D adpos(1, 0);
+    ad.mPosOnPlate.fromC2D(adpos); // Upper right of np
+    ew[23] = ad.atomof;
+
+    // Containing Plate
+    ColorPlate cp;
+    ColorUtils cu;
+    C2D psiz(cPROBLEM_SIZE);
+    C2D ewsiz((psiz + C2D.instanceof(pu.c2x2))*2 +
+              C2D.instanceof(pu.c1x0)*cFUNCTION_TERMS +
+              C2D.instanceof(0,(C2D.Coord) npsiz.getY()) + // Room for NumberPlate
+              pu.c1x3
+              );
+    cp.setColor(cu.color(0x202000)); // dark brown
+    cp.setSizeOfPlate(ewsiz);
+    C2D cpos((C2D.Coord) (2+cFUNCTION_TERMS),
+             (C2D.Coord) (ewsiz.y - npsiz.getY() - 3));
+    cp.setPositionOnPlate(cpos);
+    ew[11] = cp.atomof;
+
+    MigratorySeed ms;
+    AtomUtils au;
+    ms.mGoalPos.init(1,1);
+    ms.mSeedType = au.getValidType(PlateSequencer.instanceof);
+    ew[21] = ms.atomof;
+  }
+}

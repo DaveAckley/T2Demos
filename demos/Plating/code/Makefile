@@ -14,6 +14,7 @@ UFLAGS:=-o
 ARGS_TXT_FILES:=$(wildcard args.txt)
 ULAM_FILES:=$(wildcard *.ulam)
 INC_FILES:=$(wildcard *.inc)
+SOURCE_DIR_ARGS:=--sd ./fonts
 TIMESTAMP:=$(shell date +%Y%m%d-%H%M%S)
 DEV:=$(shell whoami)
 ISHNAME:=$(TIMESTAMP)-$(DEV)
@@ -29,8 +30,11 @@ $(T2TARGET):	$(MFZ)
 run:	$(MFZ)
 	$(MFZRUN) $(MFZ)
 
-$(MFZ):	$(ULAM_FILES) $(ARGS_TXT_FILES) Makefile
-	$(ULAM) $(UFLAGS) $(ULAM_FILES) $(INC_FILES) $(ARGS_TXT_FILES) $(MFZ)
+$(MFZ):	$(ULAM_FILES) $(ARGS_TXT_FILES) Makefile Sigmoid.ulam
+	$(ULAM) $(UFLAGS) $(SOURCE_DIR_ARGS) $(ULAM_FILES) $(INC_FILES) $(ARGS_TXT_FILES) $(MFZ)
+
+Sigmoid.ulam:	$(realpath .)/sigmoid.pl
+	$< >$@
 
 clean:	
 	rm -f *~

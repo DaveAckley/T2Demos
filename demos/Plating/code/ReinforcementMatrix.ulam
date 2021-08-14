@@ -12,6 +12,7 @@ element ReinforcementMatrix : B2DPlate + Flood/* + CategorizedSite*/ + Stride2x2
     Self s = self;        // start with us
     return s.atomof;      // Use that
   }
+
   //// Flood API
   @Override
   virtual C2D getRoot() {
@@ -88,11 +89,17 @@ element ReinforcementMatrix : B2DPlate + Flood/* + CategorizedSite*/ + Stride2x2
     return true;
   }
   
+  @Override
   ARGB getColor(Unsigned selector) {
     ColorUtils cu;
     PlateUtils pu;
-    if (selector > 1u) return getFloodColor();
-    return super.getColor(selector);
+    ARGB ret = getFloodColor();
+    if (mReinforcement > 0)
+      ret = cu.between(cu.color(0xff00ff00), ret, (Unsigned) (10*mReinforcement));
+    else if (mReinforcement < 0)
+      ret = cu.between(cu.color(0xffff0000), ret, (Unsigned) (-10*mReinforcement));
+    return ret;
+    //    return super.getColor(selector);
     /*
     if (selector == 2u) {
       Reinforcement w = getReinforcement();

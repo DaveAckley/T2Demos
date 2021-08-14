@@ -1,0 +1,64 @@
+element MigratorySeed : Plate1 {
+  typedef AtomUtils.Type SeedType;
+  B2D mGoalPos;
+  SeedType mSeedType;
+  typedef Unsigned(10) BlockCount;
+  BlockCount mBlockCount;
+
+  Void die() {
+    EventWindow ew;
+    ew[0] = Empty.instanceof;
+  }
+
+  Void behave() {
+    if (!mGoalPos.isValid()) return die();
+
+    if (mustBlockOrDie()) return;
+
+    EventWindow ew;
+    C2D goalpc = mGoalPos.toC2D();
+    C2D contew;
+    C2D selfpc;
+    PlateUtils pu;
+    if (pu.findContainer(self,contew,selfpc) && selfpc == goalpc) {
+      // Time to deploy!
+      AtomUtils au;
+      ew[0] = au.new(mSeedType); // Empty if illegal type
+      return;
+    }
+    
+    MDist md;
+    Random random;
+    Unsigned minDistToGoalpc = selfpc.manhattanDistance(goalpc);
+    Unsigned ties = 1;
+    SN closestPCsn = 0u;
+
+    Plate & p = (Plate&) ew[contew];
+
+    for (SN sn = 1u; sn <= 12u; ++sn) {
+      PlateUtils.PlateRelation rel = pu.relationTo(0u,sn);
+      // We only care about our container
+      if (rel != PlateUtils.cCONTAINED_BY_PLATE) continue;
+      Atom & a = ew[sn];
+      if (a as Plate) {
+        C2D theirpospc = a.positionOnPlate();
+        Unsigned theirdisttogoal = theirpospc.manhattanDistance(goalpc);
+        if (theirdisttogoal < minDistToGoalpc) {
+          minDistToGoalpc = theirdisttogoal;
+          closestPCsn = sn;
+          ties = 1;
+        } else if (theirdisttogoal == minDistToGoalpc &&
+                   random.oneIn(++ties)) {
+          closestPCsn = sn;
+        }
+      }
+    }
+    if (closestPCsn != 0u) {
+      ew[closestPCsn] = ew[0]; // Move on
+      ew[0] = Empty.instanceof; // Leave old spot empty to heal on its own
+      mBlockCount = 0;
+    } else if (++mBlockCount == mBlockCount.maxof) 
+      return die();
+  }
+  
+}

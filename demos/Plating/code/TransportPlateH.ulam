@@ -4,17 +4,17 @@
     Target dimensions for K stops: [K+2,3]
     <code>
     Y COORD
-     0         Operator or manager
+     0         Sequencer or manager
      1         (addl opr) or payload 0
      2         (addl opr) or payload 1
 
     X COORD
-     0         L operator slot
+     0         L sequencer slot
      1         Station K-1 TPh manager  (and Left peer)
      .
      .
      K         Station 0 TPh manager (and Right peer)
-     K+1       R operator slot 
+     K+1       R sequencer slot 
     </code>
    \symbol Th
    \color #3d5
@@ -25,7 +25,7 @@ element TransportPlateH : TransportPlate {
   ARGB getColor(Unsigned selector) {
     ColorUtils cu;
     ARGB ret = super.getColor(selector);
-    if (isOperatorSlot(true) || isOperatorSlot(false))
+    if (isSequencerSlot(true) || isSequencerSlot(false))
       ret = cu.between(cu.color(0xff0000ff), ret, 33);
     if (isTransportStation())
       ret = cu.between(cu.color(0xffff0000), ret, 33);
@@ -47,7 +47,7 @@ element TransportPlateH : TransportPlate {
   }
 
   @Override
-  virtual C2D getOperatorPC(Bool left) {
+  virtual C2D getSequencerPC(Bool left) {
     return C2D.instanceof((C2D.Coord) (left ? 0u : (getK() + 1u)),(C2D.Coord) 0);
   }
 
@@ -55,7 +55,7 @@ element TransportPlateH : TransportPlate {
   Bool isTransportStation() {
     C2D pos = positionOnPlate();
     if (pos.getY() != 0) return false;
-    return !isOperatorSlot(true) && !isOperatorSlot(true);
+    return !isSequencerSlot(true) && !isSequencerSlot(true);
   }
 
   @Override
@@ -87,7 +87,7 @@ element TransportPlateH : TransportPlate {
       du.printContext();
       du.print("hAKSRKTPRT 10");
       du.print(left);
-      C2D oppl = getOperatorPC(left); // Operator slot in plate coords
+      C2D oppl = getSequencerPC(left); // Operator slot in plate coords
       du.print(oppl);
       SN opsn = plateCoordToEWSN(oppl);
       if (opsn == SN.maxof) continue;
@@ -102,15 +102,15 @@ element TransportPlateH : TransportPlate {
         Atom a;
         if (recv(left, a, false)) { // Check for inbound
           du.print("hAKSRKTPRT 12");
-          if (a is TransportOperator) {
-            // OK, we found something to put in our operator slot
+          if (a is TransportSequencer) {
+            // OK, we found something to put in our sequencer slot
             du.print("hAKSRKTPRT 13");
             opa = a;
             recv(left,a,true); // Discard used receivable
             return true;
           }
         }
-      } else if (opa as TransportOperator) {
+      } else if (opa as TransportSequencer) {
         du.print("hAKSRKTPRT 14");
         Atom a;
         if (recv(left, a, false)) { // Check for inbound
@@ -155,7 +155,7 @@ element TransportPlateH : TransportPlate {
 /** Seed TPH
     \symbol H3
 */
-element SeedTransportPlateH : TransportOperator {
+element SeedTransportPlateH : TransportSequencer {
   typedef EventWindow.SiteNum SN;
   Once mOnce;
   

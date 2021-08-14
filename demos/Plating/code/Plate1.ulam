@@ -13,4 +13,10 @@ quark Plate1 : Plate {
 
   Plate.DeathBits mDeathBits;
 
+  //// UrSelf API
+  @Override
+  virtual Void behave() {
+    if (mustBlockOrDie()) return;
+  }
+
 }

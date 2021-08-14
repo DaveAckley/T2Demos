@@ -222,6 +222,7 @@ element Tecton : B2DPlate + PlateUtils + Stride2x2 {
     }
 
     Bool dospawnintosib = false;
+    Ephemeron eph;
     if (a as Plate) { // Not us, is it any kind of Plate?
       //      du.printContext();
       //      du.print(offsetewc);
@@ -229,7 +230,7 @@ element Tecton : B2DPlate + PlateUtils + Stride2x2 {
         //        du.print("SPAWEN");
         dospawnintosib = true;
       }
-    } else if (a is Empty) {
+    } else if (eph.isEphemeral(a)) {
       //        du.print("SPAWEMPT");
         dospawnintosib = true;      
     }
@@ -323,7 +324,7 @@ element Tecton : B2DPlate + PlateUtils + Stride2x2 {
           //          bsl.printf("TFSDKON1311(%d,%d) = %d\n",
           //                     sizediff.getX(),sizediff.getY(),istargetplate);
         } else {
-          //          bsl.printf("TFSDKON14BONGOUT\n");
+        //          bsl.printf("TFSDKON14BONGOUT\n");
           DebugUtils du;
           //          du.printContext();
           //          du.print("TCBHVNOTCONT");

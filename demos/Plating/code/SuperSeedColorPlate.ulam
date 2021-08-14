@@ -82,7 +82,7 @@ element SuperSeedColorPlate : Plate1 + Stride2x2 {
         C2D ewc(pu.hadamard(plc,str));
         if (!ew.isAccessible(ewc)) continue; // Die?
         if (x == 1 && y == 1) {
-          SubplateOperator so;
+          SubplateSequencer so;
           so.mRelativeSize.init(1,2);
           so.mRelativePos.init(10,3);
           ew[ewc] = so.atomof;
@@ -112,7 +112,7 @@ element SuperSeedColorPlate : Plate1 + Stride2x2 {
         C2D ewc(pu.hadamard(plc,str));
         if (!ew.isAccessible(ewc)) continue; // Die?
         if (x == 1 && y == 1) {
-          SubplateOperator so;
+          SubplateSequencer so;
           so.mRelativeSize.init(1,2);
           so.mRelativePos.init(3,3);
           ew[ewc] = so.atomof;
@@ -142,7 +142,7 @@ element SuperSeedColorPlate : Plate1 + Stride2x2 {
         C2D ewc(pu.hadamard(pc,str));
         if (!ew.isAccessible(ewc)) continue; // Die?
         if (x == 1 && y == 1) {
-          SubplateOperator so;
+          SubplateSequencer so;
           so.mRelativeSize.init(12,1);
           so.mRelativePos.init(7,13);
           ew[ewc] = so.atomof;
@@ -195,7 +195,7 @@ element SuperSeedColorPlate : Plate1 + Stride2x2 {
       C2D rootewc(-1,-2);
       ew[rootewc] = ad.atomof;
 
-      // PlateOperator needs to see plate(0,0) and plate(0,1)
+      // PlateSequencer needs to see plate(0,0) and plate(0,1)
       ad.mPosOnPlate = B2D.instanceof(0,1);
       C2D peerewc = rootewc + C2D.instanceof(0,mystride.y);
       ew[peerewc] = ad.atomof;
@@ -213,7 +213,7 @@ element SuperSeedColorPlate : Plate1 + Stride2x2 {
       }
 
 
-      PlateOperator po;
+      PlateSequencer po;
       po.mDesiredPlateSize = B2D.instanceof(60,60);
       po.setStride(mystride);
       ew[poewc] = po.atomof; // So poewc can go there in any case

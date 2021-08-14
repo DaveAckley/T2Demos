@@ -1,0 +1,101 @@
+/** 
+    \symbol FT
+    \color #bb8
+ */
+element FunctionTerms : B2DPlate + CategorizedSite + Stride1x2FP + Flood {
+  //// Flood API
+  @Override
+  virtual C2D getRoot() {
+    return sizeOfPlate();
+  }
+  @Override
+  virtual Bool fire() {
+    return capture()
+;
+  }
+  @Override
+  virtual Bool consider(Flood & ngb, Bool isup) {
+    update();
+    return true;
+  }
+
+  typedef NumberPlate.Number Number;
+  Number mRunningTotal;
+
+  typedef Link.State State;
+
+  typedef Int(7) Weight;
+  Weight mWeight = Weight.maxof;
+  State mState;
+  State mCurState;
+
+  ARGB getColor(Unsigned selector) {
+    ColorUtils cu;
+    if (mCurState > 0) return cu.color(0xffcccccc);
+    return cu.color(0xff333333);
+  }
+  /*
+  constant Unsigned cAPATHY_PER_VOTER = 0u;
+  //// SIGH API
+  @Override
+  virtual Unsigned getApathy() {
+    return cAPATHY_PER_VOTER;
+  }
+    
+  @Override
+    virtual State decide(Sum insum, Unsigned count) {
+    C2D pos = positionOnPlate();
+    if (pos == lastPosOnPlate()) return 1; // I am the true unit I am true
+    return self.SIGH.decide(insum, count); // Dish to normal processing
+  }
+  */
+
+  Void update() {
+    if (mWeight == mWeight.maxof) {
+      Random random;
+      mWeight = (Weight) (random.oneIn(2) ? random.between(10,20) : random.between(-20,-10));
+    }
+    C2D pos = positionOnPlate();
+    Number upstreamTotal = 0;
+    EventWindow ew;
+
+    if (pos.x > 0) {
+      if (!ew.isAccessible(1)) return;
+      Atom & a = ew[1];
+      if (a as Self) {
+        upstreamTotal = a.mRunningTotal;
+      } else return;
+    }
+    mRunningTotal = (Number) (upstreamTotal + mWeight * mState);
+  }
+
+  Bool capture() {
+    mState = mCurState;
+    return true;
+  }
+
+  Bool updateCurState() {
+    EventWindow ew;
+    if (ew.isAccessible(10)) {
+      Atom & a = ew[10];
+      if (a as Link) {
+        Sigmoid sig;
+        C2D siz = a.sizeOfPlate();
+        Unsigned temp = 1u*((Unsigned) siz.getY())/2u; // # ~inbound wgts
+        mCurState = sig.decide(a.getSum(), temp) ? 1 : 0;
+        return true;
+      }
+    }
+    return false;
+  }
+
+
+  Void behave() {
+    if (mustBlockOrDie()) {
+      return;
+    }
+    checkGrowthAndHealing();
+    updateCurState();
+    floodUpdate();
+  }
+}

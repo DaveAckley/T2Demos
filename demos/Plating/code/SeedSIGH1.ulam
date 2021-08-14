@@ -1,0 +1,110 @@
+/** Build a SIGH system with centralized FUT/Eval
+   \symbol S1
+ */
+element SeedSIGH1 {
+  typedef EventWindow.SiteNum SN;
+  Void behave() {
+    EventWindow ew;
+    Random random;
+    PlateUtils pu;
+
+    WeightMatrix wm;
+    //    constant C2D cPROBLEM_SIZE = { .x = 17, .y = 11 };
+    //    constant C2D cPROBLEM_SIZE = { .x = 7, .y = 8 };
+    constant C2D cPROBLEM_SIZE = { .x = 12, .y = 11 };
+    C2D dims = cPROBLEM_SIZE;
+    //C2D dims(7,8);
+    C2D ipos(0,(C2D.Coord)(dims.getY()-1));
+    wm.setSizeOfPlate(dims);
+    wm.setPositionOnPlate(ipos);
+    wm.setStride(pu.c2x2);
+
+    // Reaction weights inbound to voters
+    wm.setStateDir(pu.cPLATE_GOES_W);
+    wm.setSumDir(pu.cPLATE_GOES_N);
+    wm.init();
+    ew[0] = wm.atomof;
+
+    // Vote weights inbound to offices
+    wm.setStateDir(pu.cPLATE_GOES_S);
+    wm.setSumDir(pu.cPLATE_GOES_E);
+    wm.init();
+    ew[2] = wm.atomof;
+
+    // Reinforcement matrix to distribute payoffs
+    ReinforcementMatrix rm;
+    rm.setSizeOfPlate(dims);
+    rm.setPositionOnPlate(ipos);
+    rm.setRootRelPos(B2D4.instanceof(B2D4.cMINVAL,B2D4.cMAXVAL));
+    rm.setLinks(1u,5u);
+    ew[4] = rm.atomof;
+
+    // SIGH sequencer to run the show
+    SIGHSequencer so;
+    ew[6] = so.atomof;
+
+    // The voters
+    VoterVector vv;
+    C2D vdims((C2D.Coord) dims.getX(),1);
+    C2D vpos(0,0);
+    vv.setSizeOfPlate(vdims);
+    vv.setPositionOnPlate(vpos);
+    ew[3] = vv.atomof;
+
+    // State gate for voters
+    StateGate sgv;
+    sgv.setSizeOfPlate(vdims);
+    sgv.setPositionOnPlate(vpos);
+    sgv.setSNs(1u, 15u, SN.maxof); // In from left, out to knight's up left, out2 nowhere
+    sgv.setGateState(sgv.cGATE_SYNC); // Pass state when sgo says to
+    ew[8] = sgv.atomof;
+
+    // The Offices
+    PollQuestion pq;
+    vdims.set(1,(C2D.Coord) dims.getY());
+    vpos.set(0,(C2D.Coord) (dims.getY()-1));
+    pq.setSizeOfPlate(vdims);
+    pq.setPositionOnPlate(vpos);
+    ew[5] = pq.atomof;
+
+    // State gate for offices
+    StateGate sgo;
+    sgo.setSizeOfPlate(vdims);
+    sgo.setPositionOnPlate(vpos);
+    sgo.setSNs(2u, 4u, SN.maxof); // In from above, out to right
+    sgo.setGateState(sgo.cGATE_SYNC); // Pass state when sgo says to
+    sgo.setMaxRoot(true);
+    ew[1] = sgo.atomof;
+
+    // Evaluator for the vote
+    Evaluator ev;
+    vdims.set(1,(C2D.Coord) dims.getY());
+    vpos.set(0,(C2D.Coord) (dims.getY()-1));
+    ev.setSizeOfPlate(vdims);
+    ev.setPositionOnPlate(vpos);
+    ev.setRootRelPos(B2D4.instanceof(B2D4.cMINVAL,B2D4.cMAXVAL));
+    ev.setNode(4u);
+    ew[13] = ev.atomof;
+
+    // Function Under Test
+    FUT fut;
+    ew[14] = fut.atomof;
+
+    // Containing Plate
+    ColorPlate cp;
+    ColorUtils cu;
+    C2D psiz(cPROBLEM_SIZE);
+    C2D ewsiz((psiz + C2D.instanceof(pu.c2x2))*2 + pu.c1x0); // One extra column for PO
+    cp.setColor(cu.color(0x202000)); // dark brown
+    cp.setSizeOfPlate(ewsiz);
+    C2D cpos((C2D.Coord) 4,(C2D.Coord) (ewsiz.y - 1));
+    cp.setPositionOnPlate(cpos);
+    ew[11] = cp.atomof;
+
+    MigratorySeed ms;
+    AtomUtils au;
+    ms.mGoalPos.init(1,1);
+    ms.mSeedType = au.getValidType(PlateSequencer.instanceof);
+    ew[9] = ms.atomof;
+  }
+}

@@ -3,10 +3,19 @@ quark PlateUtils {
   
   constant C2D c0x0 = { .x = 0, .y = 0 };
   constant C2D c0x1 = { .x = 0, .y = 1 };
+  constant C2D c0x2 = { .x = 0, .y = 2 };
+  constant C2D c0x3 = { .x = 0, .y = 3 };
   constant C2D c1x0 = { .x = 1, .y = 0 };
   constant C2D c1x1 = { .x = 1, .y = 1 };
   constant C2D c1x2 = { .x = 1, .y = 2 };
+  constant C2D c1x3 = { .x = 1, .y = 3 };
+  constant C2D c2x0 = { .x = 2, .y = 0 };
+  constant C2D c2x1 = { .x = 2, .y = 1 };
   constant C2D c2x2 = { .x = 2, .y = 2 };
+  constant C2D c2x3 = { .x = 2, .y = 3 };
+  constant C2D c3x0 = { .x = 3, .y = 0 };
+  constant C2D c3x1 = { .x = 3, .y = 1 };
+  constant C2D c3x2 = { .x = 3, .y = 2 };
   constant C2D c3x3 = { .x = 3, .y = 3 };
 
   typedef Unsigned(2) PlateDir;
@@ -155,6 +164,18 @@ quark PlateUtils {
   constant PlateRelation cOVERLAPS_PLATE = 4u;    //< L partially overlaps R (ooh bad?)
   constant PlateRelation cNOT_PLATE = 5u;         //< L and/or R is inaccessible or not a Plate
   constant PlateRelation cINTERPHASE_PLATE = 6u;  //< L and R have different strides and/or phases
+  constant String mRelationNames[PlateRelation.maxof+1u] = {
+    "SAME",
+    "CONTAINS",
+    "CONTAINED",
+    "UNRELATED",
+    "OVERLAPS",
+    "NONPLATE",
+    "INTERPHASE"
+  };
+  String relationName(PlateRelation rel) {
+    return mRelationNames[rel];
+  }
 
   PlateRelation relationTo(SN snl, SN snr) {
     MDist md;
@@ -185,8 +206,8 @@ quark PlateUtils {
     C2D str = pl.stride();
     C2D phs = pl.phase();
     
-    if (str != pr.stride() || phs != pr.phase())
-      return cINTERPHASE_PLATE; 
+    if (str != pr.stride() || phs != pr.phase()) 
+      return interphasePlateRelations(pl,ewoffsetl,pr,ewoffsetr);
 
     //    du.print("PLRLT 10");
     //    du.print(str);
@@ -224,6 +245,63 @@ quark PlateUtils {
     C2D xr = pr.positionOnPlate(); du.print(xr);
     du.print(ewoffsetr);
     return cOVERLAPS_PLATE;
+  }
+
+  PlateRelation interphasePlateRelations(Plate& pl, C2D ewoffsetl, Plate& pr, C2D ewoffsetr) {
+    DebugUtils du;
+    Bool leftOuter;
+    ByteStreamLogger bsl;
+    
+    //    bsl.printf("intpPR 10");
+
+    /// Q0: Is everybody on phase 0x0?
+    if (pl.phase() != c0x0 || pr.phase() != c0x0)
+      return cINTERPHASE_PLATE;
+    /// A0: Everybody is on phase 0x0.
+
+    /// Q1: Does either stride subsume the other?
+    C2D lstr = pl.stride();
+    C2D rstr = pr.stride();
+    if (lstr == rstr) { Fail f; f.fail(); }  // Shouldn't be here
+
+
+    C2D minstr = lstr.min(rstr);
+    //    bsl.printf("mns{%d,%d}\n", minstr.x, minstr.y);
+
+    if (lstr == minstr)  leftOuter = true;
+    else if (rstr == minstr) leftOuter = false;
+    else return cINTERPHASE_PLATE;
+
+    Plate & outer = leftOuter ? pl : pr;
+    C2D ewoffseto = leftOuter ? ewoffsetl : ewoffsetr;
+    Plate & inner = leftOuter ? pr : pl;
+    C2D ewoffseti = leftOuter ? ewoffsetr : ewoffsetl;
+    PlateRelation ret = leftOuter ? cCONTAINS_PLATE : cCONTAINED_BY_PLATE;
+    //    du.print("intpPR 12");
+    //    du.print((Unsigned) ret);
+    /// A1: Yes, outer.stride() subsumes inner.stride()
+
+    /// Q2: Does outer's ew bbox completely contain inner's ew bbox?
+    C2D ostride = outer.stride();
+    C2D istride = inner.stride();
+    C2D oewsize = hadamard(outer.sizeOfPlate(),ostride);
+    C2D iewsize = hadamard(inner.sizeOfPlate(),istride);
+    C2D oewpos = hadamard(outer.positionOnPlate(),ostride) - ewoffseto;
+    C2D iewpos = hadamard(inner.positionOnPlate(),istride) - ewoffseti;
+    TBox tbo(oewsize, -oewpos);
+    TBox tbi(iewsize, -iewpos);
+    TBox tbx = tbo.intersectionWith(tbi);
+
+    //    tbo.dprint("O:");
+    //    tbi.dprint("I:");
+    //    tbx.dprint("X:");
+
+    //    bsl.printf("ret(%s)?\n",relationName(ret));
+    if (tbx == tbi)
+      return ret; ///A2: Yes
+
+    //    bsl.printf("intpPR 14\n");
+    return cINTERPHASE_PLATE;
   }
 
   typedef Unary(5) SiteCategory;
@@ -365,25 +443,16 @@ quark PlateUtils {
     typedef Unsigned(48) BigU; // More than Int.sizeof + Range.sizeof;
     typedef Bits(8) Byte;
     if (min >= max) return cu.color(0xffffff); // WTH
-    //    du.print("RNHDDOW 10");
+
     if (v < min) v = min;
     else if (v > max) v = max;
 
     BigU scale = (BigU) (max - min);
     BigU rev = (BigU) ((((BigU) (v - min)) * Range.maxof) / scale);
 
-    //    du.print(min);
-    //    du.print(v);
-    //    du.print(max);
-    //    du.print((Unsigned) scale);
-    //    du.print((Unsigned) rev);
-
     Unsigned group = (Unsigned) ((rev >> 8u) & 0x3);
     Unsigned val = (Unsigned) (rev & 0xff);
 
-    //    du.print(group);
-    //    du.print(val);
-    
     ARGB c;
     which (group) {
     case 0u: { c = cu.color((Byte) 0xff,      (Byte) val,       (Byte) 0x00); }
@@ -391,8 +460,7 @@ quark PlateUtils {
     case 2u: { c = cu.color((Byte) 0x00,      (Byte) 0xff,      (Byte) val);  }
     case 3u: { c = cu.color((Byte) 0x00,      (Byte) (0xff-val),(Byte) 0xff); }
     }
-    ARGB grey = cu.color(0x808080);
-    //c = cu.between(grey, c, 2);
+
     return c;
   }
 
@@ -415,4 +483,45 @@ quark PlateUtils {
     return SN.maxof;
   }
 
+  /** \returns true and sets containerew and selfpc if a neighboring
+      ew site with a plate containing p is found
+   */
+  Bool findContainer(Plate & p, C2D & containerew, C2D & selfpc) {
+    DebugUtils du;
+    MDist md;
+    EventWindow ew;
+    du.print("FNCONTR 10");
+    du.printContext();
+
+    C2D pewc = p.getOurEWCoord(); // or fail
+    for (SN sn = 1u; sn < 41u; ++sn) {
+      if (!ew.isAccessible(sn)) continue;
+      C2D offsetr = md.getSiteCoord(sn);
+      Atom & a = ew[sn];
+      du.print("FNCONTR 11");
+      du.print(offsetr);
+      if (a as Plate) {
+        C2D offsetr = md.getSiteCoord(sn);
+        PlateUtils.PlateRelation rel = relationTo(a, offsetr, p, pewc);
+        if (rel != cCONTAINS_PLATE) continue;
+        du.print("FNCONTR 12");
+
+        C2D offsetew = offsetr - pewc;
+        C2D offsetpc = hadamardiv(offsetew, a.stride());
+        C2D contpos = a.positionOnPlate();
+        containerew = offsetr;
+        selfpc = contpos - offsetpc;
+        du.print(offsetew);
+        du.print(offsetpc);
+        du.print(contpos);
+
+        C2D whaaat = selfpc;
+        du.print(whaaat);
+
+        //GRRRRR du.print((C2D) selfpc);
+        return true;
+      }
+    }
+    return false;
+  }
 }

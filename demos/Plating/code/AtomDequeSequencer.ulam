@@ -1,7 +1,7 @@
-/** AtomDequeOperator
-    \symbol Oa
+/** AtomDequeSequencer
+    \symbol Qa
  */
-element AtomDequeOperator {
+element AtomDequeSequencer {
   typedef AtomDeque MyContainer;
   DebugUtils du;
   Random random;
@@ -133,7 +133,7 @@ element AtomDequeOperator {
     return false;
   }
 
-  /* XXX GROWTH HANDLED BY PLATEOPERATOR NOW
+  /* XXX GROWTH HANDLED BY PLATESEQUENCER NOW
   Bool maybeGrow() {
     if (!random.oneIn(1000)) return false;
     return tryGrow();

@@ -1,0 +1,138 @@
+local constant String cMESSAGE[] = {
+  "T2sup",
+  "#3104",
+  "    AUG 3",
+  "     2021",
+  "   The   ",
+  "  Useful ",
+  "  Valley "
+};
+local typedef UrSelf.ARGB ARGB;
+local constant ARGB cFG = { 0xff, 0xff, 0xff, 0x00 };
+local constant ARGB cBG = { 0xff, 0x00, 0x00, 0x00 };
+
+element T2sday2 : LabelPlate + B2DStreamPlate + PayloadT(16u) {
+
+  //// B2DPlate API
+  @Override
+  virtual Atom copyOf() {
+    Self s = self;
+    s.mStarry = false; // Everybody gets starry on their own
+    if (s.hasPayload()) { // And we don't dupe communications!
+      RawBits dump;
+      s.storeTo(dump);
+      s.mBufferStatus = QStream12.cBUFFER_EMPTY;
+  }
+    return s.atomof;
+  }
+
+  //// Flood API
+  virtual C2D getRoot() {
+    return sizeOfPlate()/2;
+  }
+  virtual Bool fire() { return true; }
+  virtual Bool consider(Flood & ngb, Bool isUpstream) {
+    if (isUpstream) {
+      if (ngb as Self) {
+        mDisplayMode = ngb.mDisplayMode;
+        mCount = ngb.mCount;
+        mScroll = ngb.mScroll;
+      }
+    }
+    return true;
+  }
+
+  //// ByteBox API
+  @Override
+  virtual C2D sizeOfByteBox() {
+    return C2D.instanceof((C2D.Coord) 255,(C2D.Coord) cMESSAGE.lengthof);
+  }
+  @Override
+  virtual ASCII getByteFromBox(C2D idx) {
+    if (!sizeOfByteBox().contains(idx)) return ' ';
+    String s = cMESSAGE[idx.getY()];
+    Unsigned x = (Unsigned) idx.getX();
+    if (x >= s.lengthof) return ' ';
+    return s[x];
+  }
+
+  //// LabelPlate API
+  @Override
+  virtual ARGB getFg() { return cFG; }
+  @Override
+  virtual ARGB getBg() { return cBG; }
+
+  @Override
+  virtual FN getFontNumber() {return 6u; }
+  virtual C2D getLabelPos() {
+    return C2D.instanceof(0,mScroll);
+  }
+
+  typedef Unsigned(3) DisplayMode;
+  constant DisplayMode cBLACK =       0u;
+  constant DisplayMode cFIRSTSTARS =  1u;
+  constant DisplayMode cLASTSTARS =   3u;
+  constant DisplayMode cTITLE =       5u;
+
+  DisplayMode mDisplayMode;
+  Bool mStarry;
+
+  typedef Unsigned(5) Count;
+  constant Count cCOUNT_MAX = 25u;
+  Count mCount;
+
+  typedef Unsigned(7) Scroll;
+  Scroll mScroll;
+
+  @Override
+  ARGB getColor(Unsigned selector) {
+    if (mDisplayMode == cBLACK) return getBg();
+    if (mDisplayMode >= cFIRSTSTARS && mDisplayMode <= cLASTSTARS)
+      return mStarry ? getFg() : getBg();
+    ColorUtils cu;
+    ARGB ret = super.getColor(selector);
+    if (getCommandState() == cSTATE_FIRED)
+      ret = cu.between(cu.color(0xffaa0000),ret,15);
+    return ret;
+  }
+
+  Void advanceState() {
+    if (mCount++ >= cCOUNT_MAX) {
+      if (++mDisplayMode == mDisplayMode.maxof)
+        ++mScroll;
+      mCount = mCount.minof;
+    }
+  }
+
+  Void behave() {
+    Random random;
+
+    if (mustBlockOrDie()) return;
+
+    mStarry = random.oneIn(200);
+
+    checkGrowthAndHealing();
+    updateStream();
+
+    if (positionOnPlate() == sizeOfPlate()/2 && floodReady()) {
+      advanceState();
+      floodTrigger();
+      return;
+    }
+
+    if (checkLocalActions()) return;
+  }
+}
+
+/**
+   \symbol ST
+*/
+element SeedT2sday2 {
+  Void behave() {
+    T2sday2 t2;
+    t2.setSizeOfPlate(C2D.instanceof(126,110));
+    t2.setPositionOnPlate(t2.sizeOfPlate()/2);
+    EventWindow ew;
+    ew[0] = t2.atomof;
+  }
+}

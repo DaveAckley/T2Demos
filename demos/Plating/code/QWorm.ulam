@@ -1,0 +1,175 @@
+quark QWorm : Plate1 {
+  typedef EventWindow.SiteNum SN;
+  
+  typedef Unsigned(3) Radius;
+
+  typedef Unsigned(3) SegType;
+  constant SegType cSEG_UNIN = 0u; //< Uninitted
+  constant SegType cSEG_HEAD = 1u; //< Head of worm, unswappable
+  constant SegType cSEG_BODY = 2u; //< Interior of worm, can swap either dir
+  constant SegType cSEG_TAIL = 3u; //< Tail of worm, unswappable
+  constant SegType cSEG_PLSA = 4u; //< PulseAhead, can swap ahead
+  constant SegType cSEG_PLSB = 5u; //< PulseBehind, can swap behind
+  constant SegType cSEG_RSV1 = 6u; //< Reserved, unused
+  constant SegType cSEG_NONE = 7u; //< None, not a worm, error
+
+  //// QWorm API
+  virtual SN getAhead() ;  //< Or SN.maxof if at head
+  virtual SN getBehind() ; //< Or SN.maxof if at tail
+  virtual Radius getRadius() ; //< 0..4
+  virtual SegType getSegType() ;
+  virtual Bool swapAhead(QWorm& wasAhead) ; //< return true if swap performed
+  virtual Bool isSwappable(Bool ahead) ; //
+
+
+  //// QWorm SERVICES
+  virtual Bool updateSegment() {
+    EventWindow ew;
+    SegType st = getSegType();
+    Bool goAhead;
+    SN ourewsn = ew.getSiteNumber(self);
+    if ((st == cSEG_PLSB && getBehind() == 0u) ||
+        (st == cSEG_PLSA && getAhead() == 0u)) {
+      if (!ew.isAccessible(ourewsn)) { Fail f; f.fail(); }
+      ew[ourewsn] = Empty.instanceof;
+      return true;
+    }
+    if ((goAhead = (st == cSEG_PLSA)) || (st == cSEG_PLSB)) { // A mover
+      SN swapsn = goAhead ? getAhead() : getBehind();
+      if (!ew.isAccessible(swapsn)) return false; // Out of ew or nothing to do
+      Atom & a = ew[swapsn];
+      if (a as Self) {
+        SegType ast = a.getSegType();
+        if (canSwap(ast, !goAhead)) { // If it can move opposite way to us
+          if (goAhead) {
+            if (self.isSwappable(true) && a.isSwappable(false))
+              return self.swapAhead(a);
+          } else {
+            if (a.isSwappable(true) && self.isSwappable(false))
+              return a.swapAhead(self);
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  Bool canSwap(SegType st, Bool ahead) {
+    if (st == cSEG_BODY) return true;
+    if (ahead && st == cSEG_PLSA) return true;
+    if (!ahead && st == cSEG_PLSB) return true;
+    return false;
+  }
+
+
+  ARGB segColor() {
+    ColorUtils cu;
+    which (getSegType()) {
+      case cSEG_HEAD: { return cu.color(0xffed1c24); }
+      case cSEG_BODY: { return cu.color(0xff76b900); }
+      case cSEG_TAIL: { return cu.color(0xff0071c5); }
+      case cSEG_PLSA: { return cu.dimmer(cu.color(0xffed1c24)); }
+      case cSEG_PLSB: { return cu.dimmer(cu.color(0xff0071c5)); }
+    }
+    return cu.color(0xff808080); 
+  }
+
+  Void killWormAt(SN sn,DeathBits db) {
+    EventWindow ew;
+    if (ew.isAccessible(sn) && ew[sn] is Self) {
+      Self & s = (Self&) ew[sn];
+      s.setDeathBits(db);
+    }
+  }
+
+  Bool shouldDie() {
+    return getDeathBits() != 0u;
+  }
+
+  Bool killWorm() {
+    DeathBits db = getDeathBits();
+    if (db == 0) return false;
+    killWormAt(getAhead(),db);
+    killWormAt(getBehind(),db);
+    return true;
+  }
+}
+
+quark StatefulWorm : QWorm {
+  //// StdWorm API
+  virtual Void setNgbWorm(SN ngbsn, Bool ahead) ;  //< Or fail, may leave inconsistencies
+}
+
+quark SegTypeWorm : QWorm {
+  SegType mType;
+  //// QWorm API
+  @Override
+  virtual SegType getSegType() { return mType; }
+
+  //// SegTypeWorm API
+  virtual Void setSegType(SegType st) {
+    mType = st;
+  }
+}
+
+quark StdWormT(Unary(6) cBITS) : StatefulWorm + SegTypeWorm {
+  typedef Unsigned(cBITS) SSN;
+  constant Radius cRADIUS =
+    (cBITS==6 ? 4u :
+     (cBITS==5 ? 3u :
+      (cBITS==4 ? 2u :
+       (cBITS==3 ? 1u :
+        0u))));
+
+  SSN mAhead;
+  SSN mBehind;
+
+  //// QWorm API
+  @Override
+  virtual SN getAhead() { return mAhead==SSN.maxof ? SN.maxof : (SN) mAhead; }
+  @Override
+  virtual SN getBehind() { return mBehind==SSN.maxof ? SN.maxof : (SN) mBehind; }
+  @Override
+  virtual Radius getRadius() { return cRADIUS; }
+  @Override
+  virtual Bool swapAhead(QWorm & wasAhead) {
+    if (!wasAhead is Self) return false;
+    Self & them = (Self &) wasAhead;
+
+    EventWindow ew;
+    SN theirewsn = ew.getSiteNumber(them);
+    SN ourewsn = ew.getSiteNumber(self);
+    if (!ew.isAccessible(theirewsn) ||
+        !ew.isAccessible(ourewsn))
+      return false;
+
+    SSN mynewahead = (SSN) them.getAhead();
+    SSN mynewbehind = (SSN) them.getBehind();
+    SSN theirnewahead = (SSN) self.getAhead();
+    SSN theirnewbehind = (SSN) self.getBehind();
+
+    self.setNgbWorm(mynewahead, true);
+    self.setNgbWorm(mynewbehind, false);
+    them.setNgbWorm(theirnewahead, true);
+    them.setNgbWorm(theirnewbehind, false);
+
+    Atom tmp1 = ew[ourewsn];
+    Atom tmp2 = ew[theirewsn];
+    ew[theirewsn] = tmp1;
+    ew[ourewsn] = tmp2;
+    return true;
+  }
+
+  //// StdWorm API
+  virtual Void setNgbWorm(SN ngbsn, Bool ahead) {
+    if (ngbsn > SSN.maxof) { Fail f; f.fail(); }
+    if (ahead) mAhead = (SSN) ngbsn;
+    else mBehind = (SSN) ngbsn;
+  }
+}
+
+quark StdWormR1 : StdWormT(2u) { }
+quark StdWormR2 : StdWormT(4u) { }
+quark StdWormR3 : StdWormT(5u) { }
+quark StdWormR4 : StdWormT(6u) { }
+

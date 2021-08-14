@@ -70,7 +70,7 @@ quark StdLink : Link {
     C2D str = stride();
     Sum insum;
     PlateUtils pu;
-    bsl.printf("PRPG:");
+    //    bsl.printf("PRPG:");
     PD sumDir = getSumDir();
     PD stateDir = getStateDir();
     if (pu.onBorderForDir(pos,siz,sumDir)) insum = 0;
@@ -78,11 +78,11 @@ quark StdLink : Link {
       C2D ngbpc = pos + pu.stepInDir(sumDir);
       SN ngbsn = plateCoordToEWSN(ngbpc);
       if (ngbsn == ngbsn.maxof) return false;
-      bsl.printf("SUsn(%d)",ngbsn);
+      //      bsl.printf("SUsn(%d)",ngbsn);
       Atom & a = ew[ngbsn];
       if (a as Self) {
         insum = a.mSum;
-        bsl.printf("insum(%d)",insum);
+        //        bsl.printf("insum(%d)",insum);
       } else return false;
     }
     State instate;
@@ -91,11 +91,11 @@ quark StdLink : Link {
       C2D ngbpc = pos + pu.stepInDir(stateDir);
       SN ngbsn = plateCoordToEWSN(ngbpc);
       if (ngbsn == ngbsn.maxof) return false;
-      bsl.printf("STsn(%d)",ngbsn);
+      //      bsl.printf("STsn(%d)",ngbsn);
       Atom & a = ew[ngbsn];
       if (a as Self) {
         instate = a.mState;
-        bsl.printf("instate(%d)",instate);
+        //        bsl.printf("instate(%d)",instate);
       } else return false;
       if (instate != mState) {
         mState = instate;
@@ -105,7 +105,7 @@ quark StdLink : Link {
     Sum outsum = (Sum) (mWeight * mState + insum);
     if (outsum != mSum) {
       mSum = outsum;
-      bsl.printf("mSum(%d)",mSum);
+      //      bsl.printf("mSum(%d)",mSum);
       changed = true;
       // bsl.printf("\n");
     }
@@ -191,17 +191,17 @@ quark LinkT(PD stateDir, PD sumDir) : Link {
     C2D str = stride();
     Sum insum;
     PlateUtils pu;
-    bsl.printf("PRPG:");
+    //    bsl.printf("PRPG:");
     if (pu.onBorderForDir(pos,siz,sumDir)) insum = 0;
     else {
       C2D ngbpc = pos + cSUM_FROM;
       SN ngbsn = plateCoordToEWSN(ngbpc);
       if (ngbsn == ngbsn.maxof) return false;
-      bsl.printf("SUsn(%d)",ngbsn);
+      //      bsl.printf("SUsn(%d)",ngbsn);
       Atom & a = ew[ngbsn];
       if (a as Self) {
         insum = a.mSum;
-        bsl.printf("insum(%d)",insum);
+        //        bsl.printf("insum(%d)",insum);
       } else return false;
     }
     State instate;
@@ -210,11 +210,11 @@ quark LinkT(PD stateDir, PD sumDir) : Link {
       C2D ngbpc = pos + cSTATE_FROM;
       SN ngbsn = plateCoordToEWSN(ngbpc);
       if (ngbsn == ngbsn.maxof) return false;
-      bsl.printf("STsn(%d)",ngbsn);
+      //      bsl.printf("STsn(%d)",ngbsn);
       Atom & a = ew[ngbsn];
       if (a as Self) {
         instate = a.mState;
-        bsl.printf("instate(%d)",instate);
+        //        bsl.printf("instate(%d)",instate);
       } else return false;
     }
     if (instate != mState) {
@@ -224,7 +224,7 @@ quark LinkT(PD stateDir, PD sumDir) : Link {
     Sum outsum = (Sum) (mWeight * mState + insum);
     if (outsum != mSum) {
       mSum = outsum;
-      bsl.printf("mSum(%d)",mSum);
+      //      bsl.printf("mSum(%d)",mSum);
       changed = true;
     }
     //    bsl.printf("\n");

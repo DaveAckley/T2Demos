@@ -1,0 +1,33 @@
+/** SIGH voter vector
+    \symbol VV
+    \color #bb8
+ */
+element VoterVector : B2DStreamPlate + CategorizedSite +
+                      B2DStreamPayload + NodeNW + SIGH + Stride2x2FP
+{
+  constant Unsigned cAPATHY_PER_VOTER = 1u;
+
+  //// SIGH API
+  @Override
+  virtual Int getApathy(Unsigned count) {
+    return (Int) (cAPATHY_PER_VOTER*count);
+  }
+
+  @Override
+  virtual State decide(Sum insum, Unsigned count) {
+    C2D pos = positionOnPlate();
+    if (pos == lastPosOnPlate()) return 1; // I am the true unit I am true
+    ByteStreamLogger bsl;
+    //    bsl.printf("VVCT 10(%d,%d)\n",insum,count);
+    return self.SIGH.decide(insum, count); // Dish to normal processing
+  }
+
+  Void behave() {
+    if (mustBlockOrDie()) {
+      return;
+    }
+    checkGrowthAndHealing();
+    updateStream();
+    if (choose()) return;
+  }
+}

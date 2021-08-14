@@ -1,0 +1,33 @@
+quark SIGH : Decider {
+  //// SIGH API
+  virtual Int getApathy(Unsigned count) { return -1; } //< >= 0 use apathy rules, < 0 don't
+  virtual Unsigned getTemperature(Unsigned count) { return 10u*count; }
+
+  //// Decider API
+  State decide(Sum insum, Unsigned count) {
+    typedef Sigmoid.Odds Odds;
+
+    Unsigned selftemp = self.getTemperature(count);
+    Int apathy = self.getApathy(count);
+
+    Sigmoid sig;
+    Unsigned sigT = sig.getTemperature();
+
+    Unsigned efftemp = selftemp/sigT+1u;
+
+    Random random;
+
+    if (apathy < 0) return sig.decide(insum,efftemp) ? 1 : -1; // no apathy option
+
+    Odds locut = sig.energyToOdds(insum - apathy, efftemp);
+    Odds hicut = sig.energyToOdds(insum + apathy, efftemp);
+    Odds pick = (Odds) random.between(Odds.minof, Odds.maxof);
+    ByteStreamLogger bsl;
+    //    bsl.printf("SIGDEC 10(%d,%d,sigT=%d,efftemp=%d,apathy=%d,lo=%d,hi=%d,pick=%d)\n",insum,count,sigT,efftemp,apathy,locut,hicut,pick);
+
+    if (pick <= locut) return 1;
+    if (pick >= hicut) return -1;
+    return 0;
+  }
+
+}

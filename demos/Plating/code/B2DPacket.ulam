@@ -5,8 +5,8 @@ quark B2DPacketSense {
 
   SenseDir mSenseDir;
   
-  typedef PlateOperator.Clearance Clearance;
-  typedef PlateOperator.DirClearance DirClearance;
+  typedef PlateSequencer.Clearance Clearance;
+  typedef PlateSequencer.DirClearance DirClearance;
   DirClearance mDirData;
 
   typedef Unsigned(2) SenseTag;
@@ -77,6 +77,7 @@ quark B2DPacketSense {
     C2D siz = p.sizeOfPlate();
     C2D str = p.stride();
     Bool changes = false;
+    Ephemeron eph;
     for (Unsigned d = pu.cPLATE_GOES_W; d <= pu.cPLATE_GOES_S; ++d) {
       PlateUtils.PlateDir pd = (PlateUtils.PlateDir) d;
       if (!pu.onBorderForDir(pos,siz,pd)) continue; 
@@ -90,17 +91,29 @@ quark B2DPacketSense {
       if (!outer) incr = incr*(C2D.Coord)-1;
       for (Unsigned dist = 0; dist < mindist; ++dist) {
         us += incr;
-        //        bsl.printf("SNDNDEEOOPPP13(%d)(%d,%d)\n",dist,us.getX(),us.getY());
-        Bool knowndead = ew.isLegal(us) && !ew.isLive(us);
-        if (knowndead || !p.isEmptyOrField(us,outer)) {
-          mDirData[pd] = (Clearance) dist;
-          //          bsl.printf("SNDNDEEOOPPP14(%d)\n",mDirData[pd]);
-          changes = true;
+        Bool available =
+          ew.isLegal(us) && 
+          ew.isLive(us) &&
+          (eph.isEphemeral(ew[us]) || p.isEmptyOrField(us,outer));
+        /*
+        bsl.printf("SNDNDEEOOPPP13(dist%d,live%d,eph%d,eof%d->avail%d\n",
+                   dist,
+                   ew.isLive(us),
+                   eph.isEphemeral(ew[us]),
+                   p.isEmptyOrField(us,outer),
+                   available);
+        */         
+        if (!available) {
+          if (mDirData[pd] != (Clearance) dist) {
+            mDirData[pd] = (Clearance) dist;
+            changes = true;
+          }
           break;
         }
       }
+      //      bsl.printf("SNDNDEEOOPPP14a(%d->%d)\n",pd,mDirData[pd]);
     }
-    //    bsl.printf("SNDNDEEOOPPP15(%d)\n",changes);
+    //    bsl.printf("SNDNDEEOOPPP15(chg%d)\n",changes);
     return changes;
   }
 }

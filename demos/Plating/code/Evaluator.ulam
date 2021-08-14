@@ -72,7 +72,7 @@ element Evaluator : B2DPlate + Flood + Stride2x2FP {
     Unsigned bitno = pos.length();
     if (bitno >= mFuncBits.sizeof) {
       ByteStreamLogger bsl;
-      bsl.printf("PQAPOV %d -> %d\n", bitno, mFuncBits.sizeof);
+      //      bsl.printf("PQAPOV %d -> %d\n", bitno, mFuncBits.sizeof);
       Fail f;
       f.fail();
       return false;

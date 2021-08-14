@@ -2,8 +2,45 @@
    Manage B2DPlate development and mobility using a border QStream.
    Takes plate(0,0) as the left peer and plate(0,1) as the right peer.
  */
-quark B2DStreamPlate : B2DPlate + QStream12 + Payload {
-  typedef PayloadT(16u) B2DStreamPayload;
+quark B2DStreamPlateBase : Plate + QStream12 + Payload {
+
+  typedef Payload.RawBits RawBits; //202107270321 why is this needed?
+
+  //// B2DStreamPlateBase SERVICES
+
+  Bool updateStream() {
+    if (!isPlateBorder()) return false;
+    if (canAdvance())
+      checkActions();
+    return advance();
+  }
+
+  Bool trySendPayload(Bool left, Payload & pay) {
+    if (!isPeer(left)) return false;
+    RawBits bits;
+    if (!pay.storeTo(bits)) return false;
+    return send(!left,bits); // Left peer sends rightbound and vv
+  }
+
+  Bool tryRecvPayload(Bool left, Payload & pay) {
+    if (!isPeer(left)) return false;                     // peers receive
+    if (mBufferStatus != cARRIVED_PACKET) return false;  // arrived packets
+    
+    RawBits bits;
+    if (!recv(left,bits)) return false;  // Right peer recvs rightbound and vv
+    return pay.loadFrom(bits);
+  }
+
+  virtual Void checkActions() ;
+  /////// IMPLEMENTATION
+
+}
+
+quark B2DStreamPlateT(Unary(8) cBITS_PER_COORD)
+  : B2DTPlate(cBITS_PER_COORD) + B2DStreamPlateBase
+{
+
+  typedef PayloadT(16) B2DStreamPayload;
 
   //// B2DStreamPlate SERVICES
   // Bool updateStream() 
@@ -26,7 +63,7 @@ quark B2DStreamPlate : B2DPlate + QStream12 + Payload {
       (!left && pos == C2D.instanceof(0,1));
   }
 
-  /////// IMPLEMENTATION
+  @Override
   Void checkActions() {
     Payload & p = self;
     if (p as B2DStreamPayload) {
@@ -74,28 +111,8 @@ quark B2DStreamPlate : B2DPlate + QStream12 + Payload {
       }
     }
   }
-
-  Bool updateStream() {
-    if (!isPlateBorder()) return false;
-    if (canAdvance())
-      checkActions();
-    return advance();
-  }
-
-  Bool trySendPayload(Bool left, Payload & pay) {
-    if (!isPeer(left)) return false;
-    RawBits bits;
-    if (!pay.storeTo(bits)) return false;
-    return send(!left,bits); // Left peer sends rightbound and vv
-  }
-
-  Bool tryRecvPayload(Bool left, Payload & pay) {
-    if (!isPeer(left)) return false;                     // peers receive
-    if (mBufferStatus != cARRIVED_PACKET) return false;  // arrived packets
-    
-    RawBits bits;
-    if (!recv(left,bits)) return false;  // Right peer recvs rightbound and vv
-    return pay.loadFrom(bits);
-  }
-
 }
+
+quark B2DStreamPlate : B2DStreamPlateT(7u) { }
+
+

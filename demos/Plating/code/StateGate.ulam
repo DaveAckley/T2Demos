@@ -5,15 +5,17 @@
 element StateGate : B2DPlate + CategorizedSite + Stride2x2FP {
   typedef EventWindow.SiteNum SN;
   SN mFromSN;  // Source Node
-  SN mToSN;    // Dest link
+  SN mToSN1;   // Dest link
+  SN mToSN2;   // 2nd Dest link, if any
 
   Bool mMaxRoot; // if true, plate max is upstream
   Bool isMaxRoot() { return mMaxRoot; }
   Void setMaxRoot(Bool maxroot) { mMaxRoot = maxroot; }
 
-  Void setSNs(SN nodeSN, SN linkSN) {
+  Void setSNs(SN nodeSN, SN link1SN, SN link2SN) {
     mFromSN = nodeSN;
-    mToSN = linkSN;
+    mToSN1 = link1SN;
+    mToSN2 = link2SN;
   }
 
   typedef Unary(2) GateState;
@@ -49,27 +51,31 @@ element StateGate : B2DPlate + CategorizedSite + Stride2x2FP {
       case cSTATE_FIRED:    { ret2 = cu.color(0xaa3333); }
       case cSTATE_RECOVERED:{ ret2 = cu.color(0x3333aa); }
     }
-    if (selector == 0u) return ret2;
-    if (selector == 1u) return cu.between(ret2,ret,30);
+    if (selector <= 1u) return ret2;
     if (selector == 2u) return cu.between(ret2,ret,80);
     
     return super.getColor(selector);
   }
 
+  Void setLinkIfAny(SN link, Node.State s) {
+    EventWindow ew;
+    if (ew.isAccessible(link) && ew[link] is Link) {
+      Link & l = (Link&) ew[link];
+      l.setState(s);
+    }
+  }
+
   Bool passState() { //< true iff state passed
+    EventWindow ew;
     DebugUtils du;
     //    du.print("SGPSSTT 10");
-    EventWindow ew;
-    if (mGateState == cGATE_CLOSED ||
-        !(ew[mFromSN] is Node) ||
-        !(ew[mToSN] is Link))
+    if (mGateState == cGATE_CLOSED || !(ew[mFromSN] is Node))
       return false;
     //    du.print("SGPSSTT 11");
     Node & n = (Node&) ew[mFromSN];
-    Link & l = (Link&) ew[mToSN];
     Node.State s = n.getState();
-    //    du.print((Int) s);
-    l.setState(s);
+    setLinkIfAny(mToSN1, s);
+    setLinkIfAny(mToSN2, s);
     return true;
   }
 
@@ -150,7 +156,7 @@ element StateGate : B2DPlate + CategorizedSite + Stride2x2FP {
   }
 
   Void behave() {
-    if (mFromSN == 0 || mToSN == 0) {
+    if (mFromSN == 0 || mToSN1 == 0) {
       EventWindow ew;
       ew[0] = Empty.instanceof;
       return;

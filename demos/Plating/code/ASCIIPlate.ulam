@@ -1,0 +1,170 @@
+/** ASCIIPlate
+    \symbol AP
+    \color #ccc
+ */
+element ASCIIPlate : B2DStreamPlateT(5u) + CategorizedSite + Flood + B2DStreamPayload {
+
+  typedef EventWindow.SiteNum SN;
+  DebugUtils du;
+
+  //// Flood API
+  @Override
+  virtual C2D getRoot() { PlateUtils pu; return pu.c0x0; }
+
+  @Override
+  virtual Bool fire() { return false; }
+
+  @Override
+  virtual Bool consider(Flood& ngb, Bool isup) {
+    if (isup) {
+      if (ngb as Self) {
+        mDisplayByte = ngb.mDisplayByte;
+        mFontNumber = ngb.mFontNumber;
+      } else return false;
+    }
+    return true;
+  }
+
+  ASCII mDisplayByte;
+  FontSet.FontNumber mFontNumber;
+
+  //// B2DPlate API
+  @Override
+  virtual Atom copyOf() { 
+    Self s = self;
+    if (s.hasPayload()) { // And we don't dupe communications!
+      RawBits dump;
+      s.storeTo(dump);
+      s.mBufferStatus = QStream12.cBUFFER_EMPTY;
+    }
+    return s.atomof;
+  }
+
+  constant Unsigned cTIMER_BITS = 4u;
+  typedef XTimer(cTIMER_BITS,Unsigned(cTIMER_BITS).maxof,4096u) BlockDog;
+  BlockDog mBlockDogTimer; //  About one in half a billion cumulative shot
+
+  //// Plate API
+
+  //// UrSelf API
+  @Override
+  ARGB getColor(Unsigned selector) {
+    ColorUtils cu;
+    ARGB ret = cu.color(self.isBlackPixel() ? 0xff000000 : 0xffffffff);
+    ARGB floodc = getFloodColor();
+    ret = cu.between(floodc,ret,20);
+    return ret;
+  }
+
+  Bool isBlackPixel() {
+    constant Int cX_OFFSET = -1;  // Tweak glyph position
+    constant Int cY_OFFSET = -1; // within plate
+    FontSet fs;
+    Font & font = fs.getFont(mFontNumber);
+    String finfo = font.getFontInfo();
+    C2D pos = positionOnPlate();
+    C2D siz = sizeOfPlate();
+    C2D pixpos((C2D.Coord) (pos.x + cX_OFFSET),
+               (C2D.Coord) (siz.y - pos.y + cY_OFFSET));
+    Font.SiteGlyphStatus fss = font.getSiteStatus(pixpos, mDisplayByte);
+    return fss == Font.cON;
+  }
+
+  Bool die() {
+    du.printContext();
+    du.print("DIIDDIDIEEEE");
+    return true;
+  }
+
+  Bool checkLocalActions() {
+    floodUpdate();
+    return false;
+  }
+
+  Void behave() {
+    if (mustBlockOrDie()) {
+      //// WARNING: self might be erased at this point!
+      EventWindow ew;   
+      Atom & a = ew[0];  // So get a new ref from the ew
+      if (a as Self) 
+        a.mBlockDogTimer.reset(); // If it's still alive, it was blocked
+      return;
+    }
+    // Block dog alarm means there's been no movement or growth for a looong time
+    if (mBlockDogTimer.countAlarm()) return (Void) die();
+
+    checkGrowthAndHealing();
+    updateStream();
+    if (checkLocalActions()) return;
+  }
+
+}
+
+
+
+/** Seed ASCIIPlate
+    \symbol SA
+ */
+element SeedASCIIPlate {
+  Void behave() {
+    EventWindow ew;
+    ASCIIPlate ad;
+    Random random;
+    PlateUtils pu;
+    C2D dims(10, 16);
+    ad.mSizeOfPlate.fromC2D(dims);
+    ad.mPosOnPlate.fromC2D(pu.c0x0);
+    ad.mDisplayByte = '?';
+    ew[0] = ad;
+  }
+}
+
+/** Change ASCIIPlate byte
+    \symbol RB
+*/
+element Rebyte {
+  typedef EventWindow.SiteNum SN;
+  Void behave() {
+    EventWindow ew;
+    PlateUtils pu;
+    for (SN sn = 1u; sn < 41u; ++sn) {
+      if (!ew.isAccessible(sn)) continue;
+      Atom & a = ew[sn];
+      if (a as ASCIIPlate) {
+        if (a.positionOnPlate() == pu.c0x0) {
+          Random random;
+          a.mDisplayByte = (ASCII) random.between(32u,255);
+          break;
+        }
+      }
+    }
+    ew[0] = Empty.instanceof;
+  }
+}
+
+/** Change ASCIIPlate font
+    \symbol RF
+*/
+element Refont {
+  typedef EventWindow.SiteNum SN;
+  Void behave() {
+    EventWindow ew;
+    PlateUtils pu;
+    for (SN sn = 1u; sn < 41u; ++sn) {
+      if (!ew.isAccessible(sn)) continue;
+      Atom & a = ew[sn];
+      if (a as ASCIIPlate) {
+        if (a.positionOnPlate() == pu.c0x0) {
+          FontSet.FontNumber fsn = a.mFontNumber;
+          if (fsn == fsn.maxof) fsn = fsn.minof;
+          else ++fsn;
+          a.mFontNumber = fsn;
+          a.mDisplayByte = (ASCII) ('0'+fsn);
+          a.floodTrigger();
+          break;
+        }
+      }
+    }
+    ew[0] = Empty.instanceof;
+  }
+}

@@ -115,6 +115,7 @@ quark Plate {
     MDist md;
     EventWindow ew;
     PlateUtils pu;
+    ByteStreamLogger bsl;
 
     SN selfsn = getOurSN();
     C2D offsetl = md.getSiteCoord(selfsn);
@@ -127,7 +128,6 @@ quark Plate {
 
     for (SN sn = 1u; sn < 41u; ++sn) {
       if (!ew.isAccessible(sn)) continue;
-      C2D offsetr = md.getSiteCoord(sn);
       Atom & a = ew[sn];
       if (a as Self) {
         
@@ -154,6 +154,21 @@ quark Plate {
         } else if (rel == pu.cOVERLAPS_PLATE) {
           DebugUtils du;
           du.print("KILL OVERLAPPING PLATE");
+          bsl.forceOutput(true);
+          bsl.printf("MBoD 13 osn%d <%s> tsn%d\n", selfsn, pu.relationName(rel), sn);
+          bsl.printf("@%d,%d:%s[%d,%d]{%d,%d}(%d,%d)%s", 
+                     offsetl.x,offsetl.y,"o",
+                     self.sizeOfPlate().x,self.sizeOfPlate().y,
+                     self.stride().x,self.stride().y,
+                     self.positionOnPlate().x,self.positionOnPlate().y,
+                     "\n");
+          bsl.printf("@%d,%d:%s[%d,%d]{%d,%d}(%d,%d)%s", 
+                     offsetr.x,offsetr.y,"t",
+                     a.sizeOfPlate().x,a.sizeOfPlate().y,
+                     a.stride().x,a.stride().y,
+                     a.positionOnPlate().x,a.positionOnPlate().y,
+                     "\n");
+        
           a.setDeathBits(cDIE_EITHER);
           return true;  // And you must hold this time.
         }

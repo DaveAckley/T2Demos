@@ -1,0 +1,26 @@
+transient FontSet {
+  typedef Unsigned(3) FontNumber;
+  FontTerminusOGu12n mFont0;
+  FontTerminusOGu14n mFont1;
+  FontTerminusOGu14b mFont2;
+  FontTerminusOGu18n mFont3;
+  FontTerminusOGu18b mFont4;
+  FontTerminusOGu22n mFont5;
+  FontTerminusOGu28n mFont6;
+  FontHGR224 mFont7;
+
+  Font & getFont(FontNumber i) {
+    if (i == 0) return mFont0;
+    if (i == 1) return mFont1;
+    if (i == 2) return mFont2;
+    if (i == 3) return mFont3;
+    if (i == 4) return mFont4;
+    if (i == 5) return mFont5;
+    if (i == 6) return mFont6;
+    if (i == 7) return mFont7;
+
+    // Default
+    return mFont0;
+  }
+}
+

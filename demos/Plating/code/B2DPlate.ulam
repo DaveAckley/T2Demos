@@ -53,8 +53,13 @@ quark B2DTPlate(Unary(8) cBITS_PER_COORD) : Plate {
         if (sc == pu.cSC_ON_SUBPLATE) continue; // Can't grow into, can't pull stability
 
         if (sc == pu.cSC_CAN_GROW_INTO) {
-          if (isPlateBorderCoord(pc) && !isPlateBorder()) // Only border can grow border
-            continue;
+          if (isPlateBorderCoord(pc)) {
+            // Prefer border to grow border, but to seed from inside,
+            // allow upper left field to seed plate
+            Bool bordergrower = isPlateBorder() || mypos.length() <= 2u;
+            if (!bordergrower) continue;
+          }
+
           Atom copyofus = copyOf();
           Self & bein = (Self&) copyofus; // Or fail, if copyOf screwed up
           //          du.printContext();

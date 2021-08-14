@@ -1,0 +1,37 @@
+/** 
+    \symbol PQ
+    \color #88b
+ */
+element PollQuestion : B2DStreamPlate + CategorizedSite + B2DStreamPayload + NodeES + SIGH + Stride2x2FP {
+
+  /*
+  ARGB getColor(Unsigned selector) {
+    ColorUtils cu;
+    PlateUtils pu;
+    State s = getState();
+    ARGB ret;
+    if (s > 0) ret = cu.color(0xffffff);
+    else if (s < 0) ret = cu.color(0x000000);
+    else ret = cu.color(0x808080);
+    return ret;
+    }*/
+
+  //// Decider API
+
+  @Override
+  virtual State decide(Sum insum, Unsigned count) {
+    C2D pos = positionOnPlate();
+    if (pos.length() == 0u) return 1; // I am the true unit I am true
+    return self.SIGH.decide(insum, count); // Dish to normal processing, (default 0 apathy)
+  }
+
+
+  Void behave() {
+    if (mustBlockOrDie()) {
+      return;
+    }
+    checkGrowthAndHealing();
+    updateStream();
+    if (choose()) return;
+  }
+}

@@ -1,0 +1,73 @@
+/**
+   \symbol TW
+*/
+element TestWorm : StdWormR4 {
+  @Override
+  ARGB getColor(Unsigned selector) {
+    return segColor();
+  }
+  @Override
+  Bool isSwappable(Bool ahead) {
+    if (ahead && getSegType() == cSEG_HEAD) return false;
+    if (!ahead && getSegType() == cSEG_TAIL) return false;
+    return true;
+  }    
+  typedef Unsigned(3) WormLen;
+  WormLen mHeadIndex;
+  Bool tryGrowOrMove() {
+    if (getSegType() != cSEG_HEAD) return false;
+    Bool firstGrow = (mHeadIndex == 0u);
+    Bool tryMove = (mHeadIndex == mHeadIndex.maxof);
+    EventWindow ew;
+    if (tryMove) {
+      SN behindsn = getBehind();
+      if (behindsn == 0u || !ew.isAccessible(behindsn))
+        return false;
+      Atom & a = ew[behindsn];
+      if (a as Self)
+        if (a.getSegType() == cSEG_PLSB) return false;
+    }
+
+    Random random;
+    Unsigned picks = 0;
+    SN picked;
+    for (SN sn = 1; sn <= 12; ++sn) {
+      if (ew.isAccessible(sn) && ew[sn] is Empty) {
+        if (random.oneIn(++picks))
+          picked = sn;
+      }
+    }
+    if (picks == 0u) return false;
+    Self newhead = self;
+    PlateUtils pu;
+    newhead.mHeadIndex++;
+    newhead.mBehind = pu.reversePtr(picked);
+    ew[picked] = newhead.atomof;
+    self.mAhead = picked;
+    self.setSegType(tryMove ? cSEG_PLSB : (firstGrow ? cSEG_TAIL : cSEG_BODY));
+    return true;
+  }
+  Void behave() {
+    if (shouldDie()) 
+      killWorm();
+    if (mustBlockOrDie())
+      return;
+    if (tryGrowOrMove())
+      return;
+    if (updateSegment())
+      return;
+  }
+}
+
+/**
+   \symbol Sw
+*/
+element SeedTestWorm {
+  Void behave() {
+    EventWindow ew;
+    TestWorm tw;
+    TestWorm & twr = tw;
+    twr.setSegType(tw.cSEG_HEAD);
+    ew[0] = tw;
+  }
+}

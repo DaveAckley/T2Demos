@@ -1,0 +1,256 @@
+
+/** A representation of a byte-indexed MFM drawable font.
+
+  Font representation is an array of String: FONTINFO + GLPYHINFO.
+  The first String describes the font, and each remaining string
+  describes one glyph within the font.  (Only a subset of the 256
+  possible glyphs are allowed in this implementation.)
+
+   FONTINFO "WHxy"
+   0: W: Font width
+   1: H: Font height
+   2: byte-32=x: font origin x from lower left (offset32 to be non-negative)
+   3: byte-32=y: font origin y from lower left (ditto)
+   GLYPHINFO "cwhdxyrowspaddedtomultipleof8bits"
+   0: c: char
+   1: w: char width in sites
+   2: h: char height in sites
+   3: byte-32 = cx: xorigin (offset32 sites from left to first bitmap column)
+   4: byte-32 = cy: yorigin (offset32 sites from bottom to first bitmap row)
+   5: byte-32 = dx: xoffset to next glyph origin
+   6: byte-32 = dy: yoffset to next glyph origin
+   7+: then h rows as bitmaps, with (w+7)/8 chars per row
+
+   Note the w and h can be, and often are, smaller than W and H.  The
+   w and h determine the size of the bitmap, and as far as I can tell
+   they are typically just big enough for the bitmap to cover all
+   black pixels.
+
+   Overall we have four coordinate systems that we may need to be
+   aware of when using a Font in a Label:
+
+    (1) FONT COORDINATES: Positions of a glyph and its contents,
+        relative to the font bounding box, with (0,0) at the lower
+        left, +x going right, and +y going up.  Font coordinates are
+        written with surrounding ()'s and legal values range from
+        (0,0) to (W-1, H-1), inclusive.
+
+    (2) GLYPH COORDINATES: Positions of sites relative to the glyph of
+        which this fsa is a part, taking -mGloc as the origin, with +x
+        going right and +y going up.  Glyph coordinates are written
+        with surrounding []'s, and legal values range from [-cx,-cy]
+        to [dx-1,H-1], inclusive
+
+    (3) LABEL COORDINATES: Positions of sites in a glyph mapped to
+        the the (0,0) of the first glyph in a label.  Computing
+        label coordinates of an fsa in a glyph at labelIndex
+        requires summing the dx's of all glyphs in 0..labelIndex-1
+
+    (4) EVENT WINDOW COORDINATES: Positions of nearby things taking
+        fsa as the origin, with +x going right and +y going down.
+
+   The different coordinate systems are used to answer different
+   questions, such as:
+
+    (Q1) Am I part of the label?
+    (A1) Yes, if:
+         (A1.1) my mLabelIndex is legal, and
+         (A1.2) my mGloc is in the glyph bounding box of
+                string[mLabelIndex]
+
+    (Q2) If I am part of the Label, is event window site <ewx,ewy>
+         also part of the Label?  
+    (A2) Yes, if:
+         (A2.1) the result of gc = mapEWtoGlyph(<ewx,ewy>) is in my
+                glyph bounding box, meaning inGlyph(gc) returns true
+                (fast case), OR
+         (A2.2) mapToLabelCoords(gc,oLabelIndex,oGloc) returns true,
+                meaning gc (relative to our glyph) is at location
+                oGloc of the oLabelIndex glyph
+
+         (We could probably merge (A2.1) and (A2.2) without
+         significant speed loss if we did it right.  (Actually, we
+         could merge (A1) into this as well.  If mapToLabelCoords is
+         fast and general.))
+
+   ===============
+   The mGloc Label member is the atom's location relative to the
+   startingLocation for its glyph, and it can range over the entire
+   (H, dx) fillbox defining the drawing of this glyph.  Some subset of
+   the fillbox sites are contained within the rectangle between
+   bitmapOrigin and bitmapOrigin + (w,h), and such sites will be
+   checked for ink in the bitmap (using mGloc - bitmapOrigin) during
+   drawing.  The rest will always be white, but are otherwise 'legit'
+   -- in particular, they are typically crucial for bridging to the
+   fillboxes of the next and previous glyphs in the Label.
+
+*/
+
+transient Font {
+  constant ASCII cFIRST_REPRESENTED_GLYPH = ' ';
+  constant ASCII cLAST_REPRESENTED_GLYPH = '\375';
+  constant Unsigned cFIRST_BITMAP_INDEX = 7u;
+  constant Int cOFFSET_AMOUNT = 32;
+
+  Bool charExists(ASCII b) { return b >= cFIRST_REPRESENTED_GLYPH && b <= cLAST_REPRESENTED_GLYPH; }
+  Void assertCharExists(ASCII b) { if (!charExists(b)) { Fail f; f.fail(); } }
+  Bool charHasGlyph(ASCII b) {
+    if (!charExists(b)) return false;
+    String info = getCharInfo(b);
+    return info[0] != '\0';
+  }
+
+  // These two routines provide access to some actual font
+  virtual String getCharInfo(ASCII b) ; //< The GLYPHINFO for character b
+  virtual String getFontInfo() ;        //< The FONTINFO for this font
+
+  Unsigned charWidth(ASCII b) { return charWidth(getCharInfo(b)); }
+  Unsigned charHeight(ASCII b) { return charHeight(getCharInfo(b)); }
+  Unsigned charWidth(String charInfo) { return charInfo[1]; }
+  Unsigned charHeight(String charInfo) { return charInfo[2]; }
+  
+  Int charOriginX(ASCII b) { return charOriginX(getCharInfo(b)); }
+  Int charOriginY(ASCII b) { return charOriginY(getCharInfo(b)); }
+  Int charOriginX(String charInfo) { return charInfo[3] - cOFFSET_AMOUNT; }
+  Int charOriginY(String charInfo) { return charInfo[4] - cOFFSET_AMOUNT; }
+
+  C2D charOrigin(ASCII b) { return charOrigin(getCharInfo(b)); }
+  C2D charOrigin(String charInfo) { 
+    C2D ret;
+    ret.set(charOriginX(charInfo),charOriginY(charInfo));
+    return ret;
+  }
+
+  Int charDeviceWidth(ASCII b) { return charDeviceWidth(getCharInfo(b)); }
+  Int charDeviceHeight(ASCII b) { return charDeviceHeight(getCharInfo(b)); }
+  Int charDeviceWidth(String charInfo) { return charInfo[5] - cOFFSET_AMOUNT; }
+  Int charDeviceHeight(String charInfo) { return charInfo[6] - cOFFSET_AMOUNT; }
+
+  Unsigned fontWidth() { String info = getFontInfo(); return info[0]; }
+  Unsigned fontHeight() { String info = getFontInfo(); return info[1]; }
+  C2D fontSize() {
+    String info = getFontInfo(); 
+    return C2D.instanceof((C2D.Coord) info[0], (C2D.Coord) info[1]);
+  }
+  Int fontX() { String info = getFontInfo(); return info[2] - cOFFSET_AMOUNT; }
+  Int fontY() { String info = getFontInfo(); return info[3] - cOFFSET_AMOUNT; }
+  C2D fontOffset() {
+    C2D ret;
+    ret.set(fontX(), fontY());
+    return ret;
+  }
+
+  typedef Unary(2) SiteGlyphStatus;
+  constant SiteGlyphStatus cOUT = 0; //< coord not glyph
+  constant SiteGlyphStatus cOFF = 1; //< coord is background in glyph
+  constant SiteGlyphStatus cON = 2;  //< coord is foreground in glyph
+
+  /** Get the two key 0-based bounding boxes: (1) the 'fillbox', which
+      defines the whole piece of 'paper' associated for this glyph,
+      and (2) the 'glyphBitmapBox', for accessing the glyph bitmap to
+      find which pixels are inked and which show paper.
+
+      After accessing the glyph bitmap, the associated coordinates
+      need to be further translated by the glyph offset to find out
+      where the paper and ink lands on the sites.
+  */
+  Void getBoxes(String charInfo, C2D & fillBox, C2D & glyphBitmapBox, C2D & glyphOffset) { 
+
+    Unsigned wid = charWidth(charInfo);
+    Unsigned hei = charHeight(charInfo);
+    glyphBitmapBox.set((Int)wid,(Int)hei);
+
+    Int dwid = charDeviceWidth(charInfo);
+    Unsigned fillwid;
+    if (dwid <= 0) 
+      fillwid = wid + 1u;
+    else 
+      fillwid = (Unsigned) dwid;
+    Unsigned fillhei = fontHeight();
+    fillBox.set((Int) fillwid,(Int) fillhei);
+
+    glyphOffset = charOrigin(charInfo);
+  }
+
+  SiteGlyphStatus noChar(C2D index) {
+      return index.length() % 4u == 0u ? cON : cOFF;
+  }
+
+  SiteGlyphStatus getSiteStatus(C2D index, ASCII b) {
+    return charHasGlyph(b) ?
+      getSiteStatus(index, getCharInfo(b)) :
+      noChar(index);
+  }
+
+  SiteGlyphStatus getSiteStatus(C2D index, String charInfo) {
+    C2D fillBox, glyphBox, glyphOffset;
+    getBoxes(charInfo, fillBox, glyphBox, glyphOffset);
+
+    //    fillBox.setX(fillBox.getX() + 1);
+    if (!fillBox.contains(index)) return cOUT;
+
+    if (false) {
+      DebugUtils du;
+      du.print("INDEX PRE");
+      du.printChar(charInfo[0]);
+      du.print("index.x"); du.print(index.getX());
+      du.print("index.y"); du.print(index.getY());
+      du.print("glyphBox.x"); du.print(glyphBox.getX());
+      du.print("glyphBox.y"); du.print(glyphBox.getY());
+      du.print("glyphOffset.x"); du.print(glyphOffset.getX());
+      du.print("glyphOffset.y"); du.print(glyphOffset.getY());
+    }
+    index = index.add(glyphOffset);
+    index = index.subtract(fontOffset());
+    if (false) {
+      DebugUtils du;
+      du.print("INDEX POST");
+      du.print("index.x"); du.print(index.getX());
+      du.print("index.y"); du.print(index.getY());
+      du.print("contain"); du.print(glyphBox.contains(index));
+    }
+
+    if (!glyphBox.contains(index)) return cOFF;
+
+    Unsigned row = (Unsigned) (glyphBox.getY() - 1 - index.getY()); // Inverting rows here
+    //    Unsigned row = (Unsigned) glyphBox.getY();
+    Unsigned wid = (Unsigned) glyphBox.getX();
+    Unsigned bytesPerRow = (wid+7u)/8u;
+    Unsigned rowStartByte = row * bytesPerRow;
+    Unsigned colByte = ((Unsigned) index.getX()) / 8u;
+    Unsigned colBit = ((Unsigned) index.getX()) % 8u;
+    Unsigned rightPad = rightPad.maxof; // unused
+    Bits mask = 0x80u >> colBit;
+    Unsigned idx = cFIRST_BITMAP_INDEX + rowStartByte + colByte;
+    DebugUtils du;
+    if (false && du.hasEventWindow()) {
+      du.print("CHECK");
+      du.printContext();
+      du.printChar(charInfo[0]);
+      du.print("row"); du.print(row);
+      du.print("wid"); du.print(wid);
+      du.print("fillBox.x"); du.print(fillBox.getX());
+      du.print("fillBox.y"); du.print(fillBox.getY());
+      du.print("glyphBox.x"); du.print(glyphBox.getX());
+      du.print("glyphBox.y"); du.print(glyphBox.getY());
+      du.print("index.x"); du.print(index.getX());
+      du.print("index.y"); du.print(index.getY());
+      du.print("idx"); du.print(idx);
+      du.print("charInfo.lengthof"); du.print(charInfo.lengthof);
+      du.print("rowStartByte"); du.print(rowStartByte);
+      du.print("colByte"); du.print(colByte);
+      du.print("colBit"); du.print(colBit);
+      du.print("rightPad"); du.print(rightPad);
+    }
+    if (0 != (charInfo[idx] & mask))
+      return cON;
+    return cOFF;
+  }
+
+  C2D charSize(ASCII b) { 
+    String info = getCharInfo(b); 
+    C2D ret; 
+    ret.set((Int) info[1],(Int) info[2]); 
+    return ret; 
+  }
+}

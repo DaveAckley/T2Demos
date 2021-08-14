@@ -2,6 +2,7 @@ quark Flood : Plate {
   //// Flood API
   virtual C2D getRoot() ; //< Closeness to this plate coord defines 'upstream'
   virtual Bool fire() ;   //< return \c true if fire() action completed
+  virtual Bool release() { return true; }  //< return \c true to go to ready from recover
   virtual Bool consider(Flood & ngb, Bool isUpstream) ; //< return \c true to consider
   
   //// Flood SERVICES
@@ -29,8 +30,8 @@ quark Flood : Plate {
 
     which (mCommandState) {
       case cSTATE_READY:    { ret = cu.color(0x333333); } // near invisible
-      case cSTATE_FIRING:   { ret = cu.color(0xaaaa33); }
-      case cSTATE_FIRED:    { ret = cu.color(0xaa3333); }
+      case cSTATE_FIRING:   { ret = cu.color(0xaa3333); }
+      case cSTATE_FIRED:    { ret = cu.color(0xaaaa33); }
       case cSTATE_RECOVERED:{ ret = cu.color(0x3333aa); }
     }
     return ret;
@@ -112,7 +113,10 @@ quark Flood : Plate {
       mCommandState = cSTATE_FIRING;
     else if (mCommandState == cSTATE_FIRED && downcount == downrecovered)
       mCommandState = cSTATE_RECOVERED;
-    else if (mCommandState == cSTATE_RECOVERED && upcount == uprecovered && downcount == downready)
+    else if (mCommandState == cSTATE_RECOVERED &&
+             upcount == uprecovered &&
+             downcount == downready &&
+             release())
       mCommandState = cSTATE_READY;
     else ret = false;
     return ret;

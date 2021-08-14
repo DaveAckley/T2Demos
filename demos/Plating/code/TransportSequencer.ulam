@@ -1,6 +1,6 @@
-quark TransportOperator : B2DPlate2 {
+quark TransportSequencer : B2DPlate2 {
   typedef EventWindow.SiteNum SN;
-  /** Called to notify a TransportOperator in an operator that IO is
+  /** Called to notify a TransportSequencer in an operator that IO is
       currently possible: Output is possible if \c writeNotRead is \c
       true, and input is possible if it's false.  \returns \c true if
       TO did IO, \c false otherwise
@@ -32,7 +32,7 @@ quark TransportOperator : B2DPlate2 {
 
   //// SERVICES
   /** \returns \c true and sets \c ret and \c left if a matching
-     TransportPlate peer is found for this TransportOperator
+     TransportPlate peer is found for this TransportSequencer
    */
   Bool findStationEWC(C2D & ret, Bool & left) {
     if (lookFor(0,-3, true, true, ret) ||

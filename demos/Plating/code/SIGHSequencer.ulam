@@ -1,8 +1,8 @@
-/** SIGHOperator
-    \symbol So
+/** SIGHSequencer
+    \symbol Sq
     \color #ff0
  */
-element SIGHOperator : Plate1 {
+element SIGHSequencer : Plate1 {
   typedef ReinforcementMatrix.Reinforcement Reinforcement;
   typedef Evaluator.FuncBits FuncBits;
 

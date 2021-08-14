@@ -9,6 +9,7 @@ quark Ephemeron {
   //// SERVICES
   Bool isEphemeral(Atom a) {
     if (a is Self || a is Empty) return true;
+    if (a is Res) return true; // XXX SPECIAL CASE (NOTE NOT DREG THO)
     // XX call Plate.isEmptyOrField() somehow?
     return false;
   }

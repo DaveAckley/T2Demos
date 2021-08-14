@@ -664,7 +664,7 @@ element SuperSeedAtomDeque {
         ew[0] = Empty.instanceof;
         return;
       }
-      PlateOperator po;
+      PlateSequencer po;
       po.mDesiredPlateSize = B2D.instanceof(15,6);
       ew[2] = po.atomof;
 
@@ -673,7 +673,7 @@ element SuperSeedAtomDeque {
       ad.mPosOnPlate = B2D.instanceof(0,0);
       ew[15] = ad.atomof;
 
-      // PlateOperator needs to see plate(0,0) and plate(0,1)
+      // PlateSequencer needs to see plate(0,0) and plate(0,1)
       ad.mPosOnPlate = B2D.instanceof(0,1);
       ew[5] = ad.atomof;
 
@@ -683,7 +683,7 @@ element SuperSeedAtomDeque {
       if (a as AtomDeque) {
         // Has it grown enough to be a deque?
         if (a.mSizeOfPlate.mY >= 6) {
-          ew[0] = AtomDequeOperator.instanceof; // Decay into an ADO
+          ew[0] = AtomDequeSequencer.instanceof; // Decay into an ADO
         }
       }
     }

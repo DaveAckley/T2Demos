@@ -2,7 +2,7 @@
     \symbol PD
     \color #fa5
  */
-element PlateDeployer : B2DPlate2 + TransportOperator {
+element PlateDeployer : B2DPlate2 + TransportSequencer {
   @Override
   Bool notify(Bool skip) { return false; }
 

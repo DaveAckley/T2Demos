@@ -26,6 +26,11 @@ element ColorPlate : B2DStreamPlate + CategorizedSite + B2DStreamPayload + Strid
   typedef Unsigned(5) Color6;
   typedef Color6 RGB6[3];
   RGB6 mColor = { 30u, 30u, 5u };
+  Void setColor(ARGB color) {
+    for (Unsigned i = 0u; i < 3u; ++i) {
+      mColor[i] = (Color6) (color[i+1u]/4u); //8b->6b
+    }
+  }
 
   //// Plate API
 
@@ -170,41 +175,6 @@ element ColorPlate : B2DStreamPlate + CategorizedSite + B2DStreamPayload + Strid
     //      du.print("iSANT12");
     }
     return false;    // Didn't find an item
-  }
-
-  Bool isNonControlZoneEmptyOrField(SN sn) {
-    if (sn == sn.maxof) return false;
-    MDist md;
-    return isNonControlZoneEmptyOrField(md.getSiteCoord(sn));
-  }
-
-  Bool isNonControlZoneEmptyOrField(C2D ewc) {
-    if (isOurControlZone(ewc)) return false;
-    EventWindow ew;
-    EventWindow.SiteNum sn = ew.getSiteNumber(self); // Find ourselves
-    if (sn == sn.maxof) { Fail f; f.fail("self not in EW"); return false; }
-    C2D sat = ew.getCoord(sn); // Us as coord
-
-//    du.printContext();
-//    du.print("iEOF10");
-    if (!ew.isAccessible(ewc)) return false;
-//    du.print("iEOF11");
-//    du.print(sat);
-    Atom & a = ew[ewc];
-    if (a is Empty) return true;
-//    du.print("iEOF12");
-    if (a as Plate) {
-      PlateUtils pu;
-      PlateUtils.PlateRelation rel = pu.relationTo(self, sat, a, ewc);
-//      du.print("iEOF13");
-//      du.print((Unsigned) rel);
-
-      if (rel == PlateUtils.cSAME_PLATE_AS && !a.isPlateBorder()) {
-        return true; // Found TestStack15 field
-      }
-//      du.print("iEOF14");
-    }
-    return false;  // Not empty or field
   }
 
   Bool checkLocalActions() {

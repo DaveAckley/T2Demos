@@ -3,7 +3,7 @@ quark TransportPlate : B2DPlate {
   ////TransportPlate API
   virtual Unsigned getK() ;     //< Number of stops on this track
   virtual C2D getStationPC(Unsigned k) ; //< Location of station K in plate coords
-  virtual C2D getOperatorPC(Bool left) ; //< Location of operators in plate coords
+  virtual C2D getSequencerPC(Bool left) ; //< Location of sequencers in plate coords
   virtual Bool isTransportStation() ;     //< This transport site is a station
   virtual C2D interStationIncrement(Bool left) ;    //< stationPC+this == next station left/rightward 
   virtual C2D stackingOrderIncrement() ;   //< stationPC+N*this == managed site N=[1,2]
@@ -11,7 +11,7 @@ quark TransportPlate : B2DPlate {
   ////TransportPlate SERVICES
   // virtual SN QStream14.getNextSN(Bool left)    //< SN of next site toward left (right) Peer, or SN.maxof if none
   // virtual Bool QStream14.isPeer(Bool left)     //< true if we are the left (right) Peer
-  // virtual Bool isOperatorSlot(Bool left)       //< true if we are the left (right) operator slot
+  // virtual Bool isSequencerSlot(Bool left)       //< true if we are the left (right) sequencer slot
   // virtual BufferStatus getStatus() ;      //< Occupancy
   // virtual Void setStatus(BufferStatus bs) ;
 
@@ -171,9 +171,9 @@ quark TransportPlate : B2DPlate {
     return ret;
   }
 
-  Bool isOperatorSlot(Bool left) {
+  Bool isSequencerSlot(Bool left) {
     C2D pos = positionOnPlate();
-    return pos == getOperatorPC(left);
+    return pos == getSequencerPC(left);
   }
 
   Bool managedSNs(SN & sn1, SN & sn2) {

@@ -1,0 +1,266 @@
+/** SIGHSequencer2
+    \symbol So
+    \color #0ff
+ */
+element SIGHSequencer2 : Plate1 {
+  typedef ReinforcementMatrix.Reinforcement Reinforcement;
+  typedef Evaluator.FuncBits FuncBits;
+
+  typedef Unary(4) State;
+  constant State cVOTE =    0u; //< VV fixed, PQ update
+  constant State cREACT =   1u; //< PQ fixed, VV update
+  constant State cEVAL =    2u; //< PQ/VV fixed, score(PQ)
+  constant State cCOMPARE = 3u; //< R = score(PQ) - backavg
+  constant State cREWARD =  4u; //< distribute R
+
+  State mState = cREACT;
+  Bool mEnter = true;
+
+  typedef EventWindow.SiteNum SN;
+  SN mPQStateGate;
+  SN mVVStateGate;
+  SN mRMRoot;
+  /*  SN mEVStateGate; */
+  SN mFTs;
+  SN mRC;
+  SN mNP;
+
+  Void findSites() {
+    PlateUtils pu;
+    mPQStateGate =
+      pu.findTypeAlongOffset(mPQStateGate, // in N out E
+                             C2D.instanceof(0,-1),
+                             StateGate.classidof);
+    mVVStateGate =
+      pu.findTypeAlongOffset(mVVStateGate, // in W out NNW
+                             C2D.instanceof(1,0),
+                             StateGate.classidof);
+    mRMRoot = 
+      pu.findTypeAlongOffset(mRMRoot,
+                             C2D.instanceof(2,-1),
+                             ReinforcementMatrix.classidof);
+    /*
+    mEVStateGate = 
+      pu.findTypeAlongOffset(mEVStateGate, // in NW out N
+                             C2D.instanceof(-1,-1),
+                             StateGate.classidof);
+    */
+    mFTs = 
+      pu.findTypeAlongOffset(mFTs,
+                             C2D.instanceof(-1,0),
+                             FunctionTerms.classidof);
+    mRC = 
+      pu.findTypeAlongOffset(mRC,
+                             C2D.instanceof(0,1),
+                             ReinforcementComparison.classidof);
+
+    mNP = 
+      pu.findTypeAlongOffset(mNP,
+                             C2D.instanceof(0,1),
+                             NumberPlate.classidof);
+
+  }
+
+  Bool getReinforcement(Reinforcement & r) { //< Ready from mEVRoot, compute via mFUT
+    DebugUtils du;
+    if (mFTs == 0u || mFTs == SN.maxof) return false;
+    EventWindow ew;
+    if (!ew.isAccessible(mFTs)) return false;
+    Atom & a = ew[mFTs];
+    NumberPlate.Number score;
+    if (a as FunctionTerms) {
+      score = a.mRunningTotal;
+      if (ew.isAccessible(mNP)) {
+        Atom & a2 = ew[mNP];
+        if (a2 as NumberPlate) {
+          a2.mNumber = score;
+        }
+      }
+    } else return false;
+
+    if (mRC == 0u || mRC == SN.maxof) return false;
+    if (!ew.isAccessible(mRC)) return false;
+    Atom & a2 = ew[mRC];
+    if (a2 as ReinforcementComparison) {
+      r = a2.judge(score);
+    } else return false;
+
+    return true;
+  }
+
+  Bool readyStateGate(SN sgsn) {
+    DebugUtils du;
+    if (sgsn == SN.maxof) return false;
+    EventWindow ew;
+    if (!ew.isAccessible(sgsn)) return false;
+    Atom & a = ew[sgsn];
+    if (a as StateGate) {
+      return a.getCommandState() == a.cSTATE_READY;
+    }
+    return false;
+  }
+  Bool fireStateGate(SN sgsn) {
+    DebugUtils du;
+    //    du.print("FSGFING 10");
+    du.print(sgsn);
+    if (sgsn == SN.maxof) return false;
+    EventWindow ew;
+    if (!ew.isAccessible(sgsn)) return false;
+    Atom & a = ew[sgsn];
+    if (a as StateGate) {
+      //      du.print("FSGFING 11");
+      return a.fire();
+    }
+    return false;
+  }
+
+  
+  Bool fireFTs() {
+    SN sgsn = mFTs;
+    DebugUtils du;
+    //    du.print("FSGFING 10");
+    //du.print(sgsn);
+    if (sgsn == SN.maxof) return false;
+    EventWindow ew;
+    if (!ew.isAccessible(sgsn)) return false;
+    Atom & a = ew[sgsn];
+    if (a as FunctionTerms) {
+      //      du.print("FSGFING 11");
+      return a.floodTrigger();
+    }
+    return false;
+  }
+
+  Bool readyFTs() {
+    SN sgsn = mFTs;
+    DebugUtils du;
+    if (sgsn == SN.maxof) return false;
+    EventWindow ew;
+    if (!ew.isAccessible(sgsn)) return false;
+    Atom & a = ew[sgsn];
+    if (a as FunctionTerms) {
+      return a.getCommandState() == a.cSTATE_READY;
+    }
+    return false;
+  }
+
+
+  /*
+  Bool startEvaluation() {
+    DebugUtils du;
+    if (mEVStateGate == 0u || mEVStateGate == SN.maxof) return false;
+    EventWindow ew;
+    if (!ew.isAccessible(mEVStateGate)) return false;
+    Atom & a = ew[mEVStateGate];
+    if (a as StateGate) {
+      return a.fire();
+    }
+    return false;
+  }
+  */
+
+  /*
+  Bool evaluationComplete() {
+    DebugUtils du;
+    if (mEVStateGate == 0u || mEVStateGate == SN.maxof) return false;
+    EventWindow ew;
+    if (!ew.isAccessible(mEVStateGate)) return false;
+    Atom & a = ew[mEVStateGate];
+    if (a as Evaluator) {
+      if (a.getCommandState() != a.cSTATE_READY) return false;
+      return true;
+    }
+    return false;
+  }
+  */
+
+  Bool startReinforcement(Reinforcement r) {
+    DebugUtils du;
+    if (mRMRoot == 0u || mRMRoot == SN.maxof) return false;
+    EventWindow ew;
+    if (!ew.isAccessible(mRMRoot)) return false;
+    Atom & a = ew[mRMRoot];
+    if (a as ReinforcementMatrix) {
+      a.setReinforcement(r);
+      return a.floodTrigger();
+    }
+    return false;
+  }
+
+  Bool reinforcementComplete() {
+    DebugUtils du;
+    if (mRMRoot == 0u || mRMRoot == SN.maxof) return false;
+    EventWindow ew;
+    if (!ew.isAccessible(mRMRoot)) return false;
+    Atom & a = ew[mRMRoot];
+    if (a as ReinforcementMatrix) {
+      return a.getCommandState() == a.cSTATE_READY;
+    }
+    return false;
+  }
+
+  Bool advanceStateMachine() {
+    which(mState) {
+      case cVOTE: {
+        if (mEnter && fireStateGate(mPQStateGate)) {
+          mEnter = false;
+          return true;
+        }
+        if (!mEnter && readyStateGate(mPQStateGate)) {
+          mState = cREACT;
+          mEnter = true;
+          return true;
+        }
+      }
+
+      case cREACT: {
+        if (mEnter && fireStateGate(mVVStateGate)) {
+          mEnter = false;
+          return true;
+        }
+        if (!mEnter && readyStateGate(mVVStateGate)) {
+          mState = cEVAL;
+          mEnter = true;
+          return true;
+        }
+      }
+
+      case cEVAL: {
+        if (mEnter && fireFTs()) {
+          mEnter = false;
+          return true;
+        }
+        if (!mEnter && readyFTs()) {
+          mState = cREWARD;
+          mEnter = true;
+          return true;
+        }
+      }
+
+      case cREWARD: {
+        if (mEnter) {
+          Reinforcement rmr;
+          if (!getReinforcement(rmr)) return false;
+          if (!startReinforcement(rmr)) return false;
+          mEnter = false;
+          return true;
+        }
+        if (!mEnter && reinforcementComplete()) {
+          mState = cVOTE;
+          mEnter = true;
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  Void behave() {
+    if (mustBlockOrDie()) {
+      return;
+    }
+    findSites();
+    if (advanceStateMachine())
+      return;
+  }
+}

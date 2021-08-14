@@ -18,11 +18,37 @@ quark Stride2x2F : Plate {
   }
 }
 
+/** Fixed 1x1 stride, phase <00>
+ */
+quark Stride1x1FP : Plate {
+  @Override
+  virtual C2D stride() { return PlateUtils.c2x2; }
+  @Override
+  virtual C2D phase() { return PlateUtils.c0x0; }
+
+  Bool setPhase(C2D phase) {
+    return false;
+  }
+}
+
 /** Fixed 2x2 stride, phase <00>
  */
 quark Stride2x2FP : Plate {
   @Override
   virtual C2D stride() { return PlateUtils.c2x2; }
+  @Override
+  virtual C2D phase() { return PlateUtils.c0x0; }
+
+  Bool setPhase(C2D phase) {
+    return false;
+  }
+}
+
+/** Fixed 1x2 stride, phase <00>
+ */
+quark Stride1x2FP : Plate {
+  @Override
+  virtual C2D stride() { return PlateUtils.c1x2; }
   @Override
   virtual C2D phase() { return PlateUtils.c0x0; }
 

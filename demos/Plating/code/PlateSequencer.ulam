@@ -1,14 +1,15 @@
-/** PlateOperator
-    \symbol PO
+/** PlateSequencer
+    \symbol PQ
     \color #33a
  */
-element PlateOperator : PlOpUtils + Plate1 + Stride2x2 {
+element PlateSequencer : PlSqUtils + Plate1 + Stride2x2 {
   typedef EventWindow.SiteNum SN;
   typedef B2DStreamPlate.B2DStreamPayload MyPayload;
   DebugUtils du;
   Random random;
   SN mRootSN;
   SN mRPeerSN;
+  Bool mNoDiffuse; //< true to suppress seeking open areas if nothing else to do
 
   typedef Unsigned(3) Clearance;
   typedef Clearance DirClearance[4];
@@ -59,12 +60,6 @@ element PlateOperator : PlOpUtils + Plate1 + Stride2x2 {
   }
 
   Void considerOuter() {  // We just got new outer data.  Should we act on it?
-    //// SIZE CHECK
-    ///XXXXHACK
-    if (!mDesiredPlateSize.isValid())
-      mDesiredPlateSize.init(20,6);
-    ///XXXXHACK
-
     if (!mDesiredPlateSize.isValid()) return;  // Nothing to do without a valid size
     EventWindow ew;
     MyContainer & root = (MyContainer&) ew[mRootSN];
@@ -82,6 +77,7 @@ element PlateOperator : PlOpUtils + Plate1 + Stride2x2 {
     PlateUtils.PlateDir actdir;
     PlateUtils pu;
     Random random;
+    //    C2D str = self.Stride2x2.stride();
     C2D str = self.Stride2x2.stride();
     for (Unsigned i = 0; i < 4u; ++i) {
       PlateUtils.PlateDir pd = (PlateUtils.PlateDir) i;
@@ -99,7 +95,8 @@ element PlateOperator : PlOpUtils + Plate1 + Stride2x2 {
         if (random.oneIn(++actcount)) { actdir = pd; actwantsgrow = true; }
       } else if (needy && incr.getY() != 0) {
         if (random.oneIn(++actcount)) { actdir = pd; actwantsgrow = true; }
-      } else if (mOuterClearance[pd] - 1u > mOuterClearance[oppd]) {
+      } else if ((mOuterClearance[pd] - 1u > mOuterClearance[oppd]) ||
+                 (!mNoDiffuse && mOuterClearance[pd] > 3u)) {
         //        bsl.printf("CONSIDROO1110:%d\n",actcount);
         if (random.oneIn(++actcount)) { actdir = pd; actwantsgrow = false; }
         //        bsl.printf("CONSIDROO1111:%d/%d/%d\n",actcount,actdir,actwantsgrow);
@@ -188,12 +185,17 @@ element PlateOperator : PlOpUtils + Plate1 + Stride2x2 {
     EventWindow ew;
     if (mustBlockOrDie()) return;
     if (iSeeTecton()) return;
-    if (findContainerOrDie(mRootSN, mRPeerSN)) return;
+    if (!tryToFindContainer(mRootSN, mRPeerSN, false)) return;
     {
       ByteStreamLogger bsl;
       // PLATEOPS
       MyContainer & root = (MyContainer&) ew[mRootSN];
       MyContainer & rpeer = (MyContainer&) ew[mRPeerSN];
+
+      // If we don't have a reasonable desired size, assume existing size is desired
+      if (!mDesiredPlateSize.isValid() || mDesiredPlateSize.toC2D().length() == 0u)
+        mDesiredPlateSize.fromC2D(root.sizeOfPlate());
+
       MyPayload pay;
       Random random;
       DebugUtils du;
