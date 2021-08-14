@@ -1,4 +1,4 @@
-{31}  -*-  mode: text; fill-column: 50;  -*-
+{63}  -*-  mode: text; fill-column: 50;  -*-
 [0:
 
 Tue Jul 13 02:47:36 2021 So I want to demo foggen
@@ -476,6 +476,545 @@ to use tectons to move a SIGH machine.
 
 Actually that's the second thing I want.  First
 thing I want is to do absolutely minimal cleanup
-here and commit all this.
+here and commit all this.[31:
+
+Sat Jul 24 04:47:32 2021 OK, committed as "WIP
+t2sup#3103"
+
+Now let's see about cSAME_PLATE
+[32:
+
+Sat Jul 24 09:54:47 2021 OK, have a first stab at
+interphasePlateRelations(pl,ewl,pr,ewr), and need
+some set up to call it.  Where's our seed layout?
+
+ ..                  PQ: Poll question vector
+ .. Ev PQ W<         VV: Voter vector
+ ..    S1 Wv RM      W<: Weight matrix summing toward PQ
+ .. FU SO VV S2      Wv: Weight matrix summing toward VV / SeedWeightMatrix
+ .. .. .. CP ..      S1: StateGate routing PQ out to Wv
+                     S2: StateGate routing VV out to W<
+                     RM: Reinforcement matrix
+                     SO: SIGHOperator
+                     Ev: Evaluator
+                     FU: Function Under Test
+                     CP: Containing Plate
+
+So on a theory like that we want CP to be like
+
+[]
+()
+{1,1}
+
+And what's the fricken dimensions of that plate??
+
+[ (nvoters+2)*2 , (npqs+2)*2 ]
+
+maybe?  With the +2s for the nodes on the
+left/bottom and clearance on right/top?
+
+And CP's position in that would be what:
+
+( 3, (npqs+2)*2-1 )
+
+maybe?
+[33:
+
+Sat Jul 24 10:51:00 2021 Let's add an extra column
+left for a traditional PlateOperator on the outer
+plate.
+
+:33]
+:32]
+:31]
 
 :30]
+[34:
+
+Sun Jul 25 05:11:05 2021 Adding yet another atom
+to the seed? --
+
+ ..                  PQ: Poll question vector
+ .. Ev PQ W<         VV: Voter vector
+ .. MS S1 Wv RM      W<: Weight matrix summing toward PQ
+ .. FU SO VV S2      Wv: Weight matrix summing toward VV / SeedWeightMatrix
+ .. .. .. CP ..      S1: StateGate routing PQ out to Wv
+                     S2: StateGate routing VV out to W<
+                     RM: Reinforcement matrix
+                     SO: SIGHOperator
+                     Ev: Evaluator
+                     FU: Function Under Test
+                     CP: Containing Plate
+                     MS: Migratory seed (for a PlateOperator)
+
+:34]
+[35:
+
+Sun Jul 25 10:48:22 2021 OK so last night we got
+as far as the MigratorySeed migrating to p(1,1)
+and deploying a PO, which ran a border patrol and
+released a move Tc, which started the swapping and
+then a StateGate pulled the ripcord apparently
+because of a PRREL2 overlap, apparently because it
+didn't passivate even though it's right next to
+the Tc.
+
+So why was our darling SG awake at that hour?
+[36:
+
+Sun Jul 25 10:54:24 2021 It goes to
+Plate.mustBlockOrDie() pretty much at the top of
+behave().[37:
+
+Sun Jul 25 10:55:40 2021 We're thinking this is
+going to have to be (mixed-)stride-related.
+[38:
+
+Sun Jul 25 11:39:53 2021 (I note that
+PlateOperator opens thusly:
+
+      Void behave() {
+        EventWindow ew;
+        if (mustBlockOrDie()) return;
+        if (iSeeTecton()) return;
+
+suggesting mustBlockOrDie ain't dealing with Tc.)
+
+:38]
+:37]
+
+
+:36]
+:35]
+[39:
+
+Sun Jul 25 14:17:14 2021 OK I'm confusing myself
+here in PlateUtils.interphasePlateRelations.  I'm
+saying if the intersection of the plate bounding
+boxes (now in ew units to factor out stride) is
+equal to the inner bounding box, then the
+relationship is outer CONTAINS inner (whichever
+way that goes.)
+
+But don't we need stuff about the strides too?
+The idea was a containing plate needed to contain
+ALL the plate sites of a contained plate -- but an
+outer {2,2} plate won't do that for an inner {1,1}
+plate. [40:
+
+Sun Jul 25 14:22:00 2021 Well, we've got this:
+
+    if (lstr == minstr)  leftOuter = true;
+    else if (rstr == minstr) leftOuter = false;
+    else return cINTERPHASE_PLATE;
+
+which ensures that whatever's called 'outer' has
+the minimum stride of both l and r.  And we didn't
+even get to computing the bounding boxes if that's
+not true.[41:
+
+Sun Jul 25 14:25:04 2021 OK I think I 'just' had
+the comparison between tbx and tbi backwards.  If
+the intersection IS equal to the inner box, then
+we have containment.
+
+:41]
+
+:40]
+
+:39]
+[42:
+
+Mon Jul 26 02:45:58 2021 OK so we need to start
+preparing the invited talk for the BDA workshop.
+
+:42]
+[43:
+
+Mon Jul 26 11:18:10 2021 Left a DReg+mobile-SIGH
+running during morning sleep and it blew up with a
+PRREL2 after about 16KAEPS
+
+    20210726081316-46237: 16393AEPS [242A8967]MSG: print: Unsigned: 2
+    20210726081439-46238: 16647AEPS [242A8967]MSG: @(53,50) of [0,0]: (RM) (ReinforcementMatrix(mRootPos=(B2DT<4u>(mX=0,mY=14),mLink1SN=1,mLink2SN=5,mReinforcement=-1,)Flood(mCommandState=2,)B2DTPlate<7u>(mSizeOfPlate=(B2DT<7u>(mX=12,mY=11),mPosOnPlate=(B2DT<7u>(mX=5,mY=10),mDeathBits=0x0)
+    20210726081439-46239: 16647AEPS [242A8967]MSG: print: "PRREL2 OVRLPS"
+    20210726081439-46240: 16647AEPS [242A8967]MSG: print: (12,11)
+    20210726081439-46241: 16647AEPS [242A8967]MSG: print: (5,10)
+    20210726081439-46242: 16647AEPS [242A8967]MSG: print: (0,0)
+    20210726081439-46243: 16647AEPS [242A8967]MSG: print: (12,11)
+    20210726081439-46244: 16647AEPS [242A8967]MSG: print: (5,10)
+    20210726081439-46245: 16647AEPS [242A8967]MSG: print: (-2,0)
+    20210726081439-46246: 16647AEPS [242A8967]MSG: print: "KILL OVERLAPPING PLATE"
+
+which triggered a run of other prrel2s (all with
+mDeathBis=0x3 already set) at nearby sites, and
+I'm wondering if there's a pattern at all -- like
+following along a Tecton line.  Could we map the
+prrel2s?
+
+    20210726081439-46247: 16647AEPS [242A8967]MSG: @(51,50) of [0,0]: (WM) (WeightMatrix(mSumDir=1,mStateDir=0,)StdLink(mWeight=-19,mSum=-241,mState=1,)B2DTPlate<7u>(mSizeOfPlate=(B2DT<7u>(mX=12,mY=11),mPosOnPlate=(B2DT<7u>(mX=5,mY=10),mDeathBits=0x3)
+    20210726081439-46279: 16647AEPS [242A8967]MSG: @(50,52) of [0,0]: (CP) (ColorPlate(mBlockDogTimer=(XTimer<4u 15u 4096u>(time=0),mColor=[0]=8,[1]=8,[2]=0,)PayloadT<16u>(mBits=0x0,mHasPayload=false,)Stride2x2(mStride=[0]=0,[1]=0,)B2DTPlate<7u>(mSizeOfPlate=(B2DT<7u>(mX=29,mY=26),mPosOnPlate=(B2DT<7u>(mX=12,mY=25),mDeathBits=0x3,)QStream12(mBufferStatus=0)
+    20210726081440-46311: 16647AEPS [242A8967]MSG: @(51,44) of [0,0]: (RM) (ReinforcementMatrix(mRootPos=(B2DT<4u>(mX=0,mY=14),mLink1SN=1,mLink2SN=5,mReinforcement=-1,)Flood(mCommandState=2,)B2DTPlate<7u>(mSizeOfPlate=(B2DT<7u>(mX=12,mY=11),mPosOnPlate=(B2DT<7u>(mX=4,mY=7),mDeathBits=0x3)
+    20210726081440-46335: 16647AEPS [242A8967]MSG: @(53,42) of [0,0]: (RM) (ReinforcementMatrix(mRootPos=(B2DT<4u>(mX=0,mY=14),mLink1SN=1,mLink2SN=5,mReinforcement=-1,)Flood(mCommandState=2,)B2DTPlate<7u>(mSizeOfPlate=(B2DT<7u>(mX=12,mY=11),mPosOnPlate=(B2DT<7u>(mX=5,mY=6),mDeathBits=0x3)
+    20210726081440-46359: 16647AEPS [242A8967]MSG: @(49,48) of [0,0]: (WM) (WeightMatrix(mSumDir=1,mStateDir=0,)StdLink(mWeight=5,mSum=-188,mState=-1,)B2DTPlate<7u>(mSizeOfPlate=(B2DT<7u>(mX=12,mY=11),mPosOnPlate=(B2DT<7u>(mX=4,mY=9),mDeathBits=0x3)
+    20210726081440-46375: 16648AEPS [242A8967]MSG: @(50,49) of [0,0]: (CP) (ColorPlate(mBlockDogTimer=(XTimer<4u 15u 4096u>(time=0),mColor=[0]=8,[1]=8,[2]=0,)PayloadT<16u>(mBits=0x0,mHasPayload=false,)Stride2x2(mStride=[0]=0,[1]=0,)B2DTPlate<7u>(mSizeOfPlate=(B2DT<7u>(mX=29,mY=26),mPosOnPlate=(B2DT<7u>(mX=13,mY=22),mDeathBits=0x3,)QStream12(mBufferStatus=0)
+    20210726081440-46399: 16648AEPS [242A8967]MSG: @(49,51) of [0,0]: (VV) (PayloadT<16u>(mBits=0x0,mHasPayload=false,)B2DTPlate<7u>(mSizeOfPlate=(B2DT<7u>(mX=12,mY=1),mPosOnPlate=(B2DT<7u>(mX=4,mY=0),mDeathBits=0x3,)NodeImpl(mSumInSN=2,mStateOutSN=63,mState=-1,)QStream12(mBufferStatus=0)
+    20210726081440-46415: 16648AEPS [242A8967]MSG: @(51,51) of [0,0]: (SG) (StateGate(mFromSN=1,mToSN=15,mMaxRoot=false,mGateState=1,mCommandState=0,)B2DTPlate<7u>(mSizeOfPlate=(B2DT<7u>(mX=12,mY=1),mPosOnPlate=(B2DT<7u>(mX=4,mY=0),mDeathBits=0x3)
+    20210726081440-46423: 16648AEPS [242A8967]MSG: @(51,43) of [0,0]: (CP) (ColorPlate(mBlockDogTimer=(XTimer<4u 15u 4096u>(time=0),mColor=[0]=8,[1]=8,[2]=0,)PayloadT<16u>(mBits=0x0,mHasPayload=false,)Stride2x2(mStride=[0]=0,[1]=0,)B2DTPlate<7u>(mSizeOfPlate=(B2DT<7u>(mX=29,mY=26),mPosOnPlate=(B2DT<7u>(mX=13,mY=16),mDeathBits=0x3,)QStream12(mBufferStatus=0)
+    20210726081440-46439: 16648AEPS [242A8967]MSG: @(51,47) of [0,0]: (CP) (ColorPlate(mBlockDogTimer=(XTimer<4u 15u 4096u>(time=0),mColor=[0]=8,[1]=8,[2]=0,)PayloadT<16u>(mBits=0x0,mHasPayload=false,)Stride2x2(mStride=[0]=0,[1]=0,)B2DTPlate<7u>(mSizeOfPlate=(B2DT<7u>(mX=29,mY=26),mPosOnPlate=(B2DT<7u>(mX=13,mY=20),mDeathBits=0x3,)QStream12(mBufferStatus=0)
+    20210726081440-46447: 16648AEPS [242A8967]MSG: @(51,40) of [0,0]: (WM) (WeightMatrix(mSumDir=1,mStateDir=0,)StdLink(mWeight=-2,mSum=-128,mState=1,)B2DTPlate<7u>(mSizeOfPlate=(B2DT<7u>(mX=12,mY=11),mPosOnPlate=(B2DT<7u>(mX=5,mY=5),mDeathBits=0x3)
+    20210726081440-46455: 16648AEPS [242A8967]MSG: @(53,41) of [0,0]: (CP) (ColorPlate(mBlockDogTimer=(XTimer<4u 15u 4096u>(time=0),mColor=[0]=8,[1]=8,[2]=0,)PayloadT<16u>(mBits=0x0,mHasPayload=false,)Stride2x2(mStride=[0]=0,[1]=0,)B2DTPlate<7u>(mSizeOfPlate=(B2DT<7u>(mX=29,mY=26),mPosOnPlate=(B2DT<7u>(mX=15,mY=14),mDeathBits=0x3,)QStream12(mBufferStatus=0)
+    20210726081440-46471: 16648AEPS [242A8967]MSG: @(55,39) of [0,0]: (CP) (ColorPlate(mBlockDogTimer=(XTimer<4u 15u 4096u>(time=0),mColor=[0]=8,[1]=8,[2]=0,)PayloadT<16u>(mBits=0x0,mHasPayload=false,)Stride2x2(mStride=[0]=0,[1]=0,)B2DTPlate<7u>(mSizeOfPlate=(B2DT<7u>(mX=29,mY=26),mPosOnPlate=(B2DT<7u>(mX=17,mY=12),mDeathBits=0x3,)QStream12(mBufferStatus=0)
+    20210726081440-46479: 16648AEPS [242A8967]MSG: @(47,46) of [0,0]: (WM) (WeightMatrix(mSumDir=1,mStateDir=0,)StdLink(mWeight=11,mSum=0,mState=-1,)B2DTPlate<7u>(mSizeOfPlate=(B2DT<7u>(mX=12,mY=11),mPosOnPlate=(B2DT<7u>(mX=3,mY=8),mDeathBits=0x3)
+    20210726081440-46487: 16648AEPS [242A8967]MSG: @(47,52) of [0,0]: (CP) (ColorPlate(mBlockDogTimer=(XTimer<4u 15u 4096u>(time=0),mColor=[0]=8,[1]=8,[2]=0,)PayloadT<16u>(mBits=0x0,mHasPayload=false,)Stride2x2(mStride=[0]=0,[1]=0,)B2DTPlate<7u>(mSizeOfPlate=(B2DT<7u>(mX=29,mY=26),mPosOnPlate=(B2DT<7u>(mX=10,mY=25),mDeathBits=0x3,)QStream12(mBufferStatus=0)
+    20210726081440-46495: 16648AEPS [242A8967]MSG: @(51,38) of [0,0]: (WM) (WeightMatrix(mSumDir=1,mStateDir=0,)StdLink(mWeight=34,mSum=-126,mState=-1,)B2DTPlate<7u>(mSizeOfPlate=(B2DT<7u>(mX=12,mY=11),mPosOnPlate=(B2DT<7u>(mX=5,mY=4),mDeathBits=0x3)
+    20210726081440-46503: 16648AEPS [242A8967]MSG: @(51,45) of [0,0]: (CP) (ColorPlate(mBlockDogTimer=(XTimer<4u 15u 4096u>(time=0),mColor=[0]=8,[1]=8,[2]=0,)PayloadT<16u>(mBits=0x0,mHasPayload=false,)Stride2x2(mStride=[0]=0,[1]=0,)B2DTPlate<7u>(mSizeOfPlate=(B2DT<7u>(mX=29,mY=26),mPosOnPlate=(B2DT<7u>(mX=13,mY=18),mDeathBits=0x3,)QStream12(mBufferStatus=0)
+    20210726081440-46511: 16648AEPS [242A8967]MSG: @(52,52) of [0,0]: (CP) (ColorPlate(mBlockDogTimer=(XTimer<4u 15u 4096u>(time=0),mColor=[0]=8,[1]=8,[2]=0,)PayloadT<16u>(mBits=0x0,mHasPayload=false,)Stride2x2(mStride=[0]=0,[1]=0,)B2DTPlate<7u>(mSizeOfPlate=(B2DT<7u>(mX=29,mY=26),mPosOnPlate=(B2DT<7u>(mX=14,mY=25),mDeathBits=0x3,)QStream12(mBufferStatus=0)
+    20210726081440-46519: 16648AEPS [242A8967]MSG: @(61,29) of [0,0]: (CP) (ColorPlate(mBlockDogTimer=(XTimer<4u 15u 4096u>(time=0),mColor=[0]=8,[1]=8,[2]=0,)PayloadT<16u>(mBits=0x0,mHasPayload=false,)Stride2x2(mStride=[0]=0,[1]=0,)B2DTPlate<7u>(mSizeOfPlate=(B2DT<7u>(mX=29,mY=26),mPosOnPlate=(B2DT<7u>(mX=23,mY=2),mDeathBits=0x3,)QStream12(mBufferStatus=0)
+    20210726081440-46535: 16648AEPS [242A8967]MSG: @(55,38) of [0,0]: (RM) (ReinforcementMatrix(mRootPos=(B2DT<4u>(mX=0,mY=14),mLink1SN=1,mLink2SN=5,mReinforcement=-1,)Flood(mCommandState=2,)B2DTPlate<7u>(mSizeOfPlate=(B2DT<7u>(mX=12,mY=11),mPosOnPlate=(B2DT<7u>(mX=6,mY=4),mDeathBits=0x3)
+    20210726081440-46559: 16648AEPS [242A8967]MSG: @(59,32) of [0,0]: (RM) (ReinforcementMatrix(mRootPos=(B2DT<4u>(mX=0,mY=14),mLink1SN=1,mLink2SN=5,mReinforcement=-1,)Flood(mCommandState=2,)B2DTPlate<7u>(mSizeOfPlate=(B2DT<7u>(mX=12,mY=11),mPosOnPlate=(B2DT<7u>(mX=8,mY=1),mDeathBits=0x3)
+    20210726081440-46583: 16648AEPS [242A8967]MSG: @(53,36) of [0,0]: (WM) (WeightMatrix(mSumDir=1,mStateDir=0,)StdLink(mWeight=-38,mSum=-125,mState=1,)B2DTPlate<7u>(mSizeOfPlate=(B2DT<7u>(mX=12,mY=11),mPosOnPlate=(B2DT<7u>(mX=6,mY=3),mDeathBits=0x3)
+    20210726081440-46591: 16648AEPS [242A8967]MSG: @(62,27) of [0,0]: (CP) (ColorPlate(mBlockDogTimer=(XTimer<4u 15u 4096u>(time=0),mColor=[0]=8,[1]=8,[2]=0,)PayloadT<16u>(mBits=0x0,mHasPayload=false,)Stride2x2(mStride=[0]=0,[1]=0,)B2DTPlate<7u>(mSizeOfPlate=(B2DT<7u>(mX=29,mY=26),mPosOnPlate=(B2DT<7u>(mX=24,mY=0),mDeathBits=0x3,)QStream12(mBufferStatus=0)
+    20210726081440-46599: 16648AEPS [242A8967]MSG: @(57,27) of [0,0]: (CP) (ColorPlate(mBlockDogTimer=(XTimer<4u 15u 4096u>(time=0),mColor=[0]=8,[1]=8,[2]=0,)PayloadT<16u>(mBits=0x0,mHasPayload=false,)Stride2x2(mStride=[0]=0,[1]=0,)B2DTPlate<7u>(mSizeOfPlate=(B2DT<7u>(mX=29,mY=26),mPosOnPlate=(B2DT<7u>(mX=20,mY=0),mDeathBits=0x3,)QStream12(mBufferStatus=0)
+    20210726081440-46623: 16648AEPS [242A8967]MSG: @(57,32) of [0,0]: (WM) (WeightMatrix(mSumDir=1,mStateDir=0,)StdLink(mWeight=39,mSum=72,mState=1,)B2DTPlate<7u>(mSizeOfPlate=(B2DT<7u>(mX=12,mY=11),mPosOnPlate=(B2DT<7u>(mX=8,mY=1),mDeathBits=0x3)
+    20210726081440-46655: 16648AEPS [242A8967]MSG: @(55,34) of [0,0]: (WM) (WeightMatrix(mSumDir=1,mStateDir=0,)StdLink(mWeight=24,mSum=-70,mState=-1,)B2DTPlate<7u>(mSizeOfPlate=(B2DT<7u>(mX=12,mY=11),mPosOnPlate=(B2DT<7u>(mX=7,mY=2),mDeathBits=0x3)
+    20210726081440-46679: 16648AEPS [242A8967]MSG: @(53,50) of [0,0]: (RM) (ReinforcementMatrix(mRootPos=(B2DT<4u>(mX=0,mY=14),mLink1SN=1,mLink2SN=5,mReinforcement=-1,)Flood(mCommandState=2,)B2DTPlate<7u>(mSizeOfPlate=(B2DT<7u>(mX=12,mY=11),mPosOnPlate=(B2DT<7u>(mX=5,mY=10),mDeathBits=0x3)
+    20210726081440-46687: 16648AEPS [242A8967]MSG: @(58,28) of [0,0]: (CP) (ColorPlate(mBlockDogTimer=(XTimer<4u 15u 4096u>(time=0),mColor=[0]=8,[1]=8,[2]=0,)PayloadT<16u>(mBits=0x0,mHasPayload=false,)Stride2x2(mStride=[0]=0,[1]=0,)B2DTPlate<7u>(mSizeOfPlate=(B2DT<7u>(mX=29,mY=26),mPosOnPlate=(B2DT<7u>(mX=21,mY=1),mDeathBits=0x3,)QStream12(mBufferStatus=0)
+    20210726081440-46735: 16648AEPS [242A8967]MSG: @(61,27) of [0,0]: (CP) (ColorPlate(mBlockDogTimer=(XTimer<4u 15u 4096u>(time=0),mColor=[0]=8,[1]=8,[2]=0,)PayloadT<16u>(mBits=0x0,mHasPayload=false,)Stride2x2(mStride=[0]=0,[1]=0,)B2DTPlate<7u>(mSizeOfPlate=(B2DT<7u>(mX=29,mY=26),mPosOnPlate=(B2DT<7u>(mX=23,mY=0),mDeathBits=0x3,)QStream12(mBufferStatus=0)
+    20210726081440-46743: 16648AEPS [242A8967]MSG: @(57,30) of [0,0]: (WM) (WeightMatrix(mSumDir=1,mStateDir=0,)StdLink(mWeight=32,mSum=32,mState=1,)B2DTPlate<7u>(mSizeOfPlate=(B2DT<7u>(mX=12,mY=11),mPosOnPlate=(B2DT<7u>(mX=8,mY=0),mDeathBits=0x3)
+    20210726081440-46759: 16648AEPS [242A8967]MSG: @(48,52) of [0,0]: (CP) (ColorPlate(mBlockDogTimer=(XTimer<4u 15u 4096u>(time=0),mColor=[0]=8,[1]=8,[2]=0,)PayloadT<16u>(mBits=0x0,mHasPayload=false,)Stride2x2(mStride=[0]=0,[1]=0,)B2DTPlate<7u>(mSizeOfPlate=(B2DT<7u>(mX=29,mY=26),mPosOnPlate=(B2DT<7u>(mX=11,mY=25),mDeathBits=0x3,)QStream12(mBufferStatus=0)
+    20210726081440-46767: 16649AEPS [242A8967]MSG: @(56,33) of [0,0]: (CP) (ColorPlate(mBlockDogTimer=(XTimer<4u 15u 4096u>(time=0),mColor=[0]=8,[1]=8,[2]=0,)PayloadT<16u>(mBits=0x0,mHasPayload=false,)Stride2x2(mStride=[0]=0,[1]=0,)B2DTPlate<7u>(mSizeOfPlate=(B2DT<7u>(mX=29,mY=26),mPosOnPlate=(B2DT<7u>(mX=19,mY=6),mDeathBits=0x3,)QStream12(mBufferStatus=0)
+    20210726081440-46783: 16649AEPS [242A8967]MSG: @(57,28) of [0,0]: (CP) (ColorPlate(mBlockDogTimer=(XTimer<4u 15u 4096u>(time=0),mColor=[0]=8,[1]=8,[2]=0,)PayloadT<16u>(mBits=0x0,mHasPayload=false,)Stride2x2(mStride=[0]=0,[1]=0,)B2DTPlate<7u>(mSizeOfPlate=(B2DT<7u>(mX=29,mY=26),mPosOnPlate=(B2DT<7u>(mX=20,mY=1),mDeathBits=0x3,)QStream12(mBufferStatus=0)
+    20210726081440-46807: 16649AEPS [242A8967]MSG: @(57,35) of [0,0]: (CP) (ColorPlate(mBlockDogTimer=(XTimer<4u 15u 4096u>(time=0),mColor=[0]=8,[1]=8,[2]=0,)PayloadT<16u>(mBits=0x0,mHasPayload=false,)Stride2x2(mStride=[0]=0,[1]=0,)B2DTPlate<7u>(mSizeOfPlate=(B2DT<7u>(mX=29,mY=26),mPosOnPlate=(B2DT<7u>(mX=19,mY=8),mDeathBits=0x3,)QStream12(mBufferStatus=0)
+    20210726081440-46815: 16649AEPS [242A8967]MSG: @(58,29) of [0,0]: (CP) (ColorPlate(mBlockDogTimer=(XTimer<4u 15u 4096u>(time=0),mColor=[0]=8,[1]=8,[2]=0,)PayloadT<16u>(mBits=0x0,mHasPayload=false,)Stride2x2(mStride=[0]=0,[1]=0,)B2DTPlate<7u>(mSizeOfPlate=(B2DT<7u>(mX=29,mY=26),mPosOnPlate=(B2DT<7u>(mX=21,mY=2),mDeathBits=0x3,)QStream12(mBufferStatus=0)
+    20210726081440-46847: 16649AEPS [242A8967]MSG: @(58,27) of [0,0]: (CP) (ColorPlate(mBlockDogTimer=(XTimer<4u 15u 4096u>(time=0),mColor=[0]=8,[1]=8,[2]=0,)PayloadT<16u>(mBits=0x0,mHasPayload=false,)Stride2x2(mStride=[0]=0,[1]=0,)B2DTPlate<7u>(mSizeOfPlate=(B2DT<7u>(mX=29,mY=26),mPosOnPlate=(B2DT<7u>(mX=21,mY=0),mDeathBits=0x3,)QStream12(mBufferStatus=0)
+    20210726081440-46871: 16649AEPS [242A8967]MSG: @(55,32) of [0,0]: (WM) (WeightMatrix(mSumDir=1,mStateDir=0,)StdLink(mWeight=-24,mSum=-46,mState=1,)B2DTPlate<7u>(mSizeOfPlate=(B2DT<7u>(mX=12,mY=11),mPosOnPlate=(B2DT<7u>(mX=7,mY=1),mDeathBits=0x3)
+    20210726081440-46879: 16649AEPS [242A8967]MSG: @(55,37) of [0,0]: (CP) (ColorPlate(mBlockDogTimer=(XTimer<4u 15u 4096u>(time=0),mColor=[0]=8,[1]=8,[2]=0,)PayloadT<16u>(mBits=0x0,mHasPayload=false,)Stride2x2(mStride=[0]=0,[1]=0,)B2DTPlate<7u>(mSizeOfPlate=(B2DT<7u>(mX=29,mY=26),mPosOnPlate=(B2DT<7u>(mX=17,mY=10),mDeathBits=0x3,)QStream12(mBufferStatus=0)
+    20210726081440-46895: 16649AEPS [242A8967]MSG: @(57,34) of [0,0]: (RM) (ReinforcementMatrix(mRootPos=(B2DT<4u>(mX=0,mY=14),mLink1SN=1,mLink2SN=5,mReinforcement=-1,)Flood(mCommandState=2,)B2DTPlate<7u>(mSizeOfPlate=(B2DT<7u>(mX=12,mY=11),mPosOnPlate=(B2DT<7u>(mX=7,mY=2),mDeathBits=0x3)
+    20210726081440-46903: 16649AEPS [242A8967]MSG: @(55,40) of [0,0]: (RM) (ReinforcementMatrix(mRootPos=(B2DT<4u>(mX=0,mY=14),mLink1SN=1,mLink2SN=5,mReinforcement=-1,)Flood(mCommandState=2,)B2DTPlate<7u>(mSizeOfPlate=(B2DT<7u>(mX=12,mY=11),mPosOnPlate=(B2DT<7u>(mX=6,mY=5),mDeathBits=0x3)
+    20210726081440-46911: 16649AEPS [242A8967]MSG: @(56,31) of [0,0]: (CP) (ColorPlate(mBlockDogTimer=(XTimer<4u 15u 4096u>(time=0),mColor=[0]=8,[1]=8,[2]=0,)PayloadT<16u>(mBits=0x0,mHasPayload=false,)Stride2x2(mStride=[0]=0,[1]=0,)B2DTPlate<7u>(mSizeOfPlate=(B2DT<7u>(mX=29,mY=26),mPosOnPlate=(B2DT<7u>(mX=19,mY=4),mDeathBits=0x3,)QStream12(mBufferStatus=0)
+    20210726081440-46919: 16649AEPS [242A8967]MSG: @(57,38) of [0,0]: (RM) (ReinforcementMatrix(mRootPos=(B2DT<4u>(mX=0,mY=14),mLink1SN=1,mLink2SN=5,mReinforcement=-1,)Flood(mCommandState=2,)B2DTPlate<7u>(mSizeOfPlate=(B2DT<7u>(mX=12,mY=11),mPosOnPlate=(B2DT<7u>(mX=7,mY=4),mDeathBits=0x3)
+    20210726081440-46927: 16649AEPS [242A8967]MSG: @(56,27) of [0,0]: (CP) (ColorPlate(mBlockDogTimer=(XTimer<4u 15u 4096u>(time=0),mColor=[0]=8,[1]=8,[2]=0,)PayloadT<16u>(mBits=0x0,mHasPayload=false,)Stride2x2(mStride=[0]=0,[1]=0,)B2DTPlate<7u>(mSizeOfPlate=(B2DT<7u>(mX=29,mY=26),mPosOnPlate=(B2DT<7u>(mX=19,mY=0),mDeathBits=0x3,)QStream12(mBufferStatus=0    20210726081440-46935: 16649AEPS [242A8967]MSG: @(56,28) of [0,0]: (CP) (ColorPlate(mBlockDogTimer=(XTimer<4u 15u 4096u>(time=0),mColor=[0]=8,[1]=8,[2]=0,)PayloadT<16u>(mBits=0x0,mHasPayload=false,)Stride2x2(mStride=[0]=0,[1]=0,)B2DTPlate<7u>(mSizeOfPlate=(B2DT<7u>(mX=29,mY=26),mPosOnPlate=(B2DT<7u>(mX=19,mY=1),mDeathBits=0x3,)QStream12(mBufferStatus=0)
+
+[44:
+
+Mon Jul 26 11:36:47 2021 Something like:
+
+
+    444444444455555555556666666666
+    012345678901234567890123456789
+
+ 25
+ 26
+ 27                 sZl  eY
+ 28                  id
+ 29                   k  U
+ 30                  f
+ 31                 q
+ 32                m a W
+ 33                 h
+ 34                b o
+ 35                  j
+ 36              X
+ 37                n
+ 38            R   V r
+ 39                O
+ 40            M   p
+ 41              N
+ 42              F
+ 43            K
+ 44            E
+ 45            S
+ 46        P
+ 47            L
+ 48          G
+ 49           H
+ 50            B A/c
+ 51          I J
+ 52        Qg C T
+ 53
+ 54
+
+[45:
+
+Mon Jul 26 12:09:29 2021 Which is a reasonably
+tectonic shape, I'd say..
+
+So right now I'm wondering about the whole logic
+in Plate.mustBlockOrDie().  It does a single
+center-out pass over the event window looking at
+ngb Plate instances and computing their
+relationship with self.[46:
+
+Mon Jul 26 12:35:46 2021 And I was wondering
+whether that's just not trustworthy enough, in the
+land DReg, but now I'm thinking: Yeah it's not
+trustworthy in the land of DReg, and we should just
+live with that for now, because 'fully'
+trustworthy in the land of DReg is too much to ask
+for.  In particular, we have no mechanism for Tc
+repair after swapping starts.
+
+[47:
+
+Mon Jul 26 12:41:26 2021 So are we moving on
+instead?  We're supposed to be switching to talk
+prep but we want more behavior here.  How about
+some possibilities:
+
+ - MORE COMPLEX FUT: E.g., Plateaus
+
+ - DISTRIBUTED FUT: Random sat?
+
+:47]
+
+:46]
+
+:45]
+
+:44]
+
+:43]
+[48:
+
+Mon Jul 26 12:48:21 2021 Let's make a distributed
+evaluator.  That would be a distinct step over the
+last update.
+
+I'd also like a way to report results, though.
+Should we take a (biggish) side trip into a
+character display plate?
+
+Is there ANY chance we could find the font coding
+we did for the UCSD Design Lab talk?[49:
+
+Mon Jul 26 13:31:26 2021 Ooh, took a long time
+(and had to tailscale back to nubiga) but
+/data/ackley/papers/MF/asrepo/RT13/code/elements/fonts-20161128/
+looks very encouraging!
+[51:
+
+Tue Jul 27 04:32:33 2021 OK the original font demo
+is running again, and we're making ASCIIPlate
+designed to hold a single fixed-width char -- and
+we need to settle on some communications system to
+flood the plate when a new byte to display is
+presented.  Method + UMod spinner, take updates
+from anywhere?  Root flood with tick-tock?[52:
+
+Wed Jul 28 03:34:36 2021 Did root flood with
+Flood.ulam, went in pretty nicely.  Screwing with
+fonts was a pain as usual but we've settled on a
+few sizes and weights of Terminus and it looks
+pretty good.[53:
+
+Wed Jul 28 04:34:11 2021 Also did minor hacks in
+MFM (on the develop branch) to catch failures
+during painting (as we already do on the mfmt2
+branch), and in ULAM/tcc to avoid a fail during
+fail when we don't have an event window.
+
+Should probably just push that stuff before I
+forget.  We think there's D<->E develop branch
+repo merge coming up soon.[54:
+
+Wed Jul 28 05:12:16 2021 OK, merged D/E MFM/ULAM
+
+:54]
+
+:53]
+
+:52]
+
+:51]
+:49]
+
+:48]
+[50:
+
+Mon Jul 26 13:42:23 2021 POSSIBLE OLD VIDS FOR
+HISTORY MONTAGE:
+
+/data/ackley/papers/MF/asrepo/RT13/code/elements/20150517-locoord/20150601174548.mp4
+
+ - Xinyu Boxes dancing on the heatmap
+
+/data/ackley/papers/MF/asrepo/RT13/code/elements/20150722-ecal/20150722032126.mp4
+
+ - Unconfined random directional mob tears itself up.
+
+/data/ackley/papers/MF/asrepo/RT13/code/elements/cell1.0-20160619/notes/20160610234047.mp4
+
+ - Loose red mobs condensing into slow space -
+   edge/corners
+
+/data/ackley/papers/MF/asrepo/RT13/code/elements/cell1.0-20160619/notes/20160620120304.mp4
+
+ - CPlate surrounding random shapes and then
+   moving them with swaplines
+
+/data/ackley/papers/MF/asrepo/RT13/code/elements/cell1.0-20160619/notes/20160621163215.mp4
+
+ - CPlate starting to repro large object, with
+   many bugs
+
+/data/ackley/papers/MF/asrepo/RT13/code/elements/cell1.5-20160808/outputs/20160808121937.mp4
+
+ - Early cell membrane messing up and everting
+
+:50]
+[55:
+
+Wed Jul 28 05:13:38 2021 So how do we whip up a
+distributed function to evaluate?  What does the
+double plus extended super egg look like?
+
+ ..                  PQ: Poll question vector
+ .. Ev PQ W<         VV: Voter vector
+ PS MS S1 Wv RM      W<: Weight matrix summing toward PQ
+ .. .. SO VV S2      Wv: Weight matrix summing toward VV / SeedWeightMatrix
+ .. .. .. CP ..      S1: StateGate routing PQ out to Wv
+                     S2: StateGate routing VV out to W<
+                     RM: Reinforcement matrix
+                     SO: SIGHOperator
+                     Ev: Evaluator
+                     PS: Problem Seed
+                     CP: Containing Plate
+                     MS: Migratory seed (for a PlateOperator)
+
+and PS does like what
+
+   .. .. ..
+   .. .. .. Ev PQ W<
+   .. .. PS MS S1 Wv RM
+   .. .. .. .. SO VV S2
+   .. .. .. .. .. CP ..
+
+[56:
+
+Wed Jul 28 05:39:22 2021 Are we saying there's a
+whole separate state machine in like a
+ProblemOperator?  Or SIGHOperator runs it all?
+
+Separate state machine.
+
+ SIGHSeed
+   .. .. ..
+   .. .. .. .. PQ W<
+   .. .. .. .. S1 Wv RM
+   .. .. .. FS SO VV S2
+   .. .. .. .. .. CP ..
+
+heading for like
+
+   .. .. .. S3             Pv: Weight matrix summing toward FT
+   .. .. Pv Pv PQ W<       S3: StateGate routing PQ out to Pv
+   .. .. .. S3 S1 Wv RM    FT: Function Term vector
+   .. .. FT FT SO VV S2
+   .. CP CP CP CP CP ..
+
+ FunctionSeed
+
+   .. .. .. ..
+   .. TM TM TM PQ W<
+   .. TM TM MS S1 Wv RM   FS: FunctionSeed/FunctionOperator
+   .. TU TU FS SO VV S2   TV:
+   .. .. .. .. .. CP ..
+
+
+:56]
+
+:55]
+[57:
+
+Thu Jul 29 11:18:22 2021 
+
+   .. .. .. S3             Pv: Weight matrix summing toward FT
+   .. .. Pv Pv PQ W<       S3: StateGate routing PQ out to Pv
+   .. .. MS S3 S1 Wv RM    FT: Function Term vector
+   .. .. FT FT SO VV S2
+   .. NP NP NP NP NP CP
+
+  :57]
+[58:
+
+Thu Jul 29 16:13:38 2021 OK come on running out of
+time if we're going for this.  We have the minimal
+pieces in places but we need SIGHOperator2 to
+sequence them.
+
+Can we do it all backwards somehow?  I feel like I
+have all these races between state flowing towards
+next steps.
+
+Backwards:
+ - Consequence:
+   if mEnter
+      Sum up active FT scores
+   else
+
+
+---
+    Trigger PQ (reads VV), wait for ready
+    Trigger PQ->VV and PQ->FT, wait for both ready
+    Trigger FT (judge) and VV (react), wait for both ready
+    Pass FT result to Evaluator, get reinforcement
+    Trigger RM, wait for ready
+    Loop
+
+So that still has a race in triggering FT..
+Do we even need a gate at PQ->FT?  That can't just
+be flow-through / combinational?  
+    
+    Trigger PQ (reads VV), wait for ready
+    Trigger PQ->VV, wait for both ready
+    Trigger FT (judge) and VV (react), wait for both ready
+    Pass FT result to Evaluator, get reinforcement
+    Trigger RM, wait for ready
+    Loop
+
+
+ 1. React to election
+    if mENTER
+     - Trigger PQ->VV stategate
+     - ALSO trigger PQ->FT stategate
+     - mEnter = false
+    else if both stategates are ready
+    
+
+:58]
+[59:
+
+Thu Jul 29 18:30:15 2021
+
+Trigger FT (reads PQ
+
+:59]
+
+[60:
+
+Sat Jul 31 15:44:25 2021 OK so we're past the BDA
+Workshop and the less said about my outing the
+better. 
+
+:60]
+[61:
+
+Sat Jul 31 15:45:00 2021 So today we made
+sigmoid.pl -> Sigmoid.ulam and it's time to redo
+the phony decision rule I made up two weeks ago
+for something more approximating the actual SIGH
+rules.
+[62:
+
+Sun Aug  1 15:39:09 2021 Well, so it looks like
+sigmoid.pl is vaguely plausible -- and the apathy
+implementation in SIGH.ulam is a whole lot more
+plausible too.
+
+AND THE DESCRIPTION PLUS TWO EQUATIONS IN STEP 3
+OF FIGURE 3-7 OF A CONNECTIONIST MACHINE FOR
+GENETIC HILLCLIMBING ARE FLAT OUT WRONG!?!
+
+:62]
+:61]
