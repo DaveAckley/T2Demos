@@ -1,0 +1,105 @@
+{5}  -*-  mode: text; fill-column: 50;  -*-
+[0:
+
+Fri Aug 27 09:00:03 2021 OK so we have a bunch of
+stuff starting to work here, with no local notes
+file bad bad.
+
+[1:
+
+Fri Aug 27 09:01:28 2021 Importing some bits from
+other notes files:
+
+    [:
+
+    Sun Aug 22 06:31:57 2021 So Payload (whatever it's
+    called)
+
+    A tag
+
+    quark Carrier {
+      //// Carrier API
+      virtual Bool hasPayload() ;
+      virtual Payload & examine() ; //< must not fail if hasPayload
+    }
+
+    quark Payload {
+    }
+
+    quark PayloadT(Unsigned cTAG_BITS, Unsigned cDATA_BITS) : Payload {
+    }
+
+    [:
+
+    Sun Aug 22 10:48:10 2021 But are we going to have
+    the put-together-multiple-pieces or not?  That
+    goes to whether 'in-place' payload execution makes
+    sense or not.
+
+    PRO IN-PLACE
+
+     - Can use ew.getSiteNumber(UrSelf&)
+
+    :]
+    :]
+
+
+    Fri Aug 27 02:04:03 2021 Where are we?
+
+     - We've got BitStorage.ulam with the minimum
+       ingredients working.
+
+     - We've demoed a 'persistent transient' using
+       BitStorage.recast
+
+     - We have *not* demoed a persistent transient
+       that's larger than 71 bits, though
+
+     - We have a start at Spork.ulam but no code uses
+
+     - Let's make some Spork code uses.
+
+:1]
+
+:0]
+[2:
+
+Fri Aug 27 10:48:03 2021 OK so, we now have:
+
+ - MyElement successfully gather-scatters a 222
+   bit Zong transient and thereby makes it
+   persistent.
+
+ - But the gather/scatter is one-off code in
+   MyElement.  Can we lift that somewhere anywhere
+   else?  Challenge is the iteration, and
+   believing the bits
+
+How about a new API 'transient Persistent' :) ?
+
+We'd like to add a checksum feature to a
+more-automated gather/scatter, so underlying plate
+healing up will likely be detected.[3:
+
+Fri Aug 27 11:13:46 2021 Which all loops us back
+to the foundational question:
+
+ - How do we identify the contributing bit chunks
+   and their proper positions in the bitstorage?
+
+If we trusted our checksum we might even just skip
+ensuring that the contributed bit chunks actually
+cover the entire Persistent, hmm.
+
+:3]
+
+:2]
+[4:
+
+Sun Aug 29 20:24:42 2021 So unfortunately I
+switched to 202108201451-level-two-plate-notes.txt
+by accident so I've copied that into this dir and
+will continue there.  (But 'transient Persistent'
+with checksumming is finally starting to work.)
+
+:4]

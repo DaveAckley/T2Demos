@@ -1,0 +1,2180 @@
+{142}  -*-  mode: text; fill-column: 50;  -*-
+[0:
+
+Fri Aug 20 14:51:52 2021 OK, so there's no notes
+here on L2 plates (because I started working on
+them in /personal).
+
+So this is that.
+
+:0]
+[1:
+
+Fri Aug 20 14:53:09 2021 So we need to review what
+we think is supposed to happen for L2 semantics.
+
+Issues off the top of my head:
+
+ - The sequencer problem: Do we really need to
+   reserve row and col 1 just to clear (1,1) for a
+   sequencer?  That's a big drag.
+
+ - Could we do most regulation at the centers of
+   the sides, with perhaps some limited stuff at
+   corners and even more limited stuff at the
+   root?
+
+   = Like: checking distance to L2 ngb, and
+   alignment center to center.
+
+ - Could we use the payload slot of a
+   b2dstreamplate for additional sequencer state,
+   and have the resulting thing hop packets over
+   itself as needed?  Then we could have a variety
+   of custom things all deployed in the same base
+   type plate atoms.
+
+ - We had the plates trying to flash-repair
+   themselves into existence but we think it ought
+   to be grown?  But do we really?  What if we try
+   to flash-repair but just fill with L2Plate, and
+   have the new site self-check and declare itself
+   ready for seeding once it's complete?
+
+ - How actually do we break symmetry when two
+   misaligned L2s repair into the same area?  Some
+   random tag number that declares a consistent
+   winner as long as the tags aren't identical?
+   How many bits would we blow for that?
+
+[2:
+
+Fri Aug 20 15:15:32 2021
+
+ - How would we actually delegate to the Payload
+   slot?  What's the API there -- how do we tell
+   what's in there?  It's either got a packet or a
+   packet handler?  Or a more general handler?
+
+:2]
+:1]
+[3:
+
+Fri Aug 20 23:20:00 2021 OK go.
+
+:3]
+[4:
+
+Fri Aug 20 23:20:11 2021 I do want to think about
+objects-in-Payloads.  If, in particular, we could
+have at least one 'general sequencer' -- general
+meaning replaceable -- without reserving a whole
+row and/or col for it, that would be great.
+
+Let's make a plan of attack for a spike on this.
+
+ - Review Payload
+
+..actually, screw it: Let's start a whole new
+spike/demo: L2Plate, and start the selective
+import, trying to squeeze and rationalize and
+document as we go.
+
+Let's have a first minimal cut running by midnight
+here.
+[5:
+
+Fri Aug 20 23:35:21 2021 Moving this file to
+../../L2Plate/notes/ ..[6:
+
+Fri Aug 20 23:38:10 2021 Whups.. UPDATING C2D.inc
+IN E/ULAM !!!!
+
+:6]
+
+:5]
+
+:4]
+[7:
+
+Fri Aug 20 23:40:42 2021 In So Far:
+
+Plate, Plate1, PlateUtils
+[8:
+
+Fri Aug 20 23:41:37 2021 OK here's a question: Why
+do we need B2D.ulam separate from C2D.ulam/.inc?
+Shouldn't we be able to merge them, and then just
+treat 'B2D' as like 'C2DT(7)'?
+
+..Because C2D was written before templates
+existed, that's why C2D.inc exists.  Should we
+care about preserving that?
+
+FOG IT LET'S MODRUN IT UP.[9:
+
+Sat Aug 21 00:22:44 2021 Ohhhhhhkaaay.. in the
+middle of reimplementing C2D following the pattern
+of B2D and running into a couple little issues,
+like:
+
+ - B2D inits to an invalid B2D while C2D inits to
+   (0,0).  Not following the C2D way would bust a
+   LOT of stuff.
+
+ - B2Ds become invalid on positive overflow but
+   saturate and remain valid on negative
+   overflow.  That's pretty weird.  [10:
+
+Sat Aug 21 00:55:21 2021 Should we ditch all that
+and say everything's always valid?  Say that C2D
+users can declare maxof (or probably better,
+minof) to be illegal, and use it that way, but
+it's on them to deal with saturing into
+illegality, not C2D.
+
+:10]
+
+:9]
+
+:8]
+
+:7]
+[11:
+
+Sat Aug 21 01:09:37 2021 ulam polish thoughts:
+
+----
+./C2D.ulam:130:3: ERROR: Duplicate defined function '_operator2b3d' with the same parameters.
+
+ - could possibly note where the duplicate(s) are?
+ - could possibly decode the function name?
+----
+
+----
+./C2D.inc:234:26: ERROR: Use explicit cast to convert Unsigned(4) to Int(4) for unary -.
+
+ - if a file is 'load'-ed from some other file,
+   could perhaps conceivably maybe note that other
+   file in error messages?
+----
+
+----
+./PlateUtils.ulam:444:28: ERROR: Named Constant 'cMAXVAL' is not defined, or was used before declared in a function.
+
+ - could possibly have constants defined in a base
+   class template available via subclass lookup?
+
+quark FooT(Unsigned cN) {
+  constant Unsigned cTHE_N = cN;
+}
+
+quark SubFoo : FooT(6u) { }
+
+element Foo {
+  //WORKS but bad for DRY:        Unsigned mVal = FooT(6u).cTHE_N;
+  //WORKS but bad for modularity: Unsigned mVal = SubFoo.Super.cTHE_N;
+  Unsigned mVal = SubFoo.cTHE_N; // Could work?
+}
+----
+./PlateUtils.ulam:452:10: ERROR: Class 'B2D4' has no defined constructor with 1 matching argument type: C2D(28), and cannot be called.
+
+ - hmm, 'C2D(28)' looks like a template instance,
+   but it's a class name plus a total bitsize?
+
+----
+[31:
+
+Mon Aug 23 00:19:48 2021 Seems like this could
+build
+----
+./Foo.ulam:1:7: ERROR: Building default value in progress for class Foo; requested member of same type.
+
+quark Foo {
+  Bool mArg;
+  constant Self cFooT = { .mArg = true };
+  constant Self cFooF = { .mArg = false };
+}
+----
+
+
+
+:31]
+
+[12:
+
+OHHH FOG.  NOW, ONLY NOW, I remember why B2D and
+C2D are separate: B2D USES UNSIGNED COORDS!
+
+[13:
+
+Sat Aug 21 01:28:18 2021 SOOOO, we can't unite
+them with an ulam template, but if we kept the
+C2D.inc structure, we could add like
+
+    quark B2DT(Unary(16) cBITS_PER_COORD) {
+      typedef Unsigned(cBITS_PER_COORD) Coord;
+
+    load "C2D.inc";
+
+    }
+
+    quark B2D : B2DT(7u) { }
+
+    quark B24 : B2DT(4u) { }
+
+to C2D.ulam "and be done with it"
+
+Or we could put B2D stuff in B2D.ulam and add back
+all the invalidation stuff?
+
+:13]
+:12]
+
+:11]
+[14:
+
+Sat Aug 21 08:00:22 2021 OK, so current files are
+
+    B2D.ulam
+    B2DPlate.ulam
+    B2DStreamPlate.ulam
+    C2D.inc
+    C2D.ulam
+    Payload.ulam
+    Plate.ulam
+    Plate1.ulam
+    PlateUtils.ulam
+    QStream12.ulam
+    QWorm.ulam
+    TBox.ulam
+
+and we're currently not building because
+B2DStreamPlate wants B2DPacket and beyond.  So
+that's where we were going to think about Payload
+a bit harder.
+
+[15:
+
+Sat Aug 21 08:17:52 2021 As it stands Payload is:
+
+      //// Payload API
+      typedef Bits(64) RawBits;     //< Uninterpreted payload bits of maximum size
+      virtual Bool loadFrom(RawBits rb) ;  //< true if (a prefix of) rb was successfully stored in Payload
+      virtual Bool storeTo(RawBits & rb) ; //< true if Payload was successfully stored in (a prefix of) rb
+
+and its only service is
+
+  //// Payload SERVICES
+  virtual Bool swapPayload(Self & othr) { //< true if self and other swapped payloads
+ ..
+
+[16:
+
+Sat Aug 21 08:25:32 2021 And I have to say that
+seems pretty reasonable as far as it goes.  Shall
+we think about a typed payload of some kind?
+
+Actually, let's tear out enough to get to building
+and take a look at the bit budgets.[17:
+
+Sat Aug 21 08:48:25 2021 So B2DPlate, using 7 bit
+coords, is at 30 of 32 bits. [18:
+
+Sat Aug 21 09:53:02 2021 And PayloadT(cBITS) is
+currently taking one bit for 'Bool mHasPayload',
+and we probably want to replace that with some
+kind of payload type mechanism that includes
+'empty' as a special case.
+
+:18]
+
+:17]
+
+:16]
+
+:15]
+
+:14]
+[19:
+
+Sat Aug 21 13:58:39 2021 Moving the flag.
+
+:19]
+[20:
+
+Sun Aug 22 01:04:30 2021 OK let's go again here.
+
+:20]
+[21:
+
+Sun Aug 22 01:05:11 2021 So, a 'general Payload'
+story.  Takes:
+
+ - It's (just) an approach to delegation
+
+ - It's (just) a HAS-A
+
+ - It's (just) a tagged union
+
+[22:
+
+Sun Aug 22 01:12:48 2021
+
+ - It's a subspace or nested space
+
+ - It's a plug-in architecture
+
+:22]
+
+:21]
+[23:
+
+Sun Aug 22 11:14:15 2021 Incorporating random
+notes from last night:
+[:
+
+Sun Aug 22 06:31:57 2021 So Payload (whatever it's
+called)
+
+A tag
+
+quark Carrier {
+  //// Carrier API
+  virtual Bool hasPayload() ;
+  virtual Payload & examine() ; //< must not fail if hasPayload
+}
+
+quark Payload {
+}
+
+quark PayloadT(Unsigned cTAG_BITS, Unsigned cDATA_BITS) : Payload {
+}
+
+[24:
+
+Sun Aug 22 11:20:04 2021 But are we going to have
+the put-together-multiple-pieces or not?  That
+goes to whether 'in-place' payload execution makes
+sense or not.
+
+PRO USE-IN-PLACE
+
+ - Can use ew.getSiteNumber(UrSelf&) to localize
+
+PRO LOAD/STORE
+
+ - Defined times to perform gather & scatter
+
+ :24]
+
+:]
+
+:23]
+[25:
+
+Sun Aug 22 11:21:21 2021 I think what would be
+most interesting is to modify/extend the existing
+load/store concept but absolutely base the whole
+payload hierarchy on a transient.
+[26:
+
+Sun Aug 22 11:33:00 2021 Let's rough it out maybe
+a couple times and see what we think.
+
+Name?
+
+[27:
+
+Sun Aug 22 12:16:52 2021
+
+"Activated complex (transition state): a temporary
+unstable arrangement of atoms in which old bonds
+are breaking and new bonds are forming"
+
+That seems about right..  Bit of a mouthful for a
+primal API though.  'Complex' is too simple and
+ambiguous though.
+
+'AComplex'
+'ActComplex'
+[28:
+
+Sun Aug 22 12:24:17 2021 Well maybe say yes to
+'ActivatedComplex' -- and have subclasses like to
+use 'AC' in their trade dress or whatever.
+
+:28]
+
+:27]
+
+:26]
+:25]
+[29:
+
+Sun Aug 22 12:26:06 2021
+
+transient ActivatedComplex {
+  //// ActivatedComplex API
+
+}
+
+transient ACFactory {
+  //// ACFactory API
+
+}
+
+:29]
+[30:
+
+Sun Aug 22 12:48:50 2021 So there seems to be no
+way to allocate storage on the stack that can
+later be cast to a transient.
+
+So that doesn't bode well for API calls like
+
+  ActivatedComplex & createComplex()
+
+or whatever.  But possibly we could 'do it all'
+inside a single call chain?  Something like:
+
+quark ActivatedComplexType {
+  //// ActivatedComplexType API
+  virtual Bits getType() ;
+  virtual Bool setType(Bits newType) ;
+
+  //// ActivatedComplexType SERVICES
+  Bool react() {
+    Bits actype = getType();
+    which (actype) {
+     case cACT_FOO: { ACFoo ac; return ac.process(self); }
+     case cACT_BAR: { ACBar ac; return ac.process(self); }
+     case cACT_GAH: { ACGah ac; return ac.process(self); }
+     // ..ETC..
+    }
+  }
+}
+
+// Like the tag in a tagged union
+quark ActivatedComplexTypeT(Unsigned cTYPE_BITS) {
+  typedef Bits(cTYPE_BITS) MyACType;
+  MyACType mACType;
+
+  @Override
+  virtual Bits getType() { return mACType; }
+}
+
+transient ActivatedComplex {
+  //// ActivatedComplex API
+  virtual Bool enter(SN around) ;
+  virtual Bool transition() ;
+  virtual Bits leave(SN around) ;
+
+  //// ActivatedComplex SERVICES
+  Bool process(ActivatedComplexType & act) {
+    EventWindow ew;
+    SN atsn = ew.getSiteNumber(act);
+    if (!ew.isAccessible(sn)) return false;
+
+    if (!enter(atsn)) return false;
+    if (!transition()) return false;
+    Bits newtype = leave(atsn);
+    act.setType(newtype); // Different or not
+    return true;
+  }
+}
+
+:30]
+[32:
+
+Mon Aug 23 00:32:53 2021 So okay, can we make some
+kind of cut at ActivatedComplex, or do we think
+that is too hard or somehow otherwise a bad idea?
+
+(1) Get a numeric type from ew[0]
+ (1.5) Bail unless the type is a subclass of ActivatedComplex
+(2) Build an instance of that type on the stack
+(3) Call ActivatedComplex.attempt(SN centersn) on
+    the instance
+
+And the 'hard part' is doing step (2) cleanly.
+Could hack it (as in ActivatedComplexType.react(),
+above) with a 'which (actype)' mentioning all
+concrete subclasses of ActivatedComplex but ugh.
+
+Main initial use case is a plate sequencer
+spread out across multiple border plates, to avoid
+requiring any interior sites for L2Plate
+business.
+
+Main general use is for relatively complex but
+immobile structures, so they can factor out the
+details of composing their own structure from
+(pieces of) (multiple) neighboring atoms, and just
+focus on the transitions they want to make.
+
+:32]
+[33:
+
+Mon Aug 23 01:52:31 2021 Well, I want to take a
+crack at it..  The general step (2).  At least
+maybe I'll regret it sooner rather than later.
+
+:33]
+[34:
+
+Mon Aug 23 02:46:53 2021 OK so we have a native
+stub for ActivatedComplexId.attemptEvent(ACId
+acid) now, and we want to flesh it out to do:
+
+(1) Treat acid as a classid/regid,
+(2) Find its UlamClass * acptr or return false;
+(3) return false unless acptr base ActivatedComplex
+(4) Build an UlamRef with acptr as effself
+(5) Make an ulam virtual function call to
+    ActivatedComplex.process(ActivateComplexId & ac)
+(6) Return whatever it returns
+
+:34]
+[35:
+
+Mon Aug 23 04:17:11 2021 OK we're somewhere around
+(3.5) -- we seem to've successfully declared a
+BitStorage on a BitVector<8192>, and now we're
+after an UlamRef pointing at it..
+
+:35]
+[36:
+
+Mon Aug 23 11:55:08 2021 OK, after a major
+overnight stupidity on my part, it appears our
+first cut is starting to work.
+[37:
+
+Mon Aug 23 12:15:54 2021 Well I was initting the
+tmpbv to zeros but it does seem I'd rather have
+the default value for the actual runtime-chosen
+class.  Can we get that going?[38:
+
+Mon Aug 23 12:34:21 2021 OK that actually seems
+plausible.  It's kind of magical -- just change a
+runtime type and all these different initialized
+data members spring into existence.
+[39:
+
+Mon Aug 23 13:48:28 2021 OK so what's a good next
+step here?
+
+Try to make a demo AC transient that assembles
+pieces from multiple sites, I guess?  Too big a
+jump?[40:
+
+Mon Aug 23 14:01:27 2021 Guess I need a little
+more design first though.  What are we actually
+going to demo?
+
+The 'actual' use case was to make an alternate
+Payload for B2DStreamPlate, and be able to strap
+together QStream.getNextSN(true) and false into a
+hefty 48 bit transient or something.
+
+But we've got lots of questions here:
+
+ - How is ActivatedComplex.enter(SN) going to
+   work?
+
+ - Is it supposed to be writing into arbitrary
+   bitfields of itself, to pack together
+   collections of bits from here and there?
+
+ - Or are we supposed to have to split the
+   transient up along data member lines and
+   deliberately put each chunk here or there?
+
+[41:
+
+Mon Aug 23 14:56:51 2021 It seems like we'd want
+to do the loading in some stylized way, before the
+transient is 'fully awake' so doing random bit
+writes is more motivated.  If we had some kind of
+weak 'loader script' to describe where to find the
+pieces and where to put them..
+
+[42:
+
+Tue Aug 24 01:54:33 2021 How about putting the
+loading on the ACId instead of the AC?[43:
+
+Tue Aug 24 01:56:16 2021 We could call like
+ACId.load(self) at the beginning of
+AC.process(ACId&) -- to avoid another virtual call
+in the native method -- but that kind of undercuts
+the whole 'AC isn't alive yet' perspective that
+external loading is trying to convey.  Or could we
+do a single non-virtual call back to ACId, instead
+of on to the AC, instead of calling process
+directly at all?  That should work, right?
+
+But it's not like ACId is going to know HOW to do
+the loading with no help from the AC, so what have
+we really gained?  Even if there was some kind of
+loading script language to use, we'd still have to
+run a method on the AC to get it, right?
+[44:
+
+Tue Aug 24 03:44:15 2021 If there was a whole
+separate Loader API then that could be provided
+separately before any methods run on the AC.  Load
+from QStream neighbor(s).  Load from tagged
+plates.
+
+If each data segment had a relative SN to the
+head, and the head segment had the ACId, we could
+forward events to the head -- and as long as all
+needed segments were accessible, we could be
+overclocking the AC by something like its size.
+
+quark Reactor { // AKA ActivatedComplexId ?
+
+}
+quark Reactant {
+  SN reactorSN() ;
+
+}
+[45:
+
+Tue Aug 24 04:13:49 2021 Well, a little bit need
+to start looking ahead to the 9am MichaelMarkNDave
+call, but I'm starting to think a couple things
+here:
+
+ - 'virtual transients' could be very cool, and a
+   nice advance in using spatial relationships in
+   a flexible and expressive way.
+
+ - But it is a ton of new design.  We should
+   consider taking this much effort as (most of) a
+   early spike at it, and move on for now.
+
+ - Because we are still miles from an 'inline' L2
+   sequencer, and we think we should probably just
+   hack that directly.  Strap two or if need be
+   three Payload segments together and lay a
+   sequencer on top.
+
+[46:
+
+Tue Aug 24 08:41:18 2021 Which takes us all the
+way back to: How to we extend/redo Payload?
+[47:
+
+Tue Aug 24 08:42:23 2021 We could keep the RawBits
+part for now perhaps?
+
+..The existing stuff is so focused on *moving*
+Payloads.  It seems we still have to put a layer
+above that to get going here at all anyway.
+
+:47]
+
+:46]:45]
+:44]
+:43]
+
+:42]
+
+:41]
+
+
+:40]
+
+:39]
+
+:38]
+
+:37]
+
+:36]
+[48:
+
+Sat Aug 28 10:32:59 2021 OK (I feel like I'm in
+the wrong notes file here but anyway) we have a
+minimal sort of L2Plate started here, and it's
+time to get serious about a Persistent
+L2Controller or Sequencer or whatever we call it.
+
+I'm thinking it might be good to have four
+instances of this thing, one centered on each
+face, with the North face, say, declared the
+primary for purposes of initiating L2Plate-level
+actions.
+[49:
+
+Sun Aug 29 02:23:11 2021 Too long as always, but
+we have an skeleton L2PlateSequencer embedded in
+all four faces of an L2Plate.  Restriction that
+the underlying L1 plate must be at least 3x3, to
+avoid having the L2PlateSequencer regions reach
+the corners of the L2 plate and step on each
+other.
+
+At the moment the L2PlateSequencer is only 34 bits
+but it's got plenty of room to grow with 72 bits
+available across three L2Plates.
+
+Actually we need to cut that back -- I think we
+want to preserve the QStream structure on top of
+the PayloadT slots so we'll cut two bits off each
+for that.[50:
+
+Sun Aug 29 02:30:48 2021 No, that's not a problem
+-- the QStream12.mBufferStatus is already separate
+from the PayloadT in L2Plate.  Keep our 72 bits,
+just set the status.
+
+:50]
+
+:49]
+:48]
+[51:
+
+Sun Aug 29 15:13:55 2021 OK I messed up the
+ulamrefs by trying to automate some of this
+gather/scatter stuff and now I'm way confused.
+
+What actually is the layout for all the pieces I
+intend to be manipulating?
+
+THE PLAYERS
+
+self
+  - An L2Plate that is having an event
+lio
+  - A local L2PlateSequencerIO, class size 4322
+mCenterPC
+  - A C2D data member of L2PlateSequencerIO, class size 32
+mIncr
+  - A C2D data member of L2PlateSequencerIO, class size 32
+Persistent
+  - A base class of L2PlateSequencerIO, class size 4258
+mBits
+  - A BitStorage data member of Persistent, class size 4096
+l2seq
+  - A ref to a L2PlateSequencer, lio's Persistent.mClassId, class size 34
+
+THEIR POSITIONS
+
+ In Persistent
+  - mBits is at pos 162
+  - UrSelf is at pos 4258
+ In L2PlateSequencer
+  - UrSelf is at pos 34
+ In lio the L2PlateSequencerIO
+  - mCenterPC is at pos 0
+  - mIncr is at pos 32
+  - Persistent is at pos 64
+    = Persistent.mBits is at pos 64+162=226
+      - l2seq target is at pos 226
+  - UrSelf is at pos 4322 of L2PlateSequencerIO
+
+[52:
+
+Sun Aug 29 15:32:00 2021
+
+THE ACTION
+
+..now, eventually, Persistent.get(Bool &) is
+called, and it calls
+
+  self.mBits.recast(mClassId, <true>)
+
+so for that recast call:
+ - self is a Persistent, at pos 64 of lio
+ - self.mBits is a BitStorage, at pos 226 of lio
+
+so inside BitStorage.recast(..) native, we should
+see:
+
+ ur.m_pos == 226
+ ur.m_len == 4096
+ ur.m_effself == <BitStorage*>
+
+and indeed we do see all of that.
+
+We should also see
+
+ ucptr == L2PlateSequencer::THE_INSTANCE
+
+and we do.
+
+We should also see
+
+ urselfpos == 34
+
+and we do.  Note that urselfpos is relative to the
+L2PlateSequencer -- the recast target -- NOT the
+BitStorage NOR the Persistent.
+
+[53:
+
+Sun Aug 29 15:43:53 2021
+
+We should also see
+
+ selfstg dereferencing to a BitStorage<EC> having
+ a size of 4322, since ur is pointing inside lio
+
+and we do.
+
+We should also see
+
+ ubspos == 226   pos of Persistent.mBits
+ ubslen == 4096  siz of Persistent.mBits
+
+and we do.
+
+[54:
+
+Sun Aug 29 15:49:28 2021
+
+We should also see
+UlamTransient::getDefaultTransient getting called
+on L2PlateSequencer::THE_INSTANCE with args of 226
+and the 4322 bitstorage.
+
+[55:
+
+Sun Aug 29 15:51:22 2021
+
+And we do, although gdb is messed up and showing
+us lines from L2PlateSequencer.ulam, so it's a
+little hard to tell.
+[56:
+
+Sun Aug 29 16:13:56 2021 (And then a bunch of
+unannotated stuff that all looked plausible
+happened.)
+
+And then eventually L2Plate.manifestControl calls
+
+      Bool closed =  lio.close();
+
+and we find ourselves in
+
+  Un_10442589210Persistent10::Uf_5close
+
+which isn't a virtual method.  And there, we have
+
+ ur.m_pos == 64
+ ur.m_len == 4258
+ ur.m_effSelt == Un_10443229218L2PlateSequencerIO10
+
+which maybe makes sense.  At least, we did say:
+
+    Persistent
+      - A base class of L2PlateSequencerIO, class size 4258
+and
+     In lio the L2PlateSequencerIO
+ ..   - Persistent is at pos 64
+
+[57:
+
+Sun Aug 29 16:45:05 2021 AAAAAAANNNNND SO the bug
+with in the fogging BitStorage native methods, the
+basic basic read(pos,len) and write(val,pos,len)
+methods, that were both failing to consider the
+'pos' that ALSO exists in the ur 'self' variable,
+so they only worked when the BitStorage happened
+to be at pos 0 of whatever larger object it was
+in.
+[58:
+
+Sun Aug 29 20:26:15 2021 And the same bug was also
+in computeChecksum() but I found that one a little
+quicker (before dinner/eve).[59:
+
+Sun Aug 29 20:29:46 2021 Steps to get something L2
+showable:
+
+ - Show ability to send and recv packets from
+   Persistent level.
+
+ - Scan outwards for L2 neighbor distance and alignment
+
+ - Ship sensor data around the ring, grounding it
+   (and reissuing) when it loops.  (Maybe ship
+   sensor data when it changes?)
+
+ - Accumulate sensor data at all face centers.
+
+ - Select action at north face
+[60:
+
+Sat Sep  4 04:38:32 2021 OK, so way past time to
+get moving on some closer-to-actual L2 goals here.
+
+Sending and receiving packets means we have to at
+least refresh if not redesign our QStream12 border
+packet implementation.
+
+Let's at least check how it might interact with
+our gather/scatter and Persistent transient.
+
+..how does the L2PlateSequencer get triggered?
+
+ L2Plate.behave() ->
+   checkLocalActions() ->
+     checkFaces() ->
+       manifestControl(..) ->
+         L2PlateSequencerIO lio
+         L2PlateSequencer & l2seq = lio.get(..)
+         l2seq.update()
+
+So checkFace() diverts based on position along
+border, and checkLocalActions would reasonably
+divert to check for packet handling if checkFaces
+had no interest.
+
+Now we have L2PlateSequencerIO.scatter(..)
+interacting with the packet system to the extent
+that it sets flags while scattering:
+
+      if (a as L2Plate) {
+ ..     a.mHasPayload = true;
+        a.mBufferStatus = a.cARRIVED_PACKET;
+
+so that all the scattered-to payload locations
+appear to be busy holding an inbound packet.  So
+that should keep QStream12 from messing with those
+payloads.  And so L2PlateSequencer will need to
+reach out into the border around it to deal with
+packets.
+
+So there's a first thing to look at.  Can we make
+like
+
+  Bool L2PlateSequencer.recv(Packet & pkt, Bool dir)
+
+or something?[61:
+
+Sat Sep  4 05:28:52 2021 First question is how do
+we do anything with the event window once we're
+inside a transient?  Do we want to do it via the
+Persistent level rather than the persisted object?
+It's the Persistent that has the gather/scatter,
+and thus needs to access the event window.
+[62:
+
+Sat Sep  4 05:33:29 2021 For the L2Plate anyway it
+seems the obvious idea would be to go to plate
+coords and then to ewsn from there.  That would
+standardize across the different sites that the
+persister could be running from.
+
+In the bigger picture we're asking about spatial
+localization of an object that we deliberately
+'despatialized'.
+
+Could we want like a Space or Spatial API to
+represent the spatial information that we
+suppressed in moving to a virtual object?
+
+[63:
+
+Sat Sep  4 05:48:41 2021 Well we haven't really
+given up space anyway -- we've just moved to a
+bigger granularity than a single site.
+
+We want to ask about sites 'off the ends' of our
+L2PlateSequencer spatial representation -- and
+those sites aren't even always east or west of
+us.  So just having an ew anchor won't resolve
+them completely anyway.
+
+So what if we changed
+
+  Bool L2PlateSequencer.update()
+
+to
+
+  Bool L2PlateSequencer.update(L2PlateSequencerIO &)
+
+and added
+
+  SN L2PlateSequencerIO.getIOPlate(Bool cw)
+
+to access the packet ports?
+
+[64:
+
+Sat Sep  4 06:16:56 2021 About time for a nap but
+we're also going need to know where are which way
+to scan outwards for sensory stuff.  Is that yet
+more custom L2PlateSequencerIO methods?  That
+doesn't feel very general.
+
+Nap.
+[65:
+
+Sat Sep  4 11:09:48 2021 If we dared we could use
+event window symmetries to 'correct for' the
+different edge orientations?  Think that's
+probably a mistake -- like it would break
+plateCoordToEWSN and stuff.
+
+[66:
+
+Sat Sep  4 12:27:27 2021 Yeah don't want to go
+down that road.  At least not that globally -- not
+changing all ew accesses at once.  Possibly
+something more local, though, allowing us to remap
+the virtual object origin and rotation, so that,
+say, SN 9 was always the CCW packet port and SN 12
+the CW packet port, and SN 2/10/22/38 always
+marched away from the L2Plate at the virtual
+object center (though SN 38 might be
+inaccessible).
+
+Something like that seems maybe not too bad.  In
+addition to gather and scatter, persistent
+provides a virtual object ew mapping that's
+defined however it likes, to be helpful to the
+virtual object.[67:
+
+Sun Sep  5 09:57:10 2021 So the positioning and
+orientation stuff gets set up in both L2Plate and
+L2PlateSequencerIO and it's all kind of a mess.
+
+Bool L2Plate.checkFaces() figures out which border
+we're on (expressed as a PlateDir) and where the
+center of the v[68:
+
+Sun Sep  5 10:10:36 2021 OK I give up.  We need
+another name for 'virtual object', and I Think I'm
+Going To Call It 'Plex'.
+
+ - ActivatedComplex is just too long
+
+ - Complex is just too overloaded
+
+ - ActComp is just too dumb
+
+etc.
+
+It apparently hails from the Latin 'plecto /
+plectere' meaning (I / to) 'weave, braid, twine,
+entwine', which all seems fine enough.
+
+[69:
+
+Sun Sep  5 10:19:10 2021 So, a Plex is a mechanism
+/ place where multiple pieces come together to
+interact, and somehow be transformed, and then
+leave.
+
+I try to 'coin no jargon before it's time'
+but.. it's time.
+
+RENAMING.[70:
+
+Sun Sep  5 10:27:08 2021 OK, aaaand what about the
+Persistent vs PersistentIO distinction?  How do we
+rename that.  'Plex' vs 'Plexer'?
+
+Plexio
+
+Emplextor
+
+transplex
+
+[71:
+
+Sun Sep  5 10:33:46 2021 ..Plecto?
+
+Do we even want to keep the distinction?  Can we
+collapse them?[72:
+
+Sun Sep  5 10:34:36 2021 The current Persistent
+really is closer to verb usage than noun.  It's
+the thing that gathers and scatters, not the thing
+that is gathered.  'Weaver' again
+
+[73:
+
+Sun Sep  5 10:46:13 2021 Gah, I asked: 'what is
+the root word meaning bring together' and I got
+'The English prefixes syn- along with its variant
+sym-, derived from Greek, mean together.'
+
+And google suggested the question: 'What is the
+Greek word meaning to bring together?'
+
+and suggested the 'Answer: System is derived from
+the Greek word meaning to bring together or to
+combine.'
+
+..Talk about overloaded..
+[74:
+
+Sun Sep  5 11:09:08 2021 Gah, time passing here.
+I guess stay with 'Plex', but think of it as a
+verb like 'plecto'.  "I plex together three atoms
+into an L2PlateSequencer"
+
+[75:
+
+Sun Sep  5 11:20:24 2021 OK, renamed:
+
+ Persistent -> Plex
+
+Pop pop pop.
+
+Back to L2PlateSequencer creation and operation.
+
+So we've got L2PlateSequencerPlex to do the gather
+and scatter for L2PlateSequencer, and we're going
+to overload L2PlateSequencerPlex to do remapped ew
+access so that all (?) event window operations
+look like
+
+ - We're dealing with a north side border, and
+
+ - We're in the center of the sequencer
+
+even though neither of those things may be
+literally true.
+
+When we say 'all', there, that would start out
+meaning 'including gather and scatter'.
+
+:75]
+
+:74]
+:73]
+
+:72]
+
+:71]
+
+:70]
+
+:69]
+
+:68]
+
+:67]
+
+:66]
+
+:65]
+
+:64]
+
+:63]
+
+:62]
+
+:61]
+
+:60]
+:59]
+
+:58]
+:57]
+
+:56]
+:55]
+
+:54]
+
+:53]
+
+:52]
+:51]
+[76:
+
+Sun Sep  5 12:33:49 2021 OK, so how does
+L2PlateSequencerPlex actually store and apply the
+transformations for the virtual event window?
+
+Given:
+ - Offset from ew[0] to center of plex in 000L coords
+ - PlateDir of plex
+ - a desired coord to access
+
+Say I want SN 14, which is (-2,1), and I'm on the
+east border, so PD is 090L, so
+    rotn ->(-in.y, in.x),
+and rotpd->(in.y, -in.x)
+and I'm in the leading edge of the plex, so offset
+from ew[0] to plexctr is (0,-1).  Thus:
+
+           +--+
+   L2 L2 L2|L2|L2         ew[31] ew[-1,-3] vw[14] vw[-2,1]
+           +--+
+   L2 My My My L2
+              +--+
+   L2 My My My|L2|plexctr ew[2]  ew[0,-1]  vw[0]  vw[0,0]
+              +--+
+   L2 My My My|L2|        ew[0]  ew[0,0]   vw[4]  vw[1,0]
+              +--+
+   L2 L2 L2 L2 L2
+
+rotn(-2,1) -> (-1, -2)    rotpd(-2,1)  -> (1,2)
+rotn( 0,-1) -> (1,  0)    rotpd( 0,-1) -> (-1,0)
+
+rotn(-1,-3) -> (3, -1)    rotpd(-1,-3) -> (-3,1)
+
+    vsn        -> 14
+    vew        -> (-2,1)
+    rotn(^,pd) -> (-1,-2)
+     ^ +(0,-1) -> (-1,-3)
+
+rotn(vew,pd)-plexctr
+
+[77:
+
+Sun Sep  5 13:20:53 2021 Well, that seemed to
+work[78: Sun Sep  5 17:08:31 2021 After some revs
+doh  :78].  Let's try another one?  How about
+exactly the same but on the south border?
+
+
+   L2 L2 L2 L2 L2
+
+   L2 My My My L2
+
+   L2 My My My L2
+              +--+
+   L2 My My My|L2|
+     +--+--+  +--+
+   L2|L2|L2|L2 L2
+     +--+--+
+         plexctr
+
+rotn ->(-in.x,-in.y)
+rotpd->(-in.x,-in.y)
+plexctr -> (1,0)
+
+    vsn        -> 14             10
+    vew        -> (-2,1)         (0,-2)
+    rotn(^,pd) -> (2,-1)         (0,2)
+     ^ + (1,0) -> (3,-1)         (1,2)
+
+Whiiich seems right?
+[79:
+
+Sun Sep  5 23:56:05 2021 Let's implement.
+[80:
+
+Mon Sep  6 02:41:40 2021 OK well that's looking
+vaguely plausible, and we've redone gather/scatter
+using the 'virtual ew' coords.
+
+So pop pop pop.
+
+[81:
+
+Mon Sep  6 02:46:40 2021 Now we've got scanning
+and packet comms.  Scanning seems easier since we
+don't have to revisit or design packet stuff, so
+let's start with that.
+
+Scan outwards looking for non-empty.. record
+results somehow?[82:
+
+Mon Sep  6 04:22:22 2021 OK that's starting to
+work a little.  And it's really driving home that
+we're going to have to do something about
+debugging support above the level of atoms.
+Perhaps we could extend renderGraphics somehow?
+An additional Drawable method to present the guts
+of an object somewhere?[83:
+
+Mon Sep  6 04:33:40 2021 Not clear how we'd select
+whose guts to draw or where.. renderGraphics
+expects to run all the time and draw right on top
+of the involved atom..
+
+And at the moment, L2Plate isn't inheriting from
+anything that would signal that it could form
+Plexes.  So there's nothing obvious for mfms to do
+even if we wanted to come at it from that
+side.[84:
+
+Mon Sep  6 04:40:30 2021 And we run quite a bit of
+L2Plate code before it decides that a Plex can be
+formed.  That would all have to be standardized
+somehow if mfms was going to access it.[85:
+
+Mon Sep  6 04:56:12 2021 So what if there was an
+'I can Plex' API, with like
+
+  virtual Plex.ClassId getPlex() ;
+
+returning what classid I can plex into, at the
+moment, if any.  Or wait that's not it -- it's
+what classid I 'plex with'?
+
+  virtual Plex.ClassId getPlexer() ;
+
+So it would be something like
+
+ L2Plate.getPlexer() { return L2SeqPlex.classidof; }
+
+and the mfms would do.. what.. Make an instance of
+L2SeqPlex in a BitStorage?  But L2SeqPlex has a
+ctor and we can't call that via recast.[86:
+
+Mon Sep  6 05:15:31 2021 We'd have to rotate
+things around so that the concrete Plex subclass
+would have only a default ctor, plus some kind of
+Bool-returning init method where it would figure
+out the information that's currently being
+provided via ctor.[87:
+
+Mon Sep  6 05:19:02 2021 So, in the current case,
+that's the functionality of L2Plate.checkFaces(),
+plus L2Plate.manifestControl(..).  Instead of
+them, it would be like:
+
+  L2SeqPlex plexer;
+  if (plexer.assemble())
+
+[88:
+
+Mon Sep  6 05:27:27 2021 We somehow have to get
+done the stuff that happens before gather() runs
+in Plex.open(Bool).
+
+Or could we not?  Could we just have gather()
+return 0 bits if it doesn't find the right
+circumstances?  [89:
+
+Mon Sep  6 06:24:06 2021 So we could just build
+the specified Plex, and run 'plex.open(false)' on
+it to see if it succeeds.  If it doesn't, we're
+done; if it does, we run plex.get() and display
+the contents of the resulting UrSelf&.
+
+Seems like it could work.
+
+Nap.
+[90:
+
+Mon Sep  6 10:54:27 2021 OK, well going straight
+to open in L2Plate --
+
+      Bool checkFaces() {
+ ..     L2SeqPlex plex;
+        if (!plex.open(true)) return false;
+ ..
+
+-- seems to be working.  What should we call the
+base class that will provide L2SeqPlex.classidof
+(in this case)?
+
+Reactant (part of an activated complex)
+Actant   (part of a Plex?)
+Plexer   (something that participates in a Plex)
+
+[91:
+
+Mon Sep  6 11:36:54 2021 OK well we made
+
+    quark Plexer {
+      //// Plexer API
+      typedef ClassUtils.ClassId ClassId;
+      virtual ClassId getPlex() ; //< Subtype of Plex or ClassId.maxof if none
+    }
+
+and now L2Plate presents Plexer along with all its
+other APIs.
+
+So the general pattern for a putative Plex viewer
+could be something like:
+
+  Bool examinePlex(Plexer & pxr, ByteStreamWriter bsw) {
+    Plexer.ClassId classid = pxr.getPlex();
+    ClassUtils cu;
+    if (!cu.isBase(classid,Plex.classidof)) return false;
+    BitStorage bs;
+    Plex & plex = (Plex &) bs.recast(classid, true);
+    if (!plex.open(false)) return false;
+    UrSelf & urs = plex.get();
+    bsw.print(urs);
+    return true;
+  }
+
+or something like that?
+[92:
+
+Mon Sep  6 13:54:12 2021 OK bit we've
+metarecursively screwed ourselves because:
+
+ - L2SeqPlex doesn't fit in a BitStorage
+
+because it inherits from Plex (of course)
+and
+
+    transient Plex {
+ ..  BitStorage mBits;
+ .. }
+
+doh.
+
+[93:
+
+Mon Sep  6 14:28:47 2021 So what do we do about
+this?  Have small and big BitStorages and hope it
+doesn't metarecurse again?
+
+We're trying to runtime-build a runtime-builder,
+so the latter builder needs a place to build and
+the former needs a place to build the latter.
+
+Aand the latter needs room to be subclassed with
+additional data members -- are we at three sizes??
+
+[94:
+
+Mon Sep  6 16:24:24 2021 Is there a way we could
+have the BitStorage.ulam native code generalize
+over actual storage sizes?  What if it took the
+storage-to-bash as an additional ref arg -- and we
+made BitStorage be a 0-length quark.
+
+[95:
+
+Tue Sep  7 11:10:30 2021 OK well we've gone around
+the barn a couple more times.  We created
+BitAx.ulam/native to abstract the
+read/write/recast away from the specific storage
+size, and ditched BitStream entirely.
+
+Then we ditched BitAx entirely in favor of
+BitStream resurrected as a 0length base class
+providing read/write/recast, with subclasses to
+provide the actual storage.
+
+I think we're now at trying/debugging this new
+BitStorage approach.[96:
+
+Tue Sep  7 11:23:30 2021 OK progress!  We've now
+gotten vaguely plausible output from
+
+L2Plate.behave() ->
+  Plexer.printPlex()
+
+including seeing the command spinner in
+L2PlateSequencer increment.
+
+That was our test case for a 'plex viewer' submode
+of the AtomViewPanel..  Maybe we should take a
+look at that?[97:
+
+Tue Sep  7 13:15:56 2021 Well took forever just to
+get going in MFM/gui land, but now we've got a
+little check button that does nothing, appearing
+in the atom view panel right to the close button.
+
+So now we'd need a way to divert flow to something
+that knows about Plex, when that button is
+checked.  There are at least two main issues I can
+see:
+
+ - The current atomview has got nothing like an
+   eventwindow since it just examines the one atom
+   it's clicked on
+
+ - I don't even know how to determine if UlamClass
+   Plex exists from MFM/gui level, let alone how
+   to call a method on it..
+
+[98:
+
+Tue Sep  7 14:27:27 2021 Let's see how
+renderGraphics is done..[99:
+
+Tue Sep  7 14:28:28 2021 Well first off, of
+course, renderGraphics is an UrSelf method, so no
+type analysis is required.
+
+But if we could figure out how to do the typep..
+What methods does UlamClassRegistry provide?[100:
+
+Tue Sep  7 14:34:07 2021 Well, the key would be
+
+    const UlamClass<EC> * GetUlamClassByMangledName(const char *mangledName) const;
+
+I guess.  We can
+
+(0) See if atom type is an UlamElement or bail
+(1) See if UlamClass 'Uq_10106Plexer10' exists or bail
+(2) Manage to call internalCMethodImplementingIs
+(3) Bail if atom type isn't Plexer
+(4) Create some kind of special EventWindow that
+    punches through to get read-only copies of
+    atoms on demand, while recording which atoms
+    were accessed.
+(5) Somehow build UlamRef to effself Plexer within
+    the ew[0] of this special EventWindow
+(6) Reroute LOG output to some local sink
+(7) Call the non-virtual function
+    Plexer.printPlex() using the ur from (5),
+    with an unwind_protect wrapper.
+(8) Bail if fail
+(9) Save accessed SNs in some AtomViewPanel
+    bitmap.
+(10) Format the buffered text into the
+     AtomViewPanel same as the existing stuff
+(11) Try to figure out how to highlight the
+     accessed SNs bitset
+
+[101:
+
+Tue Sep  7 16:15:16 2021 Gah.  Quite a pile.
+
+Maybe printPlex should be virtual.. nah, wrong class
+
+:101]
+
+
+:100]
+
+:99]
+
+:98]
+
+:97]
+
+:96]
+
+:95]
+
+:94]
+
+:93]
+
+:92]
+:91]
+
+
+:90]
+:89]
+
+:88]
+
+:87]
+
+:86]
+
+:85]
+
+:84]
+
+:83]
+
+:82]
+
+:81]
+
+:80]
+:79]
+:77]
+
+:76]
+[102:
+
+Wed Sep  8 05:34:53 2021 OK we're up through like
+step (3) of :100: above.  We are distinguishing
+Plexer instances from non-Plexers and flagging the
+former, but that's it.
+
+What do we do about the event window problem?
+[103:
+
+Wed Sep  8 07:40:26 2021 OK we appear to have made
+an event window to use during a call on printPlex.
+
+[104:
+
+Thu Sep  9 14:32:04 2021 Flag moved.
+
+:104]
+:103]
+:102]
+[105:
+
+Sat Sep 11 22:58:10 2021 And then we lost a TON of
+time :(since Thu/Fri AM gahhh): on an awful awful
+bug I wrote.  Tried to Plexer.printPlex() thusly:
+
+              UlamRef<EC> vfur(ur, PLEX_PRINTPLEX_VOWNED_INDEX, plexerclassid, true, vfuncptr);
+              typedef void (* Uf_919printPlex) (const UlamContext<EC>&, UlamRef<EC>& );
+              ((Uf_919printPlex10) vfuncptr) (uc, vfur);
+
+which apparently worked 'fine', until printPlex()
+called printPlexDefault(), which eventually did
+this sequence:
+
+    ClassUtils cu;
+    if (!cu.isBase(classid,Plex.classidof)) return false;
+
+which segfaulted with no prior warning.
+
+It eventually took assembly code debugging to
+isolate down to the faulting instruction, which
+was reading a '3' from the stack and then trying
+to call it.. which eventually lead to identifying
+a corrupted 'UlamContext' argument, which was then
+finally clue enough to realize the printPlex()
+calling sequence needed to be this:
+
+              UlamRef<EC> vfur(ur, PLEX_PRINTPLEX_VOWNED_INDEX, plexerclassid, true, vfuncptr);
+              typedef Ui_Ut_10111b<EC> (* Uf_919printPlex10) (const UlamContext<EC>&, UlamRef<EC>& );
+              ((Uf_919printPlex10) vfuncptr) (uc, vfur);
+
+because Plexer.printPlex() returns a Bool, unlike
+UrSelf.behave(), which returns void.
+
+GAAAAAAAAAAAAAAAAAAAAAAAAAAAH.
+
+[106:
+
+Sat Sep 11 23:07:44 2021 In any event, now we're
+finally finally moving forward again.
+
+And now the issue is how do we really want to
+print stuff in printPlex() ?  Our current
+'solution' --- rerouting DebugUtils output -- is a
+reallllly crude hammer.
+[107:
+
+Sat Sep 11 23:22:02 2021 Right now DebugUtils.ulam
+dishes to mainly native methods that explicitly
+call LOG.Message to do output, like this:
+
+  template<class EC>
+  void Uq_10109210DebugUtils10<EC>::Uf_5print(const UlamContext<EC> & uc, UlamRef<EC>& ur, Ui_Ut_102201s<EC>& Uv_3arg) const //native
+  {
+    const u32 strval = Uv_3arg.read();
+    LOG.Message("print: %S", GetStringPointerFromGlobalStringPool(strval));
+  }
+
+[108:
+
+Sat Sep 11 23:26:49 2021 An alternate approach
+would going through ByteStreamWriter instead of
+DebugUtils.  The main advantages of DebugUtils
+are:
+
+ - printContext(), which prints site/tile coords
+   and the members of ew[0], and
+
+ - print(UrSelf&), which prints the members of an
+   arbitrary reference.
+
+Could we add something like
+ByteStreamWriter.print(UrSelf&) ?  It would help a
+ton..
+
+:108]
+
+:107]
+:106]
+
+:105]
+[109:
+
+Mon Sep 13 04:20:41 2021 OK well a lot of hacking
+and smashing but not a lot of notes here, bad bad.
+
+What can I remember now?
+
+ - Instead of passing a ByteStream to printPlex, I
+   added flags to control Logger.h adding
+   timestamps and such to log messages.
+
+ - That with other random hacks got
+   L2SeqPlex.printPlex beginning to look not
+   hopeless.
+
+ - Spent a lot of time trying to get drawing onto
+   the atoms working, but it's really all for
+   naught because it would have to violate the
+   clip rectangle of the whole painting hierarchy
+   and I really don't want to do that
+
+[110:
+
+Mon Sep 13 04:40:36 2021 Nap.
+
+:110]
+
+:109]
+[111:
+
+Tue Sep 14 01:16:13 2021 OK jeez closing in on 10
+hours to air and I need to sleep.
+
+And make slides.
+
+TOPICS
+
+ - Techtonic podcast
+
+ - Further outreach (Future of Coding?)
+
+[112:
+
+Tue Sep 14 07:05:01 2021
+
+WHAT IS THE
+MICROCOMPUTOME?
+
+:112]
+
+:111]
+[113:
+
+Thu Sep 16 11:31:07 2021 OK so we're back.  I want
+to jump on getting L2Plate moving, and that's
+going to involve a bunch of steps I think:
+
+ - Getting packets actually moving on the l2
+   border
+
+ - Distributing sensor data to all sides
+
+ - Coming up with some kind of inter-L2
+   priority system so we can say who should follow
+   whom when there's phase mismatches between
+   L2Plates
+
+ - Will need to have feedback back to the L2 root
+   sooner or later, so we want inter-L2
+   communications for that.
+
+:113]
+[114:
+
+Thu Sep 16 16:19:12 2021 Ideas
+
+ - Have the center L2 border control the L2 plate?
+
+ - Centralize the meta-L2 border info there?
+
+[115:
+
+Thu Sep 16 20:27:14 2021 Nah go for upper left
+again, on the same reasoning we did it the first
+time: It remains the same over motion and growth.
+
+:115]
+
+:114]
+[116:
+
+Fri Sep 17 02:30:52 2021
+
+Put a packet buffer inside the L2PlateSequencer
+for inter-L2Plate traffic.
+
+So we need packet design again
+
+What about variable length 'don't bury the lede'
+"news" packets?[121:
+
+Fri Sep 17 04:33:31 2021 First bit
+
+0 L2Intra 'private'
+1 L2Inter 'public'
+
+
+:121]
+[120:
+
+Fri Sep 17 04:08:38 2021 If we're going to route
+both intra-L2Plate and inter-L2Plate packets over
+the L2Plate border -- which I really think we are
+-- we need to integrate them into a common
+namespace so that both L2Plate and
+L2PlateSequencer can handle them.
+
+:120][119:
+
+Fri Sep 17 02:58:47 2021 Another packet protocol
+like the intertile connector protocol.
+
+:119]
+[117:
+
+Fri Sep 17 02:48:55 2021 The exposure despite the
+movability of the Movable Feast:
+
+You must still go to the watering hole.
+
+You may be caught there or tracked going away.
+
+[118:
+
+Fri Sep 17 02:49:57 2021 The MF tends to degrade
+happenstance spatial correlations enough to hinder
+low-order open-loop interventions and attacks.
+
+
+:118]
+:117]
+
+:116]
+[122:
+
+Fri Sep 17 13:12:32 2021 OK so we're making
+'L2Plate-Packet-Formats-10.ods'.
+
+What do we want to say about local packets?
+
+ - Aim at 24 bits?[123: Fri Sep 17 13:18:00 2021
+   Actually B2DStreamPlateT appears to aim at 16
+   bit payload so let's try that.
+
+ - 1 bit local, 3 bits type, 12 bits data?
+
+:123]
+
+:122]
+[124:
+
+Sat Sep 18 00:41:50 2021 So we have
+L2Plate-Packet-Formats-11.ods currently saying
+stuff like this:
+
+          0   1   2   3   4   5   6   7   8   9  10  11  12  13  14  15
+        +---+
+        |LOC|
+        +---+---+---+---+
+private | 1 |   TYPE    |
+        +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+senseout| 1 | 0   0   0 |   PD  |  WHAT |   DISTOUT     |  DISTACROSS   |
+        +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+SO.empty| 1 | 0   0   0 | *   * | 0   0 |   DISTOUT     |  DISTACROSS   |
+        +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+SO.L2ngb| 1 | 0   0   0 | *   * | 0   1 |   DISTOUT     |  DISTACROSS   |
+        +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+SO.Rsrv1| 1 | 0   0   0 | *   * | 1   0 |   DISTOUT     |  DISTACROSS   |
+        +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+SO.Rsrv2| 1 | 0   0   0 | *   * | 1   1 |   DISTOUT     |  DISTACROSS   |
+        +---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+---+
+
+LOC  -> Private internal unrouted
+TYPE -> Private packet type
+senseout -> Sense data result
+PD -> PlateDir of sense data
+SO.empty -> WHAT == 0 -> Sensed only empty
+SO.L2ngb -> WHAT == 1 -> Sensed L2Plate neighbor
+
+:124]
+[125:
+
+Sat Sep 18 03:32:11 2021
+
+Packet Protocol Parser language
+
+<BITFIELD_DECL> := <NAME> '=' <SUBSPACE_PATTERN> <POSITION>
+
+[126:
+
+Sat Sep 18 04:08:25 2021
+
+ROUTED := [0]
+L2LOCAL := ROUTED=0
+L2ROUTE := ROUTED=1
+
+L2LOCAL.TYPE := [1:2]
+
+SENSEOUT := L2LOCAL.TYPE=0
+
+
+
+PKT := LOCAL
+[127:
+
+Sun Sep 19 01:16:06 2021
+
+KISS COME ON MAN KISS
+
+ 1 - Define bit sets (typically adjacent but not
+     required)
+
+     <NAME>[setspec]
+
+
+ 2 - Define bit values
+
+ 3 - Define predicates, like BITSET==BITVAL
+ 
+ 4 - Define rules
+
+:127]
+:126]
+
+
+:125]
+[128:
+
+Sun Sep 19 23:08:15 2021
+
+S := DECL*
+DECL := NAME ':' EXPR
+NAME := <re>
+EXPR := ORE
+ORE  := ANDE ( '|' EXPR )*
+ANDE := PRED ( EXPR )*
+PRED := VAL OP VAL
+VAL  := 
+ALT  := 
+FACTOR := TERM
+
+
+
+:128]
+[129:
+
+Sun Sep 19 23:26:27 2021 SAMPLE
+
+Routing : [0]
+Local : Routing==0
+Inter : Routing!=0
+Local 
+  Type : [1-3]
+    SenseOut : Type=000
+      PD :   [4,5]
+      What : [6,7]
+      OffOut : [8-11]
+      OffLat :  [12-15]
+    SenseIn : Type=001
+Local 
+
+:129]
+[130:
+
+Tue Sep 21 23:32:35 2021
+
+BITSET := '[' e | RANGES ']'
+RANGES := RANGE | RANGE ',' RANGES
+RANGE  := NUM | NUM '-' NUM | NUM '+' NUM
+NUM    := \d+
+
+[131:
+
+Wed Sep 22 23:00:30 2021 OK we have a basic bitset
+and now we need operators and values.
+
+:131]
+
+:130]
+[132:
+
+Thu Sep 23 01:33:40 2021 Well, we parsed
+'demo1.pal' all the way to the end.  That's:
+
+---
+# straight into routing
+Local : [0]==0
+  Type : [1-3]   # note no operator
+    ZONG BONG : Type==2
+    Dong : Type==3
+  PD : [4-5]
+    Type : []
+    North : PD==0
+Routing : [0]
+Local : Routing==0
+Inter : Routing!=0
+Local 
+  Type : [1-3]
+    SenseOut : Type==000
+      PD :   [4-5]
+      What : [6-7]
+      OffOut : [8-11]
+      OffLat :  [12-15]
+    SenseIn : Type==001
+Local 
+---    
+
+FWIW.
+
+At the moment we're just storing names in
+expressions in the expressions, but we're going to
+have to resolve them to values at some point.
+
+
+:132]
+[133:
+
+Thu Sep 23 03:42:07 2021 Simpler case
+
+Routing : [0]
+Local : Routing==0
+  Type : [1-3]
+  SenseOut : Type==000b -> handle()
+  SenseIn :  Type==001b -> handle()
+  Liveness : Type==010b -> handle()
+Inter : Routing==1
+  Op : [1]
+  Map :    Op==0
+    Op : [2-7]
+    
+  Reduce : Op==1
+    Op : [2-3]
+
+Inter Map 
+
+[134:
+
+Thu Sep 23 04:55:01 2021 How to write code for
+this?
+
+ op '-> handle()'
+
+generates a standard form handler
+
+transient Packet {
+  typedef Unsigned(1) Routing ;
+  Routing mRouting;
+  Bool pLocal() { return mRouting == 0; }
+  typedef Unsigned(3) Type ;
+  Type mType;
+  Bool pSenseOut() { return mType == 0; }
+  Bool pSenseIn() {  return mType == 1; }
+  Bool pLiveness() { return mType == 2; }
+  union 
+}
+[135:
+
+Thu Sep 23 05:15:13 2021 OK trying to make clean
+nested unions is going to be a pain.  Can we just
+leave everything flat at the top level?
+
+[136:
+
+Thu Sep 23 05:21:34 2021 Something like, I guess:
+
+transient PacketHandler : BitStorage + Fail {
+
+  typedef Unsigned(1) Routing;
+  Routing vRouting() { return (Routing) readBits(0,1); }
+
+  Bool pLocal() { return vRouting() == 0; }
+  Void aLocal() { if (!pLocal()) fail(); }
+
+  typedef Unsigned(3) Local_Type;
+  Local_Type vLocal_Type() { aLocal(); return (Local_Type) readBits(1,3); }
+
+  Bool pLocal_SenseOut() { return vLocal_Type() == 0; }
+  Void aLocal_SenseOut() { if (!pLocal_SenseOut()) fail(); }
+
+  virtual Void hLocal_SenseOut_handle() ;
+
+  Bool pLocal_SenseIn() { return vLocal_Type() == 1; }
+  Void aLocal_SenseIn() { if (!pLocal_SenseIn()) fail(); }
+
+  virtual Void hLocal_SenseIn_handle() ;
+
+  Bool pLocal_Liveness() { return vLocal_Type() == 1; }
+  Void aLocal_Liveness() { if (!pLocal_Liveness()) fail(); }
+
+  virtual Void hLocal_Liveness_handle() ;
+
+  Void dispatch() {
+    if (read(0,1)
+  }
+}
+
+:136]
+
+:135]
+
+
+:134]
+:133]
+[137:
+
+Thu Sep 23 10:36:11 2021 Simpler still come on.
+
+---
+Routing : Unsigned(1)
+  Local = 0
+  Remote = 1
+
+Routing Local Type : Unsigned(3)
+  SenseOut = 0
+  SenseIn = 1
+---
+
+equiv
+
+---
+Routing : Unsigned(1)
+  Local = 0
+    Type : Unsigned(3)
+      SenseOut = 0
+      SenseIn = 1
+  Remote = 1
+---
+
+ : to define a data member in the parent class
+ = to define a union arm selected by given value
+   of parent data member
+
+:137]
+[138:
+
+Fri Sep 24 01:59:15 2021 OK we have been trying to
+solidify the interaction between a union providing
+alternate bit patterns and a surrounding quark
+that combines the union with a tag to perform the
+selection.
+
+We're feeling like we want sort of a two-part API,
+a quark-level 'get the tag', and a union-level
+'handle the situation' given the tag.
+
+Right now we have a single API:
+
+    quark Handler : Fail + DebugUtils {
+      virtual Bool handle() { fail(); return false; } // By default
+      virtual Handler & select(Unsigned tag) { fail(); return self; }
+    }
+
+that tries to do both.
+
+[139:
+
+Fri Sep 24 02:17:02 2021 [140:
+
+Fri Sep 24 04:06:31 2021 Tradeoff between my 'now
+standard' API design all based on interface
+virtual functions, and open-coded non-virtual
+calls between automatically-generated functions
+for each needed purpose.[141:
+
+Fri Sep 24 07:25:50 2021 So we've gone to
+
+Switch
+ Unsigned getPosition(); //< current switch position
+ Knob & getKnob();       //< thing with positions
+
+Knob          //typ. a union
+ Handler & getHandler(Unsigned pos); //< switch position handler
+
+Handler
+ Bool handle(Unsigned pos);
+
+:141]
+
+:140]
+
+:139]
+
+:138]
