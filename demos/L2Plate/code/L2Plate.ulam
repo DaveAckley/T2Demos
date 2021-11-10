@@ -1,0 +1,293 @@
+use B2DStreamPlate;
+use Stride2x2;
+
+quark L2PlateBase : B2DStreamPlate6 + QStream12 + Payload + Stride1x1FP {
+
+  // L2PlateBase API
+  virtual C2D sizeOfL2Plate() ;
+  virtual C2D positionOnL2Plate() ;
+}
+
+/**
+   \symbol L2
+   \color #2233bb
+ */
+element L2Plate : L2PlateBase + PayloadT(20u) + Plexer + RingO {
+  typedef EventWindow.SiteNum SN;
+  typedef PlateUtils.PlateDir PD;
+  typedef ClassUtils.ClassId ClassId; 
+  
+  typedef L2SeqPlex MyPlex;
+
+  //// UrSelf API
+  @Override
+  ARGB getColor(Unsigned selector) {
+    return getRingOColor();
+  }
+
+  //// L2PlateBase API
+  @Override
+  C2D sizeOfL2Plate() { return mL2Info.sizeOfPlate(); }
+
+  @Override
+  C2D positionOnL2Plate() { return mL2Info.positionOnPlate(); }
+
+  //// Plexer API
+  @Override
+  virtual ClassId getPlex() { return MyPlex.classidof; }
+
+  //// RingO API
+  @Override
+  virtual Unsigned iteratorClassId() { return L2PlateRingOIterator.classidof; }
+
+  @Override
+  virtual SyncRelation syncRelation(RingO & other) {
+    C2D posl = positionOnL2Plate();
+    SyncRelation rel = RingO.cOTHER_IS_UNRELATED;
+    ByteStreamLogger bsl;
+    if (other as Self) {
+      C2D posr = other.positionOnL2Plate();
+      if (posl == posr) { // If in same L2 site,
+        posl = positionOnPlate();         // use L1 coords
+        posr = other.positionOnPlate();   // to determine syncrel
+      }
+      if (posl.min(posr) == posr)
+        rel = RingO.cOTHER_IS_UPSTREAM;
+      else if (posl.max(posr) == posr)
+        rel = RingO.cOTHER_IS_DOWNSTREAM;
+      EventWindow ew;
+      /*
+      bsl.printf("L2REL snl(%d) posl(%d,%d) snr(%d) posr(%d,%d) rel(%d)\n",
+                 ew.getSiteNumber(self),
+                 posl.x, posl.y,
+                 ew.getSiteNumber(other),
+                 posr.x, posr.y,
+                 rel);
+      */
+    } else bsl.printf("L2UNREL posl(%d,%d) \n",
+                      posl.x, posl.y);
+    return rel;
+  }
+
+  //// L2Plate services
+  @Override
+  virtual Bool fatalInconsistency() {
+    if (super.fatalInconsistency()) return true;
+
+    // L2 internal consistency check.
+    if (!sizeOfL2Plate().contains(positionOnL2Plate()))
+      return true;
+
+    // L2 neighbor consistency check    
+    EventWindow ew;
+    PlateUtils pu;
+    MDist md;
+
+    SN selfsn = getOurSN();
+    C2D offsetl = md.getSiteCoord(selfsn);
+
+    DebugUtils du;
+    for (SN sn = 1u; sn <= 8u; ++sn) {       // Let's say Moore ngb
+      if (!ew.isAccessible(sn)) continue;
+      Atom & a = ew[sn];
+      if (a as Plate) { // THIS USED TO BE 'if (a as Self)' AND IT COMPILED
+        
+        MDist md;
+        C2D offsetr = md.getSiteCoord(sn);
+        PlateUtils.PlateRelation rel = pu.relationTo(self, offsetl, a, offsetr);
+
+        if (rel == pu.cSAME_PLATE_AS) {
+          if (a as Self) {
+            // Check for identical L2 info between L2s on same L1 plate
+            if (sizeOfL2Plate() != a.sizeOfL2Plate() ||
+                positionOnL2Plate() != a.positionOnL2Plate()) {
+              du.print("L2Plate fatal ngb inconsistency");
+              a.setDeathBits(cDIE_AND_DOWN); // You die too
+              return true;               // But yeah, that's fatal to us 
+            }
+          } // else.. what about non-L2Plate on same plate?
+        } else if (rel == pu.cCONTAINS_PLATE) {
+          // Check for room for complete L2 border around L1 plate
+          if (!pu.strictlyContains(self,a,offsetr-offsetl)) {
+            du.print("L2Plate incomplete border size inconsistency");
+            a.setDeathBits(cDIE_AND_DOWN); // You die too
+            return true;          
+          }
+        } else if (rel == pu.cOVERLAPS_PLATE) {
+          du.print("L2Plate overlap");
+          a.setDeathBits(cDIE_AND_DOWN); // You die too
+          return true;        
+        } // else.. other relations for consistency checking?
+      }
+    }
+    return false;
+  }
+
+  B2DPlate4 mL2Info;
+  Bool setSizeOfL2Plate(C2D siz) { return mL2Info.setSizeOfPlate(siz); }
+  Bool setPositionOnL2Plate(C2D pos) { return mL2Info.setPositionOnPlate(pos); }
+
+  Bool die() { return die("DYIIEE"); }
+
+  Bool die(String msg) {
+    DebugUtils du;
+    du.print(msg);
+    EventWindow ew;
+    ew[0] = Empty.instanceof;
+    return true;
+  }
+  
+  Bool onceOnlyInit() {
+    EventWindow ew;
+    PlateUtils pu;
+    if (sizeOfPlate() != pu.c0x0) return false;
+    C2D ourmaxsiz(MyB2D.cMAXVAL,MyB2D.cMAXVAL);
+    // Search for adjacent L1 plate to imprint on
+    for (SN sn = 1u; sn <= 4u; ++sn) {
+      if (!ew.isAccessible(sn)) return die("L@PL INAC");
+      Atom & a = ew[sn];
+      if (a as Plate) {
+        if (a is L2PlateBase) continue; // Skip L2 Plate
+        if (!a.isPlateBorder()) return die("L@PL NBDR"); // eew guts
+        C2D l1siz = a.sizeOfPlate();
+        if (l1siz.minc() < 3) return die("L@PL SMOL");
+        C2D l1pos = a.positionOnPlate();
+        if (!ourmaxsiz.contains(l1siz+pu.c1x1)) return die("L@PL 1SIZ");
+        C2D oursiz = l1siz + pu.c2x2; // Room for our border
+        C2D ourpos = l1pos;
+        which (sn) {
+          case 1: { ourpos += pu.c2x1; } // W of us
+          case 2: { ourpos += pu.c1x2; } // N of us
+          case 3: { ourpos += pu.c1x0; } // S of us
+          case 4: { ourpos += pu.c0x1; } // E of us
+        }
+        DebugUtils du;
+        du.printContext();
+        du.print(sn);
+        du.print(oursiz);
+        du.print(ourpos);
+        du.print("AFT");
+        du.print(ourpos);
+        self.setSizeOfPlate(oursiz);
+        self.setPositionOnPlate(ourpos);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  Bool checkFaces() {
+    DebugUtils du;
+    MyPlex plex;
+    if (!plex.open(true)) return false;
+
+    //    du.print("MVCNTL 3101");
+    //    du.print(plex.mCenterPC);
+
+    Bool didInit;
+    L2PlateSequencer & l2seq = (L2PlateSequencer&) plex.get(didInit);
+
+    //    du.print("MVCNTL 3102");
+    //    du.print(plex.mCenterPC);
+
+
+    if (didInit)
+      l2seq.mSidePD = plex.mPD;
+
+    //    du.print("MVCNTL 3103");
+    //    du.print(plex.mCenterPC);
+
+    if (l2seq.update(plex)) {
+      //      du.print("MVCNTL 3103a");
+      //      du.print(plex.mCenterPC);
+
+      Bool closed =  plex.close();
+
+      //      du.print("MVCNTL 3104");
+      //      du.print(plex.mCenterPC);
+
+      if (!closed)
+        du.print("NOCLOTHESRADIO");
+      return closed;
+    }
+    return true;
+  }
+
+  Bool checkLocalActions() {
+    if (checkFaces()) return true;
+    return false;
+  }
+
+  Void behave() {
+    if (onceOnlyInit()) return;
+    if (mustBlockOrDie()) return;
+    if (checkGrowthAndHealing()) return;
+    if (updateRingO()) return;
+    if (checkLocalActions()) return;
+  }
+}
+
+transient L2PlateRingOIterator : RingOIterator {
+  typedef EventWindow.SiteNum SN;
+  constant Unsigned cCOUNT_MAX = 11u;
+  C2D mL1Pos;
+  C2D mL1Siz;
+  C2D mL2Pos;
+  C2D mL2Siz;
+  Unsigned mCount; // 0..3 SN 21..24, 4..11 SN 1..8
+  SN mNextSN; // 1..8
+
+  //// RingOIterator API
+  @Override
+  virtual Void init(RingO & on) {
+    PlateUtils pu;
+    L2Plate & l2 = (L2Plate&) on; // or fail
+    mCount = 0u;
+    mL1Pos = l2.positionOnPlate();
+    mL1Siz = l2.sizeOfPlate();
+    mL2Pos = l2.positionOnL2Plate();
+    mL2Siz = l2.sizeOfL2Plate();
+  }
+
+  SN snFromCount(Unsigned count) {
+    if (count < 4u)  return (SN) (count + 21u);
+    if (count < 12u) return (SN) (count - 3u);
+    return SN.maxof;
+  }
+
+  virtual Bool hasNext() {
+    EventWindow ew;
+    for (; mCount <= cCOUNT_MAX; ++mCount) {
+      mNextSN = snFromCount(mCount);
+      if (!ew.isAccessible(mNextSN)) continue;
+      Atom & a = ew[mNextSN];
+      if (a as L2Plate) {
+        C2D pos2r = a.positionOnL2Plate();
+        if (mL2Pos != pos2r) return true;  // If different L2 site, okay
+        if (mNextSN <= 8u) return true;    // If same L2 site and in Moore ngb, okay
+      }
+    }
+    return false;
+  }
+  
+  virtual RingO & next() {
+    if (!hasNext()) { Fail f; f.fail(); }
+    EventWindow ew;
+    SN sn = snFromCount(mCount++);
+    RingO & ret = (RingO&) ew[sn]; // Or fail if something changed under us
+    return ret;
+  }
+}
+
+/** \symbol S2
+ */
+element SeedL2Plate : Plate1 {
+  Void behave() {
+    PlateUtils pu;
+    EventWindow ew;
+    L2Plate pe;
+    pe.setPositionOnL2Plate(pu.c1x1);
+    pe.setSizeOfL2Plate(pu.c3x3);
+    ew[0] = pe.atomof;
+  }
+}

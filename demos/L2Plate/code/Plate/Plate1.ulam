@@ -1,0 +1,22 @@
+quark Plate1 : Plate {
+  //// Plate API
+  @Override
+  virtual C2D sizeOfPlate() { return PlateUtils.c1x1; }
+
+  virtual C2D positionOnPlate() { return PlateUtils.c0x0; }
+  
+  @Override
+  virtual DeathBits getDeathBits() { return mDeathBits; }
+
+  @Override
+  virtual Void setDeathBits(DeathBits bits) { mDeathBits = bits; }
+
+  Plate.DeathBits mDeathBits;
+
+  //// UrSelf API
+  @Override
+  virtual Void behave() {
+    if (mustBlockOrDie()) return;
+  }
+
+}

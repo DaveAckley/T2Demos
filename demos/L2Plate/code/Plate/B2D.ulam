@@ -1,0 +1,63 @@
+quark B2DT(Unary(8) cBITS_PER_COORD) {
+  constant Unsigned cCOMPILATION_ERROR_UNLESS_BITS_GE_2 = 1u/(cBITS_PER_COORD-1u);
+  typedef Unsigned(cBITS_PER_COORD) Coord;
+
+  load "C2D.inc";
+
+  constant Coord cILLEGAL = Coord.maxof;
+  constant Coord cMAXVAL = Coord.maxof-1u;
+  constant Coord cMINVAL = Coord.minof;
+
+  constant C2D cMAX_B2D = { .x = cMAXVAL, .y = cMAXVAL };
+
+  /* Make BCoord.maxof an illegal value.  Gives us an OoB value for signaling
+  */
+  Bool isValid() {
+    return x != cILLEGAL && y != cILLEGAL;
+  }
+
+  Void invalidate() {
+    x = y = cILLEGAL;
+  }
+
+  Void init(Self s) {
+    init(s.x, s.y);
+  }
+  
+  Void init(C2D c) {
+    init(c.x, c.y);
+  }
+
+  Void init(Int ax, Int ay) {
+    if (ax < cMINVAL || ax < cMINVAL ||
+        ay > cMAXVAL || ay > cMAXVAL)
+      invalidate();
+    else {
+      x = (Coord) ax;
+      y = (Coord) ay;
+    }
+  }
+
+  Self(C2D c) { fromC2D(c); }
+
+  C2D toC2D() {
+    if (!isValid()) {
+      Fail f;
+      f.fail("toC2D invalid B2D");
+    }
+    C2D ret(x,y);
+    return ret;
+  }
+
+  Bool fromC2D(C2D c) {
+    set(c.getX(),c.getY());
+    return isValid();
+  }
+
+}
+
+quark B2D : B2DT(7) {
+}
+
+quark B2D4 : B2DT(4) {
+}

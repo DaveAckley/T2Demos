@@ -1,0 +1,92 @@
+quark Switch {
+  virtual Unsigned getPosition() ; //< Unsigned.maxof for none
+  virtual Knob & getKnob() ;
+
+  Bool handle() {
+    Unsigned pos = getPosition();
+    if (pos == pos.maxof) return false;
+    Knob & k = getKnob();
+    Handler & h = k.getHandler(pos);
+    return h.handle(pos);
+  }
+}
+
+quark Knob : Fail + DebugUtils {
+  virtual Handler & getHandler(Unsigned pos) ;
+}
+
+quark Handler : Fail + DebugUtils {
+  virtual Bool handle(Unsigned tag) ;
+}
+
+quark L2Packet : Switch {
+  Unsigned(1) mRoutedTag;
+  L2PacketRouted mRoutedUnion;
+
+  @Override
+  virtual Unsigned getPosition() {
+    return mRoutedTag;
+  }
+
+  @Override
+  virtual Knob & getKnob() {
+    return mRoutedUnion;
+  }
+}
+
+quark L2Packet_Intra : Handler {
+  Unsigned(3) mType;
+  Unsigned(2) mPD;
+  Unsigned(2) mWhat;
+  Unsigned(4) mOffOut;
+  Unsigned(4) mOffLat;
+
+  @Override
+  virtual Bool handle(Unsigned pos) {
+    printContext();
+    which (mType) {
+      case 0u: { print("intra 0u"); return false; }
+      case 1u: { print("intra 1u"); return true; }
+    }
+    fail();
+    return false;
+  }
+}
+
+quark L2Packet_Inter : Handler {
+  Unsigned(3) mType;
+
+  @Override
+  virtual Bool handle(Unsigned pos) {
+    which (mType) {
+      case 0u: { print("inter 0u"); return true; }
+      case 1u: { print("inter 1u"); return false; }
+    }
+    fail();
+    return false;
+  }
+}
+
+union L2PacketRouted : Knob {
+  @Override
+  virtual Handler& getHandler(Unsigned pos) {
+    if (pos == 0u) return mIntra;
+    return mInter;
+  }
+
+  L2Packet_Intra mIntra;
+  L2Packet_Inter mInter;
+
+}
+
+/** \symbol PT */
+element L2PacketTest + DebugUtils {
+  Void behave() {
+    L2Packet l2p;
+    if (l2p.handle()) print("TRUEDAT");
+    else print("NAHD");
+    l2p.mRoutedTag = 1;
+    if (l2p.handle()) print("1TRUEDAT");
+    else print("1NAHD");
+  }
+}

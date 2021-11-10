@@ -1,0 +1,260 @@
+transient L2PlateSequencer {
+  typedef PlateUtils.PlateDir PD;
+
+  typedef Int(4) Delta;
+  typedef Delta SideDeltas[4];
+
+  typedef Unsigned(2) Distance;
+  typedef Distance SideDistances[4];
+
+  typedef UMod(8u,3u) CommandSpinner;
+
+  CommandSpinner mCommandSpinner;
+  PD mSidePD;
+  SideDeltas mSideDeltas;
+  SideDistances mSideDistances;
+  
+  Bool checkPacketIO(Plex & plex) {
+    return false;
+  }
+
+  Bool checkScan(Plex & plex) {
+    DebugUtils du;
+    Distance edist = 0u;
+    for (C2D.Coord y = 1; y <= 4; ++y) {
+      C2D vew(0,-y);
+      if (!plex.isAccessible(vew)) break;
+      Atom & a = plex[vew];
+      if (a is Empty) {
+        edist = (Distance) (y-1);
+      }
+    }
+    if (edist != mSideDistances[mSidePD]) {
+      mSideDistances[mSidePD] = edist;
+      return true;
+    }
+    return false;
+  }
+
+  Bool checkSeed(Plex& plex) {
+    ByteStreamLogger bsl;
+    if (!plex.isAccessible(22) || !plex.isAccessible(38))
+      return false; // Don't try if we can't reach
+    if (plex[22] is L2Plate && !(plex[38] is L2Plate))
+      return false;
+
+    Random random;
+    if (!random.oneIn(5))  // Slow down respawning so ngbs
+      return false;        // have better chance to die fully
+
+    PlateUtils pu;
+    EventWindow ew;
+    Atom & a = ew[0]; // Unmapped ew access
+    if (a as L2Plate) {
+      C2D pos2 = a.positionOnL2Plate();
+      C2D siz2 = a.sizeOfL2Plate();
+      if (siz2 == pu.c0x0) return false; // too soon?
+      if (!pu.onBorderForDir(pos2,siz2,mSidePD)) {
+        //        bsl.printf("CHKSED13\n");
+        C2D theirpos2 = pos2 + pu.stepInDir(mSidePD);
+        /*
+        bsl.printf("pos2(%d,%d) their2(%d,%d)\n",
+                   pos2.x,pos2.y,
+                   theirpos2.x,theirpos2.y);
+        */
+        L2Plate s = a;
+        s.setPositionOnL2Plate(theirpos2); // Update their l2 pos
+        C2D pos1 = a.positionOnPlate();
+        C2D siz1 = a.sizeOfPlate();
+        which (mSidePD) {
+        case pu.cPLATE_GOES_N: { pos1.y = (C2D.Coord) (siz1.y - 1); }
+        case pu.cPLATE_GOES_S: { pos1.y = 0; }
+        case pu.cPLATE_GOES_E: { pos1.x = 0; }
+        case pu.cPLATE_GOES_W: { pos1.x = (C2D.Coord) (siz1.x - 1); }
+        }
+        s.setPositionOnPlate(pos1); // Update their l1 pos
+
+        //        bsl.printf("L2B2DPSB10\n");
+        Atom l1 = plex[3];
+        if (l1 as B2DPlateBase) { // L1 plate
+          //          bsl.printf("B2DPSB10\n");
+          if (!l1.isPlateBorder()) return false; // ?? 
+          C2D pos = l1.positionOnPlate();
+          C2D siz = l1.sizeOfPlate();
+          PD l1dir = pu.borderDir(pos,siz);
+          C2D step = pu.stepInDir(l1dir);
+          C2D newpos = pos;
+          //          bsl.printf("B2DPSB11\n");
+          which (l1dir) {
+          case pu.cPLATE_GOES_N: { newpos.y = (C2D.Coord) (siz.y - 1); }
+          case pu.cPLATE_GOES_S: { newpos.y = 0; }
+          case pu.cPLATE_GOES_E: { newpos.x = 0; }
+          case pu.cPLATE_GOES_W: { newpos.x = (C2D.Coord) (siz.x - 1); }
+          }
+          DebugUtils du;
+          /*
+          du.printContext();
+          du.print(l1dir);
+          du.print(pos);
+          du.print(siz);
+          du.print(newpos);
+          bsl.printf("pos(%d,%d) newpos(%d,%d)\n",
+                     pos.x,pos.y, newpos.x, newpos.y);
+          */
+          l1.setPositionOnPlate(newpos);
+        }
+        //        bsl.printf("CHKSED12\n");
+
+        plex[38] = l1;
+        plex[22] = s;
+      }
+      //      bsl.printf("CHKSED14\n");
+      return true;
+    } 
+    //    bsl.printf("CHKSED15\n");
+    return false;
+  }
+
+  Bool update(Plex& plex) {
+    if (checkPacketIO(plex)) return true;
+    if (checkScan(plex)) return true;
+    if (checkSeed(plex)) return true;
+    mCommandSpinner++;
+    return true;
+  }
+}
+
+transient L2SeqPlex : Plex {
+  typedef EventWindow.SiteNum SN;
+  typedef PlateUtils.PlateDir PD;
+  constant Unsigned cCTRL_RADIUS = 1u;
+
+  //// Plex API
+  @Override
+  virtual Unsigned gather(BitStorage & bs) {
+    DebugUtils du;
+    Unsigned bspos = 0u;
+    if (!tryConfigure()) return bspos;
+
+    for (C2D.Coord off = -cCTRL_RADIUS; off <= cCTRL_RADIUS; ++off) {
+      C2D vewc(off, 0);
+      if (!isAccessible(vewc)) break;
+      Atom & a = self[vewc];
+      if (a as L2Plate) {
+        Unsigned k = a.mBits.sizeof;
+        bs.write(a.mBits, bspos, k);
+        bspos += k;
+      } else break;
+    }
+    return bspos;
+  }
+
+  @Override
+  virtual Bool scatter(BitStorage & bs) {
+    Unsigned bspos = 0u;
+    for (C2D.Coord off = -cCTRL_RADIUS; off <= cCTRL_RADIUS; ++off) {
+      C2D vewc(off, 0);
+      if (!isAccessible(vewc)) return false;
+      Atom & a = self[vewc];
+      if (a as L2Plate) {
+        Unsigned k = a.mBits.sizeof;
+        a.mBits = (L2Plate.MyBits) bs.read(bspos, k);
+        a.mHasPayload = true;
+        a.mBufferStatus = a.cARRIVED_PACKET;
+        bspos += k;
+      } else return false;
+    }
+    return true;
+  }
+
+  @Override
+  virtual Void renderGraphics() {
+    DebugUtils du;
+    //    du.print("l2pseqrgd10");
+
+    Drawable draw;
+    if (!draw.canDraw()) return;
+    ColorUtils cu;
+    /*
+    ARGB oncol = cu.color(0xffffffff);
+    ARGB offcol = cu.color(0x0);
+    */
+    ARGB oncol =  cu.color(0xffff1122);
+    ARGB offcol = cu.color(0xff1122ff);
+    //    du.print("l2pseqrgd11");
+    for (C2D.Coord off = -cCTRL_RADIUS; off <= cCTRL_RADIUS; ++off) {
+      C2D vewc(off, 0);
+      if (!isAccessible(vewc)) break;
+      C2D ewc = mapVEW(vewc); // Switch to real ew coords
+      //      du.print(ewc);
+      C2D start = ewc*Drawable.cUNITS_PER_SITE - Drawable.cUNITS_PER_SITE/2;
+      C2D end =   ewc*Drawable.cUNITS_PER_SITE + Drawable.cUNITS_PER_SITE/2;
+
+      ByteStreamLogger bsl;
+      /*
+      bsl.printf("(RNDPLX vewc[%d %d] start[%d %d] end[%d %d])\n",
+               vewc.x, vewc.y,
+               start.x, start.y,
+               end.x, end.y);
+
+      du.print("l2pseqrgd12");
+      */
+      draw.drawMaskedLine(start,end,oncol,offcol,0xf0f0f0f0);
+    }
+  }
+
+  @Override
+  virtual C2D mapVEW(C2D vew) {
+    PlateUtils pu;
+    C2D rot = pu.rotn(vew,mPD);
+    C2D ewc = rot + mEWOff;
+    ByteStreamLogger bsl;
+    /*    bsl.printf("(MAPVEXX, vew[%d %d], rot[%d %d], ewc[%d %d])\n",
+               vew.x, vew.y,
+               rot.x, rot.y,
+               ewc.x, ewc.y);*/
+    return ewc;
+  }
+
+  @Override
+  virtual Bool isAccessible(SN vsn) { 
+    EventWindow ew;
+    C2D ewc = mapVSN(vsn);
+    return ew.isAccessible(ewc);
+  }
+    
+  C2D mEWOff; //< dist from ew[0] to plex ctr
+  C2D mCenterPC; //< PC of plex ctr
+  PlateUtils.PlateDir mPD; //< orientation of plex
+  
+  constant Unsigned cMIN_CHECKSUM_BITS = 10u;
+
+  Bool tryConfigure() {
+    PlateUtils pu;
+    EventWindow ew;
+    Atom & a = ew[0];
+    if (a as L2Plate) {
+      if (!a.isPlateBorder()) return false;
+      C2D pos = a.positionOnPlate();
+      C2D siz = a.sizeOfPlate();
+      PD pd = pu.borderDir(pos,siz);
+      C2D ctr = pu.centerAlongDir(siz, pd);
+      Unsigned distance = ctr.manhattanDistance(pos);
+      if (distance > L2SeqPlex.cCTRL_RADIUS) return false;
+      init(ctr-pos,ctr,pd);
+      return true;
+    }
+    return false;
+  }
+
+  Void init(C2D ewoff, C2D ctrpc, PlateUtils.PlateDir pd) {
+    PlateUtils pu;
+    mEWOff = ewoff;
+    mCenterPC = ctrpc;
+    mPD = pd;
+    // BASED ON A NORTH EDGE VIEW: IN 9 OUT 12 SCAN 2 10 22 38
+    setClassId(L2PlateSequencer.classidof);
+    setChecksumBits(cMIN_CHECKSUM_BITS,32u);
+  }
+
+}

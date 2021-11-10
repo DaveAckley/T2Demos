@@ -1,0 +1,556 @@
+use B2D;
+
+quark PlateUtils {
+  typedef EventWindow.SiteNum SN;
+  
+  constant C2D c0x0 = { .x = 0, .y = 0 };
+  constant C2D c0x1 = { .x = 0, .y = 1 };
+  constant C2D c0x2 = { .x = 0, .y = 2 };
+  constant C2D c0x3 = { .x = 0, .y = 3 };
+  constant C2D c1x0 = { .x = 1, .y = 0 };
+  constant C2D c1x1 = { .x = 1, .y = 1 };
+  constant C2D c1x2 = { .x = 1, .y = 2 };
+  constant C2D c1x3 = { .x = 1, .y = 3 };
+  constant C2D c2x0 = { .x = 2, .y = 0 };
+  constant C2D c2x1 = { .x = 2, .y = 1 };
+  constant C2D c2x2 = { .x = 2, .y = 2 };
+  constant C2D c2x3 = { .x = 2, .y = 3 };
+  constant C2D c3x0 = { .x = 3, .y = 0 };
+  constant C2D c3x1 = { .x = 3, .y = 1 };
+  constant C2D c3x2 = { .x = 3, .y = 2 };
+  constant C2D c3x3 = { .x = 3, .y = 3 };
+
+  typedef Unsigned(2) PlateDir;
+  constant PlateDir cPLATE_GOES_N = (PlateDir) EventWindow.cSYMMETRY_000L;
+  constant PlateDir cPLATE_GOES_E = (PlateDir) EventWindow.cSYMMETRY_090L;
+  constant PlateDir cPLATE_GOES_S = (PlateDir) EventWindow.cSYMMETRY_180L;
+  constant PlateDir cPLATE_GOES_W = (PlateDir) EventWindow.cSYMMETRY_270L;
+
+  // Rotate \c in from a \c pd view to a North pd view
+  C2D rotpd(C2D in, PlateDir pd) {
+    which (pd) {
+    case cPLATE_GOES_E: { return rotn(in, cPLATE_GOES_W); }
+    case cPLATE_GOES_W: { return rotn(in, cPLATE_GOES_E); }
+    }
+    /*otherwise:*/
+    return rotn(in, pd); 
+  }
+
+  // Rotate \c in from a North view to a \c pd view
+  C2D rotn(C2D in, PlateDir pd) {
+    which (pd) {
+    case cPLATE_GOES_N: { return C2D.instanceof( in.x, in.y); }
+    case cPLATE_GOES_E: { return C2D.instanceof(-in.y, in.x); }
+    case cPLATE_GOES_S: { return C2D.instanceof(-in.x,-in.y); }
+    }
+    /*cPLATE_GOES_W*/
+    return C2D.instanceof( in.y,-in.x);
+  }
+
+  PlateDir borderDir(C2D pos, C2D size) {
+    if (pos.getY() == 0 && pos.getX() < size.getX() - 1)
+      return cPLATE_GOES_N;
+    if (pos.getX() == size.getX() - 1 && pos.getY() < size.getY() - 1)
+      return cPLATE_GOES_E;
+    if (pos.getY() == size.getY() - 1 && pos.getX() > 0)
+      return cPLATE_GOES_S;
+    /*if (pos.getX() == 0 && pos.getY() > 0)*/
+    return cPLATE_GOES_W;
+  }
+
+  Bool onCCWCornerForDir(C2D pos, C2D size, PlateDir pd) {
+    which (pd) {
+    case cPLATE_GOES_N: {
+      return (pos.getY() == 0 &&
+              pos.getX() == 0);
+    }
+    case cPLATE_GOES_E: {
+      return (pos.getX() == size.getX() - 1 &&
+              pos.getY() == 0);
+    }
+    case cPLATE_GOES_S: {
+      return (pos.getY() == size.getY() - 1 &&
+              pos.getX() == size.getX() - 1);
+    }
+    case cPLATE_GOES_W: {
+      return (pos.getX() == 0 &&
+              pos.getY() == size.getY() - 1);
+    }
+    }
+    return false;
+  }
+
+  Bool onBorderForDir(C2D pos, C2D size, PlateDir pd) {
+    which (pd) {
+    case cPLATE_GOES_N: {
+      return (pos.getY() == 0 &&
+              pos.getX() >= 0 &&
+              pos.getX() <= size.getX() - 1);
+    }
+    case cPLATE_GOES_E: {
+      return (pos.getX() == size.getX() - 1 &&
+              pos.getY() >= 0 &&
+              pos.getY() <= size.getY() - 1);
+    }
+    case cPLATE_GOES_S: {
+      return (pos.getY() == size.getY() - 1 &&
+              pos.getX() >= 0 &&
+              pos.getX() <= size.getX() - 1);
+    }
+    case cPLATE_GOES_W: {
+      return (pos.getX() == 0 &&
+              pos.getY() >= 0 &&
+              pos.getY() <= size.getY() - 1);
+    }
+    }
+    return false;
+  }
+
+  C2D posAndSizeAlongDir(C2D pos, C2D size, PlateDir pd) {
+    which (pd) {
+    case cPLATE_GOES_N:
+    case cPLATE_GOES_S: {
+      return C2D.instanceof(pos.x, size.x);
+    }
+    case cPLATE_GOES_E:
+    case cPLATE_GOES_W: {
+      return C2D.instanceof(pos.y, size.y);
+    }
+    }
+    return c0x0;
+  }
+
+  C2D centerAlongDir(C2D size, PlateDir pd) {
+    which (pd) {
+    case cPLATE_GOES_N: { return C2D.instanceof((C2D.Coord) (size.getX()/2), (C2D.Coord) 0); }
+    case cPLATE_GOES_E: { return C2D.instanceof((C2D.Coord) (size.getX()-1), (C2D.Coord) (size.getY()/2)); }
+    case cPLATE_GOES_S: { return C2D.instanceof((C2D.Coord) (size.getX()/2), (C2D.Coord) (size.getY()-1)); }
+    case cPLATE_GOES_W: { return C2D.instanceof((C2D.Coord) 0, (C2D.Coord) size.getY()/2); }
+    }
+    return c0x0; // NOT REACHED..
+  }
+
+  Unsigned strideInDir(PlateDir pd, C2D stride) {
+    Int v;
+    which (pd) {
+    case cPLATE_GOES_N: { v = stride.getY(); }
+    case cPLATE_GOES_E: { v = stride.getX(); }
+    case cPLATE_GOES_S: { v = stride.getY(); }
+    case cPLATE_GOES_W: { v = stride.getX(); }
+    }
+    return (Unsigned) v;
+  }
+
+  C2D stepInDir(PlateDir pd) { return stepInDir(pd, false); }
+  
+  C2D stepInDir(PlateDir pd, Bool toshrink) {
+    C2D ret = rotn(C2D.instanceof(0,-1), pd);
+    if (toshrink) ret = ret * -1;
+    return ret;
+  }
+
+  C2D stepAlongDir(PlateDir pd) { return stepAlongDir(pd, true); }
+
+  C2D stepAlongDir(PlateDir pd, Bool gocw) {
+    C2D ret = rotn(C2D.instanceof(1,0), pd);
+    if (!gocw) ret = ret * -1;
+    return ret;
+  }
+
+  SN reversePtr(SN sn) {
+    EventWindow ew;
+    MDist md;
+    if (!ew.isAccessible(sn)) return sn.maxof; // Illegal reverses to illegal
+    C2D coord = md.getSiteCoord(sn);   // Their coord relative to us
+    C2D icoord = coord*(C2D.Coord)-1;  // Our coord relative to them
+    return md.getSiteNumber(icoord);   // Our SN relative to them
+  }
+
+  /*
+  C2D lineForwardOffsetEWC(PlateDir dir, C2D stride) {
+    C2D.Coord sx = stride.x;
+    C2D.Coord sy = stride.y;
+    which (dir) {
+    case cPLATE_GOES_N: { return C2D.instanceof(0,sy); }
+    case cPLATE_GOES_E: { return C2D.instanceof(-sx,0); }
+    case cPLATE_GOES_S: { return C2D.instanceof(0,-sy); }
+    case cPLATE_GOES_W: { return C2D.instanceof(sx,0); }
+    }
+
+    return c0x0; // FAIL?
+    }*/
+
+  Bool inStride(C2D ew1, C2D ew2, C2D str) {
+    C2D wastepc;
+    return inStride(ew1,ew2,str,wastepc);
+  }
+
+  Bool inStride(C2D ew1, C2D ew2, C2D str, C2D & pcdiff) {
+    C2D ewdiff = ew1 - ew2;
+    C2D pcdf = ewdiff/str;
+    Bool ret = pcdf*str == ewdiff;
+    if (ret) pcdiff = pcdf;
+    return ret;
+  }
+
+  typedef Unsigned(3) PlateRelation;
+  constant PlateRelation cSAME_PLATE_AS = 0u;     //< L same size and net origin as R
+  constant PlateRelation cCONTAINS_PLATE = 1u;    //< L wholly contains R 
+  constant PlateRelation cCONTAINED_BY_PLATE = 2u;//< L wholly contained by R
+  constant PlateRelation cUNRELATED_TO_PLATE = 3u;//< L disjoint from R (might be adjacent)
+  constant PlateRelation cOVERLAPS_PLATE = 4u;    //< L partially overlaps R (ooh bad?)
+  constant PlateRelation cNOT_PLATE = 5u;         //< L and/or R is inaccessible or not a Plate
+  constant PlateRelation cINTERPHASE_PLATE = 6u;  //< L and R have different strides and/or phases
+  constant PlateRelation cRELATION_UNKNOWN = 7u;  //< No plate relation information is available
+  constant String mRelationNames[PlateRelation.maxof+1u] = {
+    "SAME",
+    "CONTAINS",
+    "CONTAINED",
+    "UNRELATED",
+    "OVERLAPS",
+    "NONPLATE",
+    "INTERPHASE",
+    "UNKNOWN",
+  };
+  String relationName(PlateRelation rel) {
+    return mRelationNames[rel];
+  }
+
+  PlateRelation relationTo(SN snl, SN snr) {
+    MDist md;
+    C2D offsetl = md.getSiteCoord(snl);
+    C2D offsetr = md.getSiteCoord(snr);
+    return relationTo(offsetl,offsetr);
+  }
+
+  PlateRelation relationTo(C2D ewoffsetl, C2D ewoffsetr) {
+    EventWindow ew;
+    if (ew.isAccessible(ewoffsetl) && ew.isAccessible(ewoffsetr)) {
+      return relationTo(ew[ewoffsetl], ewoffsetl, ew[ewoffsetr], ewoffsetr);
+    }
+    return cNOT_PLATE;
+  }
+
+  PlateRelation relationTo(Atom& al, C2D ewoffsetl, Atom& ar, C2D ewoffsetr) {
+    if (al as Plate) {
+      if (ar as Plate) {
+        return relationTo(al,ewoffsetl,ar,ewoffsetr);
+      }
+    }
+    return cNOT_PLATE;
+  }
+  
+  PlateRelation relationTo(Plate& pl, C2D ewoffsetl, Plate& pr, C2D ewoffsetr) {
+    DebugUtils du;
+    C2D str = pl.stride();
+    C2D phs = pl.phase();
+    
+    if (str != pr.stride() || phs != pr.phase()) 
+      return interphasePlateRelations(pl,ewoffsetl,pr,ewoffsetr);
+
+    C2D pcdiff;
+    if (!inStride(ewoffsetr, ewoffsetl, str, pcdiff))
+      return cINTERPHASE_PLATE;         // XXX return something different?
+
+    return relationTo(pl.positionOnPlate(), pl.sizeOfPlate(), ewoffsetl,
+                      pr.positionOnPlate(), pr.sizeOfPlate(), ewoffsetr);
+  }
+
+  /** Compute plate relations assuming str{1,1} and phs(0,0). Can also
+      be used for L2Plate info.
+   */
+  PlateRelation relationTo(C2D posl, C2D sizl, C2D ewoffsetl, C2D posr, C2D sizr, C2D ewoffsetr)
+  {
+    DebugUtils du;
+    //    du.print("PLRLT 10");
+    //    du.print(str);
+    //    du.print(phs);
+
+    C2D pcdiff;
+    if (!inStride(ewoffsetr, ewoffsetl, c1x1, pcdiff))
+      return cINTERPHASE_PLATE;         // XXX return something different?
+
+    //    du.print("PLRLT 11");
+    //    du.print(pcdiff);
+
+    Box2D tbl(sizl, -posl);
+    Box2D tbr(sizr, -posr + pcdiff);
+          
+    //    du.print("PLRLT 12");
+    //    tbl.dprint("L");
+    //    tbr.dprint("R");
+    if (tbl == tbr) return cSAME_PLATE_AS;
+          
+    Box2D inter = tbl.intersectionWith(tbr);
+    if (inter == tbr) return cCONTAINS_PLATE;
+    //    du.print("PLRLT 13");
+    //    inter.dprint("I");
+
+    if (inter == tbl) return cCONTAINED_BY_PLATE;
+    if (inter.volume() == 0u) return cUNRELATED_TO_PLATE;
+
+    du.printContext();
+    du.print("PRREL2 OVRLPS");
+    du.print(sizl);
+    du.print(posl);
+    du.print(ewoffsetl);
+    du.print(sizr);
+    du.print(posr);
+    du.print(ewoffsetr);
+    return cOVERLAPS_PLATE;
+  }
+
+  PlateRelation interphasePlateRelations(Plate& pl, C2D ewoffsetl, Plate& pr, C2D ewoffsetr) {
+    DebugUtils du;
+    Bool leftOuter;
+    ByteStreamLogger bsl;
+    
+    //    bsl.printf("intpPR 10");
+
+    /// Q0: Is everybody on phase 0x0?
+    if (pl.phase() != c0x0 || pr.phase() != c0x0)
+      return cINTERPHASE_PLATE;
+    /// A0: Everybody is on phase 0x0.
+
+    /// Q1: Does either stride subsume the other?
+    C2D lstr = pl.stride();
+    C2D rstr = pr.stride();
+    if (lstr == rstr) { Fail f; f.fail(); }  // Shouldn't be here
+
+
+    C2D minstr = lstr.min(rstr);
+    //    bsl.printf("mns{%d,%d}\n", minstr.x, minstr.y);
+
+    if (lstr == minstr)  leftOuter = true;
+    else if (rstr == minstr) leftOuter = false;
+    else return cINTERPHASE_PLATE;
+
+    Plate & outer = leftOuter ? pl : pr;
+    C2D ewoffseto = leftOuter ? ewoffsetl : ewoffsetr;
+    Plate & inner = leftOuter ? pr : pl;
+    C2D ewoffseti = leftOuter ? ewoffsetr : ewoffsetl;
+    PlateRelation ret = leftOuter ? cCONTAINS_PLATE : cCONTAINED_BY_PLATE;
+    //    du.print("intpPR 12");
+    //    du.print((Unsigned) ret);
+    /// A1: Yes, outer.stride() subsumes inner.stride()
+
+    /// Q2: Does outer's ew bbox completely contain inner's ew bbox?
+    C2D ostride = outer.stride();
+    C2D istride = inner.stride();
+    C2D oewsize = outer.sizeOfPlate() * ostride;
+    C2D iewsize = inner.sizeOfPlate() * istride;
+    C2D oewpos = outer.positionOnPlate() * ostride - ewoffseto;
+    C2D iewpos = inner.positionOnPlate() * istride - ewoffseti;
+    Box2D tbo(oewsize, -oewpos);
+    Box2D tbi(iewsize, -iewpos);
+    Box2D tbx = tbo.intersectionWith(tbi);
+
+    //    tbo.dprint("O:");
+    //    tbi.dprint("I:");
+    //    tbx.dprint("X:");
+
+    //    bsl.printf("ret(%s)?\n",relationName(ret));
+    if (tbx == tbi)
+      return ret; ///A2: Yes
+
+    //    bsl.printf("intpPR 14\n");
+    return cINTERPHASE_PLATE;
+  }
+
+  typedef Unary(5) SiteCategory;
+  constant SiteCategory cSC_UNWANTED = 0u;      //< Outside our plate
+  constant SiteCategory cSC_ALREADY_OURS = 1u;  //< Contains same plate as we are
+  constant SiteCategory cSC_ON_SUBPLATE = 2u;   //< Contains a subplate of our plate
+  constant SiteCategory cSC_CAN_GROW_INTO = 3u; //< Is empty or contains our container
+  constant SiteCategory cSC_WANT_NOT_GOT = 4u;  //< Inaccessible or blocked
+  constant SiteCategory cSC_INTERPHASE = 5u;    //< Not in stride, or not in phase
+
+  SiteCategory categorizeSite(Plate & us, SN sn) {
+    C2D theirpc;
+    return categorizeSite(us, sn, theirpc);
+  }
+  
+  /** Determine the status of ew site \c sn relative to us.  Return a
+      SiteCategory code describing that status.  Also, if the returned
+      status is
+
+      PlateUtils.cSC_CAN_GROW_INTO,
+      PlateUtils.cSC_ALREADY_OURS, or
+      PlateUtils.cSC_ON_SUBPLATE,
+
+      set \c theirpospc to the plate coodinate corresponding to \c sn.
+
+      \sa SiteCategory
+   */
+  SiteCategory categorizeSite(Plate & us, SN sn, C2D & theirpospc) {
+    // A site is available for me to grow into if
+    // (1) It is accessible, and
+    // (2) Its position matches my stride and phase
+    // (3) It is in my plate's bounding box, and
+    // (4) It is Empty, or
+    // (5) It is on the plate that contains me
+    EventWindow ew;
+    MDist md;
+    PlateUtils pu;
+    DebugUtils du;
+    C2D mysizepc = us.sizeOfPlate();
+    C2D mypospc = us.positionOnPlate();
+    C2D mystr = us.stride();
+    C2D myphs = us.phase();
+
+    C2D myewc = us.getOurEWCoord();
+    C2D scewc = md.getSiteCoord(sn);
+
+    C2D pcdiff;
+    if (!inStride(scewc, myewc, mystr, pcdiff))
+      return cSC_INTERPHASE;
+
+    C2D cpc = mypospc+pcdiff; 
+    if (!mysizepc.contains(cpc)) return pu.cSC_UNWANTED;   // Not in our bbox
+    if (ew.isAccessible(sn)) {
+      theirpospc = cpc;                            // Return plate pos of sn
+      Atom & a = ew[sn];
+      if (a is Empty) return pu.cSC_CAN_GROW_INTO; // Is Empty
+      if (a as Plate) {
+        PlateUtils.PlateRelation rel = pu.relationTo(us, myewc, a, scewc);
+        if (rel == pu.cINTERPHASE_PLATE)
+          return pu.cSC_INTERPHASE;               // Mismatching in stride or phase
+        if (rel == pu.cSAME_PLATE_AS)
+          return pu.cSC_ALREADY_OURS;             // Is already our plate
+        if (rel == pu.cCONTAINED_BY_PLATE)
+          return pu.cSC_CAN_GROW_INTO;            // Is on containing plate
+        if (rel == pu.cCONTAINS_PLATE) {
+          return pu.cSC_ON_SUBPLATE;              // Is on contained plate
+        }
+      }
+    }
+    return pu.cSC_WANT_NOT_GOT; // Inaccessible or blocked
+  }
+
+  /** \return the implied phase of ew[0], according to a plate with
+     the given \c stride and \c phase, located at \c ewc.  Note this
+     result does not depend on whether ew[0] actually contains Plate.
+
+     All ew sites containing the same plate will return the same value
+     here, regardless of their phase.  But two sites with matching
+     values here are not guaranteed to be on the same plate, unless
+     caller ensures that their size and pos also match.
+   */
+  C2D ewPhase(C2D stride, C2D phase, C2D ewc) {
+    return mod(ewc + phase, stride);
+  }
+
+  
+  /** Mod with non-negative remainder grr
+   */
+  Int mod(Int a, Int b) {
+    a %= b;
+    if (a < 0) a += b;
+    return a;
+  }
+
+  C2D mod(C2D a, C2D b) {
+    return C2D.instanceof((C2D.Coord) mod(a.getX(),b.getX()),
+                          (C2D.Coord) mod(a.getY(),b.getY()));
+  }
+
+/*
+  C2D hadamard(C2D a, C2D b) { //< Component-wise multiplication
+    return C2D.instanceof((C2D.Coord) (a.getX()*b.getX()),
+                          (C2D.Coord) (a.getY()*b.getY()));
+  }
+  C2D hadamardiv(C2D a, C2D b) { //< Component-wise division
+    return C2D.instanceof((C2D.Coord) (a.getX()/b.getX()),
+                          (C2D.Coord) (a.getY()/b.getY()));
+  }
+*/
+  //// Relative size and positions
+  C2D relativeToAbsolute(C2D plateAmount, B2D4 relative) {
+    return
+      (plateAmount * relative.toC2D() +
+       C2D.instanceof(B2D4.cMAXVAL/2,B2D4.cMAXVAL/2)) /
+      ((C2D.Coord) B2D4.cMAXVAL);
+  }
+
+  B2D4 absoluteToRelative(C2D plateSize, C2D pos) {
+    plateSize = plateSize.max(c1x1);         // size now (>0,>0)
+    pos = pos.max(c0x0).min(plateSize); // pos now (0..sx,0..sy)
+    C2D cmax((C2D.Coord) B2D4.cMAXVAL,(C2D.Coord) B2D4.cMAXVAL);
+    B2D4 ret(pos * cmax + plateSize/2/plateSize);
+    return ret;
+  }
+
+  SN findTypeInDir(SN cached, PlateDir dir, Unsigned classid) {
+    PlateUtils pu;
+    return findTypeAlongOffset(cached,pu.stepInDir(dir),classid);
+  }
+
+  SN findTypeAlongOffset(SN cached, C2D diroff, Unsigned classid) {
+    ClassUtils cu;
+    EventWindow ew;
+    if (cached != 0 && cached != SN.maxof && ew.isAccessible(cached)) {
+      if (cu.isBase(cu.getClassId(ew[cached]),classid)) return cached;
+    }
+    PlateUtils pu;
+    C2D ewc = PlateUtils.c0x0;
+    while (ew.isAccessible(ewc = ewc + diroff)) {
+      if (cu.isBase(cu.getClassId(ew[ewc]),classid)) return ew.getSiteNumber(ewc);
+    }
+    return SN.maxof;
+  }
+
+  /** Given that \c containee is at ewoffset relative to container,
+      and it is contained by \c container (in the sense that
+      relationTo(ew.getSiteNumber(container),
+      ew.getSiteNumber(containee)) == cCONTAINS_PLATE ), then \returns
+      true if container has a non-empty border all the way around
+      containee
+   */
+  Bool strictlyContains(Plate & container, Plate & containee, C2D ewoffset) {
+    Box2D tber(container.sizeOfPlate(), -container.positionOnPlate());
+    Box2D tbee(containee.sizeOfPlate(), -containee.positionOnPlate() + ewoffset);
+    return tber.strictlyContains(tbee);
+  }
+
+  /** \returns true and sets containerew and selfpc if a neighboring
+      ew site with a plate containing p is found
+   */
+  Bool findContainer(Plate & p, C2D & containerew, C2D & selfpc) {
+    DebugUtils du;
+    MDist md;
+    EventWindow ew;
+    du.print("FNCONTR 10");
+    du.printContext();
+
+    C2D pewc = p.getOurEWCoord(); // or fail
+    for (SN sn = 1u; sn < 41u; ++sn) {
+      if (!ew.isAccessible(sn)) continue;
+      C2D offsetr = md.getSiteCoord(sn);
+      Atom & a = ew[sn];
+      du.print("FNCONTR 11");
+      du.print(offsetr);
+      if (a as Plate) {
+        C2D offsetr = md.getSiteCoord(sn);
+        PlateUtils.PlateRelation rel = relationTo(a, offsetr, p, pewc);
+        if (rel != cCONTAINS_PLATE) continue;
+        du.print("FNCONTR 12");
+
+        C2D offsetew = offsetr - pewc;
+        C2D offsetpc = (offsetew / a.stride());
+        C2D contpos = a.positionOnPlate();
+        containerew = offsetr;
+        selfpc = contpos - offsetpc;
+        du.print(offsetew);
+        du.print(offsetpc);
+        du.print(contpos);
+
+        C2D whaaat = selfpc;
+        du.print(whaaat);
+
+        //GRRRRR du.print((C2D) selfpc);
+        return true;
+      }
+    }
+    return false;
+  }
+}

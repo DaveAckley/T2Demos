@@ -1,0 +1,124 @@
+/**
+   Manage B2DPlate development and mobility using a border QStream.
+   Takes plate(0,0) as the left peer and plate(0,1) as the right peer.
+ */
+quark B2DStreamPlateBase : Plate + QStream12 + Payload {
+
+  typedef Payload.RawBits RawBits; //202107270321 why is this needed?
+
+  //// B2DStreamPlateBase SERVICES
+
+  Bool updateStream() {
+    if (!isPlateBorder()) return false;
+    if (canAdvance())
+      checkActions();
+    return advance();
+  }
+
+  Bool trySendPayload(Bool left, Payload & pay) {
+    if (!isPeer(left)) return false;
+    RawBits bits;
+    if (!pay.storeTo(bits)) return false;
+    return send(!left,bits); // Left peer sends rightbound and vv
+  }
+
+  Bool tryRecvPayload(Bool left, Payload & pay) {
+    if (!isPeer(left)) return false;                     // peers receive
+    if (mBufferStatus != cARRIVED_PACKET) return false;  // arrived packets
+    
+    RawBits bits;
+    if (!recv(left,bits)) return false;  // Right peer recvs rightbound and vv
+    return pay.loadFrom(bits);
+  }
+
+  virtual Void checkActions() ;
+  /////// IMPLEMENTATION
+
+}
+
+quark B2DStreamPlateT(Unary(8) cBITS_PER_COORD)
+  : B2DTPlate(cBITS_PER_COORD) + B2DStreamPlateBase
+{
+  typedef B2DTPlate(cBITS_PER_COORD) MyB2DPlate;
+  typedef PayloadT(16) B2DStreamPayload;
+
+  //// B2DStreamPlate SERVICES
+  // Bool updateStream() 
+  // Bool trySendPayload(Bool cw, Payload & pay)
+
+  //// QSTREAM API
+  @Override
+  virtual SN getNextSN(Bool left) { // LEFT IS CCW, RIGHT IS CW, ON BORDER
+    if (!isPlateBorder()) return SN.maxof;
+    if (isPeer(left)) return SN.maxof;
+    if (left) return getCCWPlate();
+    /*!left*/ return getCWPlate();
+  }
+
+  @Override
+  virtual Bool isPeer(Bool left) {
+    C2D pos = positionOnPlate();
+    return
+      (left && pos == C2D.instanceof(0,0)) ||
+      (!left && pos == C2D.instanceof(0,1));
+  }
+
+  @Override
+  Void checkActions() {
+    /*
+    Payload & p = self;
+    if (p as B2DStreamPayload) {
+      if (!p.hasPayload()) return;
+      B2DStreamPayload.MyBits pay = p.peekAtPayload();
+      B2DPacket pkt = (B2DPacket) pay;
+      ByteStreamLogger bsl;
+      DebugUtils du;
+      //      bsl.printf("BDSLKCHECKAC:");
+      //      pkt.print(bsl);
+      //      bsl.printf("\n");
+
+      if (pkt.isSense()) {
+        //        du.print("CLAMDOTO10");
+        //XXX WAS        B2DPacketSense & ps = pkt.asSense();
+        B2DPacketSense & ps = pkt.mSenseAct.mPacketSense;
+        //        du.print("CLAMDOTO11"); // XXX WAS bsl.printf("CLAMDOTO11\n");
+        if (ps.sense(self)) {
+          //          du.print("SENSNGOG10");
+          // We have to update our payload
+          Payload.RawBits rb;
+          //          du.print("SENSNGOG11");
+          p.storeTo(rb); // discard existing packet
+          //          du.print("SENSNGOG12");
+          B2DStreamPayload.MyBits newbits = (B2DStreamPayload.MyBits) pkt;
+          //          bsl.printf("SENSNGOG1310(%x)\n",(Unsigned) newbits);
+          rb = p.toRawBits(newbits);
+          //          bsl.printf("SENSNGOG1311(%x)\n",(Unsigned) rb);
+          p.loadFrom(rb); // Stuff in new packet
+          //          bsl.printf("SENSNGOG14\n");
+          //          bsl.print("UPKDTP");
+          //          pkt.print(bsl); 
+          //          bsl.printf("\n");
+          //          bsl.printf("SENSNGOG15\n");
+        }
+        //        du.print("CLAMDOTO12");
+      } else if (pkt.isAct()) {
+        //        du.print("LKJACT10");
+        B2DPacketAct & pa = pkt.mSenseAct.mPacketAct;
+        //        du.print("LKJACT11");
+        if (pa.act(self)) {
+          //          du.print("LKJACT12");
+        }
+        //        du.print("LKJACT13");
+      }
+    }
+    */
+  }
+}
+
+quark B2DStreamPlate : B2DStreamPlateT(7u) { }
+
+quark B2DStreamPlate6 : B2DStreamPlateT(6u) { }
+
+quark B2DStreamPlate4 : B2DStreamPlateT(4u) { }
+
+

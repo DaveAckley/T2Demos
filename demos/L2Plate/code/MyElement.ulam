@@ -1,0 +1,139 @@
+use B2DPlate;
+
+transient Zong : Plex {
+  Bool mBong;
+  constant Unsigned cONGS = 9;
+  Unsigned(20) mUongs[cONGS];
+  Bool mBong2;
+  Bool commitUpdate() {
+    DebugUtils du;
+    du.printContext();
+    du.print(mUongs[0]++);
+    du.print(mUongs[mUongs[0]%cONGS]++);
+    du.print(mBong = !(mBong2 != mBong2));
+    du.print("WOWOWOONG");
+    du.print(self);
+    return true;
+  }
+}
+
+element MyElement : B2DPlate4 {
+  typedef Bits(52) MyBits;
+  MyBits mBits;
+  /* create failure during rendering
+  @Override
+  ARGB getColor(Unsigned selector) {
+    Fail f;
+    f.fail();
+    return super.getColor(selector);
+  }
+  */
+  Unsigned gather(BitStorage & bs) {
+    EventWindow ew;
+    PlateUtils pu;
+    Unsigned bspos = 0u;
+    for (C2D.Coord y = 0; y < 2; ++y)
+      for (C2D.Coord x = 0; x < 2; ++x) {
+        C2D pc(x,y);
+        SN ewsn = plateCoordToEWSN(pc);
+        if (!ew.isAccessible(ewsn)) break;
+        Atom & a = ew[ewsn];
+        if (a as Self) {
+          Unsigned k = a.mBits.sizeof;
+          bs.write(a.mBits, bspos, k);
+          bspos += k;
+        } else break;
+      }
+    return bspos;
+  }
+  Bool scatter(BitStorage & bs) {
+    EventWindow ew;
+    PlateUtils pu;
+    Unsigned bspos = 0u;
+    for (C2D.Coord y = 0; y < 2; ++y)
+      for (C2D.Coord x = 0; x < 2; ++x) {
+        C2D pc(x,y);
+        SN ewsn = plateCoordToEWSN(pc);
+        if (!ew.isAccessible(ewsn)) return false; //ew may be trashed
+        Atom & a = ew[ewsn];
+        if (a as Self) {
+          Unsigned k = a.mBits.sizeof;
+          a.mBits = (MyBits) bs.read(bspos, k);
+          bspos += k;
+        } else return false;
+      }
+    return true;
+  }
+  Void behave() {
+    typedef BitStorageT(4096) BitStorage4K;
+
+    DebugUtils du;
+    if (mustBlockOrDie()) return;
+    //    du.print("MYSD 10");
+    if (checkGrowthAndHealing()) return;
+    BitStorage4K bs;
+    Unsigned gathered = gather(bs);
+    //    du.print(gathered);
+    constant Unary(32) cCHKBITS = 16u;
+    if (gathered < Zong.sizeof + cCHKBITS) return;
+    //    du.print("MYSD 11");
+    Bool init = !bs.isChecksumValid(Zong.sizeof,cCHKBITS);
+    if (init)
+      du.print("REININININTITIITITIT");
+    du.print(init);
+    Zong & urs = (Zong&) bs.recast(Zong.classidof, init);
+    //    du.print("MYSD 12");
+    if (urs.commitUpdate()) {
+      //      du.print("MYSD 13");
+      Bool upd = bs.updateChecksum(Zong.sizeof,cCHKBITS);
+      du.print(upd);
+      if (!scatter(bs)) { Fail f; f.fail(); }
+    }
+  }
+}
+
+/** \symbol M1 
+    \color #f0c
+*/
+element SeedMyElement {
+  Void behave() {
+    EventWindow ew;
+    PlateUtils pu;
+    MyElement me;
+    me.setPositionOnPlate(pu.c0x0);
+    me.setSizeOfPlate(pu.c3x3);
+    ew[0] = me;
+  }
+}
+
+
+/** \symbol M2
+    \color #c0f
+*/
+element SeedMyElement2 {
+  Void behave() {
+    EventWindow ew;
+    PlateUtils pu;
+    MyElement me;
+    me.setPositionOnPlate(pu.c0x0);
+    me.setSizeOfPlate(C2D.instanceof(5,7));
+    ew[0] = me;
+  }
+}
+
+element DebugSeed + PlateUtils {
+  Void behave() {
+    L2Plate lp;
+    lp.setSizeOfL2Plate(c1x1);
+    lp.setPositionOnL2Plate(c0x0);
+    lp.setSizeOfPlate(C2D.instanceof(6,9));
+    lp.setPositionOnPlate(c1x0);
+    MyElement me;
+    me.setSizeOfPlate(C2D.instanceof(5,7));
+    me.setPositionOnPlate(c0x0);
+    EventWindow ew;
+    ew[3] = me;
+    ew[0] = lp;
+  }
+  
+}

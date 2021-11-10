@@ -1,0 +1,270 @@
+quark RingOState {
+  Bool(1) mUpState;
+  Bool(1) mDownState;
+  Bool operator==(RingOState & other) {
+    return mUpState == other.mUpState && mDownState == other.mDownState;
+  }
+  Bool operator!=(RingOState & other) {
+    return mUpState != other.mUpState || mDownState != other.mDownState;
+  }
+  ARGB color() {
+    Bits(32) col = 0u;
+    if (mUpState)   col |= 0x00ff0000; // add red
+    if (mDownState) col |= 0x0000ff00; // add green
+    if (col == 0u)  col =  0x000000ff; // blue if neither
+    col |= 0xff000000;                 // add alpha
+    ColorUtils cu;
+    return cu.color(col);
+  }
+}
+
+/**
+   Sync using a General Distributed Ring Oscillator, given upstream and downstream iterators
+ */
+quark RingO {
+  typedef EventWindow.SiteNum SN;
+  typedef BitStorageT(4096) BitStorage4K;
+
+  RingOState mRingOState;
+
+  typedef Unary(2) SyncRelation;
+  constant SyncRelation cOTHER_IS_UNRELATED = 0;
+  constant SyncRelation cOTHER_IS_UPSTREAM = 1;
+  constant SyncRelation cOTHER_IS_DOWNSTREAM = 2;
+
+  //// RingO API
+  virtual Unsigned iteratorClassId() ;   //< The id of a RingOIterator subclass
+  virtual SyncRelation syncRelation(RingO & other) ; //< How does other relate to self?
+
+  /** return true to let root start next phase */
+  virtual Bool rootTick(Bool wasTrue) { return true; }
+
+  /** return true to let tail start next phase */
+  virtual Bool tailTock(Bool wasTrue) { return true; }
+
+  /** return true to let wire propagate change into self */
+  virtual Bool edge(Bool fromUp, Bool newState) { return true; }
+  
+  //// RingO SERVICES
+  Bool updateRingO() {                    //< returns true if state changes made
+    BitStorage4K bs;
+    EventWindow ew;
+    ClassUtils.ClassId classid = self.iteratorClassId();
+    ClassUtils cu;
+    Fail f;
+    if (!cu.isBase(classid,RingOIterator.classidof)) {
+      f.fail("NOT ITERATOR");
+    }
+
+    RingONeighborhood ngb;
+    RingOIterator & itr = (RingOIterator &) bs.recast(classid, true);
+    itr.init(self);
+    while (itr.hasNext()) {
+      RingO & n = itr.next();
+      SN sn = ew.getSiteNumber(n);
+      RingOState s = n.mRingOState;
+      SyncRelation rel = self.syncRelation(n);
+      ngb.countRingOState(s, rel);
+    }
+    
+    return ngb.update(self);
+  }
+
+  ARGB getRingOColor() {  return mRingOState.color();  }
+
+}
+
+quark RingOIterator {
+  //// RingO API
+  virtual Void init(RingO & on) ;  //< Set up to iterator around \c on
+  virtual Bool hasNext() ;        //< \c true if another RingO& available
+  virtual RingO & next() ;         //< Get next RingO& or fail if none 
+}
+
+transient RingONeighborhood {
+  typedef EventWindow.SiteNum SN;
+  typedef RingO.SyncRelation SyncRel;
+  typedef Unsigned(6) ByteCount;
+  ByteCount mUpCount, mUpTrue;
+  ByteCount mDownCount, mDownTrue;
+
+  Void debugPrint() {
+    ByteStreamLogger bsl;
+    bsl.printf("[RingO uc%d ut%d dc%d dt%d]\n",
+               mUpCount, mUpTrue,
+               mDownCount, mDownTrue);
+  }
+
+  Void countRingOState(RingOState state, RingO.SyncRelation rel) {
+    if (rel == RingO.cOTHER_IS_UPSTREAM) {
+      ++mUpCount;
+      if (state.mUpState) ++mUpTrue;
+    } else if (rel == RingO.cOTHER_IS_DOWNSTREAM) {
+      ++mDownCount;
+      if (state.mDownState) ++mDownTrue;
+    }
+  }
+
+  ByteCount ngbCount(SyncRel rel) {
+    if (rel == RingO.cOTHER_IS_UPSTREAM)
+      return mUpCount;
+    if (rel == RingO.cOTHER_IS_DOWNSTREAM)
+      return mDownCount;
+    Fail f;
+    f.fail();
+    return ByteCount.minof;
+  }
+
+  Bool allDirAreVal(SyncRel rel, Bool val) {
+    if (rel == RingO.cOTHER_IS_UPSTREAM) {
+      if (val) return mUpCount == mUpTrue;
+      else return mUpTrue == 0u;
+    } else if (rel == RingO.cOTHER_IS_DOWNSTREAM) {
+      if (val) return mDownCount == mDownTrue;
+      else return mDownTrue == 0u;
+    }
+    Fail f;
+    f.fail();
+    return false;
+  }
+
+  Bool update(RingO & me) {
+    RingOState newst = me.mRingOState; // Assume new state same as old
+
+    DebugUtils du;
+
+    //// ROOT TICK
+    if (ngbCount(RingO.cOTHER_IS_UPSTREAM) == 0u &&
+        newst.mUpState == newst.mDownState &&
+        me.rootTick(newst.mUpState)) 
+      newst.mUpState = !newst.mUpState;
+
+    //// TAIL TOCK
+    else if (ngbCount(RingO.cOTHER_IS_DOWNSTREAM) == 0u &&
+        newst.mDownState != newst.mUpState &&
+        me.tailTock(newst.mDownState)) 
+      newst.mDownState = !newst.mDownState;
+
+    else {    //// WIRE PROPAGATION
+
+      if (ngbCount(RingO.cOTHER_IS_UPSTREAM) > 0u) {
+        if (allDirAreVal(RingO.cOTHER_IS_UPSTREAM,      true))
+          newst.mUpState = true;
+        else if (allDirAreVal(RingO.cOTHER_IS_UPSTREAM, false))
+          newst.mUpState = false;
+        // else no up change
+      }
+
+      if (ngbCount(RingO.cOTHER_IS_DOWNSTREAM) > 0u) {
+        if (allDirAreVal(RingO.cOTHER_IS_DOWNSTREAM,      true))
+          newst.mDownState = true;
+        else if (allDirAreVal(RingO.cOTHER_IS_DOWNSTREAM, false))
+          newst.mDownState = false;
+        // else no down change
+      }
+    }
+
+    if (newst != me.mRingOState) {
+      if (newst.mUpState != me.mRingOState.mUpState) {
+        if (!me.edge(true, newst.mUpState))
+          return false;
+      }
+      if (newst.mDownState != me.mRingOState.mDownState) {
+        if (!me.edge(false, newst.mDownState))
+          return false;
+      }
+      me.mRingOState = newst;
+      return true;
+    }
+
+    return false;
+  }
+
+}
+
+quark RingOPlate :  B2DPlate + RingO {
+
+  //// RingO API
+  @Override
+  virtual Unsigned iteratorClassId() {
+    return RingOMooreIterator.classidof;
+  }
+
+  @Override
+  virtual SyncRelation syncRelation(RingO & other) {
+    EventWindow ew;
+    PlateUtils pu;
+    MDist md;
+
+    SN selfsn = getOurSN();
+    if (selfsn == SN.maxof) return RingO.cOTHER_IS_UNRELATED; // WTH?
+    C2D offsetl = md.getSiteCoord(selfsn);
+
+    if (other as RingOPlate) {
+
+      SN othersn = other.getOurSN();
+      if (othersn == SN.maxof) return RingO.cOTHER_IS_UNRELATED; // WTH?
+
+      C2D offsetr = md.getSiteCoord(othersn);
+      PlateUtils.PlateRelation rel = pu.relationTo(self, offsetl, other, offsetr);
+      if (rel != pu.cSAME_PLATE_AS) return RingO.cOTHER_IS_UNRELATED; // WTH?
+
+      Bool snUpstream =   offsetl.min(offsetr)==offsetr;
+      if (snUpstream) return RingO.cOTHER_IS_UPSTREAM;
+
+      Bool snDownstream = offsetl.max(offsetr)==offsetr;
+      if (snDownstream) return RingO.cOTHER_IS_DOWNSTREAM;
+
+    }
+    return RingO.cOTHER_IS_UNRELATED;
+  }
+
+}
+
+transient RingOMooreIterator : RingOIterator {
+  typedef EventWindow.SiteNum SN;
+  SN mNextSN;
+
+  //// RingOIterator API
+  @Override
+  virtual Void init(RingO & on) { mNextSN = 1u; }
+  virtual Bool hasNext() {
+    EventWindow ew;
+    for (; mNextSN <= 8u; ++mNextSN) {
+      if (!ew.isAccessible(mNextSN)) continue;
+      if (ew[mNextSN] is RingO) return true;
+    }
+    return false;
+  }
+  
+  virtual RingO & next() {
+    if (!hasNext()) { Fail f; f.fail(); }
+    EventWindow ew;
+    RingO & ret = (RingO&) ew[mNextSN++]; // Or fail if something changed under us
+    return ret;
+  }
+}
+
+element RingODemo : RingOPlate {
+
+  //// UrSelf API
+  @Override
+  ARGB getColor(Unsigned selector) {
+    return getRingOColor();
+  }
+
+  Void behave() {
+    if (mustBlockOrDie()) return;
+    if (checkGrowthAndHealing()) return;
+    if (updateRingO()) return;
+  }
+}
+
+element SeedRingODemo {
+  Void behave() {
+    RingODemo d;
+    d.setSizeOfPlate(C2D.instanceof(9,7));
+    EventWindow ew;
+    ew[0] = d;
+  }
+}

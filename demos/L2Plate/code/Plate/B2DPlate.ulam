@@ -1,0 +1,157 @@
+use EventWindow;
+quark B2DPlateBase : Plate {
+  typedef EventWindow.SiteNum SN;
+  
+  //// B2DPlateBase API
+  virtual Bool setSizeOfPlate(C2D size) ;
+  virtual Bool setPositionOnPlate(C2D pos) ;
+  virtual Atom copyOf() { //< A copy of self suitable for healing
+    return self.atomof;
+  }
+
+  //// B2DPlateBase utilities
+  Bool checkGrowthAndHealing() {
+    EventWindow ew;
+    PlateUtils pu;
+    Random random;
+    MDist md;
+    C2D mypos = positionOnPlate();
+    C2D mystr = stride();
+    Bool grew = false;
+    DebugUtils du;
+
+    //    du.print("CGAH 10");
+    //    du.print(mypos);
+    //    du.print(mystr);
+    for (C2D.Coord y = -2; y <= 2; ++y) {
+      for (C2D.Coord x = -2; x <= 2; ++x) {
+        if (x == 0 && y == 0) continue;
+        //    du.print("CGAH 11");
+        //    du.print(x);
+        //    du.print(y);
+
+        C2D ewc = (C2D.instanceof(x,y) * mystr);
+        //    du.print(ewc);
+
+        EventWindow.SiteNum sn = md.getSiteNumber(ewc);
+        if (sn == sn.maxof) continue;
+
+        //    du.print(sn);
+        C2D pc;                   // Plate coord of site
+        PlateUtils.SiteCategory sc = pu.categorizeSite(self, sn, pc);
+        //    du.print((Unsigned) sc);
+        if (sc == pu.cSC_INTERPHASE) continue; // Impossible by iteration?
+        if (sc == pu.cSC_UNWANTED) continue;
+        if (sc == pu.cSC_ON_SUBPLATE) continue; // Can't grow into, can't pull stability
+        //    du.print("CGAH 12");
+        if (sc == pu.cSC_CAN_GROW_INTO) {
+          if (isPlateBorderCoord(pc)) {
+            // Prefer border to grow border, but to seed from inside,
+            // allow upper left field to seed plate
+            Bool bordergrower = isPlateBorder() || mypos.length() <= 2u;
+            if (!bordergrower) continue;
+          }
+          //    du.print("CGAH 13");
+          Atom copyofus = copyOf();
+          Self & bein = (Self&) copyofus; // Or fail, if copyOf screwed up
+          //          du.printContext();
+          //          du.print("OANZC");
+          //          du.print(ewc);
+          //          du.print(pc);
+          bein.setPositionOnPlate(pc);
+          ew[sn] = bein.atomof;
+          grew = true;  // Wanted it and got it
+          continue;
+        }
+      }
+    }
+    //    du.print("CGAH 14");
+    return grew;
+  }
+
+  SN getCCWPlate() {
+    PlateUtils pu;
+    C2D pos = positionOnPlate();
+    C2D size = sizeOfPlate();
+    PlateUtils.PlateDir dir = pu.borderDir(pos,size);
+    C2D incrpc;
+    which (dir) {
+    case pu.cPLATE_GOES_N: {
+      if (pos.getX() > 0) incrpc.setX(-1); else incrpc.setY(+1);
+    }
+    case pu.cPLATE_GOES_E: {
+      if (pos.getY() > 0) incrpc.setY(-1); else incrpc.setX(-1);
+    }
+    case pu.cPLATE_GOES_S: {
+      if (pos.getX() < size.getX() - 1) incrpc.setX(+1); else incrpc.setY(-1);
+    }
+    case pu.cPLATE_GOES_W: {
+      if (pos.getY() < size.getY() - 1) incrpc.setY(+1); else incrpc.setX(+1);
+    }
+    }
+    C2D incr = (incrpc * stride());
+    MDist md;
+    EventWindow ew;
+    SN ret = md.getSiteNumber(incr); // XXX ASSUMES WE'RE AT ew[0];
+    if (!(ew[ret] is Self)) ret = SN.maxof; // Only valid if really one of us
+    return ret;
+  }
+
+  SN getCWPlate() {
+    PlateUtils pu;
+    C2D pos = positionOnPlate();
+    C2D size = sizeOfPlate();
+    PlateUtils.PlateDir dir = pu.borderDir(pos,size);
+    C2D incrpc;
+    which (dir) {
+    case pu.cPLATE_GOES_N: {
+      if (pos.getX() < size.getX() - 1) incrpc.setX(+1); else incrpc.setY(+1);
+    }
+    case pu.cPLATE_GOES_E: {
+      if (pos.getY() < size.getY() - 1) incrpc.setY(+1); else incrpc.setX(-1);
+    }
+    case pu.cPLATE_GOES_S: {
+      if (pos.getX() > 0) incrpc.setX(-1); else incrpc.setY(-1);
+    }
+    case pu.cPLATE_GOES_W: {
+      if (pos.getY() > 0) incrpc.setY(-1); else incrpc.setX(+1);
+    }
+    }
+    C2D incr = (incrpc * stride());
+    MDist md;
+    return md.getSiteNumber(incr); // XXX ASSUMES WE'RE AT ew[0]
+  }
+}
+
+quark B2DTPlate(Unary(8) cBITS_PER_COORD) : B2DPlateBase {
+  typedef B2DT(cBITS_PER_COORD) MyB2D;
+  typedef EventWindow.SiteNum SN;
+  MyB2D mSizeOfPlate;
+  MyB2D mPosOnPlate;
+  DeathBits mDeathBits;
+  
+  //// Plate API
+  @Override
+  virtual C2D sizeOfPlate() { return mSizeOfPlate.toC2D(); }
+  @Override
+  virtual C2D positionOnPlate() { return mPosOnPlate.toC2D(); }
+  @Override
+  virtual DeathBits getDeathBits() { return mDeathBits; }
+  @Override
+  virtual Void setDeathBits(DeathBits bits) { mDeathBits = bits; }
+
+  //// B2DPlateBase API
+  @Override
+  virtual Bool setSizeOfPlate(C2D size) { return mSizeOfPlate.fromC2D(size); }
+  @Override
+  virtual Bool setPositionOnPlate(C2D pos) { return mPosOnPlate.fromC2D(pos); }
+}
+
+quark B2DPlate : B2DTPlate(7) { }
+
+quark B2DPlate6 : B2DTPlate(6) { }
+
+quark B2DPlate4 : B2DTPlate(4) { }
+
+quark B2DPlate2 : B2DTPlate(2) { }
+

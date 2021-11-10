@@ -1,0 +1,83 @@
+/** Fixed 2x2 stride, variable phase
+ */
+quark Stride2x2F : Plate {
+  @Override
+  virtual C2D stride() { return PlateUtils.c2x2; }
+  @Override
+  virtual C2D phase() { return C2D.instanceof(mPhase[0], mPhase[1]); }
+  
+  typedef Unsigned(1) PhaseAxis;
+  PhaseAxis mPhase[2];
+
+  Bool setPhase(C2D phase) {
+    C2D p = phase.max(PlateUtils.c0x0).min(PlateUtils.c1x1);
+    if (p != phase) return false;
+    mPhase[0] = (PhaseAxis) p.getX();
+    mPhase[1] = (PhaseAxis) p.getY();
+    return true;
+  }
+}
+
+/** Fixed 1x1 stride, phase <00>
+ */
+quark Stride1x1FP : Plate {
+  @Override
+  virtual C2D stride() { return PlateUtils.c1x1; }
+  @Override
+  virtual C2D phase() { return PlateUtils.c0x0; }
+
+  Bool setPhase(C2D phase) {
+    return false;
+  }
+}
+
+/** Fixed 2x2 stride, phase <00>
+ */
+quark Stride2x2FP : Plate {
+  @Override
+  virtual C2D stride() { return PlateUtils.c2x2; }
+  @Override
+  virtual C2D phase() { return PlateUtils.c0x0; }
+
+  Bool setPhase(C2D phase) {
+    return false;
+  }
+}
+
+/** Fixed 1x2 stride, phase <00>
+ */
+quark Stride1x2FP : Plate {
+  @Override
+  virtual C2D stride() { return PlateUtils.c1x2; }
+  @Override
+  virtual C2D phase() { return PlateUtils.c0x0; }
+
+  Bool setPhase(C2D phase) {
+    return false;
+  }
+}
+
+/** Variable stride {1,1} - {2,2}, fixed phase <00>
+ */
+
+quark Stride2x2 : Plate {
+  @Override
+  virtual C2D stride() { return C2D.instanceof(mStride[0] + 1u, mStride[1] + 1u); }
+  @Override
+  virtual C2D phase() { return PlateUtils.c0x0; }
+  
+  typedef Unsigned(1) PhaseAxis;
+  PhaseAxis mStride[2];
+
+  Bool setStride(C2D stride) {
+    C2D s = stride.max(PlateUtils.c1x1).min(PlateUtils.c2x2);
+    if (s != stride) return false;
+    mStride[0] = (PhaseAxis) (s.getX() - 1u);
+    mStride[1] = (PhaseAxis) (s.getY() - 1u);
+    return true;
+  }
+
+  Bool setPhase(C2D phase) {
+    return false;
+  }
+}

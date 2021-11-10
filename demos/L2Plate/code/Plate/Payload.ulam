@@ -1,0 +1,58 @@
+quark Payload {
+
+  //// Payload API
+  typedef Bits(64) RawBits;     //< Uninterpreted payload bits of maximum size  
+  virtual Bool loadFrom(RawBits rb) ;  //< true if (a prefix of) rb was successfully stored in Payload
+  virtual Bool storeTo(RawBits & rb) ; //< true if Payload was successfully stored in (a prefix of) rb
+
+  //// Payload SERVICES
+  virtual Bool swapPayload(Self & othr) { //< true if self and other swapped payloads
+    DebugUtils du;
+    RawBits tmp1, tmp2;
+    Bool had1, had2;
+    had1 = self.storeTo(tmp1);  
+    had2 = othr.storeTo(tmp2);
+    // Now self and othr are both empty
+    if (had1) othr.loadFrom(tmp1);
+    if (had2) self.loadFrom(tmp2);
+    return had1 || had2;
+  }
+}
+
+quark PayloadT(Unary(32) cPAYLOAD_BITS) : Payload {
+  constant Unsigned cSHIFT_DISTANCE = 64u - cPAYLOAD_BITS;
+  typedef Bits(cPAYLOAD_BITS) MyBits;
+  MyBits mBits;
+  Bool mHasPayload;
+
+  //// PayloadT SERVICES
+  Bool hasPayload() { return mHasPayload; }
+  MyBits peekAtPayload() { return mBits; }
+  RawBits toRawBits(MyBits bits) { return ((RawBits) bits) << cSHIFT_DISTANCE; }
+  MyBits fromRawBits(RawBits bits) { return (MyBits) (bits >> cSHIFT_DISTANCE); }
+
+  //// Payload API
+  @Override
+  virtual Bool loadFrom(RawBits rb) {
+    ByteStreamLogger bsl;
+    //    bsl.printf("LOSDOIDFROM10(%d)\n",mHasPayload);
+    if (mHasPayload) return false;
+    //    bsl.printf("LOSDOIDFROM11\n");
+    //    bsl.printf("LOSDOIDFROM12(%x)\n",rb);
+    //    bsl.printf("LOSDOIDFROM13(%x)\n",mBits);
+    mBits = fromRawBits(rb);
+    //    bsl.printf("LOSDOIDFROM14(%x)\n",mBits);
+    mHasPayload = true;
+    return true;
+  }
+  
+  @Override
+  virtual Bool storeTo(RawBits & rb) {
+    if (!mHasPayload) return false;
+    rb = toRawBits(mBits);
+    mHasPayload = false;
+    mBits = 0u;
+    return true;
+  }
+
+}

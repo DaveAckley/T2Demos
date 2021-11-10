@@ -1,0 +1,193 @@
+/** A base class for combining ('plexing') multiple pieces into a
+    single class instance for transformation during an event
+ */
+transient Plex {
+  //// Plex API
+  // REQUIRED METHODS
+  typedef EventWindow.SiteNum SN;
+  virtual Unsigned gather(BitStorage & bs) ; 
+  virtual Bool scatter(BitStorage & bs) ;
+
+  // OPTIONAL METHODS
+  virtual Bool isAccessible(SN vsn) { return false; }
+  virtual C2D mapVEW(C2D vew) { return vew; }
+  virtual Void renderPlex(Drawable & d) { /* No drawing by default */ }
+
+  //// Plex SERVICES
+  C2D mapVSN(SN vsn) {
+    MDist md; // Don't assume we have an ew
+    C2D vew = md.getSiteCoord(vsn); 
+    return mapVEW(vew);
+  }
+
+  Bool isAccessible(C2D vewc) {
+    MDist md;
+    SN vsn = md.getSiteNumber(vewc);
+    return isAccessible(vsn);
+  }
+
+  Atom & operator[](SN vsn) {
+    EventWindow ew;
+    C2D ewc = mapVSN(vsn);
+    return ew[ewc];
+  }
+
+  Atom & operator[](C2D vewc) {
+    EventWindow ew;
+    C2D ewc = mapVEW(vewc);
+    return ew[ewc];
+  }
+
+  typedef Unsigned ClassId;     //< Classid of Plex result
+  Self(ClassId id) {  setClassId(id);  }
+
+  Void setClassId(ClassId id) {
+    mOpened = false;
+    mClassId = id;
+  }
+
+  Void setChecksumBits(Unsigned min, Unsigned max) {
+    mOpened = false;
+    mMinChecksumBits = min;
+    mMaxChecksumBits = max;
+  }
+
+  Bool isOpened() { return mOpened; }
+
+  Bool open(Bool canInit) {
+    DebugUtils du;
+    mOpened = false;
+    ClassUtils cu;
+    Unsigned bits = gather(mBits);
+    mClassBits = cu.getClassSize(mClassId);
+    //    du.print("MCLASBD");
+    //    du.print(bits);
+    //    du.print(mClassBits);
+    if (mClassBits == Unsigned.maxof) return false; // should fail
+    //    du.print("MCLASBD 11");
+    Unsigned minbits = mClassBits + mMinChecksumBits;
+    if (bits < minbits) return false;
+    //    du.print("MCLASBD 12");
+    mChecksumBits = bits - mClassBits;
+    if (mChecksumBits > mMaxChecksumBits) mChecksumBits = mMaxChecksumBits;
+    mNeedInit = !mBits.isChecksumValid(mClassBits, (Unary(32)) mChecksumBits);
+    if (mNeedInit && !canInit) return false;
+    //    du.print("MCLASBD OPND");
+    //    du.print(mNeedInit);
+    return mOpened = true;
+  }
+
+  UrSelf & get() { Bool toss; return get(toss); }
+
+  UrSelf & get(Bool & initted) {
+    if (!mOpened) { Fail f; f.fail(); }
+    initted = mNeedInit;
+    return mBits.recast(mClassId, mNeedInit);
+  }
+
+  Bool close() {
+    DebugUtils du;
+    //    du.print("PLXCL 10");
+    if (!mOpened) return false;
+    //    du.print("PLXCL 11");
+    //    du.print("MCLASBDC");
+    //    du.print(mClassBits);
+    if (!mBits.updateChecksum(mClassBits,(Unary(32)) mChecksumBits)) return false;
+    //    du.print("PLXCL 12");
+    if (!scatter(mBits)) return false;
+    //    du.print("PLXCL 13");
+    mOpened = false;
+    return true;
+  }
+
+  Bool mOpened;
+  ClassId mClassId = ClassId.maxof;
+  Unsigned mClassBits;
+  Unsigned mChecksumBits;
+  Unsigned mMinChecksumBits = 8u;
+  Unsigned mMaxChecksumBits = 32u;
+  Bool mNeedInit;
+
+  typedef BitStorageT(4096) BitStorage4K;
+  BitStorage4K mBits;
+}
+
+quark Plexer {
+  //// Plexer API
+  typedef ClassUtils.ClassId ClassId; 
+
+  /** Subtype of Plex or ClassId.maxof if none */
+  virtual ClassId getPlex() ; //< MUST BE VIRTUAL METHOD #0
+
+  /** Write any desired output via a ByteStreamLogger for display in an AtomViewPanel */
+  virtual Bool printPlex() {  //< MUST BE VIRTUAL METHOD #1
+    return printPlexDefault();
+  }
+
+  //// Plexer SERVICES
+  @Override
+  Void renderGraphics() {
+    renderGraphicsDefault();
+  }
+
+  Void renderGraphicsDefault() {
+    DebugUtils du;
+    //    du.print("rgd10");
+    super.renderGraphics(); // Put us on top of any more general custom rendering
+
+    Plexer.ClassId classid = self.getPlex();
+    ClassUtils cu;
+    if (!cu.isBase(classid,Plex.classidof)) return;
+    //    du.print("rgd11");
+
+    typedef BitStorageT(8192) BitStorage8K;
+    BitStorage8K bs;
+
+    Plex & plex = (Plex &) bs.recast(classid, true);
+    if (!plex.open(false)) return;
+    //    du.print("rgd12");
+    plex.renderGraphics();
+
+    //    UrSelf & urs = plex.get();
+    //    du.print(urs);
+    //    urs.renderGraphics();
+  }
+
+  Bool printPlexDefault() {
+    ByteStreamLogger bsl;
+    bsl.setShowSite(false);
+    //    bsl.printf("(ROCKO,)\n");
+    //    bsl.printf("{%v})",bsl);
+    Plexer.ClassId classid = self.getPlex();
+    ClassUtils cu;
+    if (!cu.isBase(classid,Plex.classidof)) return true;
+
+    //    bsl.printf("(BOCKO,)\n");
+    typedef BitStorageT(8192) BitStorage8K;
+    BitStorage8K bs;
+
+    Plex & plex = (Plex &) bs.recast(classid, true);
+    if (!plex.open(false)) return true;
+    //    bsl.printf("(SOCKO,)\n");
+    UrSelf & urs = plex.get();
+
+    bsl.print("(");
+    bsl.print(urs);
+    Drawable draw;
+    if (draw.canDraw()) {
+      DebugUtils du;
+      du.print("CANDRAW,");
+      bsl.print("(");
+      du.print("RENDERPLEX,");
+      plex.renderPlex(draw);
+      bsl.print(")");
+    }
+    bsl.print(")\n");
+
+    //    bsl.printf(")UND),");
+    //    du.print(urs);
+    return true;
+  }
+
+}
+

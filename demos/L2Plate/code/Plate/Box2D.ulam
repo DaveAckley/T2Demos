@@ -1,0 +1,61 @@
+ulam 5; // Depends on 64 bit quarks
+
+quark Box2D {
+  typedef C2D.Coord Coord;
+  Void dprint(String msg) {
+    ByteStreamLogger bsl;
+    bsl.printf("%stb(%d,%d):(%d,%d)\n",
+               msg,
+               mMin.getX(), mMin.getY(),
+               mMax.getX(), mMax.getY());
+  }
+  C2D mMin;    // Box2D contains mMin..mMax-(1,1)
+  C2D mMax;    
+  Self(C2D size, C2D pos) {
+    mMin = pos;
+    mMax = mMin + size + C2D.instanceof(-1,-1);
+  }
+  
+  Bool operator==(Self other) {
+    return
+      self.mMin == other.mMin &&
+      self.mMax == other.mMax;
+  }
+
+  C2D size() {
+    C2D ret((Coord) (self.mMax.getX() - self.mMin.getX() + 1),
+            (Coord) (self.mMax.getY() - self.mMin.getY() + 1));
+    return ret;
+  }
+
+  Unsigned volume() {
+    C2D s = size();
+    return ((Unsigned) s.getX()) * ((Unsigned) s.getY());
+  }
+
+  Box2D intersectionWith(Box2D & other) {
+    Box2D ret;
+    ret.mMin = self.mMin.max(other.mMin);
+    ret.mMax = self.mMax.min(other.mMax);
+    if (false) {
+      ByteStreamLogger bsl;
+      bsl.printf("IW L(%d,%d,%d,%d) R(%d,%d,%d,%d) I(%d,%d,%d,%d)\n",
+                 self.mMin.getX(),self.mMin.getY(),self.mMax.getX(),self.mMax.getY(),
+                 other.mMin.getX(),other.mMin.getY(),other.mMax.getX(),other.mMax.getY(),
+                 ret.mMin.getX(),ret.mMin.getY(),ret.mMax.getX(),ret.mMax.getY());
+    }
+    return ret;
+  }
+
+  /** \returns true if, other things being equal, \c self has a border
+      all the way around \c inner
+   */
+  Bool strictlyContains(constant Box2D & inner) {
+    return
+      self.mMin.x < inner.mMin.x &&
+      self.mMin.y < inner.mMin.y &&
+      self.mMax.x > inner.mMax.x &&
+      self.mMax.y > inner.mMax.y;
+  }
+
+}

@@ -1,0 +1,339 @@
+quark Plate {
+  typedef EventWindow.SiteNum SN;
+  typedef Bits(2) DeathBits;
+  constant DeathBits cDIE_AND_DOWN = 1u<<0u; //< This and its subplates die
+  constant DeathBits cDIE_AND_UP =   1u<<1u; //< This and its superplates die
+  constant DeathBits cDIE_EITHER = cDIE_AND_DOWN | cDIE_AND_UP; //< This and sub and super plates die
+
+  //// Plate API
+  virtual C2D sizeOfPlate() ;                 //< Overall size of self's plate
+  virtual C2D positionOnPlate() ;             //< Position of self in plate (0,0)..size-(1,1)
+  virtual C2D stride() { return PlateUtils.c1x1; } //< Map plate coord diffs to ew coord diffs
+  virtual C2D phase() { return PlateUtils.c0x0; }  //< Our relative coord within stride
+  virtual Bool blockSubplates() { return false; } //< Blocks all priorities in contained plates
+  virtual Int priority() { return 0; }        //< Default priority within containment rules
+  virtual DeathBits getDeathBits() ;          //< Current DeathBits status of Plate
+  virtual Void setDeathBits(DeathBits bits) ; //< Update DeathBits status of Plate
+  virtual Bool fatalInconsistency() {         //< Return true to kill the plate
+    if (!sizeOfPlate().contains(positionOnPlate())) return true;
+    // Other fatal checks here..
+    return false;               // No problems seen
+  }
+
+  //// Plate Services
+
+  /** Priority due to stride and phase
+   */
+  Int stridePhasePriority(C2D stride, C2D phase) {
+    return stride.getY()*phase.getX() + phase.getY();
+  }
+
+  /** C2D of lower-rightmost position on this plate
+   */
+  C2D lastPosOnPlate() {
+    return sizeOfPlate()-PlateUtils.c1x1;
+  }
+
+  /** Are we contained by our own plate, based on our pos and size?
+   */
+  Bool isInPlate() {
+    return isInPlateCoord(positionOnPlate());
+  }
+
+  /** Is pos contained by our own plate, based on our size?
+   */
+  Bool isInPlateCoord(C2D pos) { return sizeOfPlate().contains(pos); }
+
+  /** Are we on the border of our plate, based on our pos and size?
+   */
+  Bool isPlateBorder() {
+    return isPlateBorderCoord(positionOnPlate());
+  }
+
+  /** Are we in the field of our plate, based on our pos and size?
+   */
+  Bool isPlateField() {
+    return isPlateFieldCoord(positionOnPlate());
+  }
+  
+  /** Is plate coordinate \c pos on the border of a plate the size of
+      ours?
+   */
+  Bool isPlateBorderCoord(C2D pos) {
+    C2D siz = sizeOfPlate();
+    if (siz.getX() <= 1 || siz.getY() <= 1) return false; // too skinny to have a border
+    if (pos.getX() == 0 || pos.getY() == 0) return true;
+    if (pos.getX() == siz.getX() - 1 || pos.getY() == siz.getY() - 1) return true;
+    return false;
+  }
+
+  Bool isPlateCorner() {
+    return isPlateCornerCoord(positionOnPlate());
+  }
+
+  /** Is plate coordinate \c pos on the corner of a plate the size of
+      ours?
+   */
+  Bool isPlateCornerCoord(C2D pos) {
+    C2D siz = sizeOfPlate();
+    return
+      (pos.getX() == 0 || pos.getX() == siz.getX() - 1) &&
+      (pos.getY() == 0 || pos.getY() == siz.getY() - 1);
+  }
+  
+  /** Is plate coordinate \c pos in the field (i.e., strictly within
+      the border) of a plate the size of ours?  Note that plates with
+      width or height == 1 do not have a border, so the entire plate
+      is considered field.
+   */
+  Bool isPlateFieldCoord(C2D pos) {
+    return
+      isInPlateCoord(pos) &&
+      !isPlateBorderCoord(pos);
+  }
+
+  /** Get our own event window site number, or fail if we are not
+      located in the event window. */
+  SN getOurSN() {
+    EventWindow ew;
+    SN selfsn = ew.getSiteNumber(self);
+    if (selfsn == selfsn.maxof) {
+      Fail f;
+      f.fail("Not in EW");
+    }
+    return selfsn;
+  }
+
+  /** Get our own event window coordinate, or fail if we are not
+      located in the event window */
+  C2D getOurEWCoord() {
+    MDist md;
+    return md.getSiteCoord(getOurSN());
+  }
+
+  Bool mustBlockOrDie() {
+    MDist md;
+    EventWindow ew;
+    PlateUtils pu;
+    ByteStreamLogger bsl;
+
+    SN selfsn = getOurSN();
+    C2D offsetl = md.getSiteCoord(selfsn);
+    
+    Int ourpriority = self.priority();
+    DeathBits db = self.getDeathBits();
+    Bool weAreDying = (db & cDIE_EITHER) != 0;
+    Bool dieDown = (db & cDIE_AND_DOWN) != 0;
+    Bool dieUp = (db & cDIE_AND_UP) != 0;
+
+    // Basic consistency checks
+    if (!weAreDying && fatalInconsistency()) {
+      setDeathBits(cDIE_EITHER);
+      return true;
+    }
+
+    for (SN sn = 1u; sn < 41u; ++sn) {
+      if (!ew.isAccessible(sn)) continue;
+      Atom & a = ew[sn];
+      if (a as Self) {
+        
+        // Need to compare priorities if it's on our or a containing plate
+        MDist md;
+        C2D offsetr = md.getSiteCoord(sn);
+        PlateUtils.PlateRelation rel = pu.relationTo(self, offsetl, a, offsetr);
+
+        if (weAreDying) {
+          Bool killit = false;
+
+          if (rel == pu.cSAME_PLATE_AS) killit = true;
+          else if (rel == pu.cCONTAINS_PLATE && dieDown) killit = true;
+          else if (rel == pu.cCONTAINED_BY_PLATE && dieUp) killit = true;
+
+          if (killit) a.setDeathBits(db);
+        } else if (rel == pu.cSAME_PLATE_AS) {
+
+          if (a.priority() > ourpriority) { // outranked on plate: you must hodl
+            return true;                    // can short circuit loop since not dying
+          }
+        } else if (rel == pu.cCONTAINED_BY_PLATE) {
+          if (a.blockSubplates()) return true;  // regardless of priority comparison
+        } else if (rel == pu.cOVERLAPS_PLATE) {
+          DebugUtils du;
+          du.print("KILL OVERLAPPING PLATE");
+          bsl.forceOutput(true);
+          bsl.printf("MBoD 13 osn%d <%s> tsn%d\n", selfsn, pu.relationName(rel), sn);
+          bsl.printf("@%d,%d:%s[%d,%d]{%d,%d}(%d,%d)%s", 
+                     offsetl.x,offsetl.y,"o",
+                     self.sizeOfPlate().x,self.sizeOfPlate().y,
+                     self.stride().x,self.stride().y,
+                     self.positionOnPlate().x,self.positionOnPlate().y,
+                     "\n");
+          bsl.printf("@%d,%d:%s[%d,%d]{%d,%d}(%d,%d)%s", 
+                     offsetr.x,offsetr.y,"t",
+                     a.sizeOfPlate().x,a.sizeOfPlate().y,
+                     a.stride().x,a.stride().y,
+                     a.positionOnPlate().x,a.positionOnPlate().y,
+                     "\n");
+        
+          a.setDeathBits(cDIE_EITHER);
+          return true;  // And you must hold this time.
+        }
+      }
+    }
+    if (weAreDying) {
+      ew[0] = Empty.instanceof;
+      return true;
+    }
+    return false;
+  }
+
+  /** Check if site that would be \c plateCoord on our plate is
+   * accessible via the current event window.  Note this routine can
+   * be called when self is not located at ew[0], but self must be in
+   * the ew somewhere, and of course ew accessibility doesn't change.
+   *
+   * \returns site number where plateCoord would be located, or
+   * SN.maxof if \c plateCoord is outside our plate
+   * or inaccessible in the ew
+   */
+  SN plateCoordToEWSN(C2D plateCoord) {
+    return plateCoordToEWSN(plateCoord, PlateUtils.c0x0);
+  }
+  
+  SN plateCoordToEWSN(C2D plateCoord, C2D onPhase) {
+    DebugUtils du;
+    PlateUtils pu;
+    C2D plateSize = sizeOfPlate();       // Our plate size
+    if (!plateSize.contains(plateCoord)) {
+      du.print("PC2ESN NOT ON PLATE");
+      return SN.maxof;  // Not on our plate
+    }
+    EventWindow ew;
+    SN ourSN = ew.getSiteNumber(self); // Find ourselves
+    if (ourSN == ourSN.maxof) {
+      du.print("PC2ESN NOT IN EW");
+      return SN.maxof;  // We are not in the ew
+    }
+
+    C2D ourStride = stride();            // Our plate->ew coord scaling
+    if (!ourStride.contains(onPhase)) {
+      du.print("PC2ESN NO SUCH PHASE");
+      return SN.maxof;  // We don't have that phase
+    }
+    C2D ourPhase = phase();
+    C2D ourEWc = ew.getCoord(ourSN);       // Location in ew coords
+    C2D ourPlatePos = positionOnPlate();   // Location in plate coords
+    C2D offset = plateCoord - ourPlatePos; // Plate coord offset us to them
+    C2D phaseOffset = onPhase - ourPhase;  // phase difference us to them
+    C2D theirEWc = offset*ourStride + ourEWc + phaseOffset; // Where they'd be in the ew
+
+    if (!ew.isAccessible(theirEWc)) {
+      /*
+      du.print("PC2ESN INACCESSIBLE");
+      du.print(plateCoord);
+      du.print(ourEWc);
+      du.print(theirEWc);
+      */
+      return SN.maxof;  // Inaccessible
+    }
+
+    return ew.getSiteNumber(theirEWc);
+  }
+
+  /** Return true iff \c ewc is an accessible site that's either empty
+      or contains a field site of the same Plate as self
+   */
+  Bool isEmptyOrField(C2D ewc) {
+    return isEmptyOrField(ewc, false);
+  }
+
+  /** Return true iff \c ewc is an accessible site that's either empty
+      or contains a plate site (border or field) of the same Plate as self
+   */
+  Bool isEmptyOrPlate(C2D ewc) {
+    return isEmptyOrPlate(ewc, false);
+  }
+
+  /** Return true iff \c ewc is an accessible site that's either (1)
+      empty or (2) contains a field site that's on the same Plate as
+      self, or (3) on the containing Plate if \c allowContainer is
+      true.
+   */
+  Bool isEmptyOrField(C2D ewc, Bool allowContainer) {
+    EventWindow ew;
+    SN sn = ew.getSiteNumber(self); // Find ourselves
+    if (sn == sn.maxof) { Fail f; f.fail("self not in EW"); return false; }
+    C2D sat = ew.getCoord(sn); // Us as ewcoord
+
+//    du.printContext();
+//    du.print("iEOF10");
+    if (!ew.isAccessible(ewc)) return false;
+//    du.print("iEOF11");
+//    du.print(sat);
+    Atom & a = ew[ewc];
+    if (a is Empty) return true;
+//    du.print("iEOF12");
+    if (a as Plate) {
+      PlateUtils pu;
+      PlateUtils.PlateRelation rel = pu.relationTo(self, sat, a, ewc);
+//      du.print("iEOF13");
+//      du.print((Unsigned) rel);
+
+      if (a.isPlateBorder()) return false; // Border is 'never' empty
+      if (rel == PlateUtils.cSAME_PLATE_AS)
+        return true;            // Found our field
+      if (allowContainer &&
+          rel == PlateUtils.cCONTAINED_BY_PLATE &&
+          !a.isPlateBorder())
+        return true;            // Found container field
+//      du.print("iEOF14");
+    }
+    return false;  // Not empty or field
+  }
+
+  /** Return true iff \c ewc is an accessible site that's either (1)
+      empty or (2) is a site on the same Plate as self, or (3) on the
+      containing Plate if \c allowContainer is true.
+   */
+  Bool isEmptyOrPlate(C2D ewc, Bool allowContainer) {
+    EventWindow ew;
+    SN sn = ew.getSiteNumber(self); // Find ourselves
+    if (sn == sn.maxof) { Fail f; f.fail("self not in EW"); return false; }
+    C2D sat = ew.getCoord(sn); // Us in ewcoord
+
+//    du.printContext();
+//    du.print("iEOF10");
+    if (!ew.isAccessible(ewc)) return false;
+//    du.print("iEOF11");
+//    du.print(sat);
+    Atom & a = ew[ewc];
+    if (a is Empty) return true;
+//    du.print("iEOF12");
+    if (a as Plate) {
+      PlateUtils pu;
+      PlateUtils.PlateRelation rel = pu.relationTo(self, sat, a, ewc);
+//      du.print("iEOF13");
+//      du.print((Unsigned) rel);
+
+      if (rel == PlateUtils.cSAME_PLATE_AS)
+        return true;            // Found our field
+      if (allowContainer &&
+          rel == PlateUtils.cCONTAINED_BY_PLATE &&
+          !a.isPlateBorder())
+        return true;            // Found container field
+//      du.print("iEOF14");
+    }
+    return false;  // Not empty or field
+  }
+
+
+  //// DClock predicates
+  Bool isRoot() {
+    return positionOnPlate() == PlateUtils.c0x0;
+  }
+
+  Bool isMax() {
+    return positionOnPlate() + PlateUtils.c1x1 == sizeOfPlate();
+  }
+
+}
