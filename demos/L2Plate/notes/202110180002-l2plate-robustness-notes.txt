@@ -1,4 +1,4 @@
-{152}  -*-  mode: text; fill-column: 50;  -*-
+{230}  -*-  mode: text; fill-column: 50;  -*-
 [0:
 
 Mon Oct 18 00:02:48 2021 So I've been blasting
@@ -1953,8 +1953,934 @@ doesn't have any of our ./notes/ files:
 202110180002-l2plate-robustness-notes.txt
 202108270859-s11-rego-notes.txt
 
+[152:
+
+Wed Nov 10 12:21:12 2021 OK, a first
+T2Demos/demos/L2Plate is committed and pushed.
+[153:
+
+Wed Nov 10 14:10:11 2021 Well, shutting down
+nubiga to swap in the new workstation.  This is
+going to mean disruption for some time..
+
+:153]
+:152]
+
 :151]
 
 :150]
 :149]
 :148]
+[154:
+
+Sun Nov 14 03:33:20 2021 OK, so we've moved nubiga
+to its new home.
+
+:154]
+[155:
+
+Sun Nov 14 03:38:20 2021 So let's get some kind of
+plan for USING our next-level sync to move or grow
+or SOMETHING.
+
+[156:
+
+Sun Nov 14 03:44:09 2021 What about a 'test plate'
+that can be seeded anywhere, and it tries to heal
+up, and if it heals up successfully and fully and
+begins to clock, then the original source of the
+seed can detect that and issue a second command
+that causes the test plate to decay into something
+useful or empty or whatever.
+
+[157:
+
+Sun Nov 14 04:29:52 2021 And it puffs into
+nothingness if it touches anything?
+
+:157]
+
+:156]
+
+:155]
+[158:
+
+Sun Nov 14 07:46:19 2021 So now I'm wondering:
+
+ Given that RingO propagation depends on L2Plate
+ coordinates, how can we ever change those
+ coordinates, on any RingO phase, and still
+ continue to propagate properly?
+
+And saying that makes me think the implied answer
+is 'obvious' from (traditional) KTN sync: We have,
+somehow, to maintain old and new sets of state,
+and when we check between local sites, we have to
+decide whether to use the old or new state
+depending on the relative RingO states between the
+local sites.
+[160:
+
+Sun Nov 14 08:07:46 2021 So to keep RingO
+propagation itself going, we could hack the
+RingOIterator subclass to compensate for inflight
+changes.  In principle anyway.
+
+But at the moment, for example, the L2Plate
+behave() looks like this:
+
+  Void behave() {
+    if (onceOnlyInit()) return;
+    if (mustBlockOrDie()) return;
+    if (checkGrowthAndHealing()) return;
+    if (updateRingO()) return;
+    if (checkLocalActions()) return;
+  }
+
+We can overlook onceOnlyInit() for now but how the
+heck can we do mustBlockOrDie() without depending
+on L2Plate coordinate comparisons?
+
+[161:
+
+Sun Nov 14 08:18:15 2021 The superscary
+in-for-a-pound is we override positionOnPlate()
+and sizeOfPlate() to .. what?  Return different
+answers depending on who's asking?  We don't know
+who's asking.
+
+[162:
+
+Sun Nov 14 08:21:04 2021 It's really all 'just'
+Tecton dynamics, and Tecton global disruption, all
+over again.
+
+If we are EVER going to change, say, plate size,
+(1) That change has to reach all plate sites
+(2) Which literally cannot happen all at once
+(3) So there will be EWs that can see both sizes
+
+Which we handled in Tecton-land by passivating
+whenever (3) might be true.  And we had the
+problem that if the Tecton got destroyed, we had
+no way to know how to recover -- no way to know
+which size was the 'real' one, say.
+
+But it seems like now we're heading toward a view
+where we keep additional redundant state in the
+(L2)Plate, so that when (3) occurs, we have a
+chance to figure out what was going on.
+
+"The size mismatches BECAUSE we're BLU and it's
+RED and its RED DELTA says increment the size like
+so, which precisely accounts for mismatch we see."
+
+Or the like.
+
+The point is, be able to self-stabilize even in
+the presence of coordinate disruption. Be able to
+self-stabilize back to an in-progress global
+coordinate change, and then complete that change
+plausible/successfully.
+
+[163:
+
+Sun Nov 14 08:36:44 2021 We could add new API like
+
+ C2D RingOPlate.sizeOfPlate(RingOPlate& asSeenFrom) 
+ C2D RingOPlate.positionOnPlate(RingOPlate& asSeenFrom) 
+
+and those would have enough smarts to compensate
+between different RingOState, using this (so far
+hypothetical) RingODelta information.[165:
+
+Sun Nov 14 08:44:38 2021 With the idea that RingO
+self stabilization stuff would need to happen
+early, and it would use this new API to help
+figure out what's going on.  And if it detected
+that non-RingO-aware code would see spurious
+inconsistencies, it returns true to passivate the
+rest of the event.
+
+:165]
+
+[164:
+
+Sun Nov 14 08:41:02 2021 RingODelta sample:
+
+8 bits == 2 bits for each of sX sY pX pY
+00 no change
+01 increment
+10 decrement
+11 empty
+
+[166:
+
+Sun Nov 14 09:36:19 2021 So what might this early
+stabilization stuff look like?
+
+  Void behave() {
+    if (onceOnlyInit()) return;
+    if (mustBlockOrDie()) return;
+    if (checkGrowthAndHealing()) return;
+    if (updateRingO()) return;
+    if (checkLocalActions()) return;
+  }
+
+Seems like we might need to split mustBlockOrDie
+up?  Well, let's just say
+
+  Void behave() {
+    if (onceOnlyInit()) return;
+    if (updateRingO()) return;
+    if (mustBlockOrDie()) return;
+    if (checkGrowthAndHealing()) return;
+    if (checkLocalActions()) return;
+  }
+
+What if we 'just' move updateRingO earlier?  [167:
+
+Sun Nov 14 09:46:01 2021 Actually hey: Weren't we
+going to redo to like
+
+  Bool RingO.updateRingo(RingOIterator &) 
+
+and get rid of the classid stuff?  That doesn't
+appear to have happened in this code.
+[168:
+
+Sun Nov 14 09:54:19 2021 Yeah the discussion back
+at :146: above.  Let's do that first right now.
+[169:
+
+Sun Nov 14 10:17:06 2021 OK, now there's no
+mentions of classid in RingO.ulam.
+
+Made RingOPlate in RingO.ulam and RingOL2Plate in
+L2Plate.ulam to abstract away the RingOIterator;
+we'll see how that goes.
+
+:169]
+:168]
+:167]
+
+:166]
+
+
+:164]
+
+:163]
+
+:162]
+
+:161]
+
+:160]
+[159:
+
+Sun Nov 14 07:55:35 2021
+
+ UP DOWN COLOR      
+ F  F    BLUE      -> RED  (D)
+ T  F    RED       -> YLW  (U) 
+ T  T    YELLOW    -> GRN  (D)
+ F  T    GREEN     -> BLU  (U)
+
+ENTER RED:
+  ROOT:  COMPUTE NEW STATE DELTA
+  FIELD: COPY NEW STATE DELTA
+
+:159]
+
+:158]
+[170:
+
+Sun Nov 14 10:28:46 2021 OK, now what blows up if
+we move updateRingO .. no, if we
+
+ - Split mustBlockOrDie into mustBlock and
+   mustDie.  
+
+ - Move updateRing between mustDie and mustBlock
+
+
+
+:170]
+[171:
+
+Sun Nov 14 10:33:09 2021 OK OK OK not clear how we
+do this.  We can kill ourselves but we can't
+propagate death bits without checking plate
+relations.  So how do we split up mustBlockOrDie?
+
+[172:
+
+Sun Nov 14 10:54:13 2021 Could we use dynamic
+priority to get a tecton-like effect but just by
+examining the RingOState?  So we only commit plate
+state changes when we're at an elevated priority,
+so neighbors will bail?
+
+Maybe.  Head hurts; big surprise.
+
+Going around on all this yet again does make me
+think about all the more-and-less general
+techniques we have for composing dynamics.
+
+    Plate coords -> Spatial hierarchy
+    Passivation -> Execution order, temporal hierarchy
+    Virtual function delegations
+
+To some degree we can choose any of those for some
+dynamics composition task, can mix and match among
+them, but we have to sort out the interactions no
+matter what we choose.
+
+[173:
+
+Sun Nov 14 11:18:13 2021 And there's also types of
+dynamics:
+
+   Homeostatic
+   Sequential
+
+Is that the main distinction?  Homeostatic says
+(robustly) stay where we are, sequential says
+(somehow) go to a different place/state.
+
+And that's the/an inherent tension in developing
+dynamics.
+[174:
+
+Sun Nov 14 12:44:03 2021 And the/a basic metalevel
+move we're considering here is: Adding enough
+redundancy that the intermediate stages of a
+sequential act can be maintained homeostatically
+as the sequence unfolds.
+
+So an (always) obvious question is how much
+redundancy do we want to add, to defend against
+what kinds and amounts of damage?
+
+ - Detect and repair single atom deletion during a
+   sequence, possibly skipping or repeating a step
+   but maintaining the wavefront dynamics.
+
+ - Turn limited forms of individual atom
+   corruption into single atom deletions?
+
+:174]
+   
+
+:173]
+
+:172]
+
+:171]
+[175:
+
+Sun Nov 14 14:10:27 2021 How about adding some
+checking using a fourth state?
+
+RingODelta sample:
+
+8 bits == 2 bits for each of sX sY pX pY
+00 no change (even parity)
+01 increment
+11 decrement
+10 no change (odd parity)
+
+[176:
+
+Sun Nov 14 17:03:02 2021 Seems like an enumeration
+of possible state changes 'would be so much more
+efficient'.  [177:
+
+Mon Nov 15 02:10:15 2021 OK come on let's go.
+
+ - Assign actions to RingO state changes
+
+ - Make a RingO-named thing to hold a plate delta
+
+ - Refactor for RingOPlateBase
+
+ - Put RingO-themed plate delta in RingOPlateBase
+[178:
+
+Mon Nov 15 04:49:50 2021 Four stroke engine
+
+UD    UD
+00 -> 10 (enter RED) AIM        (ROOT TICK)
+10 -> 11 (enter YLW) AIMED      (TAIL TICK)
+11 -> 01 (enter GRN) FIRE       (ROOT TOCK)
+01 -> 00 (enter BLU) FIRED      (TAIL TOCK)
+
+:178]
+
+:177]
+
+:176]
+
+
+:175]
+[179:
+
+Mon Nov 15 13:50:56 2021 OK, so we gave RingODemo an
+
+   MyB2D mNewSize;
+
+data member,
+
+ - and we have RingODemo.rootTick(..) updating it
+   at random when entering RED
+
+ - and we have RingODemo.edge(..) propagating down
+   mNewSize to everybody as they enter RED
+
+So next steps were going to be something like:
+
+ - do self.setSizeOfPlate(mNewSize) when entering
+   GRN (or: exchange mNewSize and sizeOfPlate?)
+
+ - make some kind of priority() override so that
+   when sites that see GRN from YLW, they
+   passivate, so the inconsistent sizeOfPlate
+   doesn't bug them?
+
+Still going to be sequencing issues at least,
+there, because we haven't reordered the behave()
+code to move the updateRingO stuff earlier -- we
+haven't dealt with that at all.
+
+[180:
+
+Mon Nov 15 14:32:10 2021 Also, the existing
+priority scheme is first-order only, right? In
+this case we could want a second-order priority
+scheme where we ask 'what is the priority of A
+when seen from B?'[181:
+
+Mon Nov 15 14:35:03 2021 Well but priority is
+already 'kind of' second-order because we compare
+another's priority to our own.
+
+I guess the point is we'd ditch the whole idea of
+numeric priority and just go with
+
+  Bool Plate.priority(Plate& other) ; //< do we have priority over other?
+
+[182:
+
+Mon Nov 15 14:39:39 2021 But all that stuff is
+just within-plate only.  (And just Plate-only, for
+that matter.)
+
+Maybe we want a separate notion of RingO priority?
+That can be tied to Plate priority if desired but
+isn't welded to it?
+
+But but.. We're trying to keep RingO pretty clean,
+and put the load on subclasses of RingOIterator.
+Buuuut L2PlateRingOIterator, for example, is
+comparing self.posititionOnL2Plate() vs
+ngb.positionOnL2Plate() to decide if that site is
+part of the iteration.
+
+If we were trying to renumber L2 plates -- to let
+it shift position by growth, for example -- then
+the positionOnL2Plate would change when ngbs enter
+GRN.
+
+:182]
+
+:181]
+
+:180]
+
+:179]
+[183:
+
+Tue Nov 16 13:48:18 2021 OK so here's the thing:
+I'm getting increasingly conflicted about how or
+if to get L2 plates moving, but if I am going to
+take a serious run at it at all, then
+
+  WE HAVE TO MAKE THE L2 SITE SPACING FLEXIBLE
+
+So to that end I want to at least make some TODO:
+
+[211: Wed Nov 17 04:58:04 2021
+DONE :211] - Refresh standard Tecton so we can hand trigger
+   one on a given L2 site. Get that working on a
+   1x1 L2Plate
+
+[216: Wed Nov 17 11:49:55 2021 3x3 but for starters:
+DONE  :216] - Move to a 2x2 L2Plate and see what breaks when
+   one L2 site is misaligned with the other three.
+
+[217:
+DONE :217] - Report those findings here
+
+[219: Wed Nov 17 12:16:38 2021
+DONE :219] - Make more to-do based on that report.
+
+[218:
+
+Wed Nov 17 12:03:24 2021 More TODO
+
+[222: Wed Nov 17 12:37:27 2021 
+DONE :222] - Review how L2 site decides to reseed.
+
+[227: Wed Nov 17 15:24:09 2021
+DONE :227] - Review how L2 neighborhood works
+
+ - Propose mechanism(s) to allow variable distance
+   between L2 sites, supporting
+
+   - Don't reseed if there's any plausible
+     neighbor there
+
+   - Support RingO propagation regardless of small
+     spatial phase differences
+
+ - Implement a mechanism
+
+ - Demonstrate L2 site movability
+
+ - Move an entire L2 plate, site by site, 'by
+   hand'
+
+ - Come make more to-do
+
+:218]
+
+
+GO GO GO NOW GO
+
+:183]
+[184:
+
+Tue Nov 16 13:53:50 2021 Imported
+demos/Plating/code/Tecton.ulam. Not building:
+
+./Tecton.ulam:94:12: ERROR: (1) 'lineForwardOffsetEWC' has no defined function with 2 matching argument types: Unsigned(2), C2D(32), and cannot be called.
+[185:
+
+Tue Nov 16 13:55:28 2021 Which corresponds to:
+
+      C2D lineForwardOffsetEWC() {
+>>      return lineForwardOffsetEWC(mPlateDir, stride());
+      }
+
+and Tecton inherited (!?) from PlateUtils, which
+has an implementation.
+
+[186:
+
+Tue Nov 16 13:57:33 2021 Our current
+PlateUtils.ulam has that commented out.  We
+absolutely don't remember why.  Let's put it back
+in and see what pops.
+[187:
+
+Tue Nov 16 13:58:54 2021 OK next issue:
+
+./Tecton.ulam:225:5: ERROR: Typedef 'Ephemeron' in class Tecton remains undefined.
+
+[188:
+
+Tue Nov 16 14:00:16 2021 OK imported
+Ephemeron.ulam too; going again.
+[189:
+
+Tue Nov 16 14:03:27 2021 Built clean. Trying it.
+
+[190: 
+
+Tue Nov 16 14:04:30 2021 Runs, but we need some
+kind of SeedTecton 
+[191:
+
+Tue Nov 16 14:17:18 2021 OK making (Q)SeedTecton
+and wondering: How does a Tecton grow? What do we
+actually need to seed it with?[192:
+
+Tue Nov 16 14:20:05 2021 I guess we're looking to
+get enough info to call Tecton's
+
+  C2D initFromOpCmd(Bool doGrow, PlateDir inDir,C2D pos,C2D size,C2D str) 
+
+method?
+[193:
+
+Tue Nov 16 14:49:41 2021 Calls to initFromOpCmd
+are currently failing. First issue seems to be
+it's expecting to be at an CCW corner, but I
+wasn't counting on that.  I guess we could try
+picking such a spot and see what happens next
+though.. [194:
+
+Tue Nov 16 14:51:28 2021 OK I picked a corner and
+we got a successful return.  We're not doing
+anything with it, though, yet.[195:
+
+Tue Nov 16 14:52:29 2021 Well,
+Plating/../B2DPacket.ulam just goes straight to
+the ew with the returned coord.[196:
+
+Tue Nov 16 15:33:52 2021 OK, the mapping isn't
+quite what I was expecting but we can now trigger
+moves with a 'Tm' SeedTectonMove.  Let's try some
+more.  Can we grow?[197:
+
+Tue Nov 16 15:48:34 2021 OK, we had to generalize
+some stuff hardcoded to B2DPlate to use
+B2DPlateBase instead, but now we can move and grow
+(L1) Plates!  Can we claim a to-do?[198:
+
+Tue Nov 16 15:49:33 2021 Well, we don't have a
+mechanism to make a 1x1 L2Plate, do we?[199:
+
+Tue Nov 16 15:56:50 2021 OK, it looks like L2Plate
+is failing to passivate when Tecton is around?
+Does that seem likely from the code?[200:
+
+Tue Nov 16 16:01:28 2021 OK so we need to review
+our concepts here. In particular, how is
+conventional same-or-containing-plate priority
+supposed to be sufficient to passivate around
+Tecton if we can't safely determine
+same-or-containing plate when a Tecton is foggen
+moving through??
+[201:
+
+Tue Nov 16 16:06:31 2021 Is it completely
+disgusting to consider passivating on priority
+when overlap is detected??[202:
+
+Tue Nov 16 16:26:15 2021 Well it might be
+completely disgusting but that aside it doesn't
+really work: Because we then get states where,
+after the tecton has passed, a fixed-up plate site
+sees itself as consistent with the Tecton, so that 
+doesn't block it but then looks diagonally across
+the tecton line to an unfixed-up plate site, and
+triggers death.
+
+[203:
+
+Tue Nov 16 16:45:30 2021 But why doesn't it see
+the (consistent) Tecton as needing a priority
+comparison, and it should have passivated
+there.. No?
+
+Time to get cooking for dinner.[204:
+
+Wed Nov 17 02:13:39 2021 OK back.
+
+So I guess we're starting with a mystery.  Why
+don't the Tecton passivate a consistent-with-them
+L2Plate?[205:
+
+Wed Nov 17 03:25:13 2021 OK we're actually dying
+via mustBlockOrDie going to fatalInconsistency()
+which then (in the case of L2Plate) does a Moore
+neighborhood search, and apparently fails to
+suspend its own checking when tecton's around.
+
+[206:
+
+Wed Nov 17 03:27:46 2021 With
+
+  virtual Bool fatalInconsistency()
+
+the return values are
+
+ true to DIE of inconsistency, or
+ false to CONTINUE, seeing nothing wrong
+
+and we don't have an option to return passivate or
+suspend or whatever. Even though it seems possible
+that a fatalInconsistency check might well
+determine something that would call for
+passivation. 
+[207:
+
+Wed Nov 17 04:10:44 2021 Well, trying to interact
+with Tecton solely on a priority() basis -- which
+assumes that plate relations are reliable -- seems
+like an awful finicky balancing act.  It feels
+like we should move Tecton passivation to a
+supra-plate level -- like the 'huge hammer'
+iSeeTecton() method did in previous versions.
+
+But, how did that not risk deadlock on
+tecton-tecton interactions?  I guess Tecton didn't
+call iSeeTecton()?
+[208:
+
+Wed Nov 17 04:22:41 2021 Yeah just reviewed
+iSeeTecton in ../../Plating/code and it's totally
+gross cuttenpasta in four different files with no
+Plate-central involvement. Although in some of
+those cases it gets called after mustBlockOrDie
+rather than before, which makes me wonder why that
+never ran into problems.. but whatever.
+
+[209:
+
+Wed Nov 17 04:24:49 2021 So.  One thing I think
+about here is the 'as seen from' notion: What if
+you could return different sizeOfPlate or
+positionOnPlate as a function of who's asking?
+
+But again that misses the point.  Tecton is
+returning (locally) consistent sizes and positions
+and that's not the problem. The problem is looking
+across the tecton and comparing pre- and
+post-Tecton conventional plate and seeing overlap
+there, which is absolutely true.
+
+Suppose we create a concept of Plate disruptor, or
+something like that, as a generalization of
+Tecton.  (Or maybe Tecton IS that concept.)  And
+the idea is: Seeing any Plate disruptor means you
+should passivate, unless you are a Plate disruptor
+yourself, regardless of plate containment -- which
+is what makes it different than priority.
+
+Or what if we 
+
+[210:
+
+Wed Nov 17 04:52:35 2021 OK, the proximal problem
+was that L2Plate.fatalInconsistency wasn't
+considering cCONTAINED_BY_PLATE at all.
+
+So now we have [1,1] L2Plate motion and growing
+'working'.
+
+Note the L1 plate inside doesn't automatically
+grow when the surrounding L2Plate grows, so the L2
+plate border gets thicker.
+
+However, one can move the inner L1 plate around
+using tectons within the L2Plate (!) except that
+the current SeedTecton technology picks a plate to
+consider at random, which means it might pick an
+L2Plate rather than the L1 plate, and the seeding
+fails in that case.  Or something like that.
+
+Second sleep.  Actually let's claim our to-do
+first! [212:
+
+Wed Nov 17 04:58:34 2021 OK, claimed. But we
+really think we need to rethink tecton priority?
+We'll see.   Sleep now.[213:
+
+Wed Nov 17 10:30:48 2021 So, what breaks on when
+we move a piece of a 3x3 L2 plate?
+[214:
+
+Wed Nov 17 10:45:13 2021 OK, so the first test on
+moving went like this:
+
+ - 3x3 builds itself
+
+ - trigger L2 site (2,0) to move east
+
+ - Tecton starts moving L2 site east
+
+ - Tecton reaches west side of L2 site (2,0),
+   begins to erase itself
+
+ - L2 site (1,0) decides to reseed site (2,0),
+   putting on a new L2 border on top of a Tc and
+   placing a MyElement in the position it used to
+   be before moving (which is now inconsistent
+   with the moved L1 sites).
+
+ - Then a little later, one of the moved L2 border
+   sites detected that new L2 border was
+   inconsistent and set its death bits
+
+ - And a little while after that, one of the moved
+   L1 MyElements detected that the new MyElement
+   was inconsistent and set its death bits
+
+ - Then the new L2 border, as part of
+   dying, discovered that most of the moved L1
+   sites where contained by the new L2 border, so
+   it set their death bits before erasing itself.
+
+And everything went poof from there.
+
+[215:
+
+Wed Nov 17 11:36:24 2021 So of course it's
+primarily the decision to reseed that's at fault.
+And that's exactly what we were expecting to
+find.
+
+Seems like we could claim the rest of the (actual)
+to-dos of :211: above..
+
+So now we need more to-do..  [220:
+
+Wed Nov 17 12:28:16 2021 OK so how to we decide to
+reseed an L2 site?[221:
+
+Wed Nov 17 12:30:25 2021 OK, it looks like:
+
+ L2Plate.behave() ->
+  L2Plate.checkLocalActions() ->
+   L2Plate.checkFaces() ->
+    L2PlateSequencer.update(MyPlex&) ->
+     L2PlateSequencer.checkSeed(MyPlex&) ->
+         if (plex[22] is L2Plate && !(plex[38] is L2Plate))
+           return false;
+
+So we're hardcoded to check SN 22 and 38, which is
+(0,-3) and (0,-4) in the (normalized) Plex
+mapping.
+
+And if we pass that 'if' statement, we're pretty
+much going to reseed, modulo unlikely edge cases.
+
+Claiming reseed review
+
+[223:
+
+Wed Nov 17 12:38:42 2021 OK, how does the L2Plate
+RingO neighborhood work?
+
+[224:
+
+Wed Nov 17 14:50:40 2021 Well, it considers SNs
+21..24 and then 1..8 and that's it.
+
+Looking ahead: What are we going to do about
+upstream/downstream when an upstream L2 site is
+shifted upwards/downwards in L1 position, and VV?
+
+[225:
+
+Wed Nov 17 14:56:02 2021 That's determined, I
+think, by L2Plate.syncRelation(RingO & other),
+which has one case for same L2 site, which we
+don't care about here I think, and otherwise
+compares the L2 coords, which we do care about.
+
+So I think what the existing code is going to do
+is say that everything on an upstream L2 site is
+UPSTREAM, even if its L1 coord would put it
+downstream of us, were we in the same L2 site.
+
+[226:
+
+Wed Nov 17 15:18:18 2021 But maybe that's okay?
+Now I'm worried that a top-row L2 site shifted up
+is going to look like a separate RingO root, isn't
+is?
+
+Maybe not if we search the full ew for L2 site
+ngbs, and stick with the existing L2 over L1
+dominance scheme.  Then a protruding L2 site could
+look diagonally below itself (in L1 terms) -- like
+to SN 30 at (-3,1) -- and still find something to
+call 'upstream'.
+
+I think I have to have faith that RingO
+propagation will do something sensible even in
+such cases.
+
+But, claiming L2 ngb review.[228:
+
+Wed Nov 17 15:38:27 2021 So, mechanisms.
+
+ - Proposal for RingO ngb:
+   (1) Search whole ew [THIS IS ONLY CHANGE]
+   (2) same L2 site, max/min L1 coords
+   (3) different L2 site, max/min L2 coords
+
+ - Proposal for L2PlateSequencer.checkSeed(Plex&):
+   [229: Thu Nov 18 02:41:26 2021
+   (1) Don't seed if plex[22] or plex[38] is inaccessible
+   (2) Don't seed if plex[22] or plex[38] are non-empty
+   (3) Search all of 'north hemisphere'
+       (-4..4,-1..-4) for any L2 plate of matching
+       l2size and appropriate l2pos; don't seed if
+       found.
+   (4) Otherwise seed at 22 & 38
+   :229]
+   
+
+:228]
+
+:226]
+
+:225]
+
+:224]
+
+:223]
+
+:221]
+
+:220]
+
+:215]
+
+:214]
+:213]
+
+:212]
+
+:210]
+
+:209]
+
+:208]
+
+:207]
+:206]
+
+:205]
+
+:204]
+
+:203]
+
+:202]
+
+:201]
+:200]
+
+:199]
+
+:198]
+
+:197]
+
+:196]
+
+:195]
+
+:194]
+
+:193]
+
+:192]
+
+:191]
+:190]
+
+:189]
+:188]
+
+:187]
+:186]
+
+:185]
+
+:184]
