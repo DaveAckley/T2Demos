@@ -8,11 +8,19 @@ quark L2PlateBase : B2DStreamPlate6 + QStream12 + Payload + Stride1x1FP {
   virtual C2D positionOnL2Plate() ;
 }
 
+quark RingOL2Plate : L2PlateBase + RingOPlateBase {
+  //// RingOL2Plate SERVICES
+  Bool updateRingOPlate() {
+    L2PlateRingOIterator itr;
+    return updateRingO(itr);
+  }
+}
+
 /**
    \symbol L2
    \color #2233bb
  */
-element L2Plate : L2PlateBase + PayloadT(20u) + Plexer + RingO {
+element L2Plate : RingOL2Plate + PayloadT(20u) + Plexer {
   typedef EventWindow.SiteNum SN;
   typedef PlateUtils.PlateDir PD;
   typedef ClassUtils.ClassId ClassId; 
@@ -37,8 +45,6 @@ element L2Plate : L2PlateBase + PayloadT(20u) + Plexer + RingO {
   virtual ClassId getPlex() { return MyPlex.classidof; }
 
   //// RingO API
-  @Override
-  virtual Unsigned iteratorClassId() { return L2PlateRingOIterator.classidof; }
 
   @Override
   virtual SyncRelation syncRelation(RingO & other) {
@@ -87,6 +93,8 @@ element L2Plate : L2PlateBase + PayloadT(20u) + Plexer + RingO {
     C2D offsetl = md.getSiteCoord(selfsn);
 
     DebugUtils du;
+    Int ourpriority = self.priority();
+
     for (SN sn = 1u; sn <= 8u; ++sn) {       // Let's say Moore ngb
       if (!ew.isAccessible(sn)) continue;
       Atom & a = ew[sn];
@@ -96,8 +104,19 @@ element L2Plate : L2PlateBase + PayloadT(20u) + Plexer + RingO {
         C2D offsetr = md.getSiteCoord(sn);
         PlateUtils.PlateRelation rel = pu.relationTo(self, offsetl, a, offsetr);
 
+        du.print("FTIL2 CNSDR");
+        du.print(offsetr);
+
         if (rel == pu.cSAME_PLATE_AS) {
+
+          if (a.priority() > ourpriority) { // outranked on same plate: not
+            du.print("FTIL2 SAME false");
+            du.print(sn);
+            return false;                   // fatal, but we have to stop checking?
+          }
+
           if (a as Self) {
+
             // Check for identical L2 info between L2s on same L1 plate
             if (sizeOfL2Plate() != a.sizeOfL2Plate() ||
                 positionOnL2Plate() != a.positionOnL2Plate()) {
@@ -107,17 +126,43 @@ element L2Plate : L2PlateBase + PayloadT(20u) + Plexer + RingO {
             }
           } // else.. what about non-L2Plate on same plate?
         } else if (rel == pu.cCONTAINS_PLATE) {
+
           // Check for room for complete L2 border around L1 plate
           if (!pu.strictlyContains(self,a,offsetr-offsetl)) {
             du.print("L2Plate incomplete border size inconsistency");
             a.setDeathBits(cDIE_AND_DOWN); // You die too
             return true;          
           }
+        } else if (rel == pu.cCONTAINED_BY_PLATE) {
+
+          if (a.priority() > ourpriority) { // outranked by containing plate: not
+            du.print("FTIL2 CONTBY false");
+            du.print(sn);
+            return false;                   // fatal, but we have to stop checking?
+          }
+
         } else if (rel == pu.cOVERLAPS_PLATE) {
+
+          if (a.priority() > ourpriority) { // outranked while overlapping plate: not
+            du.print("FTIL2 OVER false");
+            du.print(sn);
+            return false;                   // fatal, but we have to stop checking?
+          }
+
           du.print("L2Plate overlap");
           a.setDeathBits(cDIE_AND_DOWN); // You die too
           return true;        
-        } // else.. other relations for consistency checking?
+        } else if (rel == pu.cCONTAINED_BY_PLATE) {
+          if (a.priority() > ourpriority) { // outranked by containing plate: not
+            du.print("FTIL2 CONTBY false");
+            du.print(sn);
+            return false;                   // fatal, but we have to stop checking?
+          }
+        } else {
+          du.print("FTIL2 ????");
+          du.print(sn);
+          du.print(rel);
+        }
       }
     }
     return false;
@@ -222,7 +267,7 @@ element L2Plate : L2PlateBase + PayloadT(20u) + Plexer + RingO {
     if (onceOnlyInit()) return;
     if (mustBlockOrDie()) return;
     if (checkGrowthAndHealing()) return;
-    if (updateRingO()) return;
+    if (updateRingOPlate()) return;
     if (checkLocalActions()) return;
   }
 }
@@ -279,15 +324,30 @@ transient L2PlateRingOIterator : RingOIterator {
   }
 }
 
-/** \symbol S2
+/** Make a 3x3 L2Plate
+    \symbol S3
  */
-element SeedL2Plate : Plate1 {
+element SeedL2Plate3x3 : Plate1 {
   Void behave() {
     PlateUtils pu;
     EventWindow ew;
     L2Plate pe;
     pe.setPositionOnL2Plate(pu.c1x1);
     pe.setSizeOfL2Plate(pu.c3x3);
+    ew[0] = pe.atomof;
+  }
+}
+
+/** Make a 1x1 L2Plate
+    \symbol S1
+ */
+element SeedL2Plate1x1 : Plate1 {
+  Void behave() {
+    PlateUtils pu;
+    EventWindow ew;
+    L2Plate pe;
+    pe.setPositionOnL2Plate(pu.c0x0);
+    pe.setSizeOfL2Plate(pu.c1x1);
     ew[0] = pe.atomof;
   }
 }

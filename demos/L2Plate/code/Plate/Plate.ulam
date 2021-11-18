@@ -116,6 +116,7 @@ quark Plate {
     EventWindow ew;
     PlateUtils pu;
     ByteStreamLogger bsl;
+    DebugUtils du;
 
     SN selfsn = getOurSN();
     C2D offsetl = md.getSiteCoord(selfsn);
@@ -153,12 +154,24 @@ quark Plate {
         } else if (rel == pu.cSAME_PLATE_AS) {
 
           if (a.priority() > ourpriority) { // outranked on plate: you must hodl
+            du.print("MBODap>p SAME");
             return true;                    // can short circuit loop since not dying
           }
         } else if (rel == pu.cCONTAINED_BY_PLATE) {
           if (a.blockSubplates()) return true;  // regardless of priority comparison
+
+          if (a.priority() > ourpriority) { // outranked while overlapping plate: again
+            du.print("MBODap>p CONT");
+            return true;                    // we hodl. (This seems was unfair to us.)
+          }
+
         } else if (rel == pu.cOVERLAPS_PLATE) {
-          DebugUtils du;
+
+          if (a.priority() > ourpriority) { // outranked while overlapping plate: again
+            du.print("MBODap>p OVERLAPS");
+            return true;                    // we hodl. (This seems was unfair to us.)
+          }
+
           du.print("KILL OVERLAPPING PLATE");
           bsl.forceOutput(true);
           bsl.printf("MBoD 13 osn%d <%s> tsn%d\n", selfsn, pu.relationName(rel), sn);

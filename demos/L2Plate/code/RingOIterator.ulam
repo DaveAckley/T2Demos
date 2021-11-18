@@ -1,0 +1,31 @@
+
+quark RingOIterator {
+  //// RingO API
+  virtual Void init(RingO & on) ;  //< Set up to iterator around \c on
+  virtual Bool hasNext() ;        //< \c true if another RingO& available
+  virtual RingO & next() ;         //< Get next RingO& or fail if none 
+}
+
+transient RingOMooreIterator : RingOIterator {
+  typedef EventWindow.SiteNum SN;
+  SN mNextSN;
+
+  //// RingOIterator API
+  @Override
+  virtual Void init(RingO & on) { mNextSN = 1u; }
+  virtual Bool hasNext() {
+    EventWindow ew;
+    for (; mNextSN <= 8u; ++mNextSN) {
+      if (!ew.isAccessible(mNextSN)) continue;
+      if (ew[mNextSN] is RingO) return true;
+    }
+    return false;
+  }
+  
+  virtual RingO & next() {
+    if (!hasNext()) { Fail f; f.fail(); }
+    EventWindow ew;
+    RingO & ret = (RingO&) ew[mNextSN++]; // Or fail if something changed under us
+    return ret;
+  }
+}

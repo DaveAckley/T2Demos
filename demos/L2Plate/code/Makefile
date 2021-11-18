@@ -16,6 +16,7 @@ ULAM_FILES:=$(sort $(wildcard *.ulam))
 TCC_FILES:=$(sort $(wildcard *.tcc))
 INC_FILES:=$(wildcard *.inc)
 SOURCE_DIR_ARGS:=--sd ./Plate
+SD_ULAM_FILES=$(wildcard ./Plate/*.ulam)
 TIMESTAMP:=$(shell date +%Y%m%d-%H%M%S)
 DEV:=$(shell whoami)
 ISHNAME:=$(TIMESTAMP)-$(DEV)
@@ -31,7 +32,7 @@ $(T2TARGET):	$(MFZ)
 run:	$(MFZ)
 	$(MFZRUN) $(MFZ)
 
-$(MFZ):	$(ULAM_FILES) $(INC_FILES) $(TCC_FILES) $(ARGS_TXT_FILES) Makefile
+$(MFZ):	$(ULAM_FILES) $(INC_FILES) $(TCC_FILES) $(ARGS_TXT_FILES) $(SD_ULAM_FILES) Makefile
 	$(ULAM) $(UFLAGS) $(SOURCE_DIR_ARGS) $(ULAM_FILES) $(INC_FILES) $(TCC_FILES) $(ARGS_TXT_FILES) $(MFZ)
 
 clean:

@@ -1,0 +1,500 @@
+/** Tecton: Generalized for moving or growing Plates
+    \symbol Tc
+    \color #3b3
+    \symmetries none
+*/
+element Tecton : B2DPlate + PlateUtils + Stride2x2 {
+  typedef Unsigned(1) Side;
+  constant Side cNORTH_SIDE = 0u;
+  constant Side cSOUTH_SIDE = 1u;
+  Bool mSidesReady [2]; 
+  Bool mGrowLine = false; // Else swapline
+
+  constant Unsigned cTIMER_BITS = 4u;
+  typedef XTimer(cTIMER_BITS,Unsigned(cTIMER_BITS).maxof,8u) BlockedAtStartTimer;
+  BlockedAtStartTimer mBlockedStart;
+
+  //// UrSelf API
+  @Override
+  ARGB getColor(Unsigned selector) {
+    ColorUtils cu;
+    ARGB ret = cu.color(mGrowLine ? 0xffeebbbb : 0xff552222);
+    ARGB mid = cu.color(0xff808080);
+    if (!mSidesReady[0]) ret = cu.between(ret,mid,75);
+    if (!mSidesReady[1]) ret = cu.between(ret,mid,75);
+    return ret;
+  }
+
+  PlateDir mPlateDir;
+
+  // On entry, size and pos describe the plate being operated upon
+  // return ewc(0,0) if can't start tecton here, else ewcoffset from
+  // parent pos for initial tecton placement.
+  C2D initFromOpCmd(Bool doGrow, PlateDir inDir,C2D pos,C2D size,C2D str) {
+    C2D retoffsetewc(0,0); // Init to no-go
+    C2D tpos;
+    C2D tsize;
+
+    ByteStreamLogger bsl;
+    PlateUtils pu;
+    bsl.printf("D*SWODLS10 (%d)\n",inDir);
+    if (!pu.onCCWCornerForDir(pos,size,inDir))
+      return retoffsetewc;
+    bsl.printf("D*SWODLS11\n");
+
+    which (inDir) {
+
+    case cPLATE_GOES_W: {
+      retoffsetewc.set(-str.getX(),0);
+      tpos.set(0,size.getY()-1);
+      tsize.set(size.getX()+1,size.getY());
+      if (doGrow) size += C2D.instanceof(1,0);
+    }
+
+    case cPLATE_GOES_N: {
+      retoffsetewc.set(0,-str.getY());
+      tpos.set(0,0);
+      tsize.set(size.getX(),size.getY()+1);
+      if (doGrow) size += C2D.instanceof(0,1);
+    }
+
+    case cPLATE_GOES_E: {
+      retoffsetewc.set(str.getX(),0);
+      tpos.set(size.getX(),0);
+      tsize.set(size.getX()+1,size.getY());
+      if (doGrow) size += C2D.instanceof(1,0);
+    }
+
+    case cPLATE_GOES_S: {
+      retoffsetewc.set(0,str.getY());
+      tpos.set(size.getX()-1,size.getY());
+      tsize.set(size.getX(),size.getY()+1);
+      if (doGrow) size += C2D.instanceof(0,1);
+    }
+    otherwise: { return retoffsetewc; }
+    }
+    mPlateDir = inDir;
+    mGrowLine = doGrow;
+    mSizeOfPlate.fromC2D(tsize);
+    mPosOnPlate.fromC2D(tpos);
+    setStride(str);
+    bsl.printf("D*SWODLS15(%d,%d)\n",retoffsetewc.getX(),retoffsetewc.getY());
+    return retoffsetewc;
+  }
+
+  /// PLATEDIR API
+
+  /*
+  SN lineForwardSN() {  // Next site forward in line direction
+    return lineForwardSN(mPlateDir);
+  }
+  */
+
+  C2D lineForwardOffsetEWC() {
+    return lineForwardOffsetEWC(mPlateDir, stride());
+  }
+
+  SN sideSN(Side s) {  // Sites directly on either site of line
+    C2D str = stride();
+    C2D.Coord sx = str.x;
+    C2D.Coord sy = str.y;
+    C2D ewc(0,0);
+    which (mPlateDir) {
+    case cPLATE_GOES_W: { ewc.setY(s == cNORTH_SIDE ? -sy : sy); }
+    case cPLATE_GOES_N: { ewc.setX(s == cNORTH_SIDE ? sx : -sx); }
+    case cPLATE_GOES_E: { ewc.setY(s == cNORTH_SIDE ? sy : -sy); }
+    case cPLATE_GOES_S: { ewc.setX(s == cNORTH_SIDE ? -sx : sx); }
+    otherwise: { return EventWindow.SiteNum.maxof; }
+    }
+    MDist md;
+    return md.getSiteNumber(ewc);
+  }
+
+  SN backSideSN(Side s) {  // Back bein sites either site of line
+    C2D str = stride();
+    C2D.Coord sx = str.x;
+    C2D.Coord sy = str.y;
+    C2D ewc(0,0);
+    which (mPlateDir) {
+    case cPLATE_GOES_W: { s == cNORTH_SIDE ? ewc.set(-sx,-sy) : ewc.set(-sx,sy); }
+    case cPLATE_GOES_N: { s == cNORTH_SIDE ? ewc.set(sx,-sy) : ewc.set(-sx,-sy); }
+    case cPLATE_GOES_E: { s == cNORTH_SIDE ? ewc.set(sx,sy) : ewc.set(sx,-sy); }
+    case cPLATE_GOES_S: { s == cNORTH_SIDE ? ewc.set(-sx,sy) : ewc.set(sx,sy); }
+    otherwise: { return EventWindow.SiteNum.maxof; }
+    }
+    MDist md;
+    return md.getSiteNumber(ewc);
+  }
+
+  Bool atPlateEnd(C2D size, C2D pos) {  // Is pos in size at end of plate?
+    which (mPlateDir) {
+    case cPLATE_GOES_W: { return pos.getX() == size.getX() - 1; }
+    case cPLATE_GOES_N: { return pos.getY() == size.getY() - 1; }
+    case cPLATE_GOES_E: { return pos.getX() == 0; }
+    case cPLATE_GOES_S: { return pos.getY() == 0; }
+    }
+    // NOT REACHED
+    return false;
+  }
+
+  Bool stillOnPlate(C2D size, C2D pos) {  // Is pos inside size plate?
+    which (mPlateDir) {
+    case cPLATE_GOES_W: { return pos.getX() < size.getX(); }
+    case cPLATE_GOES_N: { return pos.getY() < size.getY(); }
+    case cPLATE_GOES_E: { return pos.getX() >= 0; }
+    case cPLATE_GOES_S: { return pos.getY() >= 0; }
+    }
+    // NOT REACHED
+    return false;
+  }
+
+  Bool atLineEnd(C2D size, C2D pos, Side s) {  // Is pos in size at s end of line?
+    which (mPlateDir) {
+    case cPLATE_GOES_W:  {
+      return s == cNORTH_SIDE ? pos.getY() == 0 : pos.getY() == size.getY() - 1;
+    }
+    case cPLATE_GOES_N:  {
+      return s == cNORTH_SIDE ? pos.getX() == size.getX() - 1 : pos.getX() == 0;
+    }
+    case cPLATE_GOES_E:  {
+      return s == cNORTH_SIDE ? pos.getY() == size.getY() - 1 : pos.getY() == 0;
+    }
+    case cPLATE_GOES_S:  {
+      return s == cNORTH_SIDE ? pos.getX() == 0 : pos.getX() == size.getX() - 1;
+    }
+    }
+    // NOT REACHED
+    return false;
+  }
+
+  //// Plate API
+  @Override
+  virtual Bool blockSubplates() { return true; } //< I mow through subplates oh yeah
+  @Override
+  virtual Int priority() { return 10; }     //< If you see me hunker down
+
+  Bool haveBackBein(Side side) {
+    EventWindow ew;
+    MDist md;
+    EventWindow.SiteNum backside = backSideSN(side);
+    if (!ew.isAccessible(backside)) return false;  // If can't look, no back bein there ??
+    C2D offset = md.getSiteCoord(backside);
+    Atom & a = ew[backside];
+    if (a as Self) {            // OK, it's a TectonW too
+      return (relationTo(self,C2D.instanceof(0,0),a,offset) == cSAME_PLATE_AS); // And for same plate
+    }
+    return false;
+  }
+
+  Bool spreadLine(Side side) {
+    DebugUtils du;
+    EventWindow ew;
+    MDist md;
+    SN sib = sideSN(side);
+
+    //    du.print("SPREEDLLEAIN");
+    //    du.print(side);
+    //    du.print(sib);
+
+    if (!ew.isAccessible(sib)) return false;  // If can't look, not ready
+
+    C2D offsetewc = md.getSiteCoord(sib); // offset in stride() distances
+
+    Atom & a = ew[sib];
+    if (a as Self) { // OK, it's a TectonW too
+      if (relationTo(self,C2D.instanceof(0,0), a,offsetewc) ==
+          cSAME_PLATE_AS)           // And for same plate
+        return a.mSidesReady[side];  // So we're ready on that side if they are
+    }
+    //    du.print("SPRL11");
+
+    if (true) {
+      //      du.print("SPRL12 AHEAD CHECK");
+      C2D fwdewc = offsetewc + lineForwardOffsetEWC();
+      //      du.print(fwdewc);
+      if (ew.isAccessible(fwdewc)) {
+        Atom & f = ew[fwdewc];
+        if (f as Self) {                                // If also a plate shifter
+          if (relationTo(self,C2D.instanceof(0,0), f, fwdewc) == cSAME_PLATE_AS) // For same plate
+            return true;                                // Then we must be a back bein for them
+        }
+      }
+    }
+
+    Bool dospawnintosib = false;
+    Ephemeron eph;
+    if (a as Plate) { // Not us, is it any kind of Plate?
+      //      du.printContext();
+      //      du.print(offsetewc);
+      if (relationTo(self,C2D.instanceof(0,0),a,offsetewc) == cCONTAINED_BY_PLATE) { // And does it contain us?
+        //        du.print("SPAWEN");
+        dospawnintosib = true;
+      }
+    } else if (eph.isEphemeral(a)) {
+      //        du.print("SPAWEMPT");
+        dospawnintosib = true;      
+    }
+    if (dospawnintosib) {
+      // SPAWN INTO ew[sib]
+      Self bein = self; // Start with us
+      bein.mBlockedStart.reset();
+      bein.mPosOnPlate.fromC2D(self.mPosOnPlate.toC2D() + offsetewc/stride());
+      bein.mSidesReady[0] = bein.mSidesReady[1] = false;  // Decide for themselves
+      ew[sib] = bein.atomof;
+      return false;
+    }
+    //    du.print("NONNNSPAWEN");
+    //    du.print("SPRL12");
+
+    return false;
+  }
+
+  Void miscarry() {
+    mBlockedStart.trigger();
+  }
+  
+  Bool miscarried() {
+    EventWindow ew;
+    MDist md;
+    if (mSidesReady[cNORTH_SIDE] && mSidesReady[cSOUTH_SIDE]) // already delivered
+      return false; 
+
+    if (!mBlockedStart.countAlarm()) return false;
+
+    // Spread the bad news
+    for (Unsigned s = Side.minof; s <= Side.maxof; ++s) {
+      Side side = (Side) s;
+      SN sib = sideSN(side);
+      if (!ew.isAccessible(sib)) continue;
+      C2D offsetewc = md.getSiteCoord(sib); // offset in stride() distances
+
+      Atom & a = ew[sib];
+      if (a as Self) { // OK, it's a TectonW too
+        if (relationTo(self,C2D.instanceof(0,0), a,offsetewc) ==
+            cSAME_PLATE_AS)           // And for same plate
+          a.miscarry();
+      }
+    }
+    ew[0] = Empty.instanceof;
+    return true;
+  }
+
+  Void behave() {
+    if (mustBlockOrDie()) return;
+    if (miscarried()) return;
+    EventWindow ew;
+    MDist md;
+    C2D size = sizeOfPlate();
+    C2D pos = positionOnPlate();
+    ByteStreamLogger bsl;
+    
+    if (!mSidesReady[cNORTH_SIDE] || !mSidesReady[cSOUTH_SIDE]) {
+      // GROWTH PHASE
+      if (atLineEnd(size,pos,cNORTH_SIDE)) mSidesReady[cNORTH_SIDE] = true;
+      else mSidesReady[cNORTH_SIDE] = spreadLine(cNORTH_SIDE);
+
+      if (atLineEnd(size,pos,cSOUTH_SIDE)) mSidesReady[cSOUTH_SIDE] = true;
+      else mSidesReady[cSOUTH_SIDE] = spreadLine(cSOUTH_SIDE);
+    } else if (stillOnPlate(size,pos)) {
+      // SHIFT PHASE
+      //  Any back beins?
+      if (!atLineEnd(size,pos,cNORTH_SIDE) && haveBackBein(cNORTH_SIDE)) return; // Wait for back man
+      if (!atLineEnd(size,pos,cSOUTH_SIDE) && haveBackBein(cSOUTH_SIDE)) return; // Ditto
+      //  No.  Are we done?
+      if (atPlateEnd(size,pos)) { // My work is done
+        ew[0] = Empty.instanceof; // If growline, previously-swapped will grow in here
+        return;
+      }
+      //  No.  Need to swap ahead
+      C2D fwdewc = lineForwardOffsetEWC();
+      //      bsl.printf("TFSDKON11n\n");
+      if (!ew.isAccessible(fwdewc)) return;  // Uh oh.
+      Atom & fwd = ew[fwdewc];
+      Bool doswap = false;
+      Bool istargetplate = false;
+      //      bsl.printf("TFSDKON12\n");
+      if (fwd as Plate) {
+        C2D origin;
+        //        bsl.printf("TFSDKON13\n");
+        PlateRelation rel = relationTo(self, origin, fwd, fwdewc);
+        //        bsl.printf("TFSDKON1310(%d,%d) = %d\n",fwdewc.getX(),fwdewc.getY(),rel);
+        if (rel == cCONTAINS_PLATE) { // We contain the target plate, 
+          C2D sizediff = size - fwd.sizeOfPlate(); // and its length
+          istargetplate = sizediff.length() == 1u; 
+          //          bsl.printf("TFSDKON1311(%d,%d) = %d\n",
+          //                     sizediff.getX(),sizediff.getY(),istargetplate);
+        } else {
+        //          bsl.printf("TFSDKON14BONGOUT\n");
+          DebugUtils du;
+          //          du.printContext();
+          //          du.print("TCBHVNOTCONT");
+          //          du.print((Unsigned) rel);
+          return; // uh oh?
+        }
+        doswap = true;
+      } else if (fwd is Empty) {
+        doswap = true;
+      } else {
+        DebugUtils du;
+        //        du.printContext();
+        //        du.print("SWAPPOW");
+        //        du.print(fwd);
+        doswap = true;
+      }
+      if (doswap) {
+        //feedWatchdog(); // OK, this is progress
+        bsl.printf("TFSDKON15 fwdewc(%d,%d)\n",
+                   fwdewc.getX(),fwdewc.getY());
+        Self me = self;         // Remember me
+        C2D dest = pos + fwdewc/stride();
+        bsl.printf("TFSDKON15 dest(%d,%d)\n",
+                   dest.getX(),dest.getY());
+        me.mPosOnPlate.fromC2D(dest);    // Advance me (in plate coords)
+        Atom & a = ew[fwdewc];
+        //        bsl.printf("TFSDKON16 mgrowline %d istargetplate %d\n",mGrowLine, istargetplate);
+
+        if (mGrowLine && istargetplate) {
+          // WEST (OR SOUTH) GROW LINE CHANGES SIZE BUT NOT POS
+          if (a as B2DPlateBase) { // Can we manage to fixup anything that's B2DPlateBase?
+
+            //            bsl.printf("GNEC10 msizeplate(%d,%d)\n",a.mSizeOfPlate.mX,a.mSizeOfPlate.mY);
+
+            //            bsl.printf("TFSDKON18 size(%d,%d\n",size.getX(), size.getY());
+
+            //            bsl.printf("GNEC11 msizeplate(%d,%d)\n",a.mSizeOfPlate.mX,a.mSizeOfPlate.mY);
+
+            a.setSizeOfPlate(size); // You'll be the tecton's size now
+
+            //            bsl.printf("GNEC12 msizeplate(%d,%d)\n",a.mSizeOfPlate.mX,a.mSizeOfPlate.mY);
+
+            //            bsl.printf("TFSDKON18 new msizeplate(%d,%d\n",
+            //                       a.mSizeOfPlate.mX,a.mSizeOfPlate.mY);
+
+          //            bsl.printf("GNEC13 msizeplate(%d,%d)\n",a.mSizeOfPlate.mX,a.mSizeOfPlate.mY);
+
+            if (fwdewc.getX() < 0 || fwdewc.getY() < 0) {
+
+              //              bsl.printf("GNEC14 msizeplate(%d,%d)\n",a.mSizeOfPlate.mX,a.mSizeOfPlate.mY);
+
+              //              bsl.printf("TFSDKON19 posplate(%d,%d)\n",
+              //                         a.mPosOnPlate.mX,a.mPosOnPlate.mY);
+
+              //              bsl.printf("GNEC15 msizeplate(%d,%d)\n",a.mSizeOfPlate.mX,a.mSizeOfPlate.mY);
+              //typedef B2DPlate.Super.MyB2D MYMyB2D;
+
+              C2D gnecOldPos = a.positionOnPlate();
+              C2D newposr = gnecOldPos;
+              //              MYMyB2D & posr = a.mPosOnPlate;
+              //              bsl.printf("GNEC1510 gnecOldPos(%d,%d)\n",gnecOldPos.getX(),gnecOldPos.getY());
+              C2D gnecFwdAbs = fwdewc.abs();
+              //              bsl.printf("GNEC1511 gnecFwdAbs(%d,%d)\n",gnecFwdAbs.getX(),gnecFwdAbs.getY());
+              C2D gnecSum = gnecOldPos+gnecFwdAbs;
+              //              bsl.printf("GNEC1512 gnecSum(%d,%d)\n",gnecSum.getX(),gnecSum.getY());
+              a.setPositionOnPlate(gnecSum);
+
+              //              bsl.printf("----------GNEC16 msizeplate(%d,%d)\n",a.mSizeOfPlate.mX,a.mSizeOfPlate.mY);
+
+              //              bsl.printf("TFSDKON210 new posplate(%d,%d>>\n",
+              //                         a.mPosOnPlate.mX,a.mPosOnPlate.mY);
+
+              //              bsl.printf("++++++++++GNEC17 msizeplate(%d,%d)\n",a.mSizeOfPlate.mX,a.mSizeOfPlate.mY);
+            }
+          } else {
+            bsl.print("NOT B2DPLATE?\n");
+            DebugUtils du;
+            du.print(a);
+            return setDeathBits(cDIE_AND_DOWN);
+          }
+        }
+      //        bsl.printf("TFSDKON212\n");
+        ew[0] = ew[fwdewc];    // Shift some Plate (or empty or whatevs)!
+        //        bsl.printf("TFSDKON213\n");
+        ew[fwdewc] = me.atomof; // Put me down! 
+        //        bsl.printf("TFSDKON214\n");
+      }
+    } else {
+      // SHRINK PHASE
+      Fail f; f.fail("AHSRINKE");
+    }
+  }
+      
+}
+
+
+quark QSeedTecton {
+  typedef EventWindow.SiteNum SN;
+  
+  //// QSeedTecton API
+  typedef Unary(2) TectonCmd;
+  constant TectonCmd cSKIP = 0u;
+  constant TectonCmd cGROW = 1u;
+  constant TectonCmd cMOVE = 2u;
+
+  virtual TectonCmd getCmd(Plate& forplate) ;
+
+  //// QSeedTecton SERVICES
+  Void behave() {
+    EventWindow ew;
+    PlateUtils pu;
+    DebugUtils du;
+    
+    Unsigned count = 0;
+    SN picksn;
+    Bool toGrow;
+    Random random;
+    for (SN sn = 1u; sn <= 4u; ++sn) {       // vonN ngb only for sure
+      if (!ew.isAccessible(sn)) continue;
+      Atom & a = ew[sn];
+      if (a as Plate) {
+        if (!a.isPlateBorder()) continue;    // We only want border sites
+        TectonCmd cmd = getCmd(a);
+        if (cmd == cSKIP) continue;
+        if (random.oneIn(++count)) {
+          picksn = sn;
+          toGrow = (cmd == cGROW);
+        }
+      }
+    }
+    if (count > 0u) { // Picked something
+      Plate & p = (Plate&) ew[picksn];
+      C2D pos = p.positionOnPlate();
+      C2D siz = p.sizeOfPlate();
+      PlateUtils.PlateDir dir = pu.borderDir(pos,siz); // Side the target is on
+      Tecton tc;
+      C2D at = tc.initFromOpCmd(toGrow, dir, pos, siz, pu.c1x1);
+      if (at == pu.c0x0) {
+        du.print("NO INIT");
+        du.print(p);
+      } else {
+        du.print("INITTED");
+        // Need to remap at to be relative to plate we picked, not to us
+        du.print(at);
+        at += ew.getCoord(picksn);
+        du.print(at);
+        du.print(dir);
+        du.print(p);
+        du.print(tc);
+        ew[at] = tc;
+      }
+    }
+    ew[0] = Empty.instanceof; // I'm done no matter what
+  }
+}
+
+/** SeedTectionMove: Make a Move Tecton based on a neighboring plate
+    \symbol Tm
+    \color #7f7
+    \symmetries none
+*/
+element SeedTectonMove : QSeedTecton {
+  virtual TectonCmd getCmd(Plate& forplate) { return cMOVE; }
+}
+
+/** SeedTectonGROW: Make a Grow Tecton based on a neighboring plate
+    \symbol Tg
+    \color #7f7
+    \symmetries none
+*/
+element SeedTectonGrow : QSeedTecton {
+  virtual TectonCmd getCmd(Plate& forplate) { return cGROW; }
+}

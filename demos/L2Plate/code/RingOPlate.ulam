@@ -1,0 +1,109 @@
+quark RingOPlateBase : B2DPlateBase + RingO {
+
+  //// RingOPlateBase API
+  Bool updateRingOPlate() {
+    return updateRingOPlateMooreNeighborhood(); // default
+  }
+
+  //// RingOPlate SERVICES
+  Bool updateRingOPlateMooreNeighborhood() {
+    RingOMooreIterator itr;
+    return updateRingO(itr);
+  }
+
+  @Override
+  virtual SyncRelation syncRelation(RingO & other) {
+    EventWindow ew;
+    PlateUtils pu;
+    MDist md;
+
+    SN selfsn = getOurSN();
+    if (selfsn == SN.maxof) return RingO.cOTHER_IS_UNRELATED; // WTH?
+    C2D offsetl = md.getSiteCoord(selfsn);
+
+    if (other as RingOPlate) {
+
+      SN othersn = other.getOurSN();
+      if (othersn == SN.maxof) return RingO.cOTHER_IS_UNRELATED; // WTH?
+
+      C2D offsetr = md.getSiteCoord(othersn);
+      PlateUtils.PlateRelation rel = pu.relationTo(self, offsetl, other, offsetr);
+      if (rel != pu.cSAME_PLATE_AS) return RingO.cOTHER_IS_UNRELATED; // WTH?
+
+      Bool snUpstream =   offsetl.min(offsetr)==offsetr;
+      if (snUpstream) return RingO.cOTHER_IS_UPSTREAM;
+
+      Bool snDownstream = offsetl.max(offsetr)==offsetr;
+      if (snDownstream) return RingO.cOTHER_IS_DOWNSTREAM;
+
+    }
+    return RingO.cOTHER_IS_UNRELATED;
+  }
+
+}
+
+quark RingOPlate :  RingOPlateBase + B2DPlate6 {
+
+
+}
+
+element RingODemo : RingOPlate {
+  typedef Super.MyB2D MyB2D;
+  MyB2D mNewSize;
+
+  Void maybeChangeSize() {
+    Random random;
+    mNewSize.fromC2D(sizeOfPlate());
+    mNewSize.x = (MyB2D.Coord) (mNewSize.x + random.between(-3,3)/3);
+    mNewSize.y = (MyB2D.Coord) (mNewSize.y + random.between(-3,3)/3);
+  }
+
+  //// UrSelf API
+  @Override
+  ARGB getColor(Unsigned selector) {
+    return getRingOColor();
+  }
+
+  @Override
+  virtual Bool rootTick(RingONeighborhood & ngb) {
+    DebugUtils du;
+    if (mRingOState.getStateIndex() == RingOState.cBLU_STATE) // entering RED
+      maybeChangeSize();
+    return true;
+  }
+
+  @Override
+  virtual Bool edge(RingONeighborhood & ngb, Bool fromUp, Bool newState) { 
+    if (fromUp) {
+      EventWindow ew;
+      SN sn = ngb.sampleInDir(RingO.cOTHER_IS_UPSTREAM);
+      if (ew.isAccessible(sn)) {
+        if (newState) { // AIM at mNewSize
+          Atom & a = ew[sn];
+          if (a as Self) {
+            mNewSize = a.mNewSize;
+          }
+        } else {
+          DebugUtils du;
+          du.print("FIRE WRITREME XXX");
+        }
+      }
+    }
+    return true;
+  }
+
+  Void behave() {
+    if (mustBlockOrDie()) return;
+    if (checkGrowthAndHealing()) return;
+    if (updateRingOPlate()) return;
+  }
+}
+
+element SeedRingODemo {
+  Void behave() {
+    RingODemo d;
+    d.setSizeOfPlate(C2D.instanceof(9,7));
+    EventWindow ew;
+    ew[0] = d;
+  }
+}

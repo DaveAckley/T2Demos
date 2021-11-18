@@ -166,7 +166,6 @@ quark PlateUtils {
     return md.getSiteNumber(icoord);   // Our SN relative to them
   }
 
-  /*
   C2D lineForwardOffsetEWC(PlateDir dir, C2D stride) {
     C2D.Coord sx = stride.x;
     C2D.Coord sy = stride.y;
@@ -178,7 +177,7 @@ quark PlateUtils {
     }
 
     return c0x0; // FAIL?
-    }*/
+  }
 
   Bool inStride(C2D ew1, C2D ew2, C2D str) {
     C2D wastepc;

@@ -1,0 +1,104 @@
+transient RingONeighborhood {
+  typedef EventWindow.SiteNum SN;
+  typedef RingO.SyncRelation SyncRel;
+  typedef Unsigned(6) ByteCount;
+  ByteCount mUpCount, mUpTrue;
+  ByteCount mDownCount, mDownTrue;
+  SN mSampleUpSN, mSampleDownSN;
+
+  Void debugPrint() {
+    ByteStreamLogger bsl;
+    bsl.printf("[RingO uc%d ut%d usn%d dc%d dt%d dsn%d]\n",
+               mUpCount, mUpTrue, mSampleUpSN,
+               mDownCount, mDownTrue, mSampleDownSN);
+  }
+
+  Void countRingOState(RingO& other, RingO.SyncRelation rel) {
+    EventWindow ew;
+    Random random;
+    SN sn = ew.getSiteNumber(other);
+    if (rel == RingO.cOTHER_IS_UPSTREAM) {
+      if (random.oneIn(++mUpCount)) mSampleUpSN = sn;
+      if (other.mRingOState.mUpState) ++mUpTrue;
+    } else if (rel == RingO.cOTHER_IS_DOWNSTREAM) {
+      if (random.oneIn(++mDownCount)) mSampleDownSN = sn;
+      if (other.mRingOState.mDownState) ++mDownTrue;
+    }
+  }
+
+  SN sampleInDir(SyncRel rel) {
+    SN ret = SN.maxof;
+    if (rel == RingO.cOTHER_IS_UPSTREAM)
+      ret = mSampleUpSN;
+    else if (rel == RingO.cOTHER_IS_DOWNSTREAM)
+      ret = mSampleDownSN;
+    else { Fail f; f.fail(); }
+    return ret;
+  }
+
+  ByteCount ngbCount(SyncRel rel) {
+    if (rel == RingO.cOTHER_IS_UPSTREAM)
+      return mUpCount;
+    if (rel == RingO.cOTHER_IS_DOWNSTREAM)
+      return mDownCount;
+    Fail f;
+    f.fail();
+    return ByteCount.minof;
+  }
+
+  Bool allDirAreVal(SyncRel rel, Bool val) {
+    if (rel == RingO.cOTHER_IS_UPSTREAM) {
+      if (val) return mUpCount == mUpTrue;
+      else return mUpTrue == 0u;
+    } else if (rel == RingO.cOTHER_IS_DOWNSTREAM) {
+      if (val) return mDownCount == mDownTrue;
+      else return mDownTrue == 0u;
+    }
+    Fail f;
+    f.fail();
+    return false;
+  }
+
+  Bool update(RingO & me) {
+    RingOState newst = me.mRingOState; // Assume new state same as old
+
+    DebugUtils du;
+    Bool blocked = false; // true if anybody said don't advance
+
+    //// ROOT TICK
+    if (ngbCount(RingO.cOTHER_IS_UPSTREAM) == 0u &&
+        newst.mUpState == newst.mDownState) {
+      if (me.rootTick(self)) 
+        newst.mUpState = !newst.mUpState;
+      else blocked = true;
+    }
+
+    //// TAIL TOCK
+    if (ngbCount(RingO.cOTHER_IS_DOWNSTREAM) == 0u &&
+        newst.mDownState != newst.mUpState) {
+      if (me.tailTock(self)) 
+        newst.mDownState = !newst.mDownState;
+      else blocked = true;
+    }
+
+    //// UP WIRE PROPAGATION DOWN
+    if (ngbCount(RingO.cOTHER_IS_UPSTREAM) > 0u &&
+        allDirAreVal(RingO.cOTHER_IS_UPSTREAM, !newst.mUpState)) {  // upstream unanimous against me
+      if (me.edge(self, true, !newst.mUpState))
+        newst.mUpState = !newst.mUpState;
+      else blocked = true;
+    }
+
+    //// DOWN WIRE PROPAGATION UP
+    if (ngbCount(RingO.cOTHER_IS_DOWNSTREAM) > 0u && 
+        allDirAreVal(RingO.cOTHER_IS_DOWNSTREAM, !newst.mDownState)) { // downstream unanimous against me
+      if (me.edge(self, false, !newst.mDownState))
+        newst.mDownState = !newst.mDownState;
+      else blocked = true;
+    }
+
+    me.mRingOState = newst;
+    return blocked;
+  }
+
+}
