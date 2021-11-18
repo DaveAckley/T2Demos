@@ -274,13 +274,13 @@ element L2Plate : RingOL2Plate + PayloadT(20u) + Plexer {
 
 transient L2PlateRingOIterator : RingOIterator {
   typedef EventWindow.SiteNum SN;
-  constant Unsigned cCOUNT_MAX = 11u;
+  constant Unsigned cCOUNT_MAX = 39u;
   C2D mL1Pos;
   C2D mL1Siz;
   C2D mL2Pos;
   C2D mL2Siz;
-  Unsigned mCount; // 0..3 SN 21..24, 4..11 SN 1..8
-  SN mNextSN; // 1..8
+  Unsigned mCount; // 0..39 SN 1..40
+  SN mNextSN; // 1..40
 
   //// RingOIterator API
   @Override
@@ -295,8 +295,7 @@ transient L2PlateRingOIterator : RingOIterator {
   }
 
   SN snFromCount(Unsigned count) {
-    if (count < 4u)  return (SN) (count + 21u);
-    if (count < 12u) return (SN) (count - 3u);
+    if (count <= cCOUNT_MAX)  return (SN) (count + 1u);
     return SN.maxof;
   }
 
