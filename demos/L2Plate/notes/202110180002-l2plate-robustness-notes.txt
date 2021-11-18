@@ -1,4 +1,4 @@
-{230}  -*-  mode: text; fill-column: 50;  -*-
+{240}  -*-  mode: text; fill-column: 50;  -*-
 [0:
 
 Mon Oct 18 00:02:48 2021 So I've been blasting
@@ -2434,7 +2434,8 @@ DONE :222] - Review how L2 site decides to reseed.
 [227: Wed Nov 17 15:24:09 2021
 DONE :227] - Review how L2 neighborhood works
 
- - Propose mechanism(s) to allow variable distance
+[235: Thu Nov 18 12:58:22 2021
+DONE :235] - Propose mechanism(s) to allow variable distance
    between L2 sites, supporting
 
    - Don't reseed if there's any plausible
@@ -2443,11 +2444,14 @@ DONE :227] - Review how L2 neighborhood works
    - Support RingO propagation regardless of small
      spatial phase differences
 
- - Implement a mechanism
+[236: Thu Nov 18 12:58:28 2021
+DONE :236] - Implement a mechanism
 
- - Demonstrate L2 site movability
+[237: Thu Nov 18 12:58:46 2021 
+DONE :237] - Demonstrate L2 site movability
 
- - Move an entire L2 plate, site by site, 'by
+[238: Thu Nov 18 12:58:48 2021 
+DONE :238] - Move an entire L2 plate, site by site, 'by
    hand'
 
  - Come make more to-do
@@ -2798,12 +2802,14 @@ But, claiming L2 ngb review.[228:
 
 Wed Nov 17 15:38:27 2021 So, mechanisms.
 
- - Proposal for RingO ngb:
+[233: Thu Nov 18 12:57:54 2021
+DONE :233] - Proposal for RingO ngb:
    (1) Search whole ew [THIS IS ONLY CHANGE]
    (2) same L2 site, max/min L1 coords
    (3) different L2 site, max/min L2 coords
 
- - Proposal for L2PlateSequencer.checkSeed(Plex&):
+[234:
+DONE :234] - Proposal for L2PlateSequencer.checkSeed(Plex&):
    [229: Thu Nov 18 02:41:26 2021
    (1) Don't seed if plex[22] or plex[38] is inaccessible
    (2) Don't seed if plex[22] or plex[38] are non-empty
@@ -2814,7 +2820,19 @@ Wed Nov 17 15:38:27 2021 So, mechanisms.
    (4) Otherwise seed at 22 & 38
    :229]
    
+[230:
 
+Thu Nov 18 03:13:54 2021 OK let's take a crack at this.
+[231:
+
+Thu Nov 18 09:23:02 2021 Well, slept instead, but
+now have done the expanded L2PlateRingOIterator.
+Seems noticeably slower but it seems to be
+working.
+
+
+:231]
+:230]
 :228]
 
 :226]
@@ -2884,3 +2902,17 @@ Wed Nov 17 15:38:27 2021 So, mechanisms.
 :185]
 
 :184]
+[232:
+
+Thu Nov 18 12:57:21 2021 OK, so some progress.
+Let's claim stuff..[239:
+
+Thu Nov 18 12:58:57 2021 OK, yow claimed like
+everything.  Next stop is need to make more
+to-do.
+
+Committing this stuff.
+
+:239]
+
+:232]
