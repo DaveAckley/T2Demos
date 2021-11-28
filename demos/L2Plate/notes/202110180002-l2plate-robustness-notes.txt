@@ -1,4 +1,4 @@
-{240}  -*-  mode: text; fill-column: 50;  -*-
+{246}  -*-  mode: text; fill-column: 50;  -*-
 [0:
 
 Mon Oct 18 00:02:48 2021 So I've been blasting
@@ -2438,10 +2438,10 @@ DONE :227] - Review how L2 neighborhood works
 DONE :235] - Propose mechanism(s) to allow variable distance
    between L2 sites, supporting
 
-   - Don't reseed if there's any plausible
+[240: DONE  :240]   - Don't reseed if there's any plausible
      neighbor there
 
-   - Support RingO propagation regardless of small
+[241: DONE just saying  :241]   - Support RingO propagation regardless of small
      spatial phase differences
 
 [236: Thu Nov 18 12:58:28 2021
@@ -2916,3 +2916,85 @@ Committing this stuff.
 :239]
 
 :232]
+[242:
+
+Thu Nov 18 13:04:28 2021 First cut more TODO
+
+ - Consider reseeding (just) L2 if (just) L1 is
+   seen.  (Right now, MyElement is much more
+   robust than L2Plate to write faults, and we end
+   up with bare MyElement l1 plates blocking L2
+   reseeding.)
+
+ - Consider how to implement a second RingO for
+   each L2 site independently.
+
+ - Consider how a single L2 site could centralize
+   L2 site border knowledge and select a plausible
+   move direction.  
+
+   - Is it by QStream12ing on the L2 site border?
+
+   - Or is it by adding RingO payload?
+
+
+:242]
+[243:
+
+Sun Nov 28 00:14:24 2021 Well, have been on other
+stuff (mostly 'Robust Local Sync: Research
+Notebook Video') for over a week, it appears.
+
+But we're going to put some time in here and see
+if we can get a second RingO circuit going in each
+L2 site individually.
+
+Obvious issue: Can't inherit from RingO twice.
+[244:
+
+Sun Nov 28 00:18:24 2021 Now, if we added
+
+  virtual RingOState & getRingOState() ; //< Access relevant state
+
+to the RingO API, and added like
+
+  RingOState mRingOState;
+  @Override
+  virtual RingOState & getRingOState() { return mRingOState; }
+
+in the subclasses, then we could keep multiple
+RingOState data members around.
+
+And how is it we associate the right mRingOState
+with the right RingOIterator?  By having each
+subclass pass the right RingOIterator to
+updateRingO.
+
+That makes sense.
+
+So I guess this has to work?  But one more little
+detail: How does some rando other class handle
+accessing the correct RingO services 'from the
+outside'?  Like:
+
+  Atom & a = ew[1];
+  if (a as RingO) {
+    // Now what?
+  }
+
+Well, I guess the point is: Either the Rando knows
+specifically what kind of RingO it's looking for
+(e.g., Self), or the Rando has to be happy with
+just getRingOState().
+
+That's not so unreasonable, I think..
+
+:244]
+
+:243]
+[245:
+
+Sun Nov 28 00:33:22 2021 Are we clean here?  Need
+a commit before we start this?
+
+:245]
