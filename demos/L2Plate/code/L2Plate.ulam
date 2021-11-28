@@ -104,14 +104,14 @@ element L2Plate : RingOL2Plate + PayloadT(20u) + Plexer {
         C2D offsetr = md.getSiteCoord(sn);
         PlateUtils.PlateRelation rel = pu.relationTo(self, offsetl, a, offsetr);
 
-        du.print("FTIL2 CNSDR");
-        du.print(offsetr);
+        //        du.print("FTIL2 CNSDR");
+        //        du.print(offsetr);
 
         if (rel == pu.cSAME_PLATE_AS) {
 
           if (a.priority() > ourpriority) { // outranked on same plate: not
-            du.print("FTIL2 SAME false");
-            du.print(sn);
+            //            du.print("FTIL2 SAME false");
+            //            du.print(sn);
             return false;                   // fatal, but we have to stop checking?
           }
 
@@ -136,16 +136,16 @@ element L2Plate : RingOL2Plate + PayloadT(20u) + Plexer {
         } else if (rel == pu.cCONTAINED_BY_PLATE) {
 
           if (a.priority() > ourpriority) { // outranked by containing plate: not
-            du.print("FTIL2 CONTBY false");
-            du.print(sn);
+            //            du.print("FTIL2 CONTBY false");
+            //            du.print(sn);
             return false;                   // fatal, but we have to stop checking?
           }
 
         } else if (rel == pu.cOVERLAPS_PLATE) {
 
           if (a.priority() > ourpriority) { // outranked while overlapping plate: not
-            du.print("FTIL2 OVER false");
-            du.print(sn);
+            //            du.print("FTIL2 OVER false");
+            //            du.print(sn);
             return false;                   // fatal, but we have to stop checking?
           }
 
@@ -154,8 +154,8 @@ element L2Plate : RingOL2Plate + PayloadT(20u) + Plexer {
           return true;        
         } else if (rel == pu.cCONTAINED_BY_PLATE) {
           if (a.priority() > ourpriority) { // outranked by containing plate: not
-            du.print("FTIL2 CONTBY false");
-            du.print(sn);
+            //            du.print("FTIL2 CONTBY false");
+            //            du.print(sn);
             return false;                   // fatal, but we have to stop checking?
           }
         } else {
