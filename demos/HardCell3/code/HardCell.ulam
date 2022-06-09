@@ -1,0 +1,516 @@
+transient NgbState {
+  typedef EventWindow.SiteNum SN;
+  EventWindow ew;
+  Random random;
+  
+  typedef Unsigned(3) State; // 0..4 -> align, 5 -> empty, 6 -> conflicted, 7 -> uninit
+  Bool mFoundUp, mFoundDown, mFoundUninitted;
+  Bool mUnsettledDown;
+  State mState = State.maxof;
+  Unsigned mHops = Unsigned.maxof; // If mState <= 4
+  C2D mNgbCtr;
+  C2D mFoundAt;
+
+  Void ngbStats(C2D ngbctr, QHardCell & me) {
+    DebugUtils du;
+    Unsigned myhops = me.getHopCount();
+    mNgbCtr = ngbctr;
+    Bool allDownSettled = true; // Start hopeful
+    for (SN sn = 0u; sn <= 4u; ++sn) {
+      C2D off = ew.getCoord(sn);
+      C2D at = ngbctr + off;
+      if (!ew.isAccessible(at)) continue;
+      //du.print(at);
+      Atom & a = ew[at];
+      //      du.print(a);
+      if (a as QHardCell) {
+        //du.print("gots1");
+        if (!me.inMyGroup(a)) continue;
+        //du.print("gots2");
+        // Found a ngb! Stash alignment
+        if (mState <= 4u) mState = 6u; // Already had one
+        else if (mState != 6u) { // Record alignment
+          mState = (State) sn;
+          mFoundAt = at;
+          mHops = a.getHopCount();
+          if (mHops == mHops.maxof) mFoundUninitted = true;
+          else if (mHops < myhops) mFoundUp = true;
+          else if (mHops > myhops) {
+            mFoundDown = true;
+            if (!a.isSettledDownstream())
+              allDownSettled = false;
+          }
+        }
+      }
+    }
+    if (mState == mState.maxof) // Found none
+      mState = 5u;              // Record empty
+    mUnsettledDown = mFoundDown && mState != 0u;
+    // RECURSIVE STEP:
+    mUnsettledDown = mUnsettledDown || !allDownSettled;
+  }
+}
+
+transient QHardCellState {
+  typedef EventWindow.SiteNum SN;
+  EventWindow ew;
+  Random random;
+
+  NgbState mNgbStates[4];
+  Unsigned mMinHopsNgb = Unsigned.maxof; // 0..3 or maxof if none
+  Unsigned mMinHops;
+  Unsigned mMinHopsCount;
+
+  Unsigned mEmptyNgb = Unsigned.maxof; // 0..3 or maxof if none
+  Unsigned mEmptyCount;
+  
+  Bool mAllDownSettled;
+
+  /** aligned means both axis are mod 3
+   */
+  Bool aligned(C2D me, C2D other) {
+    return
+      ((me.getX() - other.getX()) % 3 == 0) &&
+      ((me.getY() - other.getY()) % 3 == 0);
+  }
+
+  constant C2D mNgbOffs[4] = {
+    { .x = -3, .y = 0 },
+    { .x =  0, .y = -3 },
+    { .x =  0, .y = 3 },
+    { .x =  3, .y = 0 },
+  };
+
+  Void doStats(QHardCell & me) {
+    DebugUtils du;
+    mMinHops = mMinHops.maxof;
+    mMinHopsCount = 0u;
+
+    mEmptyNgb = mMinHops.maxof;
+    mEmptyCount = 0u;
+
+    mAllDownSettled = true;
+    for (Unsigned i = 0u; i < mNgbStates.lengthof; ++i) {
+      NgbState & n = mNgbStates[i];
+      n.ngbStats(mNgbOffs[i], me);
+      mAllDownSettled = mAllDownSettled && !n.mUnsettledDown;
+      if (n.mState == 5u) { // have empty
+        //du.print(mEmptyCount);
+        if (random.oneIn(++mEmptyCount))
+          mEmptyNgb = i;
+      }
+
+      if (n.mState >= 5u) continue; // Nobody otherwise usable there
+
+      //      du.print("NS");
+      //      du.print(i);
+      //      du.print(n);
+      //      du.print(mEmptyNgb);
+      if (n.mHops < mMinHops) {
+        mMinHopsNgb = i;
+        mMinHops = n.mHops;
+        mMinHopsCount = 1;
+        //        du.print("ZOng");
+        //        du.print(mMinHopsNgb);
+      } else if (n.mHops == mMinHops && random.oneIn(++mMinHopsCount)) {
+        mMinHopsNgb = i;
+        //        du.print("ZONG");
+        //        du.print(mMinHopsNgb);
+      }
+    }
+
+    // Check for consensus alignments
+    
+  }
+}
+
+quark QHardCell {
+  //// QHardCell API
+  virtual Bool inMyGroup(QHardCell & qh) { return true; }
+  virtual Unsigned getHopCount() ;
+  virtual Void setHopCount(Unsigned hops) ;
+  virtual Unsigned getMaxHopCount() ;
+  virtual Bool isSettledDownstream() ;
+  virtual Void setSettledDownstream(Bool settledown) ;
+  virtual Bool rootBehave(QHardCellState &hcs) { return false; }
+  virtual Void initCopy() { setHopCount(Unsigned.maxof); }
+
+  //// QHardCell SERVICES
+  Bool blockOrDie(Unsigned dieOdds) {
+    Random random;
+    if (random.oneIn(dieOdds)) return die();
+    return block();
+  }
+  Bool block() { return true; } // Nothing happened but we need to wait
+  Bool done() { return true; }  // Things are different now 
+  Bool die() {
+    EventWindow ew;
+    ew[0] = Empty.instanceof; 
+    return true;
+  }
+
+  // \returns true if anything changed
+  Bool update(QHardCellState & hcs) {
+    DebugUtils du;
+    EventWindow ew;
+    Unsigned myhop = getHopCount();
+    Unsigned maxhop = getMaxHopCount();
+    C2D origin;
+    hcs.doStats(self);
+
+    //// RECORD MY DOWNSTREAM SETTLEDNESS
+    setSettledDownstream(hcs.mAllDownSettled);
+
+    //// AM I UNINITTED?
+    if (myhop >= maxhop) { 
+      // Take min hop if any
+      if (hcs.mMinHopsCount > 0u) { // Have a ngb
+        NgbState & ns = hcs.mNgbStates[hcs.mMinHopsNgb];
+        if (ns.mHops < maxhop - 1u) { // And room to grow
+          //          du.print(ns);
+          setHopCount(ns.mHops + 1u);
+          //          du.print(self);
+          //          du.print("INITTING");
+          return done();
+        }
+      }
+      //      du.print("NONINITTING");
+
+      // I'm uninitted with no upstream? Die quickly
+      return blockOrDie(2u);
+    }
+    /// I AM INITTED.
+
+    /// IS AN INGROUP TOO CLOSE?
+    typedef EventWindow.SiteNum SN;
+    for (SN sn = 1u; sn <= 4u; ++sn) {
+      Atom & a = ew[sn];
+      if (a as Self) {
+        if (inMyGroup(a)) {
+          return blockOrDie(5u); // YES AN INGROUP IS IN MY VONN NGB
+        }
+      }
+    }
+    /// NO THERE'S NO INGROUP TOO CLOSE.
+
+    /// DO I NEED AND HAVE AN UPSTREAM?
+    if (myhop != 0u) { // I need an upstream
+      if (hcs.mMinHopsCount == 0u) // I'm all alone?
+        return blockOrDie(3u);
+
+      /// I HAVE A NGB.
+      NgbState & ns = hcs.mNgbStates[hcs.mMinHopsNgb];
+      
+      /// DO I NEED TO CHANGE MY HOPS?
+      if (ns.mHops != myhop - 1u) {
+        /// YES I DO.
+      
+        /// ARE HOPS AVAILABLE?
+        if (ns.mHops < maxhop - 1u) { // And room to grow
+          //          du.print(ns);
+          setHopCount(ns.mHops + 1u);
+          //          du.print(self);
+          //          du.print("RETARGETING");
+          return done();
+        }
+        /// NO MORE HOPS AVAILABLE
+        return blockOrDie(2u); // Ngb is already max, no room for me
+      }
+      /// I DO NOT NEED TO CHANGE MY HOPS.
+    }
+    /// I AM ROOT OR HAVE A NEXT UPSTREAM
+    //    du.print("//// I AM ROOT OR HAVE A NEXT UPSTREAM");
+
+    /// AM I UNALIGNED WITH MY UPSTREAM?
+    if (myhop != 0u) { // I'm not root
+      /// IS MY UPSTREAM IN CONSENSUS?
+      Unsigned upalign = Unsigned.maxof;
+      for (Unsigned i = 0u; i < hcs.mNgbStates.lengthof; ++i) {
+        NgbState & ns = hcs.mNgbStates[i];
+        if (ns.mState <= 4u) { // it's us there
+          if (ns.mHops == myhop - 1u) { // they're our next upstream
+            if (upalign == Unsigned.maxof)
+              upalign = ns.mState;
+            else
+              if (ns.mState != upalign) {
+                /// MY UPSTREAM IS NOT IN CONSENSUS.
+                return blockOrDie(1000u);
+              }
+          }
+        }
+        /// MY UPSTREAM IS IN CONSENSUS.
+      }
+
+      NgbState & ns = hcs.mNgbStates[hcs.mMinHopsNgb];
+      if (ns.mState != 0u) {
+        /// I AM UNALIGNED WITH MY UPSTREAM.
+
+        /// AM I BLOCKED BY UNALIGNED DOWNSTREAM?
+        for (Unsigned i = 0u; i < hcs.mNgbStates.lengthof; ++i) {
+          NgbState & ns2 = hcs.mNgbStates[i];
+          if (ns2.mFoundUninitted)  // Need to let them init
+            return blockOrDie(1000u);
+          if (ns2.mFoundDown) { // Is somebody downstream there?
+            if (ns2.mState != 0u &&       // If not aligned with us and
+                ns2.mState != ns.mState)  // not aligned with our upstream
+              return blockOrDie(100u);             // we have to wait
+          }
+        }
+        /// I AM NOT BLOCKED BY UNALIGNED DOWNSTREAM.
+
+        /// CAN I ALIGN MYSELF WITH MY UPSTREAM?
+        /// (is the would-be-aligned site empty?)
+
+        if (!ew.isAccessible(ns.mState)) // If destination is inaccessible
+          return die();                  // I must die
+
+        /// DESTINATION IS ACCESSIBLE
+        if (ew[ns.mState] is Empty) {
+          ///XXX HOW TO INVALIDATE DOWNSTREAM SETTLEMENTS FAST ENOUGH?
+          // Nuking everybody from orbit, as here, seems a poor choice
+          typedef EventWindow.SiteNum SN;
+          for (SN sn = 0u; sn < 41u; ++sn) {
+            Atom & a = ew[sn];
+            if (a as Self) {
+              if (!inMyGroup(a)) continue;
+              a.setSettledDownstream(false);
+            }
+          }
+          ew.swap(0u,ns.mState);
+          /// I AM ALIGNED WITH UPSTREAM
+          return true; // CANNOT SAFELY CALL (eg) done() HERE!
+        }
+      }
+    }
+
+    /// I AM ALIGNED WITH MY UPSTREAM.
+
+    /// DO I WANT TO SPAWN?
+    //    du.print("//// DO I WANT TO SPAWN?");
+    //    du.print(myhop);
+    //    du.print(maxhop);
+    
+    if (myhop < maxhop - 1u) {
+      /// YES I WANT TO SPAWN.
+      //      du.print("/// YES I WANT TO SPAWN.");
+      /// DID I SEE A RANDOM ACTUAL ALIGNED EMPTY?
+      if (hcs.mEmptyCount > 0u) {
+        //        du.print("hcs.mEmp");
+        C2D c = hcs.mNgbOffs[hcs.mEmptyNgb];
+        //        du.print(c);
+        if (ew.isAccessible(c) && ew[c] is Empty) {
+          setSettledDownstream(false);  // After I spawn, downstream will be unsettled
+          Atom a = self.atomof; // Full copy
+          Self & copy = (Self&) a;
+          copy.initCopy();
+          //          du.print(c);
+          ew[c] = a;
+          return done(); // I SPAWNED
+        }
+      }
+      /// I DID NOT.
+    }
+    /// I CAN'T OR DON'T WANT TO SPAWN
+
+    if (rootBehave(hcs)) return true;
+    return false;
+  }
+
+}
+
+/** HardCell: A Low-Density Mobile Grid
+   \symbol H3
+   \color 0xf0f0f0
+ */
+element HardCell : QHardCell {
+  typedef XTimer(3u,7u,500u) RootWatchdog;
+  RootWatchdog mRootWatchdog;
+
+  typedef EventWindow.SiteNum SN;
+  typedef Unsigned(5) HopCount;
+  constant HopCount cMAX_HOPS = 20u;
+
+  constant Unsigned cDIFFUSE_ODDS = 1u;
+
+  HopCount mHops = cMAX_HOPS;
+  Bool mSettledDownstream = false;
+
+  typedef Unsigned(4) NChan;
+  typedef NChan NColor[3];
+  NColor mColor;
+
+  typedef Int(5) DirSpeed;
+  constant DirSpeed cMAX_NW = DirSpeed.minof + 1;
+  constant DirSpeed cMAX_SE = -cMAX_NW;
+  DirSpeed mDirs[2];
+
+  Void changeDir() {
+    Random random;
+    Bool moving = false;
+    while (!moving) {
+      for (Unsigned i = 0u; i < mDirs.lengthof; ++i) {
+        mDirs[i] = (DirSpeed) random.between(cMAX_NW, cMAX_SE);
+        if (mDirs[i] != 0) moving = true;
+      }
+    }
+  }
+
+  SN updatePick(SN curpick, SN newdir, Unsigned & totwgt, Int newwgt) {
+    Random random;
+    if (newwgt < 0) {
+      newdir += 2u;  // 1=>3, 2=>4
+      newwgt = -newwgt;
+    }
+    Unsigned wgt = (Unsigned) newwgt;
+    totwgt += wgt;
+    if (random.oddsOf(wgt, totwgt))
+      curpick = newdir;
+    return curpick;
+  }
+
+  SN pickDir(Unsigned diffuseOdds) {
+    Random random;
+    Unsigned totw = diffuseOdds;
+    SN curPick = (SN) random.between(1u,4u);
+    for (Unsigned i = 0u; i < mDirs.lengthof; ++i) 
+      curPick = updatePick(curPick, (SN) (i+1u), totw, mDirs[i]);
+    return curPick;
+  }
+
+  Void mutateColor() {
+    Random random;
+    for (Unsigned i = 0u; i < mColor.lengthof; ++i) {
+      Int delta = random.between(-2,2);
+      mColor[i] = (NChan) (mColor[i] + delta);
+    }
+  }
+
+  ARGB baseColor() {
+    ColorUtils cu;
+    return cu.color((ASCII) (mColor[0]*10 + 100),
+                    (ASCII) (mColor[1]*10 + 100),
+                    (ASCII) (mColor[2]*10 + 100));
+  }
+
+  typedef Unsigned(2) MoveDir; // 0..3 => SN 1..4
+  MoveDir mMoveDir;
+
+  typedef Unsigned(5) StepsRemaining;
+  StepsRemaining mStepsRemaining;
+
+  //// UrSelf API
+  @Override
+  virtual ARGB getColor(Unsigned selector) {
+    ColorUtils cu;
+    Unsigned hc = getHopCount();
+    Unsigned maxhc = getMaxHopCount();
+    if (hc >= maxhc) {
+      return cu.color(0xff, 0xff, 0x00);
+    }
+    Unsigned closeness = maxhc - hc;
+    Unsigned pct = 60u + 40u * closeness / maxhc;
+    ARGB black;
+    return cu.between(baseColor(),black,pct);
+  }
+
+  //// QHardCell API
+  @Override
+  virtual Unsigned getMaxHopCount() { return cMAX_HOPS; }
+  @Override
+  virtual Unsigned getHopCount() { return mHops; }
+  @Override
+  virtual Void setHopCount(Unsigned hops) { mHops = (HopCount) hops; }
+  @Override
+  virtual Bool isSettledDownstream() {
+    return mSettledDownstream;
+  }
+  @Override
+  virtual Void setSettledDownstream(Bool settledown) { mSettledDownstream = settledown; }
+
+  @Override
+  virtual Void initCopy() {
+    super.initCopy();
+    mutateColor();
+  }
+
+  @Override
+  virtual Bool rootBehave(QHardCellState &hcs) {
+    DebugUtils du;
+    /// AM I ROOT?
+    if (mHops != 0u) return false;
+    /// I AM ROOT.
+
+    /// HAVE I BLOCKED OUT?
+    if (mRootWatchdog.countAlarm())
+      return die();
+
+    /// AM I BLOCKED BY UNSETTLED DOWNSTREAM?
+    //    if (!hcs.mAllDownSettled) {
+    if (!isSettledDownstream()) {
+      //      du.print("nongo");
+      //      du.print(hcs);
+      return block(); // we have to wait
+    }
+    /*
+    /// AM I BLOCKED BY UNALIGNED DOWNSTREAM?
+    for (Unsigned i = 0u; i < hcs.mNgbStates.lengthof; ++i) {
+      NgbState & ns2 = hcs.mNgbStates[i];
+      if (ns2.mFoundDown) { // Is somebody downstream there?
+        if (ns2.mState != 0u)  // not aligned with our upstream
+          return blockOrDie(10000u); // we have to wait
+      }
+    }
+    */
+
+    /// DOWNSTREAM IS ALIGNED WITH ME
+
+    Random random;
+    if (true /*random.oneIn(200)*/) {
+      EventWindow ew;
+      SN sn = pickDir(cDIFFUSE_ODDS);
+      if (ew.isAccessible(sn) && ew[sn] is Empty) {
+        mRootWatchdog.reset();
+        setSettledDownstream(false);
+        ew.swap(0u,sn);
+        return true; // CANNOT SAFELY CALL (eg) done() HERE!
+      }
+      changeDir();
+    }
+    return false;
+  }
+
+  Void behave() {
+    ByteStreamLogger bsl;
+    QHardCellState hcs;
+    if (!update(hcs)) return;
+
+    /*
+    bsl.printf("al %d una %d\n",
+               hcs.mAlignedCount,
+               hcs.mUnalignedCount);
+    */
+  }
+}
+
+/** HardCell3 v13: Demo spike, warts and all.
+ \author Dave Ackley
+ \copyright 2022 LCF
+ \license GPL-3
+ \symbol S
+ \version 13
+*/
+element S {
+  Void behave() {
+    EventWindow ew;
+    Random random;
+    HardCell hc;
+    hc.mHops = 0u; // You are root
+    for (Unsigned i = 0u; i < 3u; ++i) { // you have a random color
+      hc.mColor[i] = (HardCell.NChan)
+        random.between(HardCell.NChan.minof,
+                       HardCell.NChan.maxof);
+    }
+    hc.changeDir(); // and a random dir
+    ew[0] =  hc.atomof;
+  }
+}

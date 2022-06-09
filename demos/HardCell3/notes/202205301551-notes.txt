@@ -1,0 +1,396 @@
+{31}  -*-  mode: text; fill-column: 50;  -*-
+[0:
+
+Mon May 30 15:51:31 2022 OK, into another spike
+trying a self-stabilizing periodic grid. Falls
+toward distance 2 spacing (or distance 3
+possibly?) to nearest up-hop neighbor. Goal is we
+should be able to drive the whole thing around by
+oogying the root by single sites and letting the
+rest of the grid relax to it.
+[1:
+
+Mon May 30 16:19:13 2022 I'm currently tracking
+the nearest upstream and downstream members,
+manhattan distance, regardless of the specific
+difference in the hop count. That way we can see
+an even smaller hopcount on the diagonal, but we
+won't be thrown off by it.
+
+Not sure what we want to be doing if we're
+uninitted. I guess everybody will look upstream at
+that point and we'll find the nearest, which kind
+of seems okay.
+
+Now, what do we do when we find we're not properly
+aligned with our chosen upstream? How do we decide
+where we want to be? We check the dist2 ngbs of
+the upstream (the ones we can reach) and pick the
+one that's empty and nearest to us, and go there.
+
+:1]
+:0]
+[2:
+
+Tue May 31 08:03:21 2022 OK so we're still
+screwing around with what stats to collect and
+what to do when we're somehow unaligned. If we
+always opt for death when anything looks weird
+we're kind of back to 'vegetative motion' rather
+than 'locomotion'. So we do want to try to move
+ourselves to better align with upstream, instead
+of dying, at least sometimes.
+
+Right now we're bucketing all upstream guys, but
+maybe we should focus just on one-hop upstreams.
+
+:2]
+[3:
+
+Tue May 31 13:22:23 2022 OK, about time to move
+the flag, but, progress. Things to be thinking
+about next:
+
+ - We can't align to upstream until our downstream
+   aligns with us. That's how we get upstream
+   backpressure to slow down as needed.
+
+ - Having raggedy random shapes, rather than
+   necessarily self-stabilizing to maxhops, looks
+   kind of fun and interesting. They're what I've
+   been hand-drawing so far, for in-progress
+   demos. Could have a minHops instead, that will
+   be maintained endogenously, but which stuff
+   could grow beyond opportunistically.
+
+:3]
+[4:
+
+Wed Jun  1 01:00:30 2022 Flag moved. So I'm
+wondering if we have a problem with when
+downstream misalignment blocks us: If we're at
+hops==h, what if something at h+1 has already
+moved, based on seeing some other HC at h? Then
+the h+1 looks misaligned relative to us, but it
+shouldn't block us, because it's already aligned
+to where we'll be once we align.
+
+So how do we tell when downstream should block us?
+
+Say letters as hops:
+
+   .B A B    .B  AB   . B AB   B AB  . B AB
+
+    C B C     C B C    C B C  C  BC   C  BC
+
+      C         C        C      C        C
+
+
+ . B AB    . B A B    . B A B
+
+  C  B C    C  B C      C B C
+
+     C         C          C
+
+[5:
+
+Wed Jun  1 08:55:28 2022 OK so the upshot from
+last night is we're going to try focusing on the
+four von Neumann neighborhoods adjacent to us:
+
+          .
+         .2.
+        .104.
+       .2.3.2.
+      .104*104.
+       .3.2.3.
+        .104.
+         .3.
+          .
+
+and record state for each one:
+
+ - 0..4 next up alignment, 5 if none, 6 if multiple ups
+ - 0..4 next down alignment, 5 if none, 6 if multiple downs
+
+[6:
+
+Wed Jun  1 09:04:03 2022 Which seems to suggest we
+could do stride 3 if we wanted:
+
+          2
+         104
+        ..3..
+       2.....2
+      104.*.104
+       3.....3
+        ..2..
+         104
+          3
+
+which is interesting, at least because it (reduces
+density and thus) increases the space multiplier
+significantly.
+[7:
+
+Wed Jun  1 10:21:24 2022 OK, saved to
+HardCell.ulam-hold and trying stride 3. Let's redo
+doStats..
+[8:
+
+Thu Jun  2 01:15:49 2022 Gah lost a lot of time with
+screwed-up meeting times and what not. Now trying
+again..
+
+:8]
+:7]
+:6]
+
+:5]
+
+:4]
+[9:
+
+Thu Jun  2 01:17:03 2022 So, repeat:
+
+          2
+         104
+        ..3..
+       2.....2
+      104.*.104
+       3.....3
+        ..2..
+         104
+          3
+
+quark NgbState {
+  typedef Unsigned(3) State; // 0..4 -> alignment, 5 -> empty, 6 -> conflicted
+  Bool mIsUp; // direction if mState <= 4;
+  Unsigned XXX CONTINUE HERE
+  State mState;
+  
+}
+
+
+:9]
+[10:
+
+Thu Jun  2 03:33:37 2022 OK, have a first cut at
+'transient NgbState'. Need to declare some and
+call it..
+[11:
+
+Thu Jun  2 05:03:52 2022 wut I'm getting g++
+compiler errors?[12:
+
+Thu Jun  2 05:39:45 2022 Sent ishtar..
+
+:12]
+
+:11]
+
+:10]
+[13:
+
+Thu Jun  2 05:39:58 2022 OK, so I tested
+NgbState.doStats(..) in one case and it now looks
+vaguely plausible. [14:
+
+Thu Jun  2 05:53:58 2022 Actually had several bugs
+:) but now is looking vaguely plausible.
+
+:14]
+
+:13]
+[15:
+
+Thu Jun  2 10:16:54 2022 OK let's think about some
+cases.
+
+ - Unaligned downstream:
+   = Wait for them to align with us[17: Fri Jun  3
+   02:04:33 2022 Apparently done  :17]
+
+ - Unaligned upstream:
+   = If no unaligned downstream, try to align
+     - Or do we have to check for 'no differently
+       unaligned downstream'?[18: Now doing 'block
+       if downstream unaligned with us and with
+       upstream, but not confident in it   :18]
+
+ - Empty ngb
+   = Think about spawning[19: Up now..  :19]
+
+ - Root with no unaligned downstream
+   = Think about moving
+
+:15]
+[16:
+
+Thu Jun  2 10:25:31 2022 So, do we have/want to
+think about 'no differently unaligned downstream'?
+On the one hand, the claim is: No we don't,
+because we're going to do consensus anyway -- The
+downstream can't have aligned with some other
+upstream. Buut we didn't check for that, did we?
+Need something like:
+
+ - Unaligned upstream:
+   = If conflicting upstream misalignments, die shot?
+   = Now we have just one 'unalignment direction'
+     (though perhaps from multiple upstreams)
+   = If no unaligned downstream, try to align
+     - Or do we have to check for 'no differently
+       unaligned downstream'?
+
+:16]
+[20:
+
+Fri Jun  3 11:09:52 2022 OK, so current status:
+
+ - Root can move in four directions, but it has to
+   move slowly, because making a second move
+   before the first has settled can (still) lead
+   to (essentially) deadlock
+
+ - Not sure if that's because of a bug or a
+   thinko. Smart money thinks 'both'.
+
+ - Inside track on thinko is the diagonal corners:
+   When upstream sees downstream as all aligned,
+   that doesn't mean downstream's downstream is
+   all aligned, so it's possible that diagonal
+   corners end up within a Moore ngb and that
+   seems to deadlock.
+
+ - We also have issues with 'incorrect spawning'
+   in the middle of a grid -- like once we had a
+   double-move as above, causing stacked pairs
+   (two HC within a von N ngb) which are never
+   supposed to happen according to the intended
+   path.
+
+ - Right now we have background evaporation of
+   certain deadlocked cases (like stacked pairs),
+   but that's slow and (since it's random) not
+   certain to solve the problem without creating
+   others.
+
+The overall picture, just staring at it, is that
+we don't have a clear and unique chain of
+command from the root -- perhaps/seemingly because
+of the 2D nature of the layout vs the 1D nature of
+the hopcount.
+
+We've been wondering whether a concept of 'settled
+downstream' -- sort of like a Markov blanket (in
+the non-BS sense) -- could provide enough spatial
+buffering to avoid these problems. It would be
+that each HC has a 'mSettledDownstream' bit, which
+would be true only if:
+
+ - No uninitted HC are visible, and
+
+ - All HC downstream are aligned
+
+and false otherwise.
+
+But in particular we are not including
+
+ - All HC downstream are settled
+
+as a condition, so mSettledDownstream is not
+recursive and only goes one level.
+
+[21:
+
+Fri Jun  3 12:52:01 2022 One could imagine a
+mSettledUpstream bit, as well, that might gate
+actions like spawning (?).
+[22:
+
+Fri Jun  3 14:33:31 2022 Well let's spike a
+recursive mSettledDownstream, just to see if we
+can get this going here.
+
+Idea:
+
+ - Clone to HardCell1011
+
+ - Keep hacking here, see if we like anything
+
+:22]
+:21]
+
+:20]
+[23:
+
+Sat Jun  4 00:53:57 2022 OK, HardCell1011 split
+off.
+
+Now hack.
+
+:23]
+[24:
+
+Sat Jun  4 00:57:25 2022 OK, added QHardCell API
+methods and HardCell.mSettledDownstream. Now,
+where does it get used?
+[25:
+
+Sat Jun  4 00:58:49 2022 Can we make an
+NgbState.mSettled? Does that help? Conditions: 
+
+:25]
+:24]
+[26:
+
+Sat Jun  4 01:41:07 2022 OK, now have
+NgbState.mSettledDown being set up during
+ngbStats(..). Untested. Need a caller.
+
+:26]
+[27:
+
+Sat Jun  4 03:11:58 2022 OK so it's kind of
+running -- and it's doing better than it was --
+but there's still issues. It's still possible for
+our downstream to move before we do, with the
+result that our downstream looks unsettled to us,
+but that's our misperception because we haven't
+aligned upwards but it has.
+
+Right now, that deadlocks until a blockOrDie hits
+die, and the (eventual) respawning (often, at
+least) gets things going again.[28:
+
+Sat Jun  4 03:54:29 2022 Well, I'm going to let
+this simulation run awhile, see how the quadratic
+time animation looks.
+
+When hardcells run into each other, we can get
+very long deadlocks, at least. And right now,
+there's no pressure for HCs to move apart.
+
+:28]
+
+:27]
+[29:
+
+Thu Jun  9 12:26:32 2022 OK, so trying to clean up
+the 'standard demo build process' a bit so we can
+move directories between mfmt2 and mfms builds
+without having to edit (much of) anything.
+
+Have added ../Make-dispatch.sh to check uname info
+and decide what to do; have added separate
+Makefile-t2.mk's and Makefile-mfms.mk's to code/
+
+Sort of seems to be working.[30:
+
+Thu Jun  9 12:53:06 2022 OK, trying to commit this
+to T2Demos..
+
+:30]
+
+:29]
