@@ -7,7 +7,7 @@
 
 all:	code
 
-TARGETS:=code run ishtar clean cdmd
+TARGETS:=code run ishtar clean cdmd install
 
 help:	FORCE
 	@echo "Make targets are: $(TARGETS)"
