@@ -10,9 +10,6 @@ quark QHardCell {
   virtual Unsigned getUpHops() ;          // Distance to root
   virtual Void setUpHops(Unsigned uphops) ;
 
-  //XXX  virtual Unsigned getMinDownHops() ;     // Distance to nearest tail
-  //XXX  virtual Void setMinDownHops(Unsigned downhops) ;
-  
   virtual Unsigned getMaxHopsGoal() ;     // Intended max hops (here)
   
   virtual Unsigned getSettledDownHops() ; // Down hops all aligned with me 
@@ -29,11 +26,6 @@ quark QHardCell {
 
   virtual ContactWarnings getContactWarnings() ;
   virtual Void setContactWarnings(ContactWarnings cw) ;
-
-  /* XXX
-  virtual Void observeStreamDirection(SN dir, Bool isup) ;
-  virtual Bool isPlausibleUpStreamDirection(SN dir) ;
-  */
 
   //// QHardCell SERVICES
   Bool blockOrDie(Unsigned dieOdds) {

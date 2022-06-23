@@ -13,7 +13,6 @@ element HardCell : QHardCell {
   constant Unsigned cDIFFUSE_ODDS = 1u;
 
   HopCount mUpHops = cMAX_HOPS;
-  //XXX  HopCount mMinDownHops = 0u;
 
   HopCount mSettledDownHops = 0u;
 
@@ -46,27 +45,6 @@ element HardCell : QHardCell {
   virtual Void setContactWarnings(ContactWarnings cw) {
     mContactWarnings = cw;
   }
-
-  /*XXX
-  typedef Unsigned(2) UpCount;
-  UpCount mUpCounts[4];
-  @Override
-  virtual Void observeStreamDirection(SN dir, Bool isup) {
-    if (dir >= 4u) { Fail f; f.fail(); }
-    if (isup) ++mUpCounts[dir];
-    else --mUpCounts[dir];
-  }
-  
-  @Override
-  virtual Bool isPlausibleUpStreamDirection(SN dir) {
-    if (dir >= 4u) { Fail f; f.fail(); }
-    Unsigned tot = 0u;
-    for (Unsigned i = 0u; i < 4u; ++i) tot += mUpCounts[dir];
-
-    if (tot > 2u && mUpCounts[dir] < 2u) return false;
-    return true; // Be liberal about saying yes
-  }
-  */
 
   SN updatePick(SN curpick, SN newdir, Unsigned & totwgt, Int newwgt) {
     Random random;
@@ -109,11 +87,6 @@ element HardCell : QHardCell {
   typedef Unsigned(2) MoveDir; // 0..3 => SN 1..4
   MoveDir mMoveDir;
 
-  /* XXX
-  typedef Unsigned(5) StepsRemaining;
-  StepsRemaining mStepsRemaining;
-  */
-
   //// UrSelf API
   @Override
   virtual ARGB getColor(Unsigned selector) {
@@ -144,13 +117,6 @@ element HardCell : QHardCell {
   virtual Unsigned getUpHops() { return mUpHops; }
   @Override
   virtual Void setUpHops(Unsigned uphops) { mUpHops = (HopCount) uphops; }
-
-  /*XXX
-  @Override
-  virtual Unsigned getMinDownHops() { return mMinDownHops; }
-  @Override
-  virtual Void setMinDownHops(Unsigned mindownhops) { mMinDownHops = (HopCount) mindownhops; }
-  */
 
   @Override
   virtual Unsigned getSettledDownHops() { return mSettledDownHops; }
