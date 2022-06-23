@@ -1,4 +1,4 @@
-{17}  -*-  mode: text; fill-column: 50;  -*-
+{19}  -*-  mode: text; fill-column: 50;  -*-
 [0:
 
 Wed Jun 22 00:56:16 2022 OK, starting a new notes
@@ -177,7 +177,17 @@ refreshing. Now we're at:
 Thu Jun 23 02:08:23 2022 Let's push this as is to
 capture the lay of the land, then clean out the
 XXX after.
+[17:
 
+Thu Jun 23 03:01:19 2022 OK, pushed. Now clean
+  up.[18:
+
+Thu Jun 23 03:02:46 2022 OK, cut XXXs. Pushing
+again. 
+
+:18]
+
+:17]
 :16]
 
 :13]
