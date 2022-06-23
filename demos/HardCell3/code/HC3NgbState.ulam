@@ -1,0 +1,137 @@
+/** Summarization of the state of an HC3 neighbor. Focus is on
+ * providing useful information for the default case, plus access to
+ * the underlying grid atom, when present, so caller can do whatever
+ * more exotic analysis.
+ */
+transient HC3NgbState {
+  typedef EventWindow.SiteNum SN;
+  EventWindow ew;
+  Random random;
+  
+  typedef Unsigned(4) State; // 0..4 -> align, 5 -> empty, 6 -> conflicted, 14 -> init
+  constant State cNGB_CENTER = 0u; // Found us in SN0/ctr only
+  constant State cNGB_WEST   = 1u; // Found us in SN1/west only
+  constant State cNGB_NORTH  = 2u; // Found us in SN2/north only
+  constant State cNGB_SOUTH  = 3u; // Found us in SN3/south only
+  constant State cNGB_EAST   = 4u; // Found us in SN4/east only
+  constant State cNGB_EMPTY  = 5u; // All SN0..4 were empty
+  constant State cNGB_MULTI  = 6u; // Found more than one us in SN0..4
+  constant State cNGB_BLOCK  = 7u; // Found none of us but something nonempty
+
+  constant State cNGB_INIT   = State.maxof; // Found nothing so far
+
+  State mState = cNGB_INIT;
+  Unsigned mHops = Unsigned.maxof; // If mState <= 4
+  C2D mNgbCtr;
+  C2D mFoundAt;
+
+  /// ACCESSORY STATE
+  Bool mFoundInaccessible;       // center doesn't exist
+  Bool mFoundBlockage;           // center blocked but qhc in the ngb
+  Bool mFoundUninit;
+  Bool mFoundUpstream;
+  Bool mFoundDownstream;
+
+  Bool foundInaccessible() { return mFoundInaccessible; }
+  Bool foundBlockage() { return mFoundBlockage; }
+  Bool foundUninitialized() { return mFoundUninit; }
+  Bool foundAnyUpstream() { return mFoundUpstream; }
+  Bool foundAnyDownstream() { return mFoundDownstream; }
+
+  Bool hasValidNeighbor() { return validNeighbor(mState); }
+  Bool validNeighbor(SN sn) { return sn <= cNGB_EAST; }
+  Bool isEmpty() { return mState == cNGB_EMPTY; }
+
+  State ngbState() { return mState; }
+
+  Void assertValidNeighbor(SN sn) {
+    if (!validNeighbor(sn)) {
+      Fail f;
+      f.fail("Invalid neighbor");
+    }
+  }
+
+  Void assertHasNeighbor() { assertValidNeighbor(mState); }
+
+  C2D getNgbCoordFor(SN sn) {
+    assertValidNeighbor(sn);
+    C2D off = ew.getCoord(sn);
+    C2D at = mNgbCtr + off;
+    return at;
+  }
+
+  C2D getNgbCoord() { // Get absolute ew coord of grid ngb or fail
+    return getNgbCoordFor((SN) mState);
+  }
+
+  SN getNgbOffset() { // Get relative SN of grid ngb or fail
+    assertHasNeighbor();
+    return (SN) mState;
+  }
+
+  Unsigned getUpHops() {
+    assertHasNeighbor();
+    return mHops;
+  }
+
+  QHardCell & getNgb() { // Get ref to grid ngb or fail
+    C2D at = getNgbCoord();
+    Atom & a = ew[at];
+    QHardCell & ret = (QHardCell&) a;
+    return ret;
+  }
+
+  Void init(C2D ngbctr, QHardCell & me) {
+    //    self = Self.instanceof; // Nuke from orbit
+    
+    mNgbCtr = ngbctr; // This instance customization
+    
+    DebugUtils du;
+    Unsigned myhops = me.getUpHops();
+    Unsigned maxhops = me.getMaxHopsGoal();
+
+    for (SN sn = 0u; sn <= 4u; ++sn) { // Scan full vonN
+      C2D at = getNgbCoordFor(sn);
+
+      if (sn == 0u) { // Only assess center for foundinaccessible
+        if (!ew.isAccessible(at)) {
+          mFoundInaccessible = true;
+          continue;
+        }
+
+        // any 'non-self' means 'blockage'
+        Atom & a = ew[at];
+        if (!(a is QHardCell || a is Empty)) {
+          mFoundBlockage = true;
+          continue;
+        }
+      }
+
+      //du.print(at);
+      Atom & a = ew[at];
+      //      du.print(a);
+
+      if (a as QHardCell) {
+        //du.print("gots1");
+        if (!me.inMyGroup(a)) continue;
+
+        Unsigned ahops = a.getUpHops();
+        if (ahops >= maxhops)       mFoundUninit = true;
+        else if (ahops < myhops)    mFoundUpstream = true;
+        else if (ahops > myhops)    mFoundDownstream = true;
+
+        //du.print("gots2");
+        // Found a ngb! Stash alignment
+
+        if (mState <= cNGB_EAST) mState = cNGB_MULTI; // Already had one
+        else if (mState != cNGB_MULTI) { // Record alignment
+          mState = (State) sn;
+          mFoundAt = at;
+          mHops = ahops;
+        }
+      }
+    }
+    if (mState == cNGB_INIT)    // Found none
+      mState = cNGB_EMPTY;      // Record empty
+  }
+}

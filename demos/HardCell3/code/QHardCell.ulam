@@ -1,0 +1,288 @@
+use HC3NgbState;
+
+quark QHardCell {
+
+  //// QHardCell API
+  typedef EventWindow.SiteNum SN;
+
+  virtual Bool inMyGroup(QHardCell & qh) { return true; }
+
+  virtual Unsigned getUpHops() ;          // Distance to root
+  virtual Void setUpHops(Unsigned uphops) ;
+
+  //XXX  virtual Unsigned getMinDownHops() ;     // Distance to nearest tail
+  //XXX  virtual Void setMinDownHops(Unsigned downhops) ;
+  
+  virtual Unsigned getMaxHopsGoal() ;     // Intended max hops (here)
+  
+  virtual Unsigned getSettledDownHops() ; // Down hops all aligned with me 
+  virtual Void setSettledDownHops(Unsigned settledown) ;
+
+  virtual Bool rootBehave(HC3State &hcs) { return false; } 
+  virtual Void initCopy() { setUpHops(Unsigned.maxof); /* set uninitted */ }
+
+  typedef Unary(2) ContactWarning;
+  constant ContactWarning cCW_OPEN = 0u; //< Nothing visible in direction
+  constant ContactWarning cCW_EDGE = 1u; //< Inaccessible ngb beyond maxhops
+  constant ContactWarning cCW_DAMG = 2u; //< Inaccessible ngb below maxhops
+  typedef ContactWarning ContactWarnings[4];
+
+  virtual ContactWarnings getContactWarnings() ;
+  virtual Void setContactWarnings(ContactWarnings cw) ;
+
+  /* XXX
+  virtual Void observeStreamDirection(SN dir, Bool isup) ;
+  virtual Bool isPlausibleUpStreamDirection(SN dir) ;
+  */
+
+  //// QHardCell SERVICES
+  Bool blockOrDie(Unsigned dieOdds) {
+    Random random;
+    //XXX JUST BLOCK FOR NOW    if (random.oneIn(dieOdds)) return die();
+    return block();
+  }
+  Bool block() { return true; } // Nothing happened but we need to wait
+  Bool done() { return true; }  // Things are different now 
+  Bool die() {
+    EventWindow ew;
+    ew[0] = Empty.instanceof; 
+    return true;
+  }
+  
+  constant C2D mNgbOffs[4] = {
+    { .x = -3, .y = 0 },
+    { .x =  0, .y = -3 },
+    { .x =  0, .y = 3 },
+    { .x =  3, .y = 0 },
+  };
+
+  constant Unsigned cMIN_DOWN_SETTLED = 5u; // Say we must be this settled to ride
+
+  // \returns true if blocked or things changed, false if bored
+  Bool update() {
+    DebugUtils du;
+    EventWindow ew;
+    C2D origin;
+
+    HC3State hcs;
+    hcs.init(self);
+
+    //// NEIGHBORS INITS AND MIN UPHOP 
+    Bool uninits = false;
+    Unsigned minUpHops = Unsigned.maxof;
+    for (Unsigned i = 0u; i < hcs.mHC3NgbStates.lengthof; ++i) {
+      HC3NgbState & n = hcs.mHC3NgbStates[i];
+      n.init(mNgbOffs[i], self);
+
+      if (n.hasValidNeighbor()) {
+        if (n.foundUninitialized()) uninits = true;
+        else if (n.getUpHops() < minUpHops) minUpHops = n.getUpHops();
+      }
+    }
+    /// I KNOW MINUPHOPS AND UNINITS.
+    
+    //// AM I UNINITTED?
+    if (hcs.myuphops > hcs.maxhop) {
+      // YES
+      /// ARE THERE ANY NGBS TO LOOK TO?
+      if (minUpHops >= hcs.maxhop) return die(); // NO
+      setUpHops(minUpHops + 1u);
+      return block();
+    }
+    //// I AM INITTED
+
+    //// DO I HAVE UNINITTED NGBS?
+    if (uninits)
+      return block();
+    //// I HAVE NO UNINITTED NGBS.
+
+    //// AM I ROOT?
+    if (hcs.myuphops != 0u) {
+      // I'M NOT ROOT.
+
+      // DIE IF NO NGBS.
+      if (minUpHops == minUpHops.maxof) return die();
+
+      //// DO I NEED TO UPDATE UPHOPS?
+      if (hcs.myuphops != minUpHops + 1u) {
+        // I DO.
+        setUpHops(minUpHops + 1u);
+        return block();
+      }
+
+      // LIKELY DIE IF NO ROOM FOR ME.
+      if (minUpHops >= hcs.maxhop) return blockOrDie(2u);
+      // THERE IS ROOM FOR ME.
+
+    }
+    //// MY UPHOPS WAS CONSISTENT WITH NGBS
+    // (I MAY OR MAY NOT BE ROOT.)
+
+    //// REFRESH MY SETTLEDDOWNHOPS?
+    Unsigned mysettleddowns = 0u;
+    Unsigned mytotaldowns = 0u;
+    for (Unsigned i = 0u; i < hcs.mHC3NgbStates.lengthof; ++i) {
+      HC3NgbState & n = hcs.mHC3NgbStates[i];
+      if (n.foundAnyDownstream()) {
+        ++mytotaldowns;
+
+        if (!n.hasValidNeighbor()) {
+          du.print("INVALID SETTLEDDOWNHOPS");
+          du.print(n);
+          du.print(self);
+          n.assertHasNeighbor(); // boom
+        }
+        HC3NgbState.State ngbstate = n.ngbState();
+        if (ngbstate != HC3NgbState.cNGB_CENTER) { // Downstream not settled on us
+          mysettleddowns = 0u;
+          break;
+        }
+        QHardCell & ngb = n.getNgb();
+        Unsigned downsbythis = ngb.getSettledDownHops() + 1u;
+        if (mysettleddowns == 0u || mysettleddowns > downsbythis)
+          mysettleddowns = downsbythis;
+      }
+    }
+    // mysed == 0 : we have an unaligned down or no downs at all
+    // otherwise : all downs aligned at least this far to us
+    self.setSettledDownHops(mysettleddowns);
+    //// MY SETTLEDDOWNHOPS IS CURRENT
+
+    /// UPDATE MY CONTACTWARNINGS IF NEEDED
+    ContactWarnings cw;
+    if (mytotaldowns == 0u) {
+      /// ..BASED ON OBSERVATIONS, BECAUSE I AM A LEAF (NO DOWNSTREAM?)
+      for (Unsigned i = 0u; i < hcs.mHC3NgbStates.lengthof; ++i) {
+        HC3NgbState & n = hcs.mHC3NgbStates[i];
+        if (n.foundInaccessible() || n.foundBlockage()) {
+          cw[i] = (hcs.myuphops < hcs.maxhop - 1u) ? cCW_DAMG : cCW_EDGE;
+        }
+      }
+    } else {
+      /// ..OR BY MAXING DOWNSTREAM, BECAUSE I AM NOT A LEAF
+      Bool warningchange = false;
+      for (Unsigned i = 0u; i < hcs.mHC3NgbStates.lengthof; ++i) {
+        HC3NgbState & n = hcs.mHC3NgbStates[i];
+        if (n.foundAnyDownstream()) {
+          QHardCell & hc = n.getNgb();
+          ContactWarnings dcw = hc.getContactWarnings();
+          for (Unsigned j = 0u; j < dcw.lengthof; ++j) 
+            if (dcw[j] > cw[j]) cw[j] = dcw[j];
+        }
+      }
+    }
+    ContactWarnings cur = getContactWarnings();
+    for (Unsigned i = 0u; i < cur.lengthof; ++i) {
+      if (cur[i] != cw[i]) {
+        setContactWarnings(cw); // UPDATE WARNINGS
+        return block();         // AND QUIT (HELP WARNINGS SPEED AHEAD)
+      }
+    }
+    //// MY CONTACTWARNINGS ARE UNCHANGED
+
+    //// AM I TAIL?
+    if (hcs.myuphops < hcs.maxhop - 1u) {
+      // I'M NOT TAIL
+      
+      //// DO I NEED TO SPAWN?
+      Bool spawns = false;
+      for (Unsigned i = 0u; i < hcs.mHC3NgbStates.lengthof; ++i) {
+        HC3NgbState & n = hcs.mHC3NgbStates[i];
+        if (n.isEmpty() &&   // Whole ngb empty
+            ew.isAccessible(n.mNgbCtr)) { // ctr is accessible
+          setSettledDownHops(0u);  // After I spawn, downstream will be unsettled
+          Atom a = self.atomof; // Full copy
+          Self & copy = (Self&) a;
+          copy.initCopy();
+          ew[n.mNgbCtr] = a;
+          spawns = true;
+        }
+      }
+
+      if (spawns) return true; // I SPAWNED.
+    }
+    //// I DID NOT NEED TO SPAWN.
+    // (I MAY OR MAY NOT BE TAIL)
+
+    /////// CONSIDERATIONS FOR MOVING (ROOT OR NON-ROOT)
+
+    //// DO I HAVE ENOUGH DOWN ALIGNMENT TO MOVE NOW?
+    if (mytotaldowns > 0u &&                  // If I have any downs at all (not tail)
+        mysettleddowns < cMIN_DOWN_SETTLED &&  // No good if not there yet and
+        hcs.myuphops + mysettleddowns < hcs.maxhop - 2u) { // not near the tail
+      
+      ByteStreamLogger bsl;
+      /*      bsl.printf("msd %d, mtd %d, myu %d, mxh %d\n",
+                 mysettleddowns,
+                 mytotaldowns,
+                 hcs.myuphops,
+                 hcs.maxhop);*/
+      return blockOrDie(2000u); // NOT SETTLED DOWN ENOUGH TO MOVE
+    }
+    //// I HAVE AT LEAST cMIN_DOWN_SETTLED DOWN ALIGNMENT OR TO TAIL
+
+    //// AM I ROOT?
+    if (hcs.myuphops == 0u)
+      return rootBehave(hcs); // YES, HANDLE ME
+    //// I AM NOT ROOT.
+
+    //// DO MY UPS HAVE A CONSENSUS ALIGNMENT?
+    HC3NgbState.State upstate = HC3NgbState.cNGB_INIT;
+    for (Unsigned i = 0u; i < hcs.mHC3NgbStates.lengthof; ++i) {
+      HC3NgbState & n = hcs.mHC3NgbStates[i];
+      if (n.foundAnyUpstream()) {
+        if (!n.hasValidNeighbor()) {
+          du.print("INVALID FOUND UPS");
+          du.print(n);
+          du.print(self);
+          n.assertHasNeighbor(); // boom
+        }
+        HC3NgbState.State ngbstate = n.ngbState();
+        if (upstate == HC3NgbState.cNGB_INIT) upstate = ngbstate;
+        else if (upstate != ngbstate)
+          return blockOrDie(2000u); // MY UPS ARE NOT ALL ALIGNED WITH EACH OTHER
+      }
+    }
+    //// MY UPS ARE ALL ALIGNED upstate.
+
+    //// AM I UNALIGNED WITH upstate?
+    if (upstate == 0u) return false; // I (AM NOT ROOT AND I) ALIGN WITH UPSTATE NOTHING TO DO HERE
+    //// I AM NOT ALIGNED WITH upstate.
+
+    /*
+    //// COULD MY DOWNS ALL TOLERATE ME MOVING upstate ?
+    for (Unsigned i = 0u; i < mHC3NgbStates.lengthof; ++i) {
+      HC3NgbState & n = mHC3NgbStates[i];
+      if (n.foundAnyDownstream()) {
+        n.assertHasNeighbor(); // WE HAVE A PROPER GRID NGB SOMEWHERE IN HERE
+
+        HC3NgbState.State ngbstate = n.ngbState();
+        if (ngbstate != 0u && ngbstate != upstate) // NEED TO WAIT FOR DOWNSTREAM
+          return blockOrDie(2000u);
+      }
+    }
+    //// MY DOWNS COULD ALL TOLERATE ME MOVING upstate.
+    */
+
+    /// AM I BLOCKED FROM MOVING upstate?
+    if (/*!ew.isAccessible(upstate) ||*/
+        !ew.isEmpty(upstate))
+      return blockOrDie(2000u); // I AM BLOCKED.
+
+    /// I AM NOT BLOCKED: upstate IS EMPTY (OR INACCESSIBLE)
+
+    //// I AM GOING TO FOGGEN MOVE. I WILL NOT REMAIN SETTLED.
+    for (Unsigned i = 0u; i < hcs.mHC3NgbStates.lengthof; ++i) {
+      HC3NgbState & n = hcs.mHC3NgbStates[i];
+      if (n.hasValidNeighbor()) {
+        Self & qc = n.getNgb();
+        qc.setSettledDownHops(0u); // NUKE all down hops (including US)
+      }
+    }
+    ew.swap(0u,upstate);
+    //// I MOVED.
+    
+    return true; // CANNOT SAFELY CALL (eg) done() HERE!
+  }
+
+}

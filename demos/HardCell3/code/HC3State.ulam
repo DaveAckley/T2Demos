@@ -1,0 +1,17 @@
+/** Summarization of the state of an HC3 .
+ */
+transient HC3State {
+  typedef EventWindow.SiteNum SN;
+  EventWindow ew;
+  Random random;
+
+  Unsigned myuphops;
+  Unsigned maxhop;
+  HC3NgbState mHC3NgbStates[4];
+
+  Void init(QHardCell & q) {
+    myuphops = q.getUpHops();
+    maxhop = q.getMaxHopsGoal();
+  }
+}
+
