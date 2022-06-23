@@ -1,0 +1,195 @@
+{17}  -*-  mode: text; fill-column: 50;  -*-
+[0:
+
+Wed Jun 22 00:56:16 2022 OK, starting a new notes
+file, since 202205301551-notes.txt got really
+messed up in the linearity dept. (I really like
+the new 'add at the front' style for fresh parts,
+but not clear it works for standard dev notes.)
+
+:0]
+[1:
+
+Wed Jun 22 00:57:37 2022 So, we're just past t2sup
+#3123, and I don't want to lose state on where we
+are with HC3.
+
+So let's build again, here, play a little bit, and
+try to get a possible to-do for another cleanup,
+commit, and plan for next steps.
+[2:
+
+Wed Jun 22 02:15:52 2022
+
+TODO
+[14: Thu Jun 23 02:08:10 2022
+DONE :14] - HC3 survey battle damage
+[15:   :15] - Simplify / remediate briefly
+ - push
+ - Pocket brainstorming
+ - Initialize quark Code(Unary(5) cTYPE_BITS)
+    virtual step() {
+
+map from state bits to ulam class
+[4:
+
+Wed Jun 22 04:34:35 2022 STATE BIT CANDIDATES
+
+DATA{UD}{NSEWR} - 10 types
+{{DATA,MOVD,MOVU}{U,D}{N,S,E,W,R},LIVE}
+     2b           1b   3b          1b == 7b?
+
+[5:
+
+Wed Jun 22 04:48:22 2022
+
+event window assembler: single atom,
+
+8 bit code, 8 codes, ->      64 bits
+3 bit instruction pointer -> 67 bits
+2 bit acc pointer ->         68 bits
+
+constant pool, allows refering to selected
+ constants
+ type instanceofs
+ members within types
+ methods within types
+ ops
+
+push pop dup swap arithop compop
+
+declarations:
+ engine tries to make them true
+ blocks or aborts if it can't
+
+[6:
+
+Wed Jun 22 05:02:44 2022
+
+event window assembler seems very low level
+
+let's first prefer whole atom semantics, and you
+copy and modify and remode and deploy them
+
+try to be straight relative to your upstream.
+if you're not straight with your upstream,
+and you see an empty that is, you can move
+to that empty upstream and leave behind a
+downstream space where you were. (Unless you
+already have a downstream space downstream of you?
+want to bound the land grab somehow, probably.)
+
+
+:6]
+
+:5]
+
+TEMP{UD
+
+
+:4]
+transient Dictionary { }
+[3:
+Wed Jun 22 03:55:00 2022
+
+transient PhysicsModel { }
+
+:3]
+:2]
+:1]
+[7:
+
+Thu Jun 23 01:23:46 2022 HC3 survey. OK, let's
+start with this:
+
+  /*__________________________________________________
+  | COMPONENTS of HardCell <12> (63 bits/8 unused): 
+  | 
+  | Pos	| Bits	| Name	| Type <classid>
+  | 0	| 3	| mRootWatchdog	| XTimer(3,7u,500u) <13>
+  | 3	| 5	| mUpHops	| Unsigned(5)
+  | 8	| 5	| mMinDownHops	| Unsigned(5)
+  | 13	| 5	| mSettledDownHops	| Unsigned(5)
+  | 18	| 12	| mColor[3]	| Unsigned(4)
+  | 30	| 10	| mDirs[2]	| Int(5)
+  | 40	| 8	| mContactWarnings[4]	| Unary(2)
+  | 48	| 8	| mUpCounts[4]	| Unsigned(2)
+  | 56	| 2	| mMoveDir	| Unsigned(2)
+  | 58	| 5	| mStepsRemaining	| Unsigned(5)
+  | 63	| 0	| super	| QHardCell <9>
+  | 63	| 0	| base	| UrSelf <0>
+  |___________________________________________________
+  */ //gcnl:NodeBlockClass.cpp:2644
+
+Is mMinDownHops doing anything?[8:
+
+Thu Jun 23 01:54:22 2022 Appears not. Commented
+all refs out and things still seem to run.
+
+mSettledDownHops is used for sure, though,
+  right?[9:
+
+Thu Jun 23 01:55:59 2022 Yes for sure.
+
+mUpCounts?
+[10:
+
+Thu Jun 23 01:56:46 2022 It's associated with
+
+  virtual Void observeStreamDirection(SN dir, Bool isup) {
+
+and
+
+  virtual Bool isPlausibleUpStreamDirection(SN dir) {
+
+which also both appear to be used nowhere. Can we
+kill that stuff too?[11:
+
+Thu Jun 23 01:59:41 2022 Appears so.
+
+mStepsRemaining?
+
+[12:
+
+Thu Jun 23 02:00:15 2022 No refs; killing.[13:
+
+Thu Jun 23 02:01:29 2022 OK well that was
+refreshing. Now we're at:
+
+  /*__________________________________________________
+  | COMPONENTS of HardCell <12> (45 bits/26 unused): 
+  | 
+  | Pos	| Bits	| Name	| Type <classid>
+  | 0	| 3	| mRootWatchdog	| XTimer(3,7u,500u) <13>
+  | 3	| 5	| mUpHops	| Unsigned(5)
+  | 8	| 5	| mSettledDownHops	| Unsigned(5)
+  | 13	| 12	| mColor[3]	| Unsigned(4)
+  | 25	| 10	| mDirs[2]	| Int(5)
+  | 35	| 8	| mContactWarnings[4]	| Unary(2)
+  | 43	| 2	| mMoveDir	| Unsigned(2)
+  | 45	| 0	| super	| QHardCell <9>
+  | 45	| 0	| base	| UrSelf <0>
+  |___________________________________________________
+
+
+[16:
+
+Thu Jun 23 02:08:23 2022 Let's push this as is to
+capture the lay of the land, then clean out the
+XXX after.
+
+:16]
+
+:13]
+
+:12]
+
+:11]
+
+:10]
+
+:9]
+
+:8]
+
+:7]
