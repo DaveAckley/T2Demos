@@ -1,4 +1,4 @@
-{19}  -*-  mode: text; fill-column: 50;  -*-
+{149}  -*-  mode: text; fill-column: 50;  -*-
 [0:
 
 Wed Jun 22 00:56:16 2022 OK, starting a new notes
@@ -25,8 +25,10 @@ TODO
 [14: Thu Jun 23 02:08:10 2022
 DONE :14] - HC3 survey battle damage
 [15:   :15] - Simplify / remediate briefly
- - push
- - Pocket brainstorming
+[37: Fri Jun 24 10:01:31 2022
+DONE :37] - push
+[38:
+DONE :38] - Pocket brainstorming
  - Initialize quark Code(Unary(5) cTYPE_BITS)
     virtual step() {
 
@@ -103,8 +105,8 @@ Thu Jun 23 01:23:46 2022 HC3 survey. OK, let's
 start with this:
 
   /*__________________________________________________
-  | COMPONENTS of HardCell <12> (63 bits/8 unused): 
-  | 
+  | COMPONENTS of HardCell <12> (63 bits/8 unused):
+  |
   | Pos	| Bits	| Name	| Type <classid>
   | 0	| 3	| mRootWatchdog	| XTimer(3,7u,500u) <13>
   | 3	| 5	| mUpHops	| Unsigned(5)
@@ -157,8 +159,8 @@ Thu Jun 23 02:01:29 2022 OK well that was
 refreshing. Now we're at:
 
   /*__________________________________________________
-  | COMPONENTS of HardCell <12> (45 bits/26 unused): 
-  | 
+  | COMPONENTS of HardCell <12> (45 bits/26 unused):
+  |
   | Pos	| Bits	| Name	| Type <classid>
   | 0	| 3	| mRootWatchdog	| XTimer(3,7u,500u) <13>
   | 3	| 5	| mUpHops	| Unsigned(5)
@@ -183,7 +185,7 @@ Thu Jun 23 03:01:19 2022 OK, pushed. Now clean
   up.[18:
 
 Thu Jun 23 03:02:46 2022 OK, cut XXXs. Pushing
-again. 
+again.
 
 :18]
 
@@ -203,3 +205,1653 @@ again.
 :8]
 
 :7]
+[19:
+
+Thu Jun 23 06:10:56 2022 Text from fresh part:
+
+[:
+
+Thu Jun 23 03:05:05 2022 Going again
+
+PROMPT: Moving Pockets
+
+QHC3SwapWorm
+ typedef Unsigned(2) Dir
+ Dir mUp, mDown;
+ typedef Unsigned(3) Role;
+
+ constant Role cTOP = 0u;
+ constant Role cBOT = 1u;
+ constant Role cMID = 2u;
+ constant Role cTDN = 3u;
+ constant Role cTUP = 4u;
+
+reporting conflicts in HC3NgbState ?
+
+PROMPT:
+
+grips and poses and moves
+
+srl we can reverse flows dynamically and easily
+
+we do have some unclarity in how the
+whole control plane operates
+and is itself gripped and regripped
+
+
+
+
+
+
+PROMPT: Elements of a spatial recurrence language
+
+set assignments
+for simplicity reduce RHS to scalar,
+but you don't have to
+
+state declarations
+s : Foo.m1.
+
+predicate declarations
+b : Foo?
+
+
+a : Foo.m1
+
+a(us)
+
+us, them, me, nobody, somebody, anybody
+
+poses and grips and moves
+
+it's easy to break things
+when you clean things
+
+us - me == them
+us - me - them == nobody
+
+
+'me' the set consisting of just ew[0]
+
+implied trailing 'me'? so postfix + , - ..
+
+
+notations
+
+ predications
+ trailing apostrophe means 'result'
+
+language uses single write model
+
+set language
+statically it looks like set relations
+but the sets act like processes
+
+a <<a set of data members of atoms in the ew>>
+
+that we can identify however we choose
+
+Thu Jun 23 03:11:57 2022 c/
+
+:]
+
+:19]
+[20:
+
+Thu Jun 23 06:12:21 2022
+
+ - Need inter-HC3 swapworm capability else how to
+   transfer code to the daughter.
+
+1: Open a port on this HC3 edge.
+2: Build out an adhoc scaffolding from the port
+3: Seed a virgin HC3 with low maxhops
+4: Wait for it to sprout a bit
+5: Open a port on that HC3 edge.
+
+[21:
+
+Thu Jun 23 06:21:01 2022 Or what if it's all
+internal?
+
+1. Try to grow grid to size X
+
+release sw heads with configurations about where
+to grow, so multiple worms can be growing
+simultaneously, without necessarily blocking each
+other, by having compatible growth patterns (like
+'fold left' vs 'fold right', if that could somehow
+help.)
+
+:21]
+
+:20]
+[22:
+
+Thu Jun 23 12:03:06 2022 Again, think about
+internal replication, where we can hope to have
+some control.
+
+Main Sequence:
+1. Survive and grow to size R (reproduction size)
+2. Deploy and position mother and daughter control anchors
+3. Deploy mother (sender) and daughter (receiver) control loops
+4. Mother rolls full genome sending copy to daughter
+5. Mother drops maxhops to size S (split size)
+6. Daughter declares as second root (maxhops S)
+7. Excess tissue withers in mother and daughter
+8. Mother and daughter each return to step 1
+
+[23:
+
+Thu Jun 23 13:44:12 2022 If the genome is normally
+deployed around/near the HC3 root, we have to
+reposition it as well as positioning the daughter
+copy. Maybe have corresponding streams out from
+the center, like N->E->S for the mother, and
+S->W->N for the daughter, as the original mother's
+genome gets consumed, freeing up the center, which
+eventually fills up with the daughter (to the W)
+and the moved mother (to the E).
+
+:23]
+
+:22]
+[24:
+
+Thu Jun 23 14:10:44 2022 Fantasizing is getting
+way way ahead of anything like plausibility, but I
+am liking the concept of deploying little code
+rings, copied off segments of the genome, and sent
+different places to control things. Like, the
+daughter receiver section is a little code ring.
+
+Also liking the idea that the 'current
+instruction', by default, just repeats and
+repeats. Until it (at least) initiates a process
+to move on.
+
+And that process, at least in principle, could be
+just quoting itself and dequoting the instruction
+it wants to take over? Question is whether there's
+associated spatial machinery that the (to-become)
+active instruction needs to be near, or whether
+the execution can just flow down the sequence.
+
+Dequote head.
+
+How do we grow a swapworm ring? If the head and
+tail are both pinned? We send out some kind of
+grow request, which swaps on the existing line,
+but when it sees an available adjacent spot, it
+splices a Move Down (or whatever) in there, and
+also turns itself into a Move Down, so from one
+available ring (that the grow request had been
+occupying) you now have two available ring spots.
+
+[25:
+
+Thu Jun 23 15:53:34 2022 Have to pack up here, but
+thinking we should do some HC3 swapworm mechanic
+spikes just to see what we could get going.
+
+:25]
+:24]
+[26:
+
+Thu Jun 23 23:34:00 2022 OK, going for a spike
+HC3SwapWorm, premised upon having one segment per
+pocket. Absolutely quick-n-dirty to start, come on
+come on let's see it before 1am.[27:
+
+Thu Jun 23 23:35:05 2022 Need a
+  PocketIterator..[28:
+
+Thu Jun 23 23:57:48 2022 Working on transient
+HC3PocketIterator (in HC3SwapWorm.ulam) and
+starting to get into.. issues.
+
+Current issue is: What are the bounds of a Pocket?
+In the relaxed case it's easy to say like: All
+coords with
+
+  x > W.x && x < E.x, and
+  y > N.y && y < S.y
+
+but what are we to say about like this:
+
+            H . . .
+            . 1 2 H
+            . . . .
+            H . . H
+
+when it's 1 that's asking to iterate the pocket?
+What about when it's 2 asking?
+
+I had been thinking we'd do min on the coords, so
+1 and 2 would both see an invalid cSTATUS_EDGE
+when they to init the iterator, since the upper
+right H is at y == 0 wrt both of them.
+
+So, obvious thing is say NO POCKET EXISTS and tell
+any pocket-dependent content to block until a
+better day. It's like Plate when a swapline's
+coming through.
+
+Let's just say we require a consistent four
+corners in one of these configurations:
+
+  1x2 2x1 2x2 3x2 2x3
+
+or we can't iterate. We should distinguish,
+though, between:
+
+ (1) seeing four corners in a transitional state,
+ (2) seeing less than four corners
+
+On (1) we're likely willing to block a long while,
+ since that's business as usual while moving
+
+On (2) we might be a bit more impatient, since
+ we'd expect a respawning. (Really tho?)
+
+:28]
+
+:27]
+
+:26]
+[29:
+
+Fri Jun 24 07:44:22 2022 OK so have a first cut at
+HC3PocketIterator.init(), and starting to think
+downstream. In particular, what are we going to do
+about the fact that, from a given HC3 pocket, it's
+not possible to iterate over all of all of the
+neighboring pockets? In a 2x2 pocket, we can see
+all of two neighbor pockets, but only 3 of 4 of
+the other two neighboring pockets.
+
+It'll be worse in 2x3s. Might be able to see all
+of only one neighbor.. and on top of all that, the
+neighboring pocket might not be OK, but pocket
+contents won't even be able to tell that.
+
+We could search across a face of a pocket, to
+examine whatever we could reach of outside-pocket
+space. I guess that's what we'd have to do, and
+just opportunistically take anything that matched
+our expectations.
+
+And keep swap swap swap within the pocket, to keep
+churning the availabilities.
+
+So we'd like a pocket iterator to provide a
+best-effort edge iterator, as well as the pocket
+contents. [30:
+
+Fri Jun 24 08:21:56 2022 Oh and here's another
+issue: From any corner of a 2x3 or 3x2 stretch
+pocket, the iterator reports OPEN because it can't
+see the diagonal corner.
+
+[31:
+
+Fri Jun 24 08:25:44 2022 What if we distinguished
+between seeing two vs three corners. Two corners
+is hopeless (or at least suspect, if diagonal),
+but with three corners we might 'assume' the
+fourth even though we can't see it right now. That
+might not be true in maxhops situations, but we
+could deal with that separately.
+
+Other safer possibility is just to block-n-swap,
+so maybe we'll see a full pocket next time.
+
+Maybe pocket content preferentially tries to swap
+toward the centers of 2x3 and 3x2? How about that?
+
+[32:
+
+Fri Jun 24 08:48:58 2022 Pocket content could go
+double redundant and hog the pocket. No tie
+breaker tho.
+
+:32]
+
+:31]
+
+:30]
+
+:29]
+[33:
+
+Fri Jun 24 08:55:39 2022 OK come on some
+
+TODO
+
+[34: Fri Jun 24 09:45:10 2022
+DONE :34] - Get iterator iterating internally
+ - Create pocket coordinates? Find self in them?
+[35: Fri Jun 24 09:58:15 2022
+DONE :35] - Demo single worm randomly jumping around its pocket
+[50: Sat Jun 25 02:13:43 2022
+DONE :50] - Consider how to implement HC3 moving pocket content
+
+:33]
+[36:
+
+Fri Jun 24 09:58:32 2022 OK, so we've got HCSW
+hopping around in its pocket, until it gets left
+behind when the pocket moves. Need HC3 pocket
+pushing now for reals.
+
+Suppose the goal is to take all four diago pocket
+sites with you when you move. That's unproblematic
+except for the two possibly occupied sites ahead
+of your leading diagos. And we're thinking they're
+supposed to 'push out' any content ahead of them.
+
+And if either of those 'out' destinations are
+occupied? Block the move, kill the occupier, or
+randomize between them?
+
+[39:
+
+Fri Jun 24 10:21:25 2022 I'm pretty tempted to
+start exploring kill the occupier. If we start
+saying HC3 is kind inside a diamond, then it's up
+to everybody else to stay out of the way.
+
+Unless? Is it possible that multiple purely HC3
+moves could cause this situation? No, I think no,
+so long as pocket content doesn't exceed half
+full. And HC3 pushing will never cause content to
+switch pockets, so it won't violate the invariant
+on its own.
+
+So okay, can we try to go for this?[40:
+
+Fri Jun 24 10:30:12 2022 Well looking at QHardCell
+right now, the easiest thing is to nuke the
+outliers if they're occupied on a push. So let's
+just do that why don't we and see how it goes.[41:
+
+Fri Jun 24 11:31:53 2022 OK, so got a first cut at
+moving the entourage. Seems like there's some
+failing cases, though, where pocket content ends
+up in a driving lane. Have to run that down.
+
+But still, progress!
+
+:41]
+
+:40]
+
+:39]
+
+:36]
+[42:
+
+Fri Jun 24 12:05:06 2022 OK. Can we see a
+driving-lane failure happening here?
+[43:
+
+Fri Jun 24 12:08:27 2022 OK yes, here I see H3
+heading N and failing to push its NE sw, so that
+ends up in the driving lane.
+
+Let's look for another failure and look for
+similarities. Like, does heading S push its SW?
+[44:
+
+Fri Jun 24 12:17:25 2022 Here's another H3 heading
+N and failing to pull its SW.
+
+:44]
+:43]
+:42]
+[45:
+
+Fri Jun 24 12:40:54 2022 I got it: It's the root
+moving without using moveEntourage.[46:
+
+Fri Jun 24 13:34:41 2022 OK, things seem pretty
+solid now. Now have a cubic animation running just
+to capture the moment..
+
+:46]
+
+:45]
+[47:
+
+Sat Jun 25 00:36:27 2022 OK, so the moment has
+been captured pretty well in 20220624141438.mp4,
+with the following takeaways after >600KAEPS:
+
+ - Pocket transport seems rock solid with no
+   losses or leaks
+
+ - We still got one random grid lockup :(
+   with apparently nothing to do with pocket
+   content.
+
+I have to believe (still) the latter is somehow
+due to propagation delays but not sure how to
+respond to it.
+
+Would it help to have a display showing settled
+distance ?[48:
+
+Sat Jun 25 02:12:34 2022 Well, now have a settled
+distance color on Atom #2, and it's interesting to
+look at but didn't immediately lead to actionable
+insights. (Partly because I didn't wait (hours?)
+to see a failure.)
+
+:48]
+
+:47]
+[49:
+
+Sat Jun 25 02:13:29 2022 Review our to-do
+[51:
+
+Sat Jun 25 02:13:59 2022 OK need more
+
+TODO
+
+[58: Sat Jun 25 06:52:01 2022
+DONE :58] - Brainstorm some kind of 'side iterator' to
+   visit neighboring pocket sites on a best-effort
+   basis. Perhaps just the strip immediately
+   across the border?
+
+[59: DONE  :59] - Implement side pocket iterator
+[71: Sun Jun 26 02:59:27 2022 Well, needed more..
+
+[72: DONE :72] - Implement neighbor relations so pockets can
+   tell whether adjacent pockets are bent
+
+:71]
+ - Add an inMyGroup() to swapworm
+
+ - element HC3SwapWorm -> quark QSwapWormHC3
+
+ - Come make more to-do
+[52: Sat Jun 25 02:20:40 2022
+
+ - Consider changing SwapWorm concept to something
+   linking to polymer
+
+:52]
+:51]
+:49]
+[53:
+
+Sat Jun 25 02:33:24 2022 Diamond Residing Polymer?
+DiaPoly? PolyD? PolymerHC3? [54:
+
+Sat Jun 25 02:58:47 2022 Doped Diamond? That's
+kind of what it's like; the swapworms are the
+dopants.
+
+[55:
+
+Sat Jun 25 04:53:42 2022 OK so here's thing: I was
+imagining we'd be using a lot of loops, rather
+than strictly linear worms. And I was imagining
+we'd be able to grow that worm 'from the side',
+while both the head and the tail are pinned.
+
+But that's not at all easy to do, given we don't
+expect to be able to access diagonal pockets.
+
+And we can't have more than one segment of a given
+worm in a pocket, or we'll lose their relative
+ordering. Or is that true? If we had 'local
+backward' and 'local forward' states, we could
+have two in a pocket, and the fwd one would report
+0 for backward() and the bck one would report 0
+for forward(), and off we go.
+
+Then, if we had two in a pocket, could we
+'spike one out' to an orthogonal pocket?
+
+                         .      .
+                           f3
+       .      .          . b3   .
+     f2  f1 f0 f1 ->   f2  f1 f2 f1
+     b4  b0 b0 b4      b4  b2 b0 b4
+       .      .          .      .
+
+[56:
+
+Sat Jun 25 05:16:03 2022 So that seems somewhat
+plausible -- except how do we know there isn't
+already another worm of this type in the
+spiked-into pocket? We can't see that whole
+pocket.
+
+Well, there couldn't be another segment that's
+part of us unless it was pointing back at us.
+
+But could we have two chains running through us,
+and end up swapping the connectivity between them?
+Which would be a cool capability to have but we'd
+like to not do it by accident very often.
+
+[57:
+
+Sat Jun 25 05:59:14 2022 About out of gas here,
+but noting that having same-category worms running
+parallel to each other along the same pockets is
+like foggen crossover -- there would be total
+ambiguity about which upstream and which
+downstream you'd match up with, at any given
+moment.
+
+If the worms ran parallel but in adjacent pockets,
+one could insert deliberate crossover points,
+crossing the streams, just by relabeling.. is that
+true? We'd need two segments in each pocket, and
+need to see all four segments at once to do the
+cross.
+
+Anyway.
+
+:57]
+
+:56]
+
+:55]
+
+:54]
+
+:53]
+[60:
+
+Sat Jun 25 10:24:26 2022 So here's a thing: From
+a HC3 entourage postion, a pocket CAN see all of
+the adjacent pockets if they're relaxed or
+squished. But it can't
+(1) see all of a 3x2 neighbor, or
+(2) tell if any neighbors are bent or not
+
+which means a pocket can't tell if it can see all
+of a neighboring pocket.
+[61:
+
+Sat Jun 25 10:35:34 2022 What I'm wondering is
+whether a little bit of redundant info in the HC3
+might help pockets things out, and possibly even
+help HC3 out detecting or dealing with
+inconsistencies.
+
+HC3's currently at 45 bits all in, with lots to
+squeeze if needed (e.g., 12 bits color, 10 bits of
+root direction vector).
+
+We could certainly afford another at least
+Unsigned(2)[4] for ngb info
+
+0: ngb at 2
+1: ngb at 3
+2: ngb off axis
+3: no ngb
+
+or even Unsigned(3)[4] and basically store (and
+maintain ugh and repair ugh ugh and so much for
+stigmergy) the full HC3NgbState.
+
+[62:
+
+Sat Jun 25 10:51:28 2022 An idea which I largely
+mostly hate hate, but would it help the pockets?
+They still wouldn't be able to tell if the
+neighboring pocket was bent, right? Or, wait,
+maybe they could?
+
+By looking at the TWO HC3 along the side they're
+interested in, the pocket COULD determine the
+alleged status of the adjacent pocket. They could
+tell if they can iterate over the whole adjacent
+pocket.
+
+Now, if the HC3 itself set up this mNgbInfo, but
+never used it itself (except perhaps during POST
+up front) would that make it less nasty? It would
+be like courtesy info for the pockets, like handy
+signage, rather than something HC3 itself depended
+on.
+
+So, we could derive this map from the HC3State,
+and update our map and our ngb's maps when we
+move.
+[63:
+
+Sat Jun 25 13:38:32 2022 Well. So are we
+(1) thinking about really doing this?
+(2) Now?
+
+(Cassoulet now in the oven low.)
+[64:
+
+Sat Jun 25 13:42:28 2022 Well let's look at
+setting it up anyway.[65:
+
+Sat Jun 25 13:54:21 2022 I wonder if we shouldn't
+let QHardCell own some of this storage. Right now
+it's 0 bits plus virtual functions to get at
+storage -- and I justified that because subclasses
+might want to allocate different amounts of
+storage for hopcount and so on.
+
+But this 'ngb map' thing would be Unsigned(2)[4]
+regardless of hopcount bits..
+
+..let's put it in QHardCell for now and see how it
+feels. 
+[66:
+
+Sat Jun 25 14:23:35 2022 OK now we have
+
+  /*__________________________________________________
+  | COMPONENTS of QHardCell <9> (8 bits/56 unused): 
+  | 
+  | Pos	| Bits	| Name	| Type <classid>
+  | 0	| 8	| mNgbRels[4]	| Unsigned(2)
+  | 8	| 0	| super	| UrSelf <0>
+  |___________________________________________________
+  */ //gcnl:NodeBlockClass.cpp:2644
+
+and we need to make some code to
+
+[74: Sun Jun 26 03:01:15 2022
+DONE :74] - set them up, and
+
+[75:
+DONE :75] - maintain them on a swap
+[67:
+
+Sat Jun 25 14:30:47 2022 Or do we want to merge
+those steps, and.. nah don't be tricky, not
+yet.[68:
+
+Sun Jun 26 01:24:59 2022 OK so we kind of made a
+mess in here. Made an HC3State.examineNgbs(.., C2D
+offset) to specify where we wanted to compute
+ngbstatus relative to. First time we pass in
+(0,0), but when we're going to move we call again,
+passing in (0,1) or whatever depending on the
+direction.
+
+But that's blowing up, I think because we end up
+scanning outside the ew without checking for
+it. And we don't want to have to check for it in
+this case.
+
+This was the wrong way to go.[69:
+
+Sun Jun 26 01:56:20 2022 I think we want separate
+new code for updating ngb status based on old
+status plus a planned move. My question is how
+much of the recent changes should/must I tear out?
+[70:
+
+Sun Jun 26 02:57:20 2022 OK so it looks like we've
+gotten HC3State.updateNgbsForMove(SN dest) working
+fairly plausibly. Does that mean we can claim some
+to-do and maybe take a break?
+[73:
+
+Sun Jun 26 03:00:33 2022 Well, we hadn't
+to-do-ified the ngbrel stuff, so not so
+satisfying.
+
+[76:
+
+Sun Jun 26 03:01:35 2022 Well found a couple
+dashed items to claim so that's a little better.
+
+TODO
+
+[81: Sun Jun 26 12:27:30 2022
+DONE :81] - Brainstorm how PocketHC3 could digest and
+   present this information
+
+[86: Mon Jun 27 02:25:28 2022 Done? Oh not
+yet. [91: Mon Jun 27 05:55:13 2022  OK now
+DONE :91]:86] - Spike something for that
+
+[107: Tue Jun 28 00:50:44 2022 Made a bold start anyway
+DONE :107] - Finally return to SwapWormHC3 and evaluate
+   where we are, particularly regarding segment
+   type representation
+   
+ - Spike a 8-segment wander-inside-diamond-SW and
+   HAVE FUN watching it wander.
+
+:76]
+
+:73]
+:70]
+:69]
+
+:68]
+
+:67]
+:66]
+:65]
+
+:64]
+:63]
+
+:62]
+
+:61]
+
+:60]
+[77:
+
+Sun Jun 26 11:13:34 2022 OK, so, right now
+PocketHC3.initIterator iterates over single
+adjacent edge in the direciton requested. We could
+add a Bool or something to request 'entire side
+pocket' maybe.
+
+How does PocketHC3 use the ngbrel info? Well,
+right now it iterates out to find the four nearest
+corners. It could check for the ngbrel as it finds
+them, and.. stash them all? We're in a transient;
+room to burn.
+
+And then what? When asked about a side pocket, we
+need to
+
+ (1) Find the two HC3 corners touching that side
+ (2) Make sure the ngbrels of those two corners
+     match in the direction of the side we're
+     considering.
+ (3) If they do, succeed with the 'full' side
+     pocket iterator.
+
+Scare quotes in (3) because we don't know if the
+full side pocket is actually accessible.
+
+Caller might or might not care about full
+accessibility -- they might be able to execute
+opportunistically if they get lucky.
+
+[78:
+
+Sun Jun 26 12:05:52 2022 Well, try that?
+[79:
+
+Sun Jun 26 12:09:59 2022 OK except the natural
+implementation is an array of arrays but ulam
+doesn't have that. We'd need to wrap the inner
+array in a struct and make an array of them.
+
+[80:
+
+Sun Jun 26 12:13:36 2022 Made 'transient
+PocketHC3_CornerInfo'.
+
+:80]
+:79]
+:78]
+
+:77]
+[82:
+
+Sun Jun 26 12:27:39 2022 OK, we're now gathering
+all the pocket corner ngbrels in
+PocketHC3.mCornerInfo[4], but we haven't extended
+initIterator and we're not yet using the
+mCornerInfo.
+
+Have to do some early cooking for dins.
+
+:82]
+[83:
+
+Mon Jun 27 00:32:37 2022 OK, so we got
+HC3State.updateNgbsForMove(destsn) apparently
+working, but then as I was laying down I realized
+that we had only updated QHardCell.mNgbRels for
+ourselves, forgetting about the mNgbRels of the
+HC3 neighbors.[84:
+
+Mon Jun 27 01:46:37 2022 Hmm, I hadn't realized
+that the NgbRel states are all symmetric wrt a
+pair of HC3s: If A is (OFFN, GAP1, GAP2, GAP3) to
+B, then B is the same back to A. But you do have
+to put that same value in complementary slots of
+their mNgbRels, one in [i] and the other in [3-i].
+[85:
+
+Mon Jun 27 02:23:47 2022 OK that appears to be
+working and updating the "ngb's ngbrels" during
+the move. Pop pop.
+[87:
+
+Mon Jun 27 02:26:06 2022 Now we need to implement
+the extra cases in initIterator.
+[88:
+
+Mon Jun 27 04:23:24 2022 Well, implemented a bunch
+of stuff, but nothing's asking for side pockets
+yet so it's untested?
+[89:
+
+Mon Jun 27 04:45:57 2022 OK, so hopping west
+pocket-to-pocket works. Let's hop in rotating
+directions! [90:
+
+Mon Jun 27 05:53:36 2022 OK, so that revealed
+systematic fencepost problems in the side pocket
+iterator init, but we now appear to be pretty
+solid for side pocket iteration and SW segments
+leaping in all four directions.
+
+:90]
+
+:89]
+:88]
+
+:87]
+:85]
+:84]
+
+:83]
+[92:
+
+Mon Jun 27 06:13:00 2022 OK, next stop will be
+returning to the SW segment type design and maybe
+it's a good time for a nap first.
+
+:92]
+[93:
+
+Mon Jun 27 11:53:35 2022 OK here we go. What are
+we going to do for SW type info? In particular:
+Subtypes or (moral equivalent to) enum? Well, 
+
+ - How many types would we be talking?
+
+Group1: Head, Tail, Middle  // 'static' spatial segments
+Group2: Down, Up            // 'dynamic' moving temps
+Group3: GrowD, ShrinkD, GrowU, ShrinkU // size change temps
+
+[94:
+
+Mon Jun 27 12:03:01 2022 Not clear we would really
+want or need group3. Or at least not being types.
+
+Main disadvantage of types is statefully changing
+types in a PiTA.
+
+A supposed advantage of types is Head and Tail
+would only have to represent one pointer, so
+they'd save space.
+
+Let's think data members for a bit. How many bits
+is all this going to cost us?
+
+ typedef Unsigned(2) Dir;
+ Dir mFwd, mBck;          // 4
+
+How about think 'affordances'?
+
+quark CmdDir {
+ typedef Unsigned(2) Cmd;
+ typedef Unsigned(2) Dir;
+ Cmd mCmd; // what to do in this dir
+ Dir mDir; // which way to next
+}
+
+quark SWHC3 {
+ CmdDir mCmdDirs[2]; // fwd[0] bck[1] 8 bits total
+}
+
+with perhaps like
+
+ constant Cmd cEND  = 0u;  //< We're last in this dir (ignore mDir)
+ constant Cmd cSTAY = 1u;  //< Not last but don't swap this way
+ constant Cmd cGO   = 2u;  //< Not last, do swap this way
+ constant Cmd cRSRV = 3u;  //< Something else cool
+
+[95:
+
+Mon Jun 27 12:53:27 2022 OK we need language to
+distinguish between 'direction' meaning
+
+ - toward head vs toward tail, vs
+ - NSEW on the diamond
+
+[96:
+
+Mon Jun 27 13:10:08 2022 Forward, aft.. okay but
+what's the collective noun for them?
+
+Directions vs Headings? Which is which?
+
+ Directions: Fwd, aft
+ Headings:   NSEW
+
+Internal: Fwd, aft
+External: NSEW
+
+Static: headward, tailward
+Dynamic: NSEW
+
+Body:
+World:
+
+that's not bad.
+
+BodyDir: fwd/headward/up, back/tailward/down
+WorldDir: NSEW
+
+[97:
+
+Mon Jun 27 13:16:45 2022 So it could be
+
+quark CmdWDir {
+ typedef Unsigned(2) Cmd;
+ typedef Unsigned(2) WorldDir;
+ Cmd mCmd; // what to do in this dir
+ WorldDir mWorld; // which way to next
+}
+
+quark SWHC3 {
+ typedef Unsigned(1) BodyDir;
+ constant BodyDir cBODY_UP = 0u;
+ constant BodyDir cBODY_DOWN = 1u;
+ CmdWDir mCmdWDirs[BodyDir.maxof]; // fwd[0] bck[1] 8 bits total
+}
+
+although could we maybe ditch DIR completely, or
+at least use it only once, so abbrs could be less
+similar? Or just use WDIR / BDIR everywhere?
+
+[98:
+
+Mon Jun 27 14:00:58 2022 OK come on drifting here.
+
+Let's say yes B(ody) vs W(orld). U(p) and D(own)
+for body directions. NSEW for world directions.
+
+And note we're still going to have U and D even
+when we're using rings. And we won't be able to
+map U/D to clockwise/anticlockwise because we
+aren't constraining which way a ring will turn.
+
+A ring, to first order, will have neither head nor
+tail, but will have U and D directions -- which
+are thus, in fact, more primary that
+Head/Tail. Head is 'just' where U runs out, etc.
+
+So okay.
+
+I guess a next question is how many segment
+'types' can we infer from mCmdWDirs, so we
+wouldn't have to represent the type separately?
+
+ constant Cmd cEND  = 0u;  //< We're last in this dir (ignore mDir)
+ constant Cmd cSTAY = 1u;  //< Not last but don't autoswap this way
+ constant Cmd cGO   = 2u;  //< Not last, do autoswap this way
+ constant Cmd cBLOCK= 3u;  //< Prevent autoswap this way
+
+
+mCmdWDirs[cBODY_UP].mCmd == cEND    -> 'Head'
+mCmdWDirs[cBODY_DOWN].mCmd == cEND  -> 'Tail'
+mCmdWDirs[*].mCmd == cStay          -> 'Middle'
+mCmdWDirs[cBODY_DOWN].mCmd == cGO   -> 'Advance'
+mCmdWDirs[cBODY_UP].mCmd == cGO     -> 'Retreat'
+
+mCmdWDirs[*].mCmd == cGO            -> 'Diffuse'?
+
+How would we distinguish the desire to swap off
+the end vs not? 
+
+mCmdWDirs[cBODY_UP].mCmd == cEND &&
+mCmdWDirs[cBODY_DOWN].mCmd == cBLOCK   -> 'HeadAnchor' ?
+
+Then stuff will come up to it and stop
+
+[99:
+
+Mon Jun 27 14:59:35 2022 Now, a big part of this
+overall story is we want standard processing of
+all this as much as possible.
+
+Could we be saying just a single bit for like a
+Bool mQuoted ?
+
+And if it's quoted we do this standard body
+processing and that's it:
+
+element DoStuff : Instruction {
+  Void behave() {
+    if (handleQuoted()) return;
+    ..do stuff..
+  }
+}
+
+quark Instruction : SwapWormHC3 {
+ ..
+}
+
+well or maybe better:
+
+element DoStuff : Instruction {
+  @Override
+  virtual Status doInstruction(Interpreter & itp) {
+    ..do stuff..
+  }
+}
+
+quark Instruction : SwapWormHC3 {
+  Void behave() {
+    if (handleQuoted()) return;
+    Interpreter itp;
+    if (findInterpreter(itp)) {
+      Status stat = doInstruction(itp);
+      which (stat) {
+      case cISTAT_DONE: { return; }
+      case cISTAT_NEXT: { tryItpAdvance(); ? }
+   ..
+      }
+    }
+  }
+}
+
+[100:
+
+Mon Jun 27 15:11:43 2022 If tryItpAdvance()
+somehow succeeds, perhaps it quotes the
+instruction on the way out?
+
+Getting waaay ahead of ourselves.
+
+  :100]
+
+:99]
+
+:98]
+:97]
+:96]
+:95] 
+ 
+:94]
+
+:93]
+[101:
+
+Mon Jun 27 15:37:03 2022
+
+
+
+spike steps:
+
+ - 1: Grow to 8 long, wander
+   2: Make 8 long ring, circulate
+
+ - Make quark Vertebrae // base class of spine
+
+ - Add Vertebrae.mCmdWDirs..
+ - Add Vertebrae.mQuoted..
+
+ - Vertebrae API
+
+ - Implement Vertebrae methods
+   Bool update() 
+
+ - Make quark Instruction : Vertebrae
+   Instruction API
+     virtual Status execute(Interpreter & itp)
+     
+ 
+
+:101]
+[102:
+
+Mon Jun 27 15:52:16 2022
+
+Have Interpreter be a subclass of HC3
+
+:102]
+[103:
+
+Mon Jun 27 16:22:17 2022 Key Instruction classes
+get distinctive colors, plus some default grey for
+the rest.
+
+:103]
+[104:
+
+Mon Jun 27 16:52:07 2022 Also have/see potential
+for swapping Cmd values but NOT state.
+
+:104]
+[105:
+
+Tue Jun 28 00:20:09 2022 OK come on we need
+code. I want to see a worm worming in the next
+twelve hours tops.
+[106:
+
+Tue Jun 28 00:20:52 2022 Saving
+SwapWormHC3.ulam-hold and tearing into it..
+
+TODO
+
+[108: Tue Jun 28 00:51:20 2022 Made Vertebra.ulam
+as a new start,
+DONE :108] - Strip out type
+
+ - Add Body/World/CmdWDir stuff
+
+ - Keep going
+
+:106]
+:105]
+[109:
+
+Tue Jun 28 00:51:41 2022 Made Vertebra.ulam with
+the minimal but nothing's using it yet.[110:
+
+Tue Jun 28 01:04:36 2022 OK, element Demo : Vertebra
+now goes west all the time.
+
+Let's have it bounce off the edge of the
+  diamond.[111:
+
+Tue Jun 28 01:07:16 2022 But moving around in free
+(pocket) space at all, vs maintaining the worm
+invariants.
+
+We should go for a grow-to-length-8 instead.
+
+ - Seed configures head/tail with desired length
+
+ - It grows, maintains segment # gradient
+
+:111]
+
+:110]
+
+:109]
+[112:
+
+Tue Jun 28 02:14:07 2022 OK, SeedDemo is making a
+single Demo with an mSegNo of 10, and we're
+thinking it should at some point grow a tail with
+mSegNo of 9 and etc.
+
+When would that Demo-specific processing happen?
+It's going to take some tinkering to get all these
+levels sorted out regarding behavior and
+sequencing.
+
+[113:
+
+Tue Jun 28 03:03:23 2022
+
+Behavioral components
+
+ - POST / apoptosis [114: Tue Jun 28 03:48:18 2022 Defer  :114]
+ - Pocket init
+ - Vertebra invariants
+ - Subclass actions
+
+[115:
+
+Tue Jun 28 04:29:20 2022 Damnit drifted again. So
+in the case of Demo here, how about:
+
+  Demo.behave() {
+    // doPOST(); // later
+    if (updateVertebra()) return;
+    // more stuff later
+  }
+
+quark Vertebra {
+  /** Do type-specific actions given the
+      Vertebra invariant(s) are satisfied
+    */
+  virtual Bool action() ; 
+}
+
+I guess we really need to break down
+Vertebra.update() to understand when action()
+would get called.
+
+Vertebra.update() :
+
+  - Death processing
+  - Init pocket or return true
+  - Rationalize upstream or die
+  - Rationalize downstream or die
+ ..
+
+[116:
+
+Tue Jun 28 04:41:29 2022 I think we should
+probably go with a VertebraState-based approach.
+
+Demo.behave() {
+  VertebraState vs;
+  vs.init(self);
+  if (vs.status() == cVS_DIE) return die();
+  if (vs.status() == cVS_BLOCK) return;
+  // cVS_OK: We are good, connections are good
+  ..do our stuff..
+}
+
+[117:
+
+Tue Jun 28 04:44:08 2022 But manoman I'm really
+hating saying 'ver-TEE-bra' (or 'ver-tuh-BRAY' for
+that matter) over and over in my head and
+keyboard.
+
+I want to call them like 'Vert' and have that be
+short for Vertebra, Vertebrae, and Vertex for good
+measure. But that's not a word, not flavorful, and
+uggy. 
+[118:
+
+Tue Jun 28 11:22:35 2022 About time to move the
+flag so we're going to have to wait, here. Still
+wanting another name
+
+ Segment   Worm
+ Vertebra  Spine
+ Bone      Spine
+ Bone      Skeleton
+ Link      Chain
+ Car       Train
+ Monomer   Polymer
+[119:
+
+Tue Jun 28 16:12:18 2022 Flag moved
+
+ Base      Strand?
+ Instruction  Program
+ Node      List
+ Point     Line
+
+hmm that's temptingly bland
+[120:
+
+Tue Jun 28 16:42:14 2022 Damnit come on pick pick
+pick something.
+
+Both Point and Link are so overloaded in their
+blandness.. Which is good and bad.
+
+LinkHC3 ?
+
+Maybe stick with Segment, at least implying
+SwapWorm, out of solidarity with our history,
+critics mocking our jargon notwithstanding.
+
+Let's do quark Segment. And not QSegment either.
+[121:
+
+Tue Jun 28 17:05:02 2022 OK it's Segment.ulam.
+
+Next steps, after the evening?
+
+:121]
+
+:120]
+
+:119]
+
+:118]
+:117]
+:116]
+:115]
+:113]
+
+:112]
+[122:
+
+Wed Jun 29 00:35:37 2022 OK again come on. Demo
+grow and move tonight.
+
+transient SegmentState {
+  PocketHC3 mPock;
+  Bool init(Segment& seg) {
+    if (p.init() != PocketHC3.cSTATUS_OK) return true; // Distorted pocket
+    return false;
+  }
+}
+
+transient DemoState : SegmentState {
+  Bool init(Demo & demo) {
+    if (super.init(demo)) return true;
+
+    return false;
+  }
+}
+
+ Demo.behave() {
+   //post
+   DemoState ds;
+   if (ds.init(self)) return;
+   
+updateSegment();
+ }
+
+.. Segment.updateSegment
+
+
+:122]
+[123:
+
+Wed Jun 29 02:08:59 2022 OK built cuts at
+DemoState and SegmentState, moved the PocketHC3
+into SegmentState, and things are working as they
+were. Still have to write the 'default Segment
+rules' and decide where to call them.
+
+Default Segment rules:
+
+ - Sanity checks / rationalization
+ - Randomize over bdir
+     Bits(1) d = random.between(0,1);
+     for (Unsigned i = 0; i < 2; ++i) {
+      d ^= 1u;
+      CmdWDir & wd = mCmdWDirs[(Unsigned) d];
+      if (wd.doStuff()) return true;
+     }
+     return false;
+
+[124:
+
+Wed Jun 29 04:16:28 2022
+
+SegmentState
+PocketHC3 mPocket
+SN mLink[2] - where mate was found (or 0u)
+Status mItsStatus[2] - its link type to us
+
+[125:
+
+Wed Jun 29 04:40:03 2022 what about
+
+ Bool mNull  = false; //      has link      /       no link
+ Bool mFixed = false; // movable | anchored / growable | cauterized
+ Unsigned(2) mWDir;
+
+
+[126:
+
+Wed Jun 29 04:45:51 2022 Block stuff in one
+direction so you get an event to look at it. While
+not blocking in the other direction so you
+
+DEFAULT BEHAVIOR
+ consider U, D in random order
+ if link+movable check mate for movable, vote if so
+ {if nolink+movable check random for availability,
+   store somehow and vote it so}
+
+ If find a l+m, call down
+    Bool
+
+[127:
+
+Wed Jun 29 05:02:52 2022 What if it's not
+'movable' but 'quoted'? 
+
+ Unsigned(3) mWDir
+   cNULL = 0u
+   CWEST..cEAST = 1u..4u
+
+ consider U, D in random order
+   if !cNULL
+     SN ngb = pocketFindMate
+     Bool do = self.wantMove(
+     if do && ngb != 0
+       doswap(0,ngb)
+       return true;
+
+   else
+     SN engb = pocketFindAvailable
+     Bool do = self.wantGrow(
+     if do && engb != 0
+       dogrow(UD,ngb)
+       return true
+
+ return false
+    
+:127]
+
+:126]
+:125]
+
+:124]
+:123]
+[128:
+
+Thu Jun 30 02:01:35 2022 OK so we stubbed in
+findMate / findAvailable and we hit findAvailable
+first. So, what exactly do we want that to do?
+
+ - Pick a random pocket ngb.
+ - Iterate over it
+ - If the sum of its 
+   = occupied sites, and its
+   = inaccessible sites
+   are 0 or 1,
+ - return a randomly selected empty sn
+ - otherwise return 0u
+
+:128]
+[129:
+
+Thu Jun 30 04:37:17 2022 OK, got as far as needing
+doGrow but taking a nap first.
+[130:
+
+Thu Jun 30 08:35:01 2022 OK, so what should be a
+first stab at doGrow? We get the Seg& that decided
+wantGrow, an (ew) sn of an empty in the pocket in
+the bd direction.
+
+ - First off: Let's override this in DemoState?
+
+[131:
+
+Thu Jun 30 08:39:12 2022 OK, now we're
+implement-me in DemoState.doGrow.
+
+We're going to say
+
+ - Copy self to temp atom
+
+ - copy..
+
+wait how do we know what PocketPtr the empty is
+in?
+[132:
+
+Thu Jun 30 09:21:55 2022 OK a first cut doGrow
+just worked. Now need findMate for the ensuing
+events. 
+
+:132]
+
+:131]
+
+:130]
+
+:129]
+[133:
+
+Thu Jun 30 10:29:38 2022 Hmm using PocketPtr == 0u
+as NULL means we can't point to our own pocket. We
+knew that, and we thought we didn't want to point
+at our own pocket, but as we work through findMate
+it starts to look like we maybe could handle self
+ptrs except for this representation of
+NULL. A-and, we have three codes in PocketPtr left
+unused anyway.
+
+Let's try to push back to running, but then
+consider moving to cPP_NULL = 7u instead of 0u
+[134:
+
+Thu Jun 30 10:52:53 2022 OK we ran, and now we
+need doSwap (for some reason), but let's try for
+moving NULL first.[135:
+
+Thu Jun 30 11:15:24 2022 OK when do we get do
+doSwap?
+
+[136: 
+
+Thu Jun 30 11:15:52 2022 We successfully found a
+mate and then called wantMove, and Demo.wantMove
+just returns true. That's why.
+[137:
+
+Thu Jun 30 11:33:12 2022 OK, now we have more
+successful in-place growth, as yet with no
+movement. Current issue is we're looking at a case
+where growth grows back into a partially populated
+pocket. Did we want to allow that?[138:
+
+Thu Jun 30 11:36:18 2022 Well,
+Segment.findAvailable allows one occupied site,
+and it doesn't do any checks about what that
+existing occupant might be.
+
+So maybe it's okay?
+[139:
+
+Thu Jun 30 11:46:22 2022 Well, we're declaring it
+okay for the moment. It doesn't appear to mess
+anything up, except to make things more
+complicated visually.
+[140:
+
+Thu Jun 30 11:57:20 2022 OK we added Demo.getColor
+and can trace the chain better.
+
+Next up is trying to move the chain. What are some
+steps for that?
+
+ - A Demo segment type member?
+   godown, goup, stay?
+
+ - Also, a relaxation step for Demo, like to
+   recheck the mseqno gradient.
+
+:140]
+
+:139]
+
+:138]
+
+:137]
+:136]
+
+:135]
+
+:134]
+:133]
+[141:
+
+Thu Jun 30 13:34:08 2022 OK we've sprouted one Demo
+with Demo.mDSType == Demo.cDS_DOWN behind the
+head, and now it just sits there.
+
+How do we get the cDS_DOWN to swap down?[142:
+
+Thu Jun 30 13:35:31 2022 Demo.wantMove(..) I
+guess.
+
+[143:
+
+Thu Jun 30 13:52:33 2022 OK so I think we have
+wantMove saying true to cDS_DOWN, so presumably
+we'll blow up on doSwap again, and ha
+
+[144:
+
+Thu Jun 30 13:57:50 2022 OK, blew up on doSwap at
+a believable point.
+[145:
+
+Thu Jun 30 14:10:34 2022 Hmm,
+
+ - wantMove() should probably be wantSwap(), and
+
+ - wantSwap needs to know which bdir we are
+   considering swapping. The answer will
+   often/usually depend on that.
+
+:145]
+:144]
+
+:143]
+
+:142]
+
+:141]
+[146:
+
+Thu Jun 30 15:15:13 2022 OK, now we need a way for
+the temps to disappear when they get to the end.
+
+(It also looks like we have a possible deadlock
+also with trying to swap into a pocket with two
+Demos. Like we're refusing to try even if the
+PocketPtrs suffice to distinguish which is
+which. We'll see.)
+
+:146]
+[147:
+
+Fri Jul  1 01:11:02 2022 Well, issues for next
+time:
+
+ - Demos should diffuse if they didn't do anything
+   else.
+
+   = We see a persistent blockage caused by a
+     pocket having two occupants plus an
+     inaccessible site; diffusion would see into
+     the inaccessible site sooner or later.
+
+
+ - Brainstorm about ditching Segment.update and
+   instead provide lower-level services that
+   Demo.behave (or similar) can mix and match.
+
+   = Feeling like the fixed-path-plus-calldowns is
+     going to be way constricting, rather than
+     liberating, going forward.
+
+   = E.g., we're going to want to limit the
+     in-flight temps, but doing that in the
+     current framework feels awul.
+
+:147]
+[148:
+
+Fri Jul  1 10:14:11 2022 It's Friday before T2sday
+and we're going to have to be locking down pretty
+damn soon, here.. but I want to try a fresh cut
+with Demo on top and Segment/SegmentState offering
+services.
+
+Actually let's do a WIP push.
+
+:148]
