@@ -2,6 +2,15 @@ use HC3NgbState;
 
 quark QHardCell {
 
+  //// QHardCell STATE
+  typedef Unsigned(2) NgbRel;
+  constant NgbRel cNGBREL_OFFN = 0u; //< ngb off axis or non-existent
+  constant NgbRel cNGBREL_GAP1 = 1u; //< ngb on axis pocket gap 1
+  constant NgbRel cNGBREL_GAP2 = 2u; //< ngb on axis pocket gap 2
+  constant NgbRel cNGBREL_GAP3 = 3u; //< ngb on axis pocket gap 3
+  typedef NgbRel NgbRels[4];
+  NgbRels mNgbRels;
+
   //// QHardCell API
   typedef EventWindow.SiteNum SN;
 
@@ -41,13 +50,6 @@ quark QHardCell {
     return true;
   }
   
-  constant C2D mNgbOffs[4] = {
-    { .x = -3, .y = 0 },
-    { .x =  0, .y = -3 },
-    { .x =  0, .y = 3 },
-    { .x =  3, .y = 0 },
-  };
-
   constant Unsigned cMIN_DOWN_SETTLED = 5u; // Say we must be this settled to ride
 
   // \returns true if blocked or things changed, false if bored
@@ -60,50 +62,40 @@ quark QHardCell {
     hcs.init(self);
 
     //// NEIGHBORS INITS AND MIN UPHOP 
-    Bool uninits = false;
-    Unsigned minUpHops = Unsigned.maxof;
-    for (Unsigned i = 0u; i < hcs.mHC3NgbStates.lengthof; ++i) {
-      HC3NgbState & n = hcs.mHC3NgbStates[i];
-      n.init(mNgbOffs[i], self);
-
-      if (n.hasValidNeighbor()) {
-        if (n.foundUninitialized()) uninits = true;
-        else if (n.getUpHops() < minUpHops) minUpHops = n.getUpHops();
-      }
-    }
+    hcs.examineNgbs(self);
     /// I KNOW MINUPHOPS AND UNINITS.
     
     //// AM I UNINITTED?
-    if (hcs.myuphops > hcs.maxhop) {
+    if (hcs.myUpHops > hcs.maxHop) {
       // YES
       /// ARE THERE ANY NGBS TO LOOK TO?
-      if (minUpHops >= hcs.maxhop) return die(); // NO
-      setUpHops(minUpHops + 1u);
+      if (hcs.minUpHops >= hcs.maxHop) return die(); // NO
+      setUpHops(hcs.minUpHops + 1u);
       return block();
     }
     //// I AM INITTED
 
     //// DO I HAVE UNINITTED NGBS?
-    if (uninits)
+    if (hcs.uninits)
       return block();
     //// I HAVE NO UNINITTED NGBS.
 
     //// AM I ROOT?
-    if (hcs.myuphops != 0u) {
+    if (hcs.myUpHops != 0u) {
       // I'M NOT ROOT.
 
       // DIE IF NO NGBS.
-      if (minUpHops == minUpHops.maxof) return die();
+      if (hcs.minUpHops == hcs.minUpHops.maxof) return die();
 
       //// DO I NEED TO UPDATE UPHOPS?
-      if (hcs.myuphops != minUpHops + 1u) {
+      if (hcs.myUpHops != hcs.minUpHops + 1u) {
         // I DO.
-        setUpHops(minUpHops + 1u);
+        setUpHops(hcs.minUpHops + 1u);
         return block();
       }
 
       // LIKELY DIE IF NO ROOM FOR ME.
-      if (minUpHops >= hcs.maxhop) return blockOrDie(2u);
+      if (hcs.minUpHops >= hcs.maxHop) return blockOrDie(2u);
       // THERE IS ROOM FOR ME.
 
     }
@@ -147,7 +139,7 @@ quark QHardCell {
       for (Unsigned i = 0u; i < hcs.mHC3NgbStates.lengthof; ++i) {
         HC3NgbState & n = hcs.mHC3NgbStates[i];
         if (n.foundInaccessible() || n.foundBlockage()) {
-          cw[i] = (hcs.myuphops < hcs.maxhop - 1u) ? cCW_DAMG : cCW_EDGE;
+          cw[i] = (hcs.myUpHops < hcs.maxHop - 1u) ? cCW_DAMG : cCW_EDGE;
         }
       }
     } else {
@@ -173,7 +165,7 @@ quark QHardCell {
     //// MY CONTACTWARNINGS ARE UNCHANGED
 
     //// AM I TAIL?
-    if (hcs.myuphops < hcs.maxhop - 1u) {
+    if (hcs.myUpHops < hcs.maxHop - 1u) {
       // I'M NOT TAIL
       
       //// DO I NEED TO SPAWN?
@@ -201,7 +193,7 @@ quark QHardCell {
     //// DO I HAVE ENOUGH DOWN ALIGNMENT TO MOVE NOW?
     if (mytotaldowns > 0u &&                  // If I have any downs at all (not tail)
         mysettleddowns < cMIN_DOWN_SETTLED &&  // No good if not there yet and
-        hcs.myuphops + mysettleddowns < hcs.maxhop - 2u) { // not near the tail
+        hcs.myUpHops + mysettleddowns < hcs.maxHop - 2u) { // not near the tail
       
       ByteStreamLogger bsl;
       /*      bsl.printf("msd %d, mtd %d, myu %d, mxh %d\n",
@@ -214,7 +206,7 @@ quark QHardCell {
     //// I HAVE AT LEAST cMIN_DOWN_SETTLED DOWN ALIGNMENT OR TO TAIL
 
     //// AM I ROOT?
-    if (hcs.myuphops == 0u)
+    if (hcs.myUpHops == 0u)
       return rootBehave(hcs); // YES, HANDLE ME
     //// I AM NOT ROOT.
 
@@ -271,10 +263,61 @@ quark QHardCell {
         qc.setSettledDownHops(0u); // NUKE all down hops (including US)
       }
     }
-    ew.swap(0u,upstate);
+    moveEntourage(hcs, upstate); // GO HERE
     //// I MOVED.
     
     return true; // CANNOT SAFELY CALL (eg) done() HERE!
+  }
+
+  Void moveEntourage(HC3State & hcs, SN destsn) {
+    DebugUtils du;
+    EventWindow ew;
+    C2D dest = ew.getCoord(destsn);
+    C2D side(dest.y,dest.x); // swap coords
+
+    //// RECOMPUTE NGBRELS AS OF AFTER I MOVE
+    {
+      ByteStreamLogger bsl;
+      //      bsl.printf("rels %d %d %d %d + %d\n",mNgbRels[0],mNgbRels[1],mNgbRels[2],mNgbRels[3],destsn);
+      hcs.updateNgbsForMove(destsn);
+      hcs.summarizeRels(mNgbRels);
+      //      bsl.printf("rels %d %d %d %d\n",mNgbRels[0],mNgbRels[1],mNgbRels[2],mNgbRels[3]);
+    }
+
+    // Advance the entourage
+    for (C2D.Coord flip = -1; flip < 2; flip += 2) {
+      C2D sideout = side*flip;
+      C2D fmover = dest + sideout;
+
+      if (!(ew[fmover] is Empty)) { // Need to advance front bein
+        C2D mdest = dest*2 + sideout;
+        if (!(ew[mdest] is Empty)) { // Need to push
+          C2D altdest = mdest + sideout;
+          if (!(ew[altdest] is Empty)) {
+            DebugUtils du;
+            du.print("SMASH OUT");
+            du.print(ew[altdest]);
+          }
+          ew[altdest] = ew[mdest]; // pushed
+        }
+        ew[mdest] = ew[fmover];
+        ew[fmover] = Empty.instanceof;
+      }
+
+      C2D bmover = dest*-1 + sideout;
+      if (!(ew[bmover] is Empty)) { // Need to advance back bein
+        C2D bdest = bmover + dest;
+        //        du.print("BMOVE");
+        //        du.print(bdest);
+        //        du.print(bmover);
+        ew[bdest] = ew[bmover];
+        ew[bmover] = Empty.instanceof;
+        
+      }
+    }
+
+    // Lastly, advance self
+    ew.swap(0u,destsn);
   }
 
 }

@@ -87,9 +87,7 @@ element HardCell : QHardCell {
   typedef Unsigned(2) MoveDir; // 0..3 => SN 1..4
   MoveDir mMoveDir;
 
-  //// UrSelf API
-  @Override
-  virtual ARGB getColor(Unsigned selector) {
+  ARGB getColorDefault() {
     ColorUtils cu;
     Unsigned hc = getUpHops();
     Unsigned maxhc = getMaxHopsGoal();
@@ -107,6 +105,24 @@ element HardCell : QHardCell {
         return cu.color(0xff,0u,0u);
     }
     return ret;
+  }
+  
+  ARGB getColorMinSettled() {
+    ColorUtils cu;
+    Unsigned dh = getSettledDownHops();
+    Unsigned mdh = cMIN_DOWN_SETTLED;
+    if (dh > mdh)  return cu.color(0xffffff);
+    return cu.between(cu.color(0xffff00),
+                      cu.color(0x000000),
+                      100u * dh / mdh);
+  }
+
+  //// UrSelf API
+  @Override
+  virtual ARGB getColor(Unsigned selector) {
+    if (selector == 2u) return getColorMinSettled();
+    if (selector == 1u) return getColorDefault();
+    return super.getColor(selector);
   }
 
   //// QHardCell API
@@ -157,7 +173,7 @@ element HardCell : QHardCell {
           ew.isAccessible(sn) && ew[sn] is Empty) {
         mRootWatchdog.reset();
         setSettledDownHops(0u);
-        ew.swap(0u,sn);
+        moveEntourage(hcs,sn);
         return true; // CANNOT SAFELY CALL (eg) done() HERE!
       }
       changeDir();

@@ -1,0 +1,169 @@
+transient SegmentState {
+  typedef EventWindow.SiteNum SN;
+  typedef Segment.PocketPtr PocketPtr;
+
+  EventWindow ew;
+  Random random;
+  DebugUtils du;
+  PocketHC3 mPocket;
+
+  // availability data valid after findAvailable returns true
+  SN mEWSNAvailable[2];
+  PocketPtr mPocketWithAvailable[2] = { Segment.cPP_NULL, Segment.cPP_NULL };
+
+  // mate data valid after findMate returns true
+  SN mEWSNMate[2];
+  PocketPtr mPocketWithMate[2] = { Segment.cPP_NULL, Segment.cPP_NULL };
+
+  //// SegmentState API
+  virtual Bool init(Segment & seg) {
+    if (mPocket.init() != PocketHC3.cSTATUS_OK) return true; // Distorted pocket
+    return false;
+  }
+
+  virtual Bool doSwap(Segment & seg, Segment.BodyDir bd) {
+    Fail f;
+    f.fail("doSwap IMPLEMENT ME");
+    return true;
+  }
+
+  virtual Bool doGrow(Segment & seg, Segment.BodyDir bd) {
+    Fail f;
+    f.fail("doGrow IMPLEMENT ME");
+    return true;
+  }
+
+  //// SegmentState SERVICES
+  Bool findMate(Segment & seg, Segment.BodyDir bd) {
+    PocketPtr ngb = seg.mPocketPtrs[bd];
+
+    RectIterator ri;
+    if (!mPocket.initIterator(ri, ngb, true))
+      return false; // Can't iterate that
+
+    SN matesn;
+    Unsigned matches = 0u;
+    while (ri.hasNext() && matches < 2u) {
+      C2D n = ri.next();
+      if (!ew.isAccessible(n)) continue; 
+
+      Atom & a = ew[n];
+      if (a as Segment) {
+        if (seg.inMyGroup(a)) {
+          PocketPtr themp = a.mPocketPtrs[1u-bd];
+          Bool bothHere = themp == 0u && ngb == 0u;
+          Bool opposites = themp == 5u-ngb;
+          if (opposites || bothHere) { // are they pointing back at us?
+            if (random.oneIn(++matches)) 
+              matesn = ew.getSiteNumber(n);     // good candidate
+          }
+        }
+      }
+    }
+    if (matches != 1u) return false; // Nope
+
+    // Stash findings
+    mEWSNMate[bd] = matesn;
+    mPocketWithMate[bd] = ngb;
+    return true;
+  }
+
+  Bool findAvailable(Segment & seg, Segment.BodyDir bd) {
+    PocketPtr ngb = (PocketPtr) random.between(1,4); // Consider 0?
+    RectIterator ri;
+    if (!mPocket.initIterator(ri, ngb, true))
+      return false; // Can't iterate that
+    SN randemp;
+    Unsigned empcount, occupcount, inaccesscount;
+    while (ri.hasNext() && occupcount + inaccesscount < 2u) {
+      C2D n = ri.next();
+      if (!ew.isAccessible(n)) ++inaccesscount;
+      else if (ew[n] is Empty) {
+        if (random.oneIn(++empcount)) randemp = ew.getSiteNumber(n);
+      } else ++occupcount;
+    }
+    if (empcount == 0u || occupcount + inaccesscount > 1u)
+      return false;                // Too much clutter
+
+    // Stash findings
+    mEWSNAvailable[bd] = randemp;
+    mPocketWithAvailable[bd] = ngb;
+    return true;
+  }
+}
+
+quark Segment {
+  typedef EventWindow.SiteNum SN;
+
+  typedef Unsigned(3) PocketPtr;
+  constant PocketPtr cPP_SELF  = 0u;  //< Ptr center
+  constant PocketPtr cPP_WEST  = 1u;  //< Ptr west
+  constant PocketPtr cPP_NORTH = 2u;  //< Ptr north
+  constant PocketPtr cPP_SOUTH = 3u;  //< Ptr south
+  constant PocketPtr cPP_EAST  = 4u;  //< Ptr east
+  constant PocketPtr cPP_RSRV1 = 5u;  //< Don't use
+  constant PocketPtr cPP_RSRV2 = 6u;  //< Don't use
+  constant PocketPtr cPP_NULL  = 7u;  //< Null pointer
+
+  typedef Unsigned(1) BodyDir;
+  constant BodyDir cBODY_UP = 0u;
+  constant BodyDir cBODY_DOWN = 1u;
+  PocketPtr mPocketPtrs[BodyDir.maxof+1u]  = { Segment.cPP_NULL, Segment.cPP_NULL }; // fwd[0] bck[1] 6 bits total
+
+  //// Segment API
+  virtual Bool wantSwap(SegmentState & ss, BodyDir bdir) { return false; }
+  virtual Bool wantGrow(SegmentState & ss) { return false; }
+
+  /** Determine if a another segment might be part of my chain. 
+
+      Used to help rule out spurious matches in other pockets.
+
+      By default, this returns \c true if and only if self and seg are
+      identical concrete classes
+   */
+  virtual Bool inMyGroup(Segment & other) {
+    ClassUtils cu;
+    return cu.getClassId(self) == cu.getClassId(other);
+  }
+
+  virtual Bool updateSegment(SegmentState & ss) {
+    PocketHC3 & p = ss.mPocket;
+    if (p.mStatus != PocketHC3.cSTATUS_OK) return true; // Distorted pocket
+   
+    Random random;
+    BodyDir bdir = (BodyDir) random.between(0,1);
+    for (Unsigned i = 0u; i < 2u; ++i) {
+      bdir = (BodyDir) (1u-bdir);
+      PocketPtr ptr = mPocketPtrs[bdir];
+      if (ptr != cPP_NULL) {
+        if (ss.findMate(self, bdir) && wantSwap(ss,bdir)) 
+          return ss.doSwap(self, bdir);
+      } else {
+        if (ss.findAvailable(self, bdir) && wantGrow(ss)) 
+          return ss.doGrow(self, bdir);
+      }
+    }
+    /*
+    Unsigned(2) mNextDir = 0u;
+    //du.print("GO");
+    C2D epick;
+    Unsigned ecount;
+    RectIterator itr;
+    p.initIterator(itr,(SN) (mNextDir+1u),true); // Iterate over full west pocket
+    while (itr.hasNext()) {
+      C2D d = itr.next();
+      if (ss.ew.isAccessible(d) && ss.ew[d] is Empty) {
+        if (ss.random.oneIn(++ecount)) 
+          epick = d;
+      }
+    }
+    if (ecount > 0u) {
+      if (mNextDir++ == mNextDir.maxof) mNextDir = 0u;
+      ss.ew.swap(C2D.instanceof,epick); // leap west?
+      return true; // Moved!
+    }
+    */
+    return false; // Nothing going on
+  }
+
+}

@@ -1,0 +1,155 @@
+transient DemoState : SegmentState {
+  Bool mGrowTemp = false;
+  
+  Bool init(Demo & demo) {
+    if (super.init(demo)) return true;
+    return false;
+  }
+
+  @Override
+  virtual Bool doGrow(Segment & seg, Segment.BodyDir bd) {
+    Fail f;
+    if (mEWSNAvailable[bd] == 0u || mPocketWithAvailable[bd] == 0u)
+      f.fail("ZONG doGrow NO EWSN WTF?");
+
+    if (seg as Demo) {
+
+      // init copy (new head)
+      Demo copy = seg;  // Copy as is
+      copy.mSegNo--;    // decrement count in copy
+      copy.mPocketPtrs[1u-bd] = // its opposite ddir points in opposite wdir
+        (PocketPtr) (5u-mPocketWithAvailable[bd]);
+
+      // update no-longer-head in place
+      seg.mPocketPtrs[bd] = mPocketWithAvailable[bd];
+      if (mGrowTemp)
+        seg.mDSType = Demo.cDS_DOWN; // now you're a down
+
+      // plant new head
+      ew[mEWSNAvailable[bd]] = copy.atomof;
+      
+    } else f.fail("ZONG doGrow NOT DEMO??");
+
+    return true;
+  }
+
+  @Override
+  virtual Bool doSwap(Segment & seg, Segment.BodyDir bd) {
+    Fail f;
+    if (mEWSNMate[bd] == 0u || mPocketWithMate[bd] == 0u) {
+      f.fail("ZONG doswap NO EWSN WTF?");
+      return false;
+    }
+
+    Demo & a1 = (Demo&) seg;
+    Demo & a2 = (Demo&) ew[mEWSNMate[bd]];
+
+    Demo us = a1;
+    Demo them = a2;
+    for (Unsigned i = 0u; i < 2u; ++i) { // Update in place
+      a1.mPocketPtrs[i] = them.mPocketPtrs[i];
+      a2.mPocketPtrs[i] = us.mPocketPtrs[i];
+    }
+
+    SN newus = mEWSNMate[bd];
+    SN newthem = 0u;
+    ew.swap(newus, newthem); // then swap
+
+    return true;
+  }
+
+}
+
+element Demo : Segment {
+  typedef Unsigned(4) SegNo;
+  constant SegNo cMAX_SEG = 10u;
+  SegNo mSegNo;
+  
+  typedef Unsigned(2) DemoSegType;
+  constant DemoSegType cDS_INIT = 0u;
+  constant DemoSegType cDS_NORM = 1u;
+  constant DemoSegType cDS_DOWN = 2u;
+  constant DemoSegType cDS_UP =   3u;
+
+  DemoSegType mDSType = cDS_INIT;
+
+  //// UrSelf API
+  @Override
+  ARGB getColor(Unsigned selector) {
+    ColorUtils cu;
+    if (mDSType == cDS_INIT) return cu.color(0xffffff);
+    if (mDSType == cDS_UP)   return cu.color(0x00ffff);
+    if (mDSType == cDS_DOWN) return cu.color(0xffff00);
+    // cDS_NORM
+    ARGB head = cu.color(0x0000ff);
+    ARGB tail = cu.color(0x00ff00);
+    return cu.between(tail, head, 100u*mSegNo/cMAX_SEG);
+  }
+
+  //// Segment API
+  @Override
+  virtual Bool wantSwap(SegmentState & ss, Segment.BodyDir bd) {
+    return mDSType == cDS_DOWN && bd == cBODY_DOWN;
+  }
+
+  @Override
+  virtual Bool wantGrow(SegmentState & ss) {
+    DemoState & ds = (DemoState&) ss;
+    EventWindow ew;
+
+    // Am I the head?
+    if (mPocketPtrs[cBODY_UP] != cPP_NULL) return false; // No
+    // I am the head.
+
+    if (mSegNo > 0u) return true; // Want more normies
+
+    // If downstream is not a DS_DOWN (and given I am head) yes
+    SN down = ss.mEWSNMate[Segment.cBODY_DOWN];
+    if (down == 0u) return false; // No downstream mate?
+    Atom & a = ew[down];
+    if (a as Demo) {
+      if (a.mDSType != cDS_NORM) return false;
+    } else return false; // XXX fail?
+
+    // downstream is normal
+    ds.mGrowTemp = true;
+    return true;
+  }
+
+  Void behave() {
+    DemoState ds;
+    if (ds.init(self)) return;
+    ByteStreamLogger bsl;
+    //    bsl.printf("helo\n");
+    if (updateSegment(ds)) return;
+    //    bsl.printf("gooby\n");
+  }
+}
+
+element SeedDemo : XTimer(3u,6u,2u) {
+  EventWindow ew;
+  Random random;
+  Void die() { ew[0] = Empty.instanceof; }
+  Void diffuse() {
+    EventWindow.SiteNum n = (EventWindow.SiteNum) random.between(1,4);
+    if (ew.isEmpty(n))
+      ew.swap(0u,n);
+  }
+  Void behave() {
+    if (countAlarm()) return die(); // one shot lives to shoot
+    
+    PocketHC3 p;
+    PocketHC3.Status pstat = p.init();
+    if (pstat == PocketHC3.cSTATUS_EDGE) return diffuse(); // seek greener pastures
+    if (pstat == PocketHC3.cSTATUS_OPEN) return die();     // give up
+    if (pstat == PocketHC3.cSTATUS_BENT) return;           // wait for clarity
+
+    Demo d;
+    d.mSegNo = Demo.cMAX_SEG;
+    d.mDSType = Demo.cDS_NORM;
+    d.mPocketPtrs[Segment.cBODY_UP] = Segment.cPP_NULL; // you're the head
+    d.mPocketPtrs[Segment.cBODY_DOWN] = Segment.cPP_NULL; // you're also the tail (for now)
+    ew[0] = d.atomof;
+    return;
+  }
+}

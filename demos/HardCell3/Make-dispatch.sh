@@ -8,8 +8,8 @@ if [ "x$ARCH" == "xarmv7l" -a "x$NODE" == "xbeaglebone" ] ; then
     DEFAULT_MFM_BIN=/home/t2/MFM/bin
 else
     ENGINE=mfms
-    DEFAULT_ULAM_BIN=/usr/bin
-    DEFAULT_MFM_BIN=/usr/bin
+    DEFAULT_ULAM_BIN=/data/ackley/PART4/code/E/ULAM/bin
+    DEFAULT_MFM_BIN=/data/ackley/PART4/code/E/MFM/bin
 fi
 echo BUILDING FOR ENGINE: $ENGINE
 

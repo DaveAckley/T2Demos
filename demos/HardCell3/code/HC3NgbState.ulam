@@ -8,6 +8,44 @@ transient HC3NgbState {
   EventWindow ew;
   Random random;
   
+  typedef Unsigned(2) NgbRel;
+  constant NgbRel cNGBREL_OFFN = 0u; //< ngb off axis or non-existent
+  constant NgbRel cNGBREL_GAP1 = 1u; //< ngb on axis pocket gap 1
+  constant NgbRel cNGBREL_GAP2 = 2u; //< ngb on axis pocket gap 2
+  constant NgbRel cNGBREL_GAP3 = 3u; //< ngb on axis pocket gap 3
+
+  NgbRel summarizeRel() {
+    if (mState == cNGB_CENTER) return cNGBREL_GAP2; 
+
+    if (mState == cNGB_NORTH) {
+
+      if (mNgbCtr == C2D.instanceof(0,-3)) return cNGBREL_GAP3;
+      else if (mNgbCtr == C2D.instanceof(0,3)) return cNGBREL_GAP1;
+
+    } else if (mState == cNGB_SOUTH) {
+
+      if (mNgbCtr == C2D.instanceof(0,-3)) return cNGBREL_GAP1;
+      else if (mNgbCtr == C2D.instanceof(0,3)) return cNGBREL_GAP3;
+
+    } else if (mState == cNGB_WEST) {
+
+      if (mNgbCtr == C2D.instanceof(-3,0)) return cNGBREL_GAP3;
+      else if (mNgbCtr == C2D.instanceof(3,0)) return cNGBREL_GAP1;
+
+    } else if (mState == cNGB_EAST) {
+
+      if (mNgbCtr == C2D.instanceof(-3,0)) return cNGBREL_GAP1;
+      else if (mNgbCtr == C2D.instanceof(3,0)) return cNGBREL_GAP3;
+    }
+    if (false)
+    {
+      ByteStreamLogger bsl;
+      bsl.printf("SNG0 Ctr(%d,%d) mState %d\n",
+                 mNgbCtr.x, mNgbCtr.y, mState);
+    }
+    return cNGBREL_OFFN;
+  }
+
   typedef Unsigned(4) State; // 0..4 -> align, 5 -> empty, 6 -> conflicted, 14 -> init
   constant State cNGB_CENTER = 0u; // Found us in SN0/ctr only
   constant State cNGB_WEST   = 1u; // Found us in SN1/west only
@@ -82,8 +120,19 @@ transient HC3NgbState {
   }
 
   Void init(C2D ngbctr, QHardCell & me) {
-    //    self = Self.instanceof; // Nuke from orbit
-    
+    //vvvvXXX     self = Self.instanceof; // Nuke from orbit
+    mState = cNGB_INIT;
+    mHops = Unsigned.maxof; // If mState <= 4
+    mNgbCtr = C2D.instanceof;
+    mFoundAt = C2D.instanceof;
+
+    mFoundInaccessible = false;       // center doesn't exist
+    mFoundBlockage = false;           // center blocked but qhc in the ngb
+    mFoundUninit = false;
+    mFoundUpstream = false;
+    mFoundDownstream = false;
+    ///^^^^XXX
+
     mNgbCtr = ngbctr; // This instance customization
     
     DebugUtils du;
