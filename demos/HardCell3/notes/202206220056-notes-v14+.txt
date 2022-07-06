@@ -1,4 +1,4 @@
-{149}  -*-  mode: text; fill-column: 50;  -*-
+{162}  -*-  mode: text; fill-column: 50;  -*-
 [0:
 
 Wed Jun 22 00:56:16 2022 OK, starting a new notes
@@ -850,14 +850,14 @@ But this 'ngb map' thing would be Unsigned(2)[4]
 regardless of hopcount bits..
 
 ..let's put it in QHardCell for now and see how it
-feels. 
+feels.
 [66:
 
 Sat Jun 25 14:23:35 2022 OK now we have
 
   /*__________________________________________________
-  | COMPONENTS of QHardCell <9> (8 bits/56 unused): 
-  | 
+  | COMPONENTS of QHardCell <9> (8 bits/56 unused):
+  |
   | Pos	| Bits	| Name	| Type <classid>
   | 0	| 8	| mNgbRels[4]	| Unsigned(2)
   | 8	| 0	| super	| UrSelf <0>
@@ -927,7 +927,7 @@ DONE :91]:86] - Spike something for that
 DONE :107] - Finally return to SwapWormHC3 and evaluate
    where we are, particularly regarding segment
    type representation
-   
+
  - Spike a 8-segment wander-inside-diamond-SW and
    HAVE FUN watching it wander.
 
@@ -1075,7 +1075,7 @@ it's a good time for a nap first.
 
 Mon Jun 27 11:53:35 2022 OK here we go. What are
 we going to do for SW type info? In particular:
-Subtypes or (moral equivalent to) enum? Well, 
+Subtypes or (moral equivalent to) enum? Well,
 
  - How many types would we be talking?
 
@@ -1213,7 +1213,7 @@ mCmdWDirs[cBODY_UP].mCmd == cGO     -> 'Retreat'
 mCmdWDirs[*].mCmd == cGO            -> 'Diffuse'?
 
 How would we distinguish the desire to swap off
-the end vs not? 
+the end vs not?
 
 mCmdWDirs[cBODY_UP].mCmd == cEND &&
 mCmdWDirs[cBODY_DOWN].mCmd == cBLOCK   -> 'HeadAnchor' ?
@@ -1282,8 +1282,8 @@ Getting waaay ahead of ourselves.
 :98]
 :97]
 :96]
-:95] 
- 
+:95]
+
 :94]
 
 :93]
@@ -1306,13 +1306,13 @@ spike steps:
  - Vertebrae API
 
  - Implement Vertebrae methods
-   Bool update() 
+   Bool update()
 
  - Make quark Instruction : Vertebrae
    Instruction API
      virtual Status execute(Interpreter & itp)
-     
- 
+
+
 
 :101]
 [102:
@@ -1421,7 +1421,7 @@ quark Vertebra {
   /** Do type-specific actions given the
       Vertebra invariant(s) are satisfied
     */
-  virtual Bool action() ; 
+  virtual Bool action() ;
 }
 
 I guess we really need to break down
@@ -1460,7 +1460,7 @@ keyboard.
 I want to call them like 'Vert' and have that be
 short for Vertebra, Vertebrae, and Vertex for good
 measure. But that's not a word, not flavorful, and
-uggy. 
+uggy.
 [118:
 
 Tue Jun 28 11:22:35 2022 About time to move the
@@ -1543,7 +1543,7 @@ transient DemoState : SegmentState {
    //post
    DemoState ds;
    if (ds.init(self)) return;
-   
+
 updateSegment();
  }
 
@@ -1607,7 +1607,7 @@ DEFAULT BEHAVIOR
 [127:
 
 Wed Jun 29 05:02:52 2022 What if it's not
-'movable' but 'quoted'? 
+'movable' but 'quoted'?
 
  Unsigned(3) mWDir
    cNULL = 0u
@@ -1629,7 +1629,7 @@ Wed Jun 29 05:02:52 2022 What if it's not
        return true
 
  return false
-    
+
 :127]
 
 :126]
@@ -1645,7 +1645,7 @@ first. So, what exactly do we want that to do?
 
  - Pick a random pocket ngb.
  - Iterate over it
- - If the sum of its 
+ - If the sum of its
    = occupied sites, and its
    = inaccessible sites
    are 0 or 1,
@@ -1683,7 +1683,7 @@ in?
 
 Thu Jun 30 09:21:55 2022 OK a first cut doGrow
 just worked. Now need findMate for the ensuing
-events. 
+events.
 
 :132]
 
@@ -1714,7 +1714,7 @@ moving NULL first.[135:
 Thu Jun 30 11:15:24 2022 OK when do we get do
 doSwap?
 
-[136: 
+[136:
 
 Thu Jun 30 11:15:52 2022 We successfully found a
 mate and then called wantMove, and Demo.wantMove
@@ -1852,6 +1852,174 @@ damn soon, here.. but I want to try a fresh cut
 with Demo on top and Segment/SegmentState offering
 services.
 
-Actually let's do a WIP push.
+Actually let's do a WIP push.[149:
+
+Fri Jul  1 10:17:54 2022 OK pushed.
+
+Let's -hold Demo, scrape it out, and try to come
+in from the top "the way an app coder would want
+to" or something smelling vaguely like that.
+
+:149]
 
 :148]
+[150:
+
+Fri Jul  1 10:29:28 2022 So, what does high-level
+app coder want Demo to do?
+
+ - Have a good pocket or block
+
+ - Find upstream and downstream as needed
+   = Or diffuse if can't
+
+ - Do type-specific processing (move up/down, ..)
+   = Leading all the way to the swap or not
+
+:150]
+[151:
+
+Fri Jul  1 15:00:15 2022 OK first cut
+Demo.behave() 'in control' built. Feels a good
+deal more obvious.. but we haven't started growing
+the chain yet.
+
+:151]
+[152:
+
+Fri Jul  1 18:04:44 2022 OK have to finish cooking
+dinner but the current issue is: We have a
+stretched pocket next to a square one:
+
+
+        H . . . H . . H
+        . b . . . . c .
+        . . . . . . . .
+        H . . . H . . H
+
+and
+
+ - Demo 'b' is upstream of 'c', but when
+ - 'c' gets an event, it can't see 'b', so
+ - SegmentState.findMate returns cMATE_MISSING (I
+   think), and then Demo.behave does
+
+    if (ms > Segment.cMATE_UNSURE) return die();
+
+ and dies because cMATE_UNSURE == 2 and
+ cMATE_MISSING == 3.
+
+SO:
+ (1) Is findMate returning cMATE_MISSING? It
+     should be returning cMATE_UNSURE.
+
+so confirm that and continue from there.
+
+
+:152]
+[153:
+
+Sat Jul  2 03:01:02 2022 OK, so we've caught a
+case where, I believe, a chain pingponging between
+two pockets absolutely results in an ambiguity
+about who is connected to who.
+
+In pocket above
+  segsdown  forward  backward
+     3        3        4
+     5        3        3
+
+In pocket below
+     4        2        2
+     6        7        2
+
+So 3 & 5 both point forward to 3 (below), and
+4 & 6 both point backward to 2 (above).
+
+Without examining the segsdown you can't tell
+who's 'right' -- but the segsdown are meant to be
+DERIVED from the chain relationships, not to
+DEFINE them.
+
+[154:
+
+Sat Jul  2 03:29:23 2022 OK, I think the only sane
+thing to do here is say we can only grow (and
+later move) into a pocket if that pocket contains
+0 segments that are inMyGroup.
+
+In this case, that would have blocked 4 below from
+growing 5 above, because 3 was already above.
+[155:
+
+Sat Jul  2 03:51:45 2022 OK that fixed the
+proximal problem, and also makes the worms look
+quite a bit more stretched out and wormier, so I
+guess that's good.
+
+:155]
+:154]
+
+:153]
+[156:
+
+Sat Jul  2 07:31:01 2022 OK, so can we make these
+more-coder-friendly diamond swapworms move, here?
+
+:156]
+[157:
+
+Sat Jul  2 12:39:34 2022 OK so we're finally
+starting to move somewhat plausibly, but we given
+that we're restricted to one of our segs in any
+given pocket, the head can wind itself into a trap
+fairly easily. There's lots of ways and intents to
+deal with that but for now let's take it as
+motivation to get backing up working..
+
+[158:
+
+Sat Jul  2 12:53:35 2022 Do we want to have a
+mTempsUp (and mSegsUp) and all? Go fully
+symmetric?
+
+I'm also wondering how we're possibly going to do
+a grow-out-the-side mechanism so that we can grow
+ringworms (eew). Say instead diamond rings how
+about that?
+
+:158]
+
+:157]
+[159:
+
+Sat Jul  2 13:33:33 2022 OK went full
+temps/segsup. Now we need to generate some UPs and
+see if we can jiggle out of jams.
+
+:159]
+[160:
+
+Sun Jul  3 13:38:16 2022 Fudge. We had the thing
+running on the grid and it locked up after several
+hours. Another instance of the weird HC3 problem
+where, I think, the root dies for some reason, and
+then everybody else starts decrementing their
+hopcounts (since they see no root), and eventually
+the periphery starts to die, and then an uninitted
+takes its place, and, somehow, we end up with a
+checkerboard of not-yet-deads and uninitteds. With
+no root so nothing else happens.
+
+Pleasantly in this case, though, the diamond
+chains didn't GAF that the grid was no longer
+moving. They just kept on doing their thing.
+
+:160]
+[161:
+
+Wed Jul  6 10:45:47 2022 OK, let's have a WIP
+commit following t2sup3124 and then see where we
+are. 
+
+:161]
