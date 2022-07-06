@@ -3,12 +3,12 @@
    \color 0xf0f0f0
  */
 element HardCell : QHardCell {
-  typedef XTimer(3u,7u,500u) RootWatchdog;
+  typedef XTimer(4u,10u,500u) RootWatchdog;
   RootWatchdog mRootWatchdog;
 
   typedef EventWindow.SiteNum SN;
   typedef Unsigned(5) HopCount;
-  constant HopCount cMAX_HOPS = 15u;
+  constant HopCount cMAX_HOPS = 17u;
 
   constant Unsigned cDIFFUSE_ODDS = 1u;
 
@@ -193,25 +193,3 @@ element HardCell : QHardCell {
   }
 }
 
-/** HardCell3 v13: Pipelining + edge detection.
- \author Dave Ackley
- \copyright 2022 LCF
- \license GPL-3
- \symbol S
- \version 13
-*/
-element S {
-  Void behave() {
-    EventWindow ew;
-    Random random;
-    HardCell hc;
-    hc.setUpHops(0u); // You are root
-    for (Unsigned i = 0u; i < 3u; ++i) { // you have a random color
-      hc.mColor[i] = (HardCell.NChan)
-        random.between(HardCell.NChan.minof,
-                       HardCell.NChan.maxof);
-    }
-    hc.changeDir(); // and a random dir
-    ew[0] =  hc.atomof;
-  }
-}

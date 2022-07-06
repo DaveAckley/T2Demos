@@ -1,0 +1,49 @@
+/** HardCell3 v15: Diamond Swapworm Spike
+ \author Dave Ackley
+ \copyright 2022 LCF
+ \license GPL-3
+ \symbol S
+ \version 15
+*/
+element S {
+  Unsigned mEvents = 0u;
+  Void behave() {
+    EventWindow ew;
+    Random random;
+    ++mEvents;
+    if (mEvents == 1u) {
+      // Start the grid
+      HardCell hc;
+      hc.setUpHops(0u); // You are root
+      for (Unsigned i = 0u; i < 3u; ++i) { // you have a random color
+        hc.mColor[i] = (HardCell.NChan)
+          random.between(HardCell.NChan.minof,
+                         HardCell.NChan.maxof);
+      }
+      hc.changeDir(); // and a random dir
+      ew[7] =  hc.atomof;
+    } else if (mEvents == 25u) {
+      // Start worm 1
+      if (ew[10] is Empty) 
+        ew[10] = SeedDemo.instanceof;
+      else
+        --mEvents;
+    } else if (mEvents >= 250u) {
+      PocketHC3 pocket;
+      RectIterator ri;
+      if (pocket.init() == PocketHC3.cSTATUS_OK &&
+          pocket.initIterator(ri)) {
+        Bool foundDemo = false;
+        while (ri.hasNext()) {
+          C2D n = ri.next();
+          if (ew[n] is Demo) {
+            foundDemo = true;
+            break;
+          }
+        }
+        if (!foundDemo)      // decay into worm 2
+          ew[0] = SeedDemo.instanceof;
+      } 
+    }
+  }
+}
