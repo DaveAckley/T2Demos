@@ -1,0 +1,78 @@
+/** The Team Will Have Your Back.
+ * \copyright 2022 Public Dowmain
+ * \color #f88
+ */
+element MyElement {
+  Random random;
+  EventWindow ew;
+  ColorUtils cu;
+  typedef Unsigned(20) Dist;
+  typedef EventWindow.SiteNum SN;
+  Dist mPos = Dist.maxof;
+  Dist mHeight = 0;
+  ASCII mColor[3];
+  Bool isLoose() { return mHeight == 0 && mPos == mPos.maxof; }
+  Bool isLocked() { return mHeight > 0 && mPos < mPos.maxof; }
+  @Override
+  ARGB getColor(Unsigned selector) {
+    return cu.color(mColor[0], mColor[1], mColor[2]);
+  }
+
+  Void recolor() {
+    if (!isLocked()) {
+      mColor[0] = (ASCII) random.bits(8);
+      mColor[1] = (ASCII) random.bits(8);
+      mColor[2] = (ASCII) random.bits(8);
+    } else {
+      ARGB arg;
+      if (mPos > mHeight / 2)
+        arg = cu.color(0xffffd700);
+      else
+        arg = cu.color(0xff0057b7);
+      mColor[0] = arg[1];
+      mColor[1] = arg[2];
+      mColor[2] = arg[3];
+    }
+  }
+
+  @Override
+  Void behave() {
+    SN ngb = (SN) random.between(1u,4u);
+    C2D c = ew.getCoord(ngb);
+    Bool done = false;
+
+    recolor();
+
+    if (isLoose()) {
+      if (ew.isLive(ngb)) {
+        if (ew[ngb] is Empty) {
+          ew[ngb] = self.atomof;
+          done = true;
+        }
+      }
+    }
+
+    if (!done && !ew.isLive(ngb)) {
+      if (c.y < 0 && mPos == mPos.maxof) { mPos = 0u; done = true; }
+      else if (c.y > 0 && mPos < mPos.maxof && mHeight == 0) {
+        mHeight = (Dist) (mPos+1);
+        done = true;
+      }
+    }
+
+    if (!done) {
+      Atom & a = ew[ngb];
+      if (a as Self) {
+        Bool takePos = true;
+        if (a.isLocked()) 
+          mHeight = a.mHeight;
+        else if (a.isLoose())  // Must have pos
+          takePos = false;
+        if (takePos && a.mPos != a.mPos.maxof) {
+          if (c.y < 0) mPos = (Dist) (a.mPos + 1);
+          else if (c.y > 0) mPos = (Dist) (a.mPos - 1);
+        }
+      }
+    }
+  }
+}
