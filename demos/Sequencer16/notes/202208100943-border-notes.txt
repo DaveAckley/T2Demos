@@ -1,0 +1,831 @@
+{53}  -*-  mode: text; fill-column: 50;  -*-
+[0:
+
+Wed Aug 10 09:43:54 2022 OK so we finally got
+custom rendering plausible on the T2s and now I
+want to get a new border approach 'going real
+quick' so we can get something going on the grid
+today.
+
+Back-o-the-mind ideas:
+
+ - Build a diagonal 'T' with the base in the
+   broken pockets at max mHops.
+
+ - Or the base of the 'T' tracks the position of
+   the missing HC3 corner at max mHops.
+
+ - In any case the base of the T breaks symmetry
+   by capturing the missing HC3 dir.
+
+ - The shaft sticks out diagonally in the
+   direction indicated by the base
+
+ - The cross of the T extends diagonally from the
+   shaft. The cross goes far enough to cover the
+   diamond tips
+
+ - Everything within the T reports damage if it
+   cannot complete the T due to obstruction or the
+   edge of universe
+
+ - The cross of the T reports contact warning if
+   it sees obstruction or EoU in the outward
+   direction (which was carried all the way from
+   the base of the T.)
+
+[1:
+
+Wed Aug 10 10:20:29 2022 I guess I'm imagining
+like a target 2 spacing, with everything tracking
+shaft toward base and cross toward shaft.
+
+Let's see.
+
+      .   .   .   .   .   .   .   .   .   c1  .   .
+
+      .   .   .   .   .   .   .   .   b   .   .   H
+
+      .   .   .   .   .   .   .   c1  .   .   .   .
+
+      .   .   .   .   .   .   c1  .   .   .   .   .
+
+      .   .   .   .   .   b   .   .   H   .   .   H
+
+      .   .   .   .   c1  .   .   .   .   .   .   .
+
+      .   .   .   c2  .   .   .   .   .   .   .   .
+
+      .   .   t   .   .   H   .   .   H   .   .   H
+
+      .   .   .   c2  .   .   .   .   .   .   .   .
+
+      .   .   .   .   c1  .   .   .   .   .   .   .
+
+      .   .   .   .   .   b   .   .   H   .   .   H
+
+      .   .   .   .   .   .   c1  .   .   .   .   .
+
+      .   .   .   .   .   .   .   c1  .   .   .   .
+
+
+So maybe we don't need the shaft at all? Just base
+and cross? Looks like the very tip of the diamond
+is uncovered - it should really be a base. Maybe a
+third type just for the tips? b, c, t?
+
+ - HC3 at max hops spawns b in missing corner
+
+ - b tracks missing HC3 pos, spawns c1s diago
+
+ - c1s track b
+[2:
+
+Wed Aug 10 11:07:59 2022 Well not sure if we want
+it, but we might want more 'centerless
+stabilization' --
+
+ - c1 spawns c2 if empty
+
+ - c2 decays to c1 if sees b
+
+ - c2 spawns b if empty
+
+ - b decays to t if it sees rotated cs
+
+ - t spawns backwards c1s
+
+so the idea could be that the tissue can grow in
+all directions -- in particular, 'soft' stuff can
+deploy 'firmer' stuff -- but once relatively
+firmer anchor points stabilize, they are respected
+by the relatively softer points.
+
+And I think, we'll see, we're hoping to allow
+excess stuff to be generated due to transient
+alignment shifts, and have the excess boil away
+during settling, under the hierarchical 'firmness'
+criteria.
+
+[3:
+
+Wed Aug 10 11:12:35 2022 Could b motion try to
+push its c1s, for faster tracking?
+
+:3]
+
+:2]
+:1]
+
+:0]
+[4:
+
+Wed Aug 10 11:16:50 2022 Time to pack up here, but
+all plausible as far as it goes. We shall see.
+
+:4]
+[5:
+
+Wed Aug 10 15:16:35 2022 OK settling in; have
+about an hour now. How can we spike this stuff?
+
+Do a B that gets spawned by HC3 and tracks
+movement; just that much. That would be a start.
+
+
+:5]
+[6:
+
+Wed Aug 10 15:37:59 2022 Ooohkay so here's a
+thing: Somebody in the 'fourth corner' of an HC3
+grid cannot see the diagonal opposite HC3. It can
+only see the two orthogonal HC3s. So it would have
+no good way of being sure that it was actually
+on the outside of the diamond.
+
+So I think we need to plan for the base to be
+inside the (incomplete) pocket, rather than on the
+corner.
+
+      .   .   .   .   .   .   .   .   .   c1  .   .
+
+      .   .   .   .   .   .   .   .   s   .   .   H
+
+      .   .   .   .   .   .   .   c1  .   s   .   .
+
+      .   .   .   .   .   .   c1  .   .   .   b   .
+
+      .   .   .   .   .   s   .   .   H   .   .   H
+
+      .   .   .   .   c1  .   s   .   .   .   .   .
+
+      .   .   .   c2  .   .   .   b   .   .   .   .
+
+      .   .   t   .   .   H   .   .   H   .   .   H
+
+      .   .   .   c2  .   .   .   b   .   .   .   .
+
+      .   .   .   .   c1  .   s   .   .   .   .   .
+
+      .   .   .   .   .   s   .   .   H   .   .   H
+
+      .   .   .   .   .   .   c1  .   .   .   .   .
+
+      .   .   .   .   .   .   .   c1  .   .   .   .
+
+
+[7:
+
+Wed Aug 10 15:59:19 2022 So at the moment, lots of
+the good stuff for pocket processing is in Segment
+and SegmentState, which isn't quite what we want
+here. Seems like we should lift pocket-processing
+up another level -- to PocketUser or Pocketable or
+Pocketee, or Pocketer or Pocker or Pock or Pokee
+or something -- and have Segment and Segment
+inherit from them.[8:
+
+Wed Aug 10 16:26:40 2022 OK I made
+Pocketable.ulam, with also PocketableState, and
+lifted a bunch of stuff out of Segment.ulam into
+that. And we're currently building, but Demo and
+NuGrow are now crapping out with not finding mates
+or something --
+
+    20220810162528-3148: 29AEPS [1249F7C7]MSG: print: "DYING"
+    20220810162528-3149: 29AEPS [1249F7C7]MSG: print: "PocketChain:>MATE_UNSURE"
+    20220810162528-3150: 29AEPS [1249F7C7]MSG: (De) Demo
+     :2681F0400014800000000000
+    (
+     Demo(
+     mDemoProvider=true,
+     )PocketChain(
+     mSegsDown=0,
+     mTempsDown=0,
+     mSegsUp=0,
+     mTempsUp=0,
+     mDSType=1,
+     )Segment(
+     mPocketPtrs=[0]=2/0x2,[1]=2/0x2
+    )
+
+    20220810162528-3151: 29AEPS [1249F7C7]MSG: print: "PocketChain.die"
+    20220810162528-3152: 30AEPS [1249F7C7]MSG: print: "DYING"
+    20220810162528-3153: 30AEPS [1249F7C7]MSG: print: "PocketChain:>MATE_UNSURE"
+    20220810162528-3154: 30AEPS [1249F7C7]MSG: (Ng) NuGrow
+     :9F81FF8400002D8000000000
+    (
+     NuGrow(
+     mSuspendWatchdog=(
+       XTimer<4u 11u 1u>(
+       time=0
+      ),
+     mCWFirst=true,
+     mIntentionIndex=0,
+     mSuspended=false,
+     )PocketChain(
+     mSegsDown=0,
+     mTempsDown=0,
+     mSegsUp=0,
+     mTempsUp=0,
+     mDSType=1,
+     )Segment(
+     mPocketPtrs=[0]=3/0x3,[1]=3/0x3
+    )
+
+so we'll need to pick up there.
+
+But now it's dinner prep..
+[9:
+
+Wed Aug 10 20:02:26 2022 OK, well that was
+proximally caused by my failure to update a method
+signature during the Pocketable.ulam creation, but
+ultimately caused by my failure to use the
+@Override keyword religiously, which would have
+flagged the problem immediately, instead of me
+having to run it down.
+
+Now we're working again.[10:
+
+Thu Aug 11 02:37:00 2022 So, it turns out that,
+even in an open pocket at the edge of a diamond
+matrix, moveEntourage pushes the content around. A
+completely passive membrane base, in an open
+edge pocket, stays in that pocket as the matrix
+moves.
+
+If we can just not mess up that property as we
+build up from the base, that would be a good
+thing. [11:
+
+Thu Aug 11 03:03:53 2022 So, what shall we do with
+our membrane base, here? If we go out with
+diagonal shaft.. we can only go to the adjacent or
+else we might lose contact during movement.
+
+Suppose we go distance two in cw and ccw of the
+open corner? Like
+
+
+      .   .   .   .   .   .   .   .   .   .   .   .
+
+      .   .   .   .   .   .   .   .   .   .   cw  H
+
+      .   .   .   .   .   .   .   .   .   .   .   .
+
+      .   .   .   .   .   .   .   .   ccw .   b   .
+
+      .   .   .   .   .   .   .   cw  H   .   .   H
+
+      .   .   .   .   .   .   .   .   .   .   .   .
+
+      .   .   .   .   .  ccw  .   b   .   .   .   .
+
+      .   .   t   .   .   H   .   .   H   .   .   H
+
+      .   .   .   .   .   cw  .   b   .   .   .   .
+
+      .   .   .   .   .   .   .   .   .   .   .   .
+
+      .   .   .   .   .   .   .   ccw H   .   .   H
+
+[12:
+
+Thu Aug 11 10:19:24 2022 So hey, we can put two
+bases per open pocket, and they will both
+automatically end up diagonal to the HC3 adjacent
+to the open corner. I think, even if I try to put
+them somewhere else, as long as the matrix in
+jiggling around a bit, moveEntourage leaves them
+in those positions. Like
+
+      .   .   .   .   .   .   .   .   .   b   .   .
+
+      .   .   .   .   .   .   .   .   H   .   .   H
+
+      .   .   .   .   .   .   .   b   .   .   .   .
+
+      .   .   .   .   .   .   b   .   .   .   .   .
+
+      .   .   .   .   .   H   .   .   H   .   .   H
+
+      .   .   .   .   .   .   b   .   .   .   .   .
+
+      .   .   .   .   .   .   .   b   .   .   .   .
+
+      .   .   .   .   .   .   .   .   H   .   .   H
+
+
+[13:
+
+Thu Aug 11 10:23:48 2022 And with the existing
+little MBase code, they both end up mDirBound
+toward the properly mOpenDir corner.
+
+And if we flow that mOpenDir out to some kind of
+outrigger cilia-stuff, and they see anything
+untoward in that mOpenDir-ection, they start
+signaling contact warnings and off we go.
+
+So how do the outriggers deploy? Dare we 'foam'
+them? Like 'be at distance 3 or 4 from a base, in
+the outdir quadrant'? And foam into a random vonN
+ngb empty, if any? Or maybe lateral? Just foam
+diago to cw(outdir) or ccw(outdir)?
+
+How could we try some things real quick here?
+
+Well, we need to get the base seeded properly, for
+one thing. Have HC3 do it somehow? Let's
+check.[14:
+
+Thu Aug 11 12:05:22 2022 So okay, it's rickety and
+dumb, but we have HC3 seeding MB in a
+self-stabilizing kind of way. Once the MB/HC3
+perimeter is established, it seems pretty robust
+to matrix movements and such.
+
+So. Now we try foaming?
+[15:
+
+Thu Aug 11 12:09:32 2022 If we said foam has to be
+at 3 or 4 and on-axis to a base, we get a pretty
+full foam surround, except with three little gaps
+near the matrix tips. ..which is of course the
+worst place to have gaps.
+
+Maybe we should wire up the contact warnings in MB
+before moving on to foam. [16:
+
+Thu Aug 11 12:16:47 2022 So the idea is:
+
+ - If the MB sees anything in the outdir quadrant,
+   except other MB (or compatible foam), it
+   signals? Ditto for EoU?
+
+ - HC3 propagates MB contact warnings.
+
+Could we possibly use ew symmetries to normalize
+the quadrant? Nah let's just brute force it, here
+at t2sup-5d..[17:
+
+Thu Aug 11 12:25:39 2022 Hmm currently contact
+warning stuff is based in QHardCell, which
+Membrane is not.. Kind of pushes for lifting out
+quark Warnable or something. ContactSensor?
+
+Brute force now..
+[18:
+
+Thu Aug 11 14:02:38 2022 OK how does the contact
+warning stuff really work, as far as propagating
+from foam-ish into the matrix?[19:
+
+Thu Aug 11 14:06:16 2022 HC3NgbState.init(C2D
+ngbctr, ..)  searches the (full) vonN ngb of ctr,
+and does ++mFoamCount for any MBase it finds
+there, as well as setting mFoundFoamWarning if the
+MBase returns true on contactWarning().
+
+And HC3State.examineNgbs(..) calls that on all
+four on-HC3-stride ctrs.
+
+And all that will basically never see any of the
+MBases, which carefully nestle themselves adjacent
+to the boundary HC3s.
+
+So, it seems, we need another mechanism.
+
+:19]
+
+:18]
+:17]
+
+:16]
+
+:15]
+
+:14]
+
+:13]
+
+:12]
+
+
+:11]
+
+:10]
+
+:9]
+:8]
+
+:7]
+
+:6]
+[20:
+
+[21:
+
+Thu Aug 11 16:20:22 2022 Well, we got a couple
+diamond matrices to bounce off each other, but
+they did do some damage.. Which isn't surprising
+since we don't have any 'foam' yet, so the outer
+HC3 are still completely exposed to the universe.
+
+But in the interaction, as it happened, one cell
+survived enough to heal up without loss of
+function. The other lost its loop but otherwise
+survived.
+
+Got to foam this mofo! Then get it onto the grid!
+
+[22:
+
+Thu Aug 11 16:30:57 2022 Just had another
+intercellular encounter, meeting each other on
+significant edges; looks like both cells survived
+intact.
+
+:22]
+
+  :21]
+
+:20]
+[23:
+
+Thu Aug 11 23:42:33 2022 OK so how shall we foam?
+
+
+      .   .   .   .   .   .   .   .   .   .   .   H
+
+      .   .   .   .   .   .   .   f   .   .   b   .
+
+      .   .   .   .   .   .   f   .   .   b   .   .
+
+      .   .   .   .   .   .   .   .   H   .   .   H
+
+      .   .   .   .   f   .   .   b   .   .   .   .
+
+      .   .   .   f   .   .   b   .   .   .   .   .
+
+      .   .   .   .   .   H   .   .   H   .   .   H
+
+      .   .   .   f   .   .   b   .   .   .   .   .
+
+      .   .   .   .   f   .   .   b   .   .   .   .
+
+      .   .   .   .   .   .   .   .   H   .   .   H
+
+      .   .   .   .   .   .   f   .   .   b   .   .
+
+      .   .   .   .   .   .   .   f   .   .   b   .
+
+[24:
+
+Fri Aug 12 01:52:52 2022 OK getting
+there. Hand-seeded MS (MembraneSensor nee Foam)
+around the cells have successfully signaled and
+avoided a contact.
+[25:
+
+Fri Aug 12 08:47:37 2022 OK, so we've had a
+four-diamond mfms run going since around 3am. Main
+takeaway so far is:
+
+   A diamond in a corner, seeing EoU on two
+   adjacent tips, gets stuck!
+
+The problem is the Membranes signal contacts on
+both sides of their particular outdir, so a
+NE membrane seeing EoU to the north reports
+contacts on both N and E. And a SW membrane seeing
+EoU to the west reports contacts on both S and W.
+
+So a membrane in the NW corner of the universe
+sees contacts N,E,S,W, and can't pick a move!
+
+So I think we need to spend a little more time
+sorting out contact warnings, here, before trying
+to deploy to the grid.
+
+"If I had it to do over," contact warnings might
+be like this:
+
+ - Standardized warning API
+   = Used by HC3 + the Membrane elements
+
+ - Three levels of reporting
+   = sighting
+   = contact
+   = damage
+
+ - 8 way instead of four way. NE != N + E
+
+[26:
+
+Fri Aug 12 09:33:47 2022 And why exactly do I want
+8 way reporting? How does behavior change
+differently? Because then an NE sensor could
+report N without also reporting E? But 4 way
+supports that.
+
+So how many bits are we ready to blow for this?
+
+ 4 dirs * 3 levels * 1 bits/level? == 12
+
+we're currently at 8 bits for
+mContactWarnings.. and why do we need separate
+level bits for relatively nested warnings?
+
+ 4 dirs * 4 levels * 1/4 bits/level? == 8
+
+typedef Unsigned(2) DefCon;
+constant DefCon cDEFCON_OPEN = 0u;  //< no visible threats
+constant DefCon cDEFCON_SGHT = 1u;  //< sighting (MSensor)
+constant DefCon cDEFCON_CONT = 2u;  //< contact (MBase, HC3 tail)
+constant DefCon cDEFCON_DAMG = 3u;  //< damage (HC3 non-tail)
+
+and we always just max-merge upstream
+
+And root can pick among the mins to select the next move.
+
+And membrane's distinguish between
+edge-of-quadrant and body-of-quadrant. Edge sets
+just that dir, body sets both quadrant dirs.
+
+[27:
+
+Fri Aug 12 10:33:22 2022 So could we do this 'real
+quick'?
+
+..we could even offer a custom renderer to display
+defcon x dir.
+
+OPEN -> nothing
+SGHT -> yellow line in dir
+CONT -> orange line in dir
+DAMG -> red line in dir
+[28:
+
+Fri Aug 12 12:29:32 2022 OK a first-cut
+DEWLine.ulam is now building clean, but isn't
+used.
+[29:
+
+Fri Aug 12 12:46:04 2022 Well, let's go to
+Border13/ and then tear into this..
+[30:
+
+Fri Aug 12 12:49:21 2022 And here we are..
+[31:
+
+Fri Aug 12 17:27:26 2022 OK, have to break for the
+evening, but base class DEWLine is starting to
+work. Remaining issues:
+
+[33: Fri Aug 19 14:35:06 2022 Fixed at some point
+DONE :33] - MBase doesn't signal when it can't see any
+   MSensors
+
+[34: Fri Aug 19 14:37:37 2022 This appears to be
+   still true.. [35: Fri Aug 19 14:40:20 2022 And
+   a fix isn't immediate because HC3NgbState
+   doesn't look in the right places for it. So the
+   HC3 signaling phase never sees anything
+   wrong. Could we do it during the MB spawning
+   code? [36: Fri Aug 19 14:42:45 2022 Well, not
+   so easily: HC3 doesn't immediately know which
+   was is out.. That's MB's job. So let's not try
+   to do this:
+
+CHOSE NOT TO :36] :35]  :34] - Tail HC3 doesn't signal when it can't see any
+   MBase
+
+ - Tail HC3 does signal when it sees MBase in its
+   quadrant? That condition is transitional but it
+   can last quite a while.
+
+[37: Fri Aug 19 14:45:09 2022 How might we do
+   this?   :37] - WIBNI MBase/MSensor did a better job covering
+   the exact tips of the diamond matrix?
+
+:31]
+:30]
+:29]
+
+:28]
+:27]
+
+:26]
+
+:25]
+
+:24]
+:23]
+[32:
+
+Fri Aug 19 14:33:20 2022 OK, where are we here?
+Did we address some of :31: above?
+
+:32]
+[38:
+
+Fri Aug 19 14:57:12 2022 Well, I tried increasing
+the MSensor site deployment range from 5..12
+(radius 2) to 5..24 (radius 2..3) but it didn't
+make any great difference.
+
+I think it's clear what is really needed is a
+third Membrane element, a corner sensor (or tip
+sensor), that stabilizes itself by seeing MS with
+appropriately different mOpenDir's on either side
+of it. And looks to the far horizon for on-axis
+threats (only?).
+[39:
+
+Fri Aug 19 17:10:06 2022 OK, so MTip is starting
+to exist, although
+
+ - its detections are weak and
+
+ - it doesn't move and
+
+ - it doesn't get seeded automatically
+
+but it's time to cook dinner.
+
+[40:
+
+Sat Aug 20 00:37:22 2022 OK let's go.
+[41:
+
+Sat Aug 20 01:03:01 2022 OK detections are a
+little better.
+
+One thing is it's not easy for MS to pick up MT
+signals, because MT (it seems) is usually
+out-of-quadrant to the MS. Did we expect that HC3
+was going to pick up MS signals directly?
+[42:
+
+Sat Aug 20 02:02:23 2022 OK so we're trying to get
+MTip moving and running in to issues where we lose
+contact with our side MS, and therefore die, when
+we're unlikely to stay in contact with them at the
+distance from HC3 we want.
+
+I think, after we set MTip.mAxisBound, we
+shouldn't reconfirm against MS.
+
+And we should probably refuse to set mAxisBound
+unless we can see 'the' HC3 that is (to be) behind
+us, as well.
+[43:
+
+Sat Aug 20 04:12:01 2022 OK so this MTip code is
+an awful mess. I think we've got to -hold it and
+try again, something like this:
+
+ - Well, keep opening MS/H3 search as is
+
+ - Well, and keep axis binding sequence as is
+
+ - But then insist on having an hc3 or die
+   = and target being out-axis from there by 2
+   = and just go there if E or MS
+
+ - Only scan when we were already there
+
+ - Have H3 accept MS and/or MT for barrier
+
+[44:
+
+Sat Aug 20 04:50:07 2022 OK, that seems to be
+working a bit better. But we're still inserting
+the MTs by hand. How shall we spawn them?
+
+[45:
+
+Sat Aug 20 11:11:12 2022 OK how shall we spawn MT?
+Have MS do it somehow?[46:
+
+Sat Aug 20 11:41:08 2022 OK, so MS is spawning MT
+when
+
+ - it sees no existing MT, but
+
+ - it sees an adjacent bound Self with a different
+   mOpenDir
+
+suggesting it is turning the corner around a tip.
+
+This causes the MT to 'mature late' in the cell
+stabilization process, but all four MTs do appear
+eventually, and so far I haven't seen any 'excess
+MTs' appearing elsewhere.
+
+[47:
+
+Sat Aug 20 11:45:45 2022 Two more things to go for
+soon soon:
+
+ - A cell growing via changing maxhops
+   = Will it avoid 'multigrow' due to itchiness?
+
+ - Spike the (xhops,yhops) idea? 
+
+:47]
+
+:46]
+
+:45]:44]
+:43]
+:42]
+:41]
+:40]
+
+:39]
+
+:38]
+[48:
+
+Sat Aug 20 12:47:14 2022 Ah, so we have gotten a
+spurious MT in the current run, and it's causing a
+persistent itch, at least. That means, with the
+current schemes, MT needs more consistency
+checking and sacrifice.
+
+I'd think the check would be seeing proper
+two-sided MS directions, at least every so
+often. This accidental MT is surrounded by
+mOpenDir == 1 MSs but doesn't seem to notice;
+doesn't seem to care.
+
+:48]
+[49:
+
+Sat Aug 20 13:55:04 2022 OK, we just saw our first
+cell growth event start and we're seeing lots of,
+uh, issues:
+
+ - Looks like now-embedded MB aren't erasing
+   themselves, at least not around the tips?
+
+ - Looks like uninitted HG won't pick up a changed
+   mMaxHops, and so never become initted?
+
+[50: Sat Aug 20 14:03:41 2022
+
+ - Seems like the HG in a bent pocket won't pick
+   up a new max hops, so nearby unitted see the
+   old value?
+
+And I see 'new max hops detours' where downstream
+HG have already gotten the new max ahead of some
+of their upstreams.
+
+Maybe we want to propagate maxhops separately and
+earlier than (most) quick outs?
+[51:
+
+Sat Aug 20 14:51:18 2022 OK, trying an early pass
+for maxhops.. too soon to say, but encouraging
+behavior so far.
+[52:
+
+Sun Aug 21 11:35:16 2022 So we've had
+20220821020424 running since overnight and
+observed a few things:
+
+ - Still getting occasionally wedged grids
+
+ - 'Genuine' jams (against the edges of the
+   universe) sometimes time-out at the root (and
+   then evaporate relatively cleanly, with latest
+   Hg and PocketChain), but
+
+ - Sometimes an Hg near a tip seems to time out
+   (?) causing a momentary failure of contact
+   warning, leading to a single step toward the
+   failed tip. Appear to have two cases of that in
+   the 20220821020424 video.
+
+   = Not sure why that happens, or whether it
+     means anything that both cases happened to be
+     near a northern tip specifically.
+
+   = (The watchdog timer seems to be running on
+     all HC3/Hg's, so you'd kind of think:
+
+     1: It could fire off anywhere, and
+     2: We'd really rather have it fire off just
+        at the root, where it's much more likely
+        to lead to a clean death.)
+
+:52]
+
+:51]
+:50]
+
+:49]

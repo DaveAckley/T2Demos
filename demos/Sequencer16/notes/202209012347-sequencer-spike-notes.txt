@@ -1,0 +1,1387 @@
+{74}  -*-  mode: text; fill-column: 50;  -*-
+[0:
+
+Thu Sep  1 23:47:45 2022 OK so OK so OK come on.
+
+Let's start some kind any kind some kind of spike
+fantasy progress on HC3 sequencering before
+September 1 is done.
+
+[1:
+
+Thu Sep  1 23:48:52 2022 First question in my
+mind:
+
+ - Where does the 'main' sequencer go, relative to
+   the root of the mother diamond?
+
+   = Wanted it near the root, so root control
+     would be eased.
+
+   = But don't want it to BE the root, so
+     generality down the road is increased
+
+   = But if we're going to use quadrant
+     navigation, we cannot distinguish specific 2D
+     offsets from the root. We only quadrant and
+     distance from the root - like super coarse
+     polar coordinates. So how could we
+     grow/gather multiple pocketchains around a
+     non-root HC3?
+
+[2:
+
+Thu Sep  1 23:54:39 2022 Note that we'd intended
+to get ShapeShifter handling shrink, somehow,
+before moving on.. but here we are. My feeling now
+is we need an actual pull, an actual spike of some
+kind, from the HC3 sequence side, and if we jump
+right back into slogging through ShapeShifter we
+won't get that.
+
+:2]
+
+:1]
+
+:0]
+[3:
+
+Thu Sep  1 23:56:35 2022 What if we imagine an HC3
+sequencer immediately adjacent to the root? Put
+aside the growth/navigational issues for the
+moment.
+[4:
+
+Thu Sep  1 23:59:16 2022 Give me a spike layout
+here:
+
+      H3    H3   H3   H3
+
+      H3    H3   H3   H3
+        C3    C2    B4  B3
+ H3   H3    H3   H3   H3   H3
+        C4    C1    B1  B2
+ H3   H3    H3   Sq   H3   H3
+         D2   D1    A1  A2
+ H3   H3    H3   R0   H3   H3
+         D3   D4    A4  A3
+ H3   H3    H3   H3   H3   H3
+
+      H3    H3   H3   H3
+
+[5:
+
+Fri Sep  2 00:03:41 2022 Something like that say:
+
+ R0 - root
+ Sq - HC3 Sequencer
+ [A-D]1 - PocketChain 'anchor'
+ [A-D][2-4] - PocketChain chains
+
+Suppressing the grid:
+
+      ..    ..   ..   ..
+
+      ..    ..   ..   ..
+        C3    C2    B4  B3
+ ..   ..    ..   ..   ..   ..
+        C4    C1    B1  B2
+ ..   ..    ..   Sq   ..   ..
+         D2   D1    A1  A2
+ ..   ..    ..   R0   ..   ..
+         D3   D4    A4  A3
+ ..   ..    ..   ..   ..   ..
+
+      ..    ..   ..   ..
+
+
+How could we make such a thing? Well, suppose we
+tried to make this:
+
+      ..    ..   ..   ..
+
+      ..    ..   ..   ..
+
+ ..   ..    ..   ..   ..   ..
+        C2    C1    B1  B2
+ ..   ..    ..   Sq   ..   ..
+         D2   D1    A1  A2
+ ..   ..    ..   R0   ..   ..
+
+ ..   ..    ..   ..   ..   ..
+
+      ..    ..   ..   ..
+
+[9:
+
+Fri Sep  2 01:57:07 2022 So say we're talking a
+'SeedSeq' to get started. It will configure and
+place four SeedChains - at (1,1), (1,-1), (-1,-1)
+and (-1,1) - and place an Hg root at (0,3).
+
+Actually I guess it's phased:
+
+ - Place Hg at (0,3)
+ - Wait a bit
+ - Place 4 x SeedChain
+ - Wait a bit more
+ - Decay into a Sq
+
+and SeedChain pops like a SeedLoop, except without
+diffusing first and with a preprogrammed direction
+for downstream.
+
+Maybe SeedChain fails in some detectable way if it
+can't get the second target spot? Well it all has
+to wait.
+
+What about a somewhat generic PocketMaker atom?
+It'd be nice to stop proliferating zillions of
+SeedX types - especially SeedXs that mostly just
+deposit SeedYs. And also a generic PocketMaker
+would be a natural for use in future pocketcode.
+
+What's our PocketChain bit budget at the moment,
+also?
+
+[10:
+
+Fri Sep  2 02:05:28 2022 It's pretty damn open:
+
+  /*__________________________________________________
+  | COMPONENTS of PocketChain <6> (24 bits/40 unused):
+  |
+  | Pos	| Bits	| Name	| Type <classid>
+  | 0	| 4	| mSegsDown	| Unsigned(4)
+  | 4	| 4	| mTempsDown	| Unsigned(4)
+  | 8	| 4	| mSegsUp	| Unsigned(4)
+  | 12	| 4	| mTempsUp	| Unsigned(4)
+  | 16	| 2	| mDSType	| Unsigned(2)
+  | 18	| 6	| super	| Segment <53>
+  | 24	| 0	| base	| UrSelf <0>
+  | 24	| 0	| base	| DiamondTypes <55>
+  | 24	| 0	| base	| Intender <51>
+  | 24	| 0	| base	| NonDebugUtils <79>
+  | 24	| 0	| base	| Pocketable <86>
+  |___________________________________________________
+
+and it's not clear how many of the *Down and *Up
+fields are actually in use.
+
+PocketMaker
+ mElementType
+ mPocketAddress
+
+quark PocketAddress {
+ typedef Unsigned(2) AddressDomain;
+ constant AddressDomain cADOM_VOID = 0u; //< (?) Discard on W, random on R
+ constant AddressDomain cADOM_SELF = 1u; //< ew[0]
+ constant AddressDomain cADOM_HERE = 2u; //< addressed site in my pocket
+ constant AddressDomain cADOM_SIDE = 2u; //< any site in addressed side pocket
+ AddressDomain mAddressDomain;
+
+ typedef Unsigned(2) AddressValue;
+ /** Address Domain specific value
+     cADOM_VOID  random.between(0u,mAddressValue)
+     cADOM_SELF  ?
+     cADOM_HERE  ?
+     cADOM_SIDE  0-3: WNSE
+ */
+ AddressValue mAddressValue;
+
+}
+[11:
+
+Fri Sep  2 03:45:40 2022 Can't get too bogged down
+here but maybe instead:
+
+quark PocketAddress {
+ Bool(1) mIsImmediate;
+ PocketPtr mAddress; // 0..7 as existing
+}
+
+or just PocketPtr, come on. We'll add immediate
+when we need it.
+
+So.
+
+PocketMaker
+ ClassId mElementType         // +16b
+ PocketPtr mDestination       // +3b
+
+What about arguments? Bit field writes?
+Could we have an ulam-6 syntax for data member
+sizes and positions? Or could ClassUtils do this
+already?
+[12:
+
+Fri Sep  2 04:41:59 2022 Well, how does MFM
+AtomViewPanel find the data members, to print?
+[13:
+
+Fri Sep  2 04:46:46 2022 Well, eventually it all
+winds down to UlamClass<EC>::PrintClassMembers(..)
+
+and UlamClass provides things like
+
+ - GetDataMemberCount()
+ - GetDataMemberInfo(u32)
+ - struct UlamClassDataMemberInfo
+
+and so on.
+
+But ClassUtils.ulam never mentions the word 'data'
+or 'member'..
+
+:13]
+
+:12]
+
+
+:11]
+
+:10]
+
+:9]
+
+[6:
+
+Fri Sep  2 00:11:37 2022 What's the root bit
+budget look like at this point, again?
+
+      /*__________________________________________________
+      | COMPONENTS of HardCellG <78> (63 bits/8 unused):
+      |
+      | Pos	| Bits	| Name	| Type <classid>
+      | 0	| 4	| mHardCellWatchdog	| XTimer(4,10u,250u) <61>
+      | 4	| 4	| mRootWatchdog	| XTimer(4,10u,100u) <60>
+      | 8	| 5	| mMaxHops	| Unsigned(5)
+      | 13	| 5	| mUpHops	| Unsigned(5)
+      | 18	| 5	| mSettledDownHops	| Unsigned(5)
+      | 23	| 12	| mColor[3]	| Unsigned(4)
+      | 35	| 10	| mDirs[2]	| Int(5)
+      | 45	| 2	| mCmdPhase	| Unsigned(2)
+      | 47	| 8	| super	| QHardCell <69>
+      | 55	| 0	| base	| UrSelf <0>
+      | 55	| 8	| base	| DEWLine <39>
+      | 63	| 0	| base	| DiamondTypes <55>
+      |___________________________________________________
+
+
+We can squeeze that pretty quickly by
+
+ - Dropping mColor for +12b -> 20b
+
+ - Merging the dogs for +4b -> 24b
+   = Perhaps use two trigger levels to encourage
+     root to expires before field. Like go with
+     XTimer(4,10u,250u) but have root manually
+     trigger at 8 instead of 10
+
+[7:
+
+Fri Sep  2 00:21:10 2022 QHardCell's 8b are
+
+  | 0	| 8	| mNgbRels[4]	| Unsigned(2)
+
+and they help with side pocket iteration and we
+really don't want to mess with that.
+
+[8:
+
+Fri Sep  2 00:27:55 2022 We'd want to
+
+ - Ditch mDirs for +10b -> 34b
+
+since we'll be using 'more sophisticated' means of
+motion control, and that's probably where we end
+up.
+
+So 34b free for each Hg, including root (which,
+after all, is only special due to mUpHops==0u.)
+
+That's pretty good, really..
+
+I guess we would like HardCellG to become a quark
+too, can we do that?
+
+:8]
+
+:7]
+
+:6]
+
+:5]
+
+
+:4]
+((The MFM architecture itself could be
+characterized as 'virtual hardware'.))
+
+:3]
+[14:
+
+Fri Sep  2 09:01:45 2022 Restart.
+
+    PocketMaker
+     ClassId mElementType         // +16b
+     PocketPtr mDestination       // +3b
+
+means:
+(1) Attempt to dereference mDestination
+(2) Create a default mElementType there if successful
+
+elaborations..
+
+typedef Unsigned(3) Action
+constant Action cTRY = 0u;
+constant Action cBLOCK = 0u;
+constant Action cDIE = 1u;
+constant Action cDIFFUSE = 2u;
+constant Action cNEXT = 3u;
+constant Action cPREV = 4u;
+
+    PocketMaker
+     ClassId mElementType     // +16b -> 16
+     PocketPtr mDestination   // +3b -> 19
+     Action mState            // +3b -> 22
+     Action mIfDone           // +3b -> 25
+     Action mIfFail           // +3b -> 28
+
+[15:
+
+Fri Sep  2 09:17:00 2022 And yet once again, where
+is the sequencer in this? Using (just) PocketPtr
+for addressing is pushing towards the 'independent
+processes' view, where everything happens relative
+to ew[0] - and eventually we start modifying
+fields of the 'instruction' in place.. and it's a
+process.
+
+[16:
+
+Fri Sep  2 09:54:53 2022 The alternative we wanted
+to explore would be more like
+
+typedef Unsigned(2) Unit
+constant Unit mSEQ_REG = 0u;
+constant Unit mSEQ_INP = 1u;
+constant Unit mSEQ_OUT = 2u;
+constant Unit mSEQ_INS = 3u;
+
+source : Unit
+dest : Unit
+type : ClassId
+match : ==, <, sub
+op :
+
+[17:
+
+Fri Sep  2 10:15:05 2022 Ooh or maybe ClassId is
+just a special case of FIELD+VALUE hypersubspace
+selection?
+
+Hmm, 7b to select start bit
+could do 6b and just say you can't target the last
+bits. could have a special case for matching the
+type? since we don't want to think partial matches
+in the element type would be useful?
+
+There's also classid which is not the element
+type. Hmm maybe that's where we could allow
+subclass relations, and have element type just be
+exact match?
+
+:17]
+
+:16]
+
+:15]
+:14]
+[18:
+
+Fri Sep  2 11:15:19 2022 Go again:
+
+Instruction
+ typedef Unsigned(7) OpCode
+ OpCode mOpCode                  +7 / 7
+ Unit mSource1                   +2 / 9
+ Unit mSource2                   +2 / 11
+ Unit mDest                      +2 / 13
+ typedef Bits(19) Condition
+ Condition mEnable               +19 / 32
+
+[19:
+
+Fri Sep  2 15:16:04 2022 Maybe we could take
+advantage of
+
+  constant PocketPtr cPP_RSRV1 = 5u;  //< Don't use
+  constant PocketPtr cPP_RSRV2 = 6u;  //< Don't use
+
+to point at HC3Seq units? At least two of them?
+Maybe like:
+
+  constant PocketPtr cPP_REG = 5u;    //< Register/stack quadrant
+  constant PocketPtr cPP_IO = 6u;     //< IN on R, OUT on W
+
+and if you try to access REG or IO when you're not
+in mSEQ_INS space, you just block.
+
+[20:
+
+Fri Sep  2 15:45:09 2022 Well obviously we've
+gotten lost in the weeds again here. We can't let
+that stop us for long.  How can we rein it in?
+
+[21:
+
+Sat Sep  3 00:18:21 2022 Just start a damn
+spike. HC3Seq.ulam
+[22:
+
+Sat Sep  3 00:56:10 2022 OK, did:
+
+ - Lifted guts of HardCellG into quark QHardCellG
+
+ - Created quark QProcUnitMap to map from logical
+   'ProcUnit' types (REG, INP, OUT, INS) to
+   PocketDir quadrants
+
+ - Made DiamondSequencer : QHardCellG which HAS-A
+   QProcUnitMap
+
+Building now.
+
+(Noting that with the amount of ulam code this
+'chain processor' implies, build times are going
+to be absofoggenlutely unbelievable on the
+keymaster..) [23:
+
+Sat Sep  3 02:33:03 2022 OK, did:
+
+ - Made quark QDebugUtils that allocates
+      Bool mDebugOutputEnabled = false;
+   to control debug output on a per-atom basis.
+
+ - Made Intender, Intention, and QHardCell inherit
+   from QDebugUtils.
+
+   = Reduced colors from 12 bits to 9 bits to free
+     up space
+
+ - Made elements Do (Df) to enable (disable) one
+   nearest QDebugUtils atom
+
+ - Felt happy about this new ability.
+[24:
+
+Sat Sep  3 02:38:39 2022 So, can we move toward
+SeedSeq to layout something like the end of :5:
+above?
+
+
+ ..   ..    ..   ..   ..   ..
+        C2    C1 SS B1  B2
+ ..   ..    ..   Sq   ..   ..
+         D2   D1    A1  A2
+ ..   ..    ..   R0   ..   ..
+
+ ..   ..    ..   ..   ..   ..
+
+SeedSeq
+ (1) Seed HardCellG root at (0,4)
+ (2) Wait until (0,1) is a HC3
+ (3) Seed
+      D1 SeedLoop(W) at (-1,0)
+      C1 SeedLoop(W) at (-1,2)
+      B1 SeedLoop(E) at (1,0)
+      A1 SeedLoop(E) at (1,2)
+ (4) Replace (0,1) with a Sq
+ (5) Erase self
+
+SeedLoop
+ (1) Wait for availability in configured side pocket
+ (2) Set up primal loop in self and side pocket
+
+[25:
+
+Sat Sep  3 02:55:55 2022 Not that far down the
+road we'd like to replace a lot of these Seed*
+elements with PocketMakers!
+
+That is, when they're used programmatically, like
+the SeedLoops from the SeedSeq..  We'll just get
+default values trying to place a PocketMaker
+manually.
+
+:25]
+
+:24]
+:23]
+
+:22]
+:21]
+
+:20]
+
+:19]
+
+:18]
+[26:
+
+Sun Sep  4 02:53:01 2022 OK so we're making some
+progress here; got four loops trying to grow.. but
+the layout in :24: is kind of messed up for
+purposes of loop growing, because the loops aren't
+centered on the root.
+
+[27:
+
+Sun Sep  4 06:45:41 2022 Got it working by fixing
+a couple bugs and relaxing the quadrant
+restrictions a little bit. Starting a movie stress
+test before nap.[28:
+
+Sun Sep  4 06:57:48 2022 Started up 10 Hg in one
+grid. Nine booted the loops okay but one lost its
+NE loop. Examining the captured frames it's clear
+that what happened is that loop got popped too
+early, before the diamond was fully-enough
+established, and the outer part of the loop stuck
+out too far beyond the diamond edge, and punched
+out:
+
+    20220904065144-3326: 279AEPS [83FE9F07]MSG: print: "DYING"
+    20220904065144-3327: 279AEPS [83FE9F07]MSG: print: "PocketChain: Too open pocket"
+    20220904065144-3328: 279AEPS [83FE9F07]MSG: (Sf) ShapeShifter
+     :9F81FFA00000022400000000
+
+So that's useful info. We should have SeedLoop11
+check the Hg settledDownCount or something before
+popping. And we wonder how on earth a 'general'
+PocketInstruction could be programmed to make such
+a check without having it totally hard-wired..
+
+A super-hack natural-life evolvo-inspired approach
+would be like just read a bitfield that happens to
+be the high-order bits of mSettleDownCount, and
+just test them for non-zero..
+
+Could have two instructions for deployment; first
+one makes the checks:
+
+IF PROC@36:3 != 0 -> NEXT
+
+where PROC means the DiamondSequencer atom itself,
+then like a bitfield and a condition..
+
+[29:
+
+Sun Sep  4 07:25:58 2022 But then the next
+instruction will have to be swapped in to execute,
+so it won't execute atomically wrt the IF
+test. Guess that's just the price of admission to
+sequential coding?
+
+[30:
+
+Sun Sep  4 07:31:27 2022 Um, if it's just a
+two-instruction loop, conceivably the swap could
+be done and then a new self drawn from ew[0] and
+the second instruction actually could run
+atomically with the first ??
+
+Even if it wasn't a two-instruction loop, if the
+upstream was already a temp and the downstream was
+already in place.. Running multiple pretty clearly
+distinct transitions in a a single event window??
+
+It could be done, right?
+
+It would pretty badly fuck up the MFM mobile
+instruction cache ideas I've been kicking around
+in the back of my head.. Really would need to
+whole codebase available everywhere.
+
+But that's kind of already true isn't it, what
+with all the base class methods and so
+forth. Per-element caches would have to have
+pretty tremendous code duplication, so much so it
+wouldn't really be 'per element' in any
+significant way.
+
+:30]
+:29]
+
+:28]
+
+:27]
+
+:26]
+[31:
+
+Mon Sep  5 16:49:38 2022
+
+ - Byte code (or bit code) with multiple
+   instructions per PocketChain atom
+
+ - explicitly do things like block for completion
+
+ - trigger things
+
+ - seq has component mapping plus posted
+   operations
+
+ - 'tail call' continues event if next atom
+   successfully moves into ew[0].
+
+[32:
+
+Tue Sep  6 00:43:30 2022 So, as an example,
+element Demo currently has 43 unused bits. We
+could stuff four 10 bit instructions in there, and
+a 2 bit intra-atom program counter, and still have
+a bit left over.
+
+We could get a lot of mileage out of a 10 bit
+instruction.
+
+00 + 8 bits : push immediate
+01 + 8 bits
+10 + 8 bits
+
+11 + 
+
+[33:
+
+Tue Sep  6 01:35:36 2022 Well if we imagine a
+single event VM, we could go smaller, like 8 or
+even 6 bits/op, allowing five or six uinstructions 
+in an atom.
+
+The idea there, I guess, would be to compose ..
+
+Well maybe these uops could help us explore future
+FPGA/ASIC-ish event window operations. Like
+consider:
+
+Category: EW ops
+
+Void <- MAPCLASS tagnum, classid
+Void <- MAPBASE tagnum, baseclassid
+ SN  <- REDUCE tagmask, combiner
+
+[34:
+
+Tue Sep  6 01:48:22 2022 Around and aground,
+aground all around.
+
+ - So so much new design implied by uops
+
+ - Gut says six or even ten uops would still be
+   very confining very quickly
+
+ - Pushing me back towards the VLIW-style
+   atom-wide 'single instruction processes'
+
+   = Hope for less new design because reuse
+     (significant chunks of) existing ulam code
+
+   = Be able to tailor back and forth along the
+     true programming / mere configuration axis as
+     time and energy and success suggest
+
+[35:
+
+Tue Sep  6 02:08:44 2022 If we wanted to move
+forward on atom-wide 'complex' instructions
+
+ACISC - Atomic Complex Instruction Set Computing
+SIAS - Single Atom Instruction Set
+SIPAC - Single Instruction Per Atom Computing
+APSC - Atomic Process Sequencing Computing
+EPS - Elemental Process Sequencing
+
+
+:35]
+
+:34]
+  
+:33]
+
+:32]
+
+:31]
+[36:
+
+Tue Sep  6 03:13:53 2022 So, head fake, head fake,
+dodge, and come in from below.
+
+ - Stop trying to think of specific instructions
+   or instruction formats
+
+ - Think of infrastructure to execute instructions
+   regardless of detailed format or function
+
+(1) How to get 'next instruction' into position
+
+(2) What 'in position' means
+
+(Re)state assumptions
+
+DiamondSequencer HAS-A
+ ComponentToQuadrantMap mComponentToQuadrantMap; //< +8b
+
+ typedef Unsigned(2) PendingOperation;
+ constant PendingOperation cDONE = 0u; //< No operation in progress
+ constant PendingOperation cFRWD = 1u; //< Roll forward, bringing next upstream here
+ constant PendingOperation cBACK = 2u; //< Roll backward, bringing next downstream here 
+ constant PendingOperation cFREE = 2u; //< Bring an empty slot here
+ typedef PendingOperation QuadrantToPendingOperation[4];
+
+ QuadrantToPendingOperation mQuadrantToPendingOperation; // +8b
+
+[37:
+
+Tue Sep  6 03:45:28 2022 When any 'Sequenceable'
+element takes an event, it
+(1) Inits and finds a DiamondSequencer, or pdiffuses
+(2) Consults ds.mComponentToQuadrantMap to find
+    its current component identity
+(3) Checks mQuadrantToPendingOperation to find its
+    current chain operation if any
+(4) If operation is non-zero, attempt to complete
+    the operation or pdiff
+(5) If operation is zero and identity is not INST,
+    pdiff
+(6) Otherwise it runs its Sequenceable.execute(..)
+    function, which does whatever it does, perhaps
+    adding pending operations or reconfiguring the
+    Component map.
+
+[38:
+
+Tue Sep  6 09:16:09 2022 Well, made a
+Sequenceable.ulam to get started, but going to
+need a review and plan for integrating (1)-(6)
+above into the Intender/Intention framework - even
+though, I expect, it'll all be happening under a
+single Intention.
+
+We'll see.
+
+:38]
+:37]
+
+:36]
+[39:
+
+Wed Sep  7 17:48:06 2022 So, what all does
+PocketChain/PocketChainState do? We're proposing
+that SequenceableState will build off that.
+
+Also, what about a generalized seed aka
+PocketMaker?
+
+element GeneralSeed {
+  ClassId mTypeToMake
+}
+
+:39]
+[40:
+
+Thu Sep  8 12:29:09 2022 So I made GeneralSeed be
+Sequenceable and it's sort of working, for what
+that's worth.. but I'm stuck again on why do this
+GeneralSeed idea at all.
+
+Why not just build the underlying element?
+
+Is it just to keep the element 'quoted' until the
+magic moment when it turns out to be in the
+instruction stream of a processor? If so then why
+not go with the Bool mQuoted idea and screw the
+GeneralSeed? Or mUnquoted or mLive or whatever, to
+default passive.
+
+[41:
+
+Thu Sep  8 13:09:17 2022 OK so we made
+
+ quark Quotable : Sequenceable
+
+that adds a Bool mIsLive.
+
+Now we need something to be Quotable.
+
+The idea is the Sequencer, when it's ready for
+another instruction, will look at the instruction
+stream and dequote whatever's there?
+
+Really seems iffy to be reifying the quotation
+status, rather than, say, searching for the
+processor and checking its status to determine if
+we are quoted.
+
+DON'T STORE STATE.
+[42:
+
+Fri Sep  9 10:57:37 2022 OK so we're down to
+implementing
+
+  Bool Quotable.isLive(Intention & it)
+
+to do those steps from :37: above. We're going to
+be assuming the Intention is at least
+PocketChainState (or maybe just SegmentState?) and
+we want to know how early we can expect to call
+isLive and have the Intention know enough to help
+with those steps.[43:
+
+Fri Sep  9 11:59:41 2022 So it's
+
+ SequenceableState ->
+ PocketChainState ->
+ SegmentState ->
+   mEWSNMate
+   mPocketWithMate
+ PocketableState ->
+   mPocket
+ Intention
+
+[44:
+
+Fri Sep  9 12:03:05 2022 So it kind of looks like
+after mPocket.init() returns false via
+PocketableState.init(..), we know we have a
+cSTATUS_OK pocket. And what information does that
+give us?
+
+It gives us pocket bounds in
+
+  Bound mBounds[4]; 
+
+[46:
+
+Fri Sep  9 12:23:26 2022 So in fact it seems like
+PocketableState.init(..) isn't enough for what we
+want. But could it be? [47:
+
+Fri Sep  9 12:25:37 2022 Well, there's
+Pocketable.findAvailables(PocketableState&), which
+fills in a bunch of info:
+
+  SN mEWSNAvailables[Pocketable.cPP_EAST+1u]; // 0..4 
+  Bool mPocketIterable[Pocketable.cPP_EAST+1u]; // 0..4 
+  Unsigned mPocketSize[Pocketable.cPP_EAST+1u]; // 0..4 
+  Unsigned mPocketUsCount[Pocketable.cPP_EAST+1u]; // 0..4 
+  Unsigned mPocketFull[Pocketable.cPP_EAST+1u]; // 0..4 
+  Unsigned mPocketEmpty[Pocketable.cPP_EAST+1u]; // 0..4 
+  Unsigned mPocketInaccessible[Pocketable.cPP_EAST+1u]; // 0..4 
+
+and I'd think could record HC3 positions too?
+
+Actually, couldn't PocketHC3 do that, and
+  earlier?[48:
+
+Fri Sep  9 12:39:15 2022 Wait, PocketHC3 already
+sets up
+
+  C2D mCoords[PocketDir.maxof+1]; // 0 --, 1 +-, 2 ++, 3 -+
+  Unsigned mCoordCount;
+
+and isn't that what we need? Assuming
+mCoordCount==4u, then it'd be like
+
+  Atom & a = ew[p.mCoords[i]];
+  if (a as DiamondSequencer) {
+   ..
+  }
+
+
+:48]
+
+:47]
+
+:46]
+
+and corner info in
+
+  PocketHC3_CornerInfo mCornerInfo[4];
+
+which sounds encouraging but corner info there is
+
+    transient PocketHC3_CornerInfo {
+      typedef QHardCell.NgbRels NgbRels;
+      NgbRels mNgbRels;
+    }
+
+and NgbRels is
+
+  typedef Unsigned(2) NgbRel;
+ ..
+  typedef NgbRel NgbRels[4];
+
+with like
+
+  constant NgbRel cNGBREL_OFFN = 0u; //< ngb off axis or non-existent
+  constant NgbRel cNGBREL_GAP1 = 1u; //< ngb on axis pocket gap 1
+  constant NgbRel cNGBREL_GAP2 = 2u; //< ngb on axis pocket gap 2
+  constant NgbRel cNGBREL_GAP3 = 3u; //< ngb on axis pocket gap 3
+
+And is that crazy or not? In effect 4x4 2D array
+with 16 numbers there? [45:
+
+Fri Sep  9 12:15:06 2022 Maybe it's not crazy. We
+have QHardCell.mNgbRels as persistent state, and
+the transient (I think) assembles that information
+from all four sides, so a pocket inhabitant can
+get a view on the status of all the side pockets,
+even though most of the HC3s bordering the side
+pockets are out of the event window.
+
+:45]
+
+
+:44]
+
+:43]
+
+:42]
+:41]:40]
+[49:
+
+Fri Sep  9 13:35:15 2022 OK well here we are
+again. This:
+
+    element DiamondSequencer : QHardCellG {
+      QProcUnitMap mProcUnitMap;          //< Process function to direction
+      QDirStatusMap mDirStatusMap;        //< Quadrant direction to process status
+    }
+
+gets us this:
+
+    ./DiamondSequencer.ulam:63:9: ERROR: Trying to exceed allotted bit size (71) for element DiamondSequencer with 77 bits.
+    ./DiamondSequencer.ulam:63:9: NOTE: Components of DiamondSequencer are..
+    ./DiamondSequencer.ulam:64:3: NOTE: (8 of 77 bits, at 0) QProcUnitMap mProcUnitMap.
+    ./DiamondSequencer.ulam:65:3: NOTE: (8 of 77 bits, at 8) QDirStatusMap mDirStatusMap.
+    ./HardCellG.ulam:1:7: NOTE: (44 of 77 bits, at 16) from super base class: QHardCellG.
+    ./DEWLine.ulam:4:7: NOTE: (8 of 77 bits, at 60) from shared base: DEWLine.
+    ./DiamondTypes.ulam:4:7: NOTE: (0 of 77 bits, at 68) from shared base: DiamondTypes.
+    ./QDebugUtils.ulam:1:7: NOTE: (1 of 77 bits, at 68) from shared base: QDebugUtils.
+    ./QHardCell.ulam:3:7: NOTE: (8 of 77 bits, at 69) from shared base: QHardCell.
+    ./DiamondSequencer.ulam:63:9: ERROR: CLASS (regular) 'DiamondSequencer' SIZED 77 FAILED.
+
+So. WTF is QHardCellG doing with 44 bits?
+[50:
+
+Fri Sep  9 13:40:14 2022 It's doing:
+
+  /*__________________________________________________
+  | COMPONENTS of QHardCellG <72> (61 bits/3 unused): 
+  | 
+  | Pos	| Bits	| Name	| Type <classid>
+  | 0	| 4	| mHardCellWatchdog	| XTimer(4,10u,250u) <64>
+  | 4	| 4	| mRootWatchdog	| XTimer(4,10u,100u) <63>
+  | 8	| 5	| mMaxHops	| Unsigned(5)
+  | 13	| 5	| mUpHops	| Unsigned(5)
+  | 18	| 5	| mSettledDownHops	| Unsigned(5)
+  | 23	| 9	| mColor[3]	| Unsigned(3)
+  | 32	| 10	| mDirs[2]	| Int(5)
+  | 42	| 2	| mCmdPhase	| Unsigned(2)
+  | 44	| 8	| super	| QHardCell <81>
+  | 52	| 0	| base	| UrSelf <0>
+  | 52	| 8	| base	| DEWLine <42>
+  | 60	| 0	| base	| DiamondTypes <58>
+  | 60	| 1	| base	| QDebugUtils <76>
+  |___________________________________________________
+  */
+
+So immediately I'd say:
+
+ - Merge mHardCellWatchdog and mRootWatchdog
+
+ - Strip out mDirs and mCmdPhase and move them
+   to a RootHardCellG
+
+Together that buys us 16 bits. We'll save the 9
+bit color to kill another day.
+
+[51:
+
+Fri Sep  9 14:02:24 2022 OK, down to:
+
+  /*__________________________________________________
+  | COMPONENTS of QHardCellG <71> (57 bits/7 unused): 
+  | 
+  | Pos	| Bits	| Name	| Type <classid>
+  | 0	| 4	| mHardCellWatchdog	| XTimer(4,10u,250u) <63>
+  | 4	| 5	| mMaxHops	| Unsigned(5)
+  | 9	| 5	| mUpHops	| Unsigned(5)
+  | 14	| 5	| mSettledDownHops	| Unsigned(5)
+  | 19	| 9	| mColor[3]	| Unsigned(3)
+  | 28	| 10	| mDirs[2]	| Int(5)
+  | 38	| 2	| mCmdPhase	| Unsigned(2)
+  | 40	| 8	| super	| QHardCell <80>
+  | 48	| 0	| base	| UrSelf <0>
+  | 48	| 8	| base	| DEWLine <42>
+  | 56	| 0	| base	| DiamondTypes <58>
+  | 56	| 1	| base	| QDebugUtils <75>
+  |___________________________________________________
+  */
+
+[52:
+
+Fri Sep  9 14:22:19 2022 OK, down to
+
+  /*__________________________________________________
+  | COMPONENTS of QHardCellG <71> (45 bits/19 unused): 
+  | 
+  | Pos	| Bits	| Name	| Type <classid>
+  | 0	| 4	| mHardCellWatchdog	| XTimer(4,10u,250u) <63>
+  | 4	| 5	| mMaxHops	| Unsigned(5)
+  | 9	| 5	| mUpHops	| Unsigned(5)
+  | 14	| 5	| mSettledDownHops	| Unsigned(5)
+  | 19	| 9	| mColor[3]	| Unsigned(3)
+  | 28	| 8	| super	| QHardCell <80>
+  | 36	| 0	| base	| UrSelf <0>
+  | 36	| 8	| base	| DEWLine <42>
+  | 44	| 0	| base	| DiamondTypes <58>
+  | 44	| 1	| base	| QDebugUtils <75>
+  |___________________________________________________
+  */
+
+and I think DiamondSequencer will now fit with
+both its maps. See how much room we might have
+left for carry flags or who-knows-what..
+[53:
+
+Fri Sep  9 14:25:30 2022 10 bits left:
+
+  /*__________________________________________________
+  | COMPONENTS of DiamondSequencer <68> (61 bits/10 unused): 
+  | 
+  | Pos	| Bits	| Name	| Type <classid>
+  | 0	| 8	| mProcUnitMap	| QProcUnitMap <69>
+  | 8	| 8	| mDirStatusMap	| QDirStatusMap <70>
+  | 16	| 28	| super	| QHardCellG <71>
+  | 44	| 0	| base	| UrSelf <0>
+  | 44	| 8	| base	| DEWLine <42>
+  | 52	| 0	| base	| DiamondTypes <58>
+  | 52	| 1	| base	| QDebugUtils <75>
+  | 53	| 8	| base	| QHardCell <80>
+  |___________________________________________________
+  */
+
+(or 11 if we give up QDebugUtils, but that won't
+happen any time soon anyway.)
+
+[54:
+
+Fri Sep  9 15:18:53 2022 OK, so SeedSeq seems to
+make what we expect, including a DiamondSequencer
+that now has a QProcUnitMap and a QDirStatusMap.
+
+So we ought to be able to write and test
+isLive(..) pretty soon, here, right?
+
+Looks like next up is figure out what quadrant
+we're in, so we can see if we're maybe
+instructions. [55:
+
+Sat Sep 10 03:59:46 2022 Well, at very very long
+last, we appear to have a Demo - which is now a
+Quotable, successfully realizing it is the head of
+an instruction stream of a DiamondSequencer that
+has nothing else to do.
+
+Tons of immediate issues but let's recognize
+getting this far is actually a bit of a thing.
+
+Break.
+
+:55]
+
+:54]
+:53]
+
+:52]
+:51]
+:50]
+:49]
+[56:
+
+Sat Sep 10 12:22:43 2022 So. Had to change the
+pump on the swamp cooler this morning but now
+we're set.
+
+IMMEDIATE ISSUES IN SEQUENCING
+
+ - Current Demos swap in and out of the
+   DiamondSequencer instruction pocket all will-ye
+   nil-ye. They need to respect their ProcStatus
+
+ - Somewhere we need semi-general Quotable
+   handling - the behavior it does when it's not
+   live. Where that includes:
+
+   = Executing the ProcStatus codes
+      cDSTATUS_IDLE - do nothing (or, you're live, if INS)
+      cDSTATUS_UPWD - if temp self make down, else
+                      if temp upstream make down
+                      if..
+      cDSTATUS_DNWD - if temp self make up, else
+                      if temp downstream make up
+      cDSTATUS_TEMP - if temp done
+                      if upstream temp swap down, done
+                      if downstream temp swap up, done
+
+[57:
+
+Sun Sep 11 03:33:48 2022 OK we're still not clear
+on chain processing steps. "What do we imagine we
+might have been imagining?"
+[58:
+
+Sun Sep 11 12:15:34 2022 Maybe we imagined:
+
+ - IN, REG, INS streams would self-stabilize towards
+   having a non-temp in the processor pocket.
+
+   = (But then if we're going to be able to
+      request a temp in one of those pockets, we'd
+      need some completion flag to distinguish
+      between a requested temp now available vs
+      one that we're supposed to stabilize away
+      from.)
+
+ - OUT would self-stabilize towards having a temp
+   in the pocket
+
+ - So a non-idle procstatus means "Do this thing
+   once and then reset your procstatus to idle
+   atomically as part of doing it."
+
+[59:
+
+Sun Sep 11 14:28:18 2022 And how do those
+self-stabilization ops work?
+
+:59]
+
+:58]
+
+:57]
+
+:56]
+[60:
+
+Sun Sep 11 16:11:17 2022 OK a little cleanup. I
+think we should merge Sequencable and Codon.. or
+maybe no? I suppose there could be sequencable
+stuff that's never executable? But we should move
+isExecutable to the Codon level. [61:
+
+Sun Sep 11 16:30:22 2022 OK, well Sequenceable is
+a pretty empty API at the moment, but I'm leaving
+it there for now.
+
+But now we need some guts for CodonState.act(..)
+to deal with the case when the codon is not
+executable. [62:
+
+Sun Sep 11 16:43:22 2022 So, all our Codons are
+still PocketChain, and so have PocketChain.mDSType
+and all.
+
+I think we'd like the main sequence in
+CodonState.act(..) to use PocketChain stuff as
+services, at whatever level, and so we'd like
+PocketChain (and or PocketChainState) to provide
+such services at useful levels.
+
+[63:
+
+Sun Sep 11 17:01:54 2022 And hmm we need a
+three-way split between
+
+ - executable,
+   = so do all our fancy stuff, vs
+
+ - in processor pocket but not executable,
+   = so do procstatus rolls and stuff, vs
+
+ - not in processor pocket,
+   = so do free-space temp propagation, growth
+     (and reshaping) and stuff.
+
+So isExecutable(..) wouldn't be the API we want
+there.
+[65:
+
+Thu Sep 15 02:11:01 2022 OK so we need/want to hit
+the ground running here on DS and Codon. What
+about that three-way split there?[66:
+
+Thu Sep 15 02:45:08 2022 We already switched to
+
+      typedef Unsigned(2) ExecutionContext;
+      constant ExecutionContext cEXCT_ACTV = 0u; //< Active, we are code, we do our special thing
+      constant ExecutionContext cEXCT_PASV = 1u; //< Passive, we are data, we shuffle as directed
+      constant ExecutionContext cEXCT_FREE = 2u; //< Free, we are chain, we manage ourselves
+      constant ExecutionContext cEXCT_DIFF = 3u; //< Diffuse, try to get around something unsettled
+
+and
+
+      /** Determine our current execution context */
+      ExecutionContext
+      getExecutionContext(Intention & it) ..
+
+in //// CODON SERVICES
+
+Though at the moment we don't seem to use anything
+except Codon.cEXCT_ACTV.
+
+According to getExecutionContext(Intention &), if
+there's no DS around, we are cEXCT_FREE.
+
+Now, "no DS around" apparently includes anything
+that causes PocketHC3.mStatus to be NOT
+cSTATUS_OK.
+
+So that seems kind of wrong: If we're in a bent
+pocket (that contains a DS), we want to block..
+
+..although perhaps the end of "Free, we are chain,
+we manage ourselves" means we'd re-detect the bent
+pocket later, as part of chain self-management,
+and we'd block then so it wouldn't be a problem.
+[67:
+
+Thu Sep 15 03:28:53 2022 Let's just keep that in
+mind as a possible issue but not hang up on it.
+
+:67]
+:66]
+
+:65]
+:63]
+
+:62]
+
+:61]
+
+:60]
+[64:
+
+Mon Sep 12 04:21:06 2022 OK! So it's an incredibly
+silly demo, but we have
+
+:64]
+[68:
+
+Thu Sep 15 04:17:00 2022 Need some good
+
+TODO
+
+ - Write outline of execution context codon
+   behavior
+
+ - Write outline of free chain codon behavior
+
+ - Spike a "first family" of codon
+   subclasses. Make an instruction framework that
+   can
+   = set entrance requirements on PUs
+   = wait for reqmts to be satisfied
+   = call down
+   = set exit requirements on PUs
+
+:68]
+[69:
+
+Thu Sep 15 04:24:33 2022 What's our Codon bit
+budget look like?
+
+  | COMPONENTS of Codon <42> (25 bits/39 unused): 
+
+Not too bad. But do 'entrance reqmts' make sense?
+
+We're thinking we're going to wait for all PUs to
+go IDLE before declaring the current instruction
+ACTV. So what do entrance requirements mean?
+Wouldn't setting PU functions be part of the call
+down?
+
+And an instruction (typically) ends by setting
+NEXT (meaning cDSTATUS_UPWD?) on the INS PU, which
+will cause it to block until it's away from the DS
+and then under cEXCT_FREE rules.
+
+[70: 
+
+Thu Sep 15 08:33:59 2022 So, does DS do anything
+on it's own initiative? So far it sounds like
+we're manipulating everything from the
+pockets.[72:
+
+Thu Sep 15 08:47:17 2022 (At the moment, DS offers
+some services but does not even have its own
+behave().. )
+
+:72]
+
+But at one point back there, we were thinking that
+at least inter-PU processing could be easier from
+DS' central location. No?
+
+Dammit get back to to-do for a specific
+spike. Diverging again.
+
+:70]
+
+:69]
+[71:
+
+Thu Sep 15 08:36:24 2022
+
+INTENDER BEHAVIOR
+ v/UrSelf.behave()
+ Intender.pursueIntention()
+   v/getIntentionClass()
+ v/Intent.init
+ v/Intent.pursue
+ 
+
+OUTLINE OF CODON INTENTIONAL BEHAVIOR
+  (Based on Demo I guess)
+
+  INIT
+    Intention.init() - set debug output if enabled
+    PocketableState.init - init mPocket or true
+    SegmentState.init - PASS THROUGH
+    PocketChainState.init - die if mPocket status OPEN
+    SequenceableState.init - PASS THROUGH
+    CodonState.init - PASS THROUGH
+
+  OBSERVE
+
+    PocketChainState.observe - findMates or diffuse
+
+  STABILIZE
+
+  ACT
+   [^DemoState.init - set mWasLive]
+    PocketChainState.act - movingSeg/{head|tail}Special
+    CodonState.act - 'passive codon behaviors'
+   [DemoState.init - diffuse if not special, else regrip]
+
+:71]
+[73:
+
+Thu Sep 15 09:50:59 2022 I'm going to commit all
+this stuff as a checkpoint, before starting to
+tear into guts again. It's been way too long.
+
+:73]

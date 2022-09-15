@@ -1,0 +1,949 @@
+{44}  -*-  mode: text; fill-column: 50;  -*-
+[0:
+
+Mon Aug 22 02:32:47 2022 OK here's the thing. I'm
+still seeing diamonds freeze up during movement,
+apparently due to some race that's exacerbated by
+the seriously long intertile event latencies that
+the tiles can manifest.
+
+And I still think there's a 'separate x and y
+hops' idea that might resolve the problem. But
+time is a-wasting rapidly here.
+
+So this T2Demos/demos/Diamond15/ spike is to try
+that idea and see how far we can get.
+
+:0]
+[1:
+
+Mon Aug 22 02:38:41 2022 Basic thought, such as it
+is, is this:
+
+ - We currently have (basically) Unsigned mHops
+   self-stabilizing to mean 'distance from the
+   root, measured in HC3 atoms'.
+
+ - We're thinking of replacing that with mXHops
+   and mYHops, but we're fantasizing that they
+   could still be Unsigned. Does that even make
+   sense?
+
+ - Then like getHops() { return mXHops + mYHops; }
+   to recover the original agnostic hops concept,
+   so we still get diamond shapes and so on.
+
+ - Then 'most things' are supposed to continue to
+   work as is, but
+
+ - The upstream and downstream settledness stuff
+   (and other stuff?) considers mXHops and mYHops
+   separately, with the intended effect that
+   nobody downstream of us in either X or Y will
+   be able to advance 'ahead' of us, regardless of
+   what path events happen to take. (Assuming the
+   hopcounts have already stabilized.)
+
+:1]
+[2:
+
+Mon Aug 22 02:48:27 2022 So how do mXHops and
+mYHops stabilize? We look at our neighbors, and
+based on their mXHops and mYHops and their offset
+relative to us, we compute what that means for our
+m[XY]Hops, and minimize each separately.
+
+And we're using abs(offset) in that calculation,
+really? So if we're seeing ourselves at m[XY]Hops
+(1,2), we might be in any of the four quadrants in
+the diamond?
+
+        (2,2) (1,2) (0,2) (1,2) (2,2)
+
+        (2,1) (1,1) (0,1) (1,1) (2,1)
+
+        (2,0) (1,0) (0,0) (1,0) (2,0)
+
+        (2,1) (1,1) (0,1) (1,1) (2,1)
+
+        (2,0) (1,2) (0,2) (1,2) (2,2)
+
+[3:
+
+Mon Aug 22 02:56:20 2022 And how does this help us
+at all? Well, let's review the settledness
+propagation code, or whatever it is, and see if
+that wakes up some memories.
+[4:
+
+Mon Aug 22 02:59:49 2022
+
+ - HC3State.examineNgbs(QHardCell&) gathers info,
+   computing HC3State.minUpHops:
+
+   for each HC3NgbState & n:
+ ..
+        else if (n.getUpHops() < minUpHops) {
+          minUpHops = n.getUpHops();
+          Unsigned mg = n.getMaxGoalHops();
+          if (mg > maxUpHopsGoal) maxUpHopsGoal = mg;
+        }
+
+
+and later, QHardCell does
+
+      setUpHops(hcs.minUpHops + 1u);
+
+if uninitted, or
+
+      //// DO I NEED TO UPDATE UPHOPS?
+      if (hcs.myUpHops != hcs.minUpHops + 1u) {
+        // I DO.
+        setUpHops(hcs.minUpHops + 1u);
+
+if initted and not root..
+
+So this 'new idea' would be to
+
+(1) maintain minXUpHops and minYUpHops separately
+(2) change examineNgbs to factor in the ngboff for
+    each n -- so min[XY]UpHops are computed
+    relative to self, not to nearest upstream
+(3) change QHardCell to check and do setXUpHops
+    and setYUpHops separately
+
+and whaat about when we want to use that
+stabilized state?
+[5:
+
+Mon Aug 22 11:24:57 2022 So, again, what does this
+do for us? When will we change our behavior based
+on min[XY]Hops?
+
+[6:
+
+Mon Aug 22 11:26:11 2022 The challenge, I believe,
+is around QHardCell.ulam:152. While checking our
+HC3 neighbors, if we see one unaligned:
+
+        HC3NgbState.State ngbstate = n.ngbState();
+        if (ngbstate != HC3NgbState.cNGB_CENTER) { // Downstream not settled on us
+          mysettleddowns = 0u;
+          break;
+        }
+
+we declare we have nothing settled and cannot go
+on.
+[7:
+
+Mon Aug 22 11:28:33 2022 Aand I ask, I believe,
+again - why can't we add code there that checks if
+that downstream is aligned with where we want to
+go, rather than where we are, and accept that case
+as well? Did we try that long ago and see it fail?
+[8:
+
+Mon Aug 22 11:39:34 2022 Well one issue is: Are we
+even sure what direction we'd move, at the point
+we are doing this:
+
+    //// REFRESH MY SETTLEDDOWNHOPS?
+
+It seems we'd have to move the code from
+
+    //// AM I UNALIGNED WITH upstate?
+    if (upstate == 0u) return false; // I (AM NOT ROOT AND I) ALIGN WITH UPSTATE NOTHING TO DO HERE
+
+through about
+
+    //// I AM NOT ALIGNED WITH upstate.
+
+much earlier, so the settleddown code could look
+at upstate
+
+[9:
+
+Mon Aug 22 11:56:48 2022 You know, though, as I
+look at this, I'm not sure that the current
+intermittent deadlock is really due to unsettled
+downstreams rather than non-consensus upstreams.
+
+The recursion was supposed to be:
+
+ (1) Downstreams can't move until upstreams are
+     unanimous, but
+ (2) Upstreams can move as soon as downstreams are
+     settled out to K
+
+:9]
+:8]
+
+:7]
+:6]
+
+:5]
+
+:4]
+
+:3]
+
+:2]
+[10:
+
+Mon Aug 22 12:37:41 2022 OK, so I reduced
+cMIN_DOWN_SETTLED from 6 to 3, and got an
+
+    20220822122309-3168: 1231AEPS [1A4F0877]MSG: print: "INVALID SETTLEDDOWNHOPS"
+    20220822122309-3169: 1231AEPS [1A4F0877]MSG: FAIL in [2,2] site [8,17]: Invalid neighbor
+
+failure pretty quickly. Attempting to understand
+it now. (Screenshot in ./case10.png fwiw.)
+
+So far, I don't see what the problem is. HG at
+[8,17] is going to produce that failure during
+this event. It's got three ngbs aligned with it,
+and one (S) not. Three of the ngbs (W,N,S) are
+downstream, with mUpHops==3, and the other (E) is
+upstream, with mUpHops==1.
+
+[11:
+
+Mon Aug 22 12:56:30 2022 Well I still don't see
+how we had n.foundAnyDownstream() but didn't have
+n.hasValidNeighbor(). I guess, going to have to
+add some print statements and try for another
+example..
+[12:
+
+Mon Aug 22 13:03:48 2022 So for the record, the
+motion sequence in this particular case goes like
+this
+
+         .4  .3  .2  .3  .4
+
+         .3  .2  .1  .2  .3
+
+         .2  .1  <0  .1  .2
+
+         .2  .2  .1  .1  .3
+
+
+         .4  .3  .2  .3  .4
+
+         .3  .2  <1  .2  .3
+
+         .2  .1 .0   .1  .2
+
+         .2  .2  .1  .1  .3
+
+
+         .4  .3  <2  .3  .4
+
+         .3  .2 .1   .2  .3
+
+         .2  .1 .0   .1  .2
+
+         .2  .2  .1  .1  .3
+
+
+         .4  .3 .2   .3  .4
+
+         .3  .2 .1   .2  .3
+
+         .2  .1 .0   <1  .2
+
+         .2  .2  .1  .1  .3
+
+
+         .4  .3 .2   .3  .4
+
+         .3  .2 .1   .2  .3
+
+         .2  .1 .0  .1   <2
+
+         .2  .2  .1  .1  .3
+
+
+         .4  .3 .2   .3  .4
+
+         .3  .2 .1   <2  .3
+
+         .2  .1 .0  .1  .2
+
+         .2  .2  .1  .1  .3
+
+
+         .4  .3 .2   .3  .4
+
+         .3  .2 .1  .2   .3
+
+         .2  .1 .0  .1  .2
+
+         .2  .2  .1  .1  .3
+
+
+[13:
+
+Mon Aug 22 13:17:08 2022 aaand that is taking way
+too long to hand-transcribe. Abandoning that
+position.
+
+:13]
+
+:12]
+
+:11]
+
+:10]
+[14:
+
+Mon Aug 22 13:52:00 2022 OK, with MFMS recompiled
+for debugging, and added print statements, we're
+now seeing this:
+
+    20220822135044-3151: 323AEPS [FFF353C7]MSG: print: "INVALID SETTLEDDOWNHOPS"
+    20220822135044-3152: 323AEPS [FFF353C7]MSG: print: Unsigned: 0
+    20220822135044-3153: 323AEPS [FFF353C7]MSG: (
+     HC3NgbState(
+     mState=6/0x6,
+     mHops=6/0x6,
+     mMaxGoalHops=7/0x7,
+     mNgbCtr=(
+       C2D(
+       x=-3/0xFFFD,
+       y=0
+      ),
+     mFoundAt=(
+       C2D(
+       x=-4/0xFFFC,
+       y=0
+      ),
+     mFoundInaccessible=false,
+     mFoundBlockage=false,
+     mFoundUninit=false,
+     mFoundUpstream=false,
+     mFoundDownstream=true,
+     mFoundFoamWarning=false,
+     mFoamCount=2/0x2
+    )
+
+    20220822135044-3154: 323AEPS [FFF353C7]MSG: FAIL in [1,1] site [13,30]: Invalid neighbor
+
+[15:
+
+Mon Aug 22 14:04:11 2022 Okay, so one thing is, at
+least with wimpy cMIN_DOWN_SETTLED == 3, we can
+legitimately arrive in positions where we get
+HC3NgbState.mState == 6/cMULTI:
+
+If we're heading W, and our downstream W looks
+happy, and everything else looks happy, we can
+advance from like this:
+
+    / event window  \
+  H(. H . . * . H . .)
+
+to this:
+
+ (H . H . * . . H .).
+      ^
+and then we have cMULTI for our W ngb.
+      ^
+Now,  ^ this guy is claiming mSettledDownHops==0,
+so you might wonder how * could decide to
+move. [16:
+
+Mon Aug 22 14:25:07 2022 Aaaand I think it's
+because of this:
+
+        //// DO I HAVE ENOUGH DOWN ALIGNMENT TO MOVE NOW?
+        if (mytotaldowns > 0u &&                  // If I have any downs at all (not tail)
+            mysettleddowns < cMIN_DOWN_SETTLED &&  // No good if not there yet and
+            hcs.myUpHops + mysettleddowns < hcs.myUpHopsGoal - 2u) { // not near the tail
+
+In the current case, I believe:
+
+(1) mytotaldowns == 3u
+(2) mysettleddowns == 0u
+(3) myUpHops == 5u and myUpHopsGoal == 7,
+    and so 5 is not less than 7 minus 2,
+    so we keep on going, instead of blocking
+
+
+:16]
+
+:15]
+:14]
+[17:
+
+Mon Aug 22 14:52:43 2022 OK, now we have a case
+where a guy is heading E and sees a cMULTI to his
+N, so he bails.
+
+The cMULTI seems to be happening because
+
+(1) he(uH9) 's below the equator in the SE quadrant
+(2) his NW(uH7) ngb (which normally he couldn't see)
+    has already advanced, appearing at (-1,-2) to him
+(3) his N(uH8) ngb is at (1,-2) to him
+
+What happens if we just block on cMULTI?
+
+It's happening in this case, I think, because I
+made cMIN_DOWN_SETTLED so small that this guy's
+row is one behind the row above, and this guy
+hasn't yet advanced in his own row. If we just
+blocked in this circumstance, his N at (1,-2)
+would be able to advance, and this guy would no
+longer see cMULTI. (This guy still wouldn't be
+able to advance, until W on his row catches up to
+the row above, but that's a case already handled I
+think.)
+[18:
+
+Mon Aug 22 15:04:00 2022 Ah, and note in
+particular, both of the cMULTI ngbs above him are
+upstream of him, so the
+
+    //// REFRESH MY SETTLEDDOWNHOPS?
+
+code doesn't examine them.
+[19:
+
+Mon Aug 22 15:57:19 2022 Well, it's running slow
+because of MFMS is built for debugging, but so far
+the 'block if any cMULTI' seems to be keeping us
+from any and all HC3 failures.. Way too soon to
+get too excited, but it's cautiously encouraging
+-- especially because we're still at
+cMIN_DOWN_SETTLED == 3. (Although we're not
+completely convinced the settleddown stuff is even
+really working..)
+
+[20:
+
+Mon Aug 22 16:03:29 2022 Hmm except all my test
+cells seem to have stopped moving? Urgh.[21:
+
+Mon Aug 22 16:21:40 2022 Observed a lockup near a
+forward tip; but repaired it via surgery before
+properly diagnosing it, so unclear what was going
+on. Going again.
+
+[22:
+
+Tue Aug 23 02:49:35 2022 Well, found a bug in the
+QHardCell moving code, where it failed to call
+setSettledDownHops(0u) on the center (despite a
+comment claiming that it did).
+
+And now we're running with cMIN_DOWN_SETTLED == 3u
+again, and the two non-HardCellG diamonds seem to
+be pretty robust.
+
+The one HardCellG diamond I started deadlocked as
+it increased mMaxHops from 7 to 8 -- while there
+was an incomplete move still in progress.
+
+Is there some kind of way we could pipeline motion
+some of the time but still get some kind of
+confirmation that all moves had finished, if we
+wanted it?
+
+Hey umm isn't that what settledDownHops is
+supposed to provide? What if we don't trigger a
+grow unless settledDownHops reaches maxHops
+(modulo fenceposts)?
+
+A full grow would be like
+state 1: Wait for max settledDownHops
+state 2: Trigger grow (resetting settledDownHops)
+state 3: Wait for max settledDownHops
+
+return to business as usual.
+
+How many bits are left in HardCellG?
+
+12 -
+
+      /*__________________________________________________
+      | COMPONENTS of HardCellG <61> (59 bits/12 unused):
+      |
+      | Pos	| Bits	| Name	| Type <classid>
+      | 0	| 4	| mHardCellWatchdog	| XTimer(4,10u,250u) <44>
+      | 4	| 5	| mMaxHops	| Unsigned(5)
+      | 9	| 5	| mUpHops	| Unsigned(5)
+      | 14	| 5	| mSettledDownHops	| Unsigned(5)
+      | 19	| 12	| mColor[3]	| Unsigned(4)
+      | 31	| 10	| mDirs[2]	| Int(5)
+      | 41	| 2	| mMoveDir	| Unsigned(2)
+      | 43	| 8	| super	| QHardCell <52>
+      | 51	| 0	| base	| UrSelf <0>
+      | 51	| 8	| base	| DEWLine <26>
+      |___________________________________________________
+      */ //gcnl:NodeBlockClass.cpp:2644
+
+[23:
+
+Tue Aug 23 03:07:47 2022 And we certainly could,
+and arguably should, go to a custom type for the
+diamond root, which would allow us to reclaim the
+10 bits of mDirs in all the non-roots.
+[24:
+
+Tue Aug 23 03:09:23 2022 It also appears the 2
+bits of mMoveDir aren't actually used for anything
+at the moment.
+
+So we could have 24 bits available for non-Root
+HC3, which isn't too bad as we think forward to
+HC3 sequencers.
+
+Perhaps we could use special mDirs values to
+signal states in a stop-and-grow process.
+[25:
+
+Tue Aug 23 10:21:30 2022 Weeeeeell, it's getting
+to be time to move the flag, but it's looking
+pretty encouraging on not locking up both during
+movement and now also during growth -- with the
+addition of a multistate settle-grow-settle path
+for the latter.
+
+There were some additional buggish things I found
+along the way -- like setting settleddown to 0 on
+a maxhops change, only to see it pop back up on
+the very next event, because the settleddown
+propagation didn't care about matching maxhops.
+
+At some point we need to think more structurally
+about what being settled with downstream actually
+means, rather than grafting in ||s whenever
+another dimension of settledness arises.
+
+:25]
+:24]
+
+:23]
+
+:22]
+:21]
+
+:20]
+:19]
+:18]
+:17]
+[26:
+
+Fri Aug 26 09:30:50 2022 Well, we've been running
+this code pretty much unmodified for a few days
+here. T2 grid's into its third day on it. Have a
+variety of little clips and stills to show.
+
+But I want to get something to show for either
+
+ - death, or
+
+ - loop operations,
+
+or both.
+
+DEATH:
+
+ - Right now I've added a root watchdog that runs
+   faster than the general HC3 watchdog, so frozen
+   diamonds now usually die cleanly from the root
+   out, rather than rotting generally.
+
+ - But that's not very clean, and not very
+   flexible.
+
+LOOP OPERATIONS
+
+ - Right now, the NuGrow family is the only loop
+   operation we've got. When first thinking of
+   loop operations I was all about breaking the
+   loop open and controlling it from the (thus
+   created) head, but now I'm wondering:
+
+ - What about like NuShrink? Couldn't we have our
+   temps be able to shrink a loop selectively
+   according to some criteria?
+
+ - With selective, sideways growth and shrinking,
+   we could move reshape loops without opening
+   them up, so long as we had enough temps in
+   them, and weren't in a hurry.
+
+:26]
+[27:
+
+Fri Aug 26 10:11:42 2022 I feel like I'd like to
+go for a demo that would allow some 'real time
+control' in mfms (though not easily on the T2s) -
+like provide 'loop control' atoms to say 'Grow
+loop radius', 'Shrink loop radius', and 'Set loop
+center here'.
+
+Although HTH would we do that last? Temps would
+have to localize themselves in 2D WRT the assigned
+loop center?
+
+What if it was just directional within the
+diamond? WNSE or center?
+
+If we just have 'grow' and 'shrink', rather than
+'set radius to X'.. still.
+
+I guess we need a WNSEC + a radius? Then a temp
+can figure out if it's in or out of the radius -
+or I guess more specifically, it could tell
+whether a given grow or shrink attempt would help
+fill the radius or shrink back to it,
+respectively.
+
+But but, how does a temp even know which side of
+the diamond it's on? I guess by uphill/downhill in
+mHops..
+
+Hmm. So things in a pocket can tell what quadrant
+they're in, in general stable conditions?  And
+then they can tell how far from the center or edge
+they are, as well, by the specific mHops/mMaxHops
+comparisons.
+
+They just can't tell, in general, where along an
+mHops isocontour they might be.
+
+But hey hey hey doesn't this support the 'stay in
+quadrant X' functionality that we were imagining?
+Couldn't this allow four loops to grow
+simultaneously, one in each quadrant, 'without
+interfering with each other'? Hahaha.
+
+[28:
+
+Fri Aug 26 10:36:32 2022 So okay, let's try to
+operationalize this a little bit.
+
+ - Note we are NOT trying to control growth and
+   size by controlling whether NuGrows are
+   circulating.
+
+ - We are trying to control growth and size by
+   reconfiguring the circulating Resizers with
+   updated parameters in some defer-to-the-head
+   fashion.
+
+[29:
+
+Fri Aug 26 11:00:02 2022 If we were to try to do
+this, how might we do it?
+
+ - Start LoopOp16 demo for ALC T-7.
+
+ - Rename NuGrow to GrowOut/OutCorner/OutSide
+
+ - Make ShrinkIn as a separate temp-like
+   thing. Not sure if it will need assistant
+   types.
+
+ - Hardcode a hop limit for now, say maxhops/2
+
+ - Make a QuadrantControl API that carries
+   WNSEC+min/max
+[30:
+
+Sat Aug 27 14:24:04 2022 So we've made
+
+ShapeShifter.ulam
+SfCorner.ulam
+SfSide.ulam
+
+as replacements for the 'Nu*' family, although the
+Nus are still in the code base.
+
+[31:
+
+Sat Aug 27 14:25:21 2022 It appears, if we are in
+a pocket and have all four corners visible, we can
+identify our quadrant quite directly by
+'cross-subtraction':
+
+   nw     ne
+       *
+
+   sw     se
+
+
+h1 = nw.mHops - se.mHops
+h2 = ne.mHops - sw.mHops
+
+if (false) ;
+else if (h1 == 0 && h2 == 2)  { quad = NE; hops = nw.mHops; }
+else if (h1 == 0 && h2 == -2) { quad = SW; hops = nw.mHops; }
+else if (h2 == 0 && h1 == 2)  { quad = NW; hops = ne.mHops; }
+else if (h2 == 0 && h1 == -2) { quad = SE; hops = ne.mHops; }
+else { quad = UNSETTLED; hops = 0u; }
+
+[32:
+
+Sun Aug 28 01:30:23 2022 OK, well, we 'cleaned up'
+a bunch, and migrated a bunch of typedefs and
+constants to quark DiamondTypes for more general
+accessibility, and made PocketQuadrant.ulam, and
+added an mPocketQuadrant to PocketHC3.
+
+So theoretically at this point, a Pocketable could
+know its rough location in a diamond by doing
+something like this:
+
+    transient MyIntention : PocketableState + .. {
+
+      //// Intention API
+      @Override
+      virtual Bool init(Intender & seg) {
+        if (super.init(seg)) return true;
+        // mPocket is cSTATUS_OK
+        return false;
+      }
+
+      @Override
+      virtual Bool act(Intender & in) {
+        if (super.act(in)) return true;
+
+        PocketQuadrant & pq = mPocket.mPocketQuadrant;
+        if (!pq.mInQuadrant) print("quadrant undetermined");
+        else {
+          print("0:NW 1:NE 2:SE 3:SW");
+          print(pq.mQuadrant);
+          print("at uphops contour");
+          print(pq.mUpHopContour);
+        }
+      }
+    }
+
+
+:32]
+
+:31]
+
+:30]
+:29]
+
+:28]
+
+:27]
+[33:
+
+Sun Aug 28 02:23:42 2022 And thinking about
+debugging this gave me an idea:
+
+How about a 'Report' atom that causes neighboring
+atoms to turn on debug output when they see such
+an Atom? You could have 'Report1' that gets
+consumed by the first atom that sees it, and
+'ReportN' that sticks until manually removed.
+
+We could have processing Report atoms happen very
+early in Intention processing, so debugging would
+get enabled early..
+[34:
+
+Sun Aug 28 02:46:25 2022 Another possibility is an
+API that blows a bit to enable debugging on a
+per-atom basis. Then we could have DebugOn and
+DebugOff atoms to control that bit from the
+outside (because we still don't have any data
+member writing UI implemented in mfms grrr.)
+
+:34]
+:33]
+[35:
+
+Sun Aug 28 04:52:08 2022
+
+SFIIDX_MOVE = 0u
+SFIIDX_WAIT = 1u
+SFIIDX_BEND = 2u
+SFIIDX_SNAP = 3u
+SFIIDX_DONE = 4u
+SFIIDX_FAIL = 5u
+
+     t--t                 t--Y
+     |  |                 |  |
+  0--X  Y--Z           0--X  Z--W
+
+
+     t--t                 t--Y
+     |  |                 |  |
+  X--0  Y--Z           X--0  Z--W
+
+
+     2--t                 t--Y
+     |  |                 |  |
+  X--1  Y--Z           X--0  Z--W
+
+
+     2--3                 2--3
+     |  |                 |  |
+  X--1  Y--Z           X--1  Y--Z
+
+
+     4--4                 4--4
+     |  |                 |  |
+  X--1  Y--Z           X--1  Y--Z
+
+
+     .  4                 .  4
+
+  X--0--Y--Z           X--0--Y--Z
+
+     .  .                 .  .
+
+
+  X--0--Y--Z
+
+
+  X--Y--0--Z
+
+
+
+:35]
+[36:
+
+Sun Aug 28 05:09:29 2022 Wow, wait a minute: What
+about a 'subworm' that travels basically as a unit
+of length 3? Head-Mid-Tail, in effect.
+
+Head will only swap ahead over one atom, then wait
+for the swapped item to get swapped again by Mid
+and (somehow synchronizing and) finally swapped by
+Tail as well. That way, the subworm will be 'at
+least' at one time at each chain position.
+
+If Mid sees H & T and detects a valid shrink, it
+signals H to hold, T to succeed (in the H
+direction), and marks itself done.
+
+When T is to succeed, it snaps the link in the H
+direction, erases M, and changes itself to H1.
+
+H1 swaps forward unless blocked. If H1 swaps over
+a temp, it converts it to an M1 and converts
+itself to an H.
+
+M1 swaps forward unless any H is ahead. If it
+swaps over a temp, it coverts it to a T and
+converts itself to an M.
+
+[37:
+
+Sun Aug 28 05:26:50 2022 Try again:
+
+Players: 
+  H/M/T
+  * - grow flag
+  c - complete flag
+
+Start with H*
+
+H* swaps forward unless blocked. If H* swaps over
+a temp, it converts the temp to M* and becomes H.
+
+H blocks unless it has a previous Mc.
+
+M* swaps forward unless blocked. If M* swaps over
+a temp, it converts the temp to T and becomes M.
+
+
+
+:37]
+
+:36]
+[38:
+
+Sun Aug 28 19:05:55 2022 Well, I set up additional
+intentions for Sf, and Demo will now spawn a
+SfIWormHead every so often, but we don't know what
+they're actually supposed to do..
+
+Nap.
+
+:38]
+[39:
+
+Mon Aug 29 01:04:20 2022 OK so currently we are
+walking through what intention ShSfIWormHead
+amounts to.
+
+ - First, sanity checks
+
+ - Then asks if can advance downstream
+   = diffuses if can't find d/s chain due to bad ngb
+   = dies if is d/s chain is missing
+
+ - Says can't go downstream if
+   = d/s is mDemoProvider, or
+   = d/s !isSwappable, or
+   = d/s is another ShapeShifter.
+     - Do we want to stick to that?
+
+ - If it can't go ds, it turns into a down temp
+   = Do we want to stick with that? 
+   = Who knows.
+
+But then it's d/s is swappable. We want
+ShSfIWormHead to swap d/s when..
+
+ - It needs to advance to a new spot, or
+ - It needs temps to extend its body.
+
+and when are those true? Because ShSfIWormHead
+wants to NOT swap d/s if it's waiting for an u/s
+ShSfIWormMid to do its business.
+
+How does it distinguish those cases?
+ (1) If there isn't an u/s ShSfIWormMid,
+     need to grow over temp
+ (2) If there is an u/s ShSfIWormMid.
+[40:
+
+Mon Aug 29 01:46:12 2022 OK I'm getting to the
+tipping point: We can't do this now. It's too
+structural and interwoven.
+
+But we might be able to do the
+loop-cut-and-rejoined trick somehow?
+
+[41:
+
+Mon Aug 29 01:47:27 2022 How could it go?
+
+ - Have an external signal recognized by a demo
+   provider.  Spike signals like
+
+[42:
+
+Mon Aug 29 01:48:45 2022 Well no wait. If we're
+going to move a loop, period, we have to have
+someplace to move it. So that means we need to
+keep our existing demo loop from filling all of
+space.
+
+Let's try to get a diamond-half-full spike going,
+just that. Using the PocketQuadrant stuff from
+like :32: above.
+[43:
+
+Mon Aug 29 02:04:55 2022 OK we need the
+maxhopsgoal here in our Intention code.. 
+
+:43]
+:42]
+
+:41]
+
+:40]
+
+:39]
