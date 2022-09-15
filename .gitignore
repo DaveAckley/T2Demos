@@ -1,6 +1,7 @@
 *~
 *-hold
 *-hold[0-9]
+*-hold[0-9][0-9]
 *.mfz
 .gen
 ISH-BUILD-*
