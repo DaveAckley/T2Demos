@@ -3,6 +3,7 @@
 *-hold[0-9]
 *-hold[0-9][0-9]
 *.mfz
+*.tgz
 .gen
 ISH-BUILD-*
 \#*\#
