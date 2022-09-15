@@ -1,4 +1,4 @@
-local constant Unsigned cGEN_ODDS = 500; //< 1-in-this to release new stream
+local constant Unsigned cGEN_ODDS = 300; //< 1-in-this to release new stream
 local constant Unsigned cPCT_GROW =  25; //< this% to increase growth odds
 local constant Unsigned cPCT_INIT =  25; //< this% initial growth odds
 
