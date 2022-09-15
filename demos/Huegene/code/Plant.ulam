@@ -15,7 +15,7 @@ element Plant {
   RGB color;
   Energy energy;
 
-  constant Int cMUTATION_DISTANCE = 7;
+  constant Int cMUTATION_DISTANCE = 8;
   Channel mutate(Channel cur) {
     return (Channel) (cur + random.between(-cMUTATION_DISTANCE,cMUTATION_DISTANCE));
   }
