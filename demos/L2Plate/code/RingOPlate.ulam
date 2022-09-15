@@ -1,16 +1,16 @@
 quark RingOPlateBase : B2DPlateBase + RingO {
 
   //// RingOPlateBase API
-  Bool updateRingOPlate() {
-    return updateRingOPlateMooreNeighborhood(); // default
+  Bool updateRingOPlate(RingOCircuit & roc) {
+    return updateRingOPlateMooreNeighborhood(roc); // default
   }
 
   //// RingOPlate SERVICES
-  Bool updateRingOPlateMooreNeighborhood() {
-    RingOMooreIterator itr;
-    return updateRingO(itr);
+  Bool updateRingOPlateMooreNeighborhood(RingOCircuit & roc) {
+    return updateRingOCircuit(roc);
   }
 
+  /* XXX IN RingOCircuit now 
   @Override
   virtual SyncRelation syncRelation(RingO & other) {
     EventWindow ew;
@@ -39,12 +39,68 @@ quark RingOPlateBase : B2DPlateBase + RingO {
     }
     return RingO.cOTHER_IS_UNRELATED;
   }
+  */
 
 }
 
+/** Single circuit plate demoer */
 quark RingOPlate :  RingOPlateBase + B2DPlate6 {
+  RingOState mRingOState;
+  
+  virtual RingOState & ringOState(RingOCircuit & roc) {
+    return mRingOState;
+  }
 
+  /** true if we participate in circuit roc */
+  virtual Bool inCircuit(RingOCircuit & roc) {
+    return roc is RingOPlateCircuit;
+  }
 
+  ARGB getRingOColor(Unsigned selector) {
+    return mRingOState.color();
+  }
+
+  //// UrSelf API
+  @Override
+  ARGB getColor(Unsigned selector) {
+    return getRingOColor(selector);
+  }
+
+}
+
+transient RingOPlateCircuit : RingOCircuit {
+  RingOMooreIterator mItr;
+
+  //// RingOCircuit API
+  @Override
+  virtual RingOIterator & ringOIterator() { return mItr; }
+
+  @Override
+  virtual SyncRelation syncRelation(RingO & me, RingO & other) {
+    SyncRelation rel = RingOCircuit.cOTHER_IS_UNRELATED;
+    ByteStreamLogger bsl;
+    if (me as RingOPlate) {
+      if (other as RingOPlate) {
+        C2D posl = me.positionOnPlate();   
+        C2D posr = other.positionOnPlate();
+
+        if (posl.min(posr) == posr)
+          rel = RingOCircuit.cOTHER_IS_UPSTREAM;
+        else if (posl.max(posr) == posr)
+          rel = RingOCircuit.cOTHER_IS_DOWNSTREAM;
+        EventWindow ew;
+          /*
+            bsl.printf("L2REL snl(%d) posl(%d,%d) snr(%d) posr(%d,%d) rel(%d)\n",
+            ew.getSiteNumber(me),
+            posl.x, posl.y,
+            ew.getSiteNumber(other),
+            posr.x, posr.y,
+            rel);
+          */
+      }
+    }
+    return rel;
+  }
 }
 
 element RingODemo : RingOPlate {
@@ -53,30 +109,34 @@ element RingODemo : RingOPlate {
 
   Void maybeChangeSize() {
     Random random;
-    mNewSize.fromC2D(sizeOfPlate());
-    mNewSize.x = (MyB2D.Coord) (mNewSize.x + random.between(-3,3)/3);
-    mNewSize.y = (MyB2D.Coord) (mNewSize.y + random.between(-3,3)/3);
+    MyB2D ns;
+    ns.fromC2D(sizeOfPlate());
+    ns.x = (MyB2D.Coord) (ns.x + random.between(-3,3)/3);
+    ns.y = (MyB2D.Coord) (ns.y + random.between(-3,3)/3);
+    if (ns != mNewSize) {
+      ByteStreamLogger bsl;
+      bsl.printf("ROD NEW SIZE [%d,%d] => [%d,%d]\n",
+                 mNewSize.x,mNewSize.y,
+                 ns.x,ns.y
+                 );
+      mNewSize = ns;
+    }
   }
 
-  //// UrSelf API
   @Override
-  ARGB getColor(Unsigned selector) {
-    return getRingOColor();
-  }
-
-  @Override
-  virtual Bool rootTick(RingONeighborhood & ngb) {
+  virtual Bool rootTick(RingOCircuit & roc, RingONeighborhood & ngb) {
     DebugUtils du;
-    if (mRingOState.getStateIndex() == RingOState.cBLU_STATE) // entering RED
+    RingOState & ros = ringOState(roc);
+    if (ros.getStateIndex() == RingOState.cBLU_STATE) // entering RED
       maybeChangeSize();
     return true;
   }
 
   @Override
-  virtual Bool edge(RingONeighborhood & ngb, Bool fromUp, Bool newState) { 
+  virtual Bool edge(RingOCircuit & roc, RingONeighborhood & ngb, Bool fromUp, Bool newState) { 
     if (fromUp) {
       EventWindow ew;
-      SN sn = ngb.sampleInDir(RingO.cOTHER_IS_UPSTREAM);
+      SN sn = ngb.sampleInDir(RingOCircuit.cOTHER_IS_UPSTREAM);
       if (ew.isAccessible(sn)) {
         if (newState) { // AIM at mNewSize
           Atom & a = ew[sn];
@@ -85,7 +145,7 @@ element RingODemo : RingOPlate {
           }
         } else {
           DebugUtils du;
-          du.print("FIRE WRITREME XXX");
+          //          du.print("FIRE WRITREME XXX");
         }
       }
     }
@@ -95,7 +155,8 @@ element RingODemo : RingOPlate {
   Void behave() {
     if (mustBlockOrDie()) return;
     if (checkGrowthAndHealing()) return;
-    if (updateRingOPlate()) return;
+    RingOPlateCircuit roc;
+    if (updateRingOPlate(roc)) return;
   }
 }
 

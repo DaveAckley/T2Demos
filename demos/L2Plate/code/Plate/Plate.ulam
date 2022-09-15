@@ -218,7 +218,7 @@ quark Plate {
     PlateUtils pu;
     C2D plateSize = sizeOfPlate();       // Our plate size
     if (!plateSize.contains(plateCoord)) {
-      du.print("PC2ESN NOT ON PLATE");
+      //      du.print("PC2ESN NOT ON PLATE");
       return SN.maxof;  // Not on our plate
     }
     EventWindow ew;

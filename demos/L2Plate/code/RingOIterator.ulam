@@ -1,6 +1,6 @@
 
-quark RingOIterator {
-  //// RingO API
+transient RingOIterator {
+  //// RingOIterator API
   virtual Void init(RingO & on) ;  //< Set up to iterator around \c on
   virtual Bool hasNext() ;        //< \c true if another RingO& available
   virtual RingO & next() ;         //< Get next RingO& or fail if none 
@@ -13,6 +13,8 @@ transient RingOMooreIterator : RingOIterator {
   //// RingOIterator API
   @Override
   virtual Void init(RingO & on) { mNextSN = 1u; }
+
+  @Override
   virtual Bool hasNext() {
     EventWindow ew;
     for (; mNextSN <= 8u; ++mNextSN) {
@@ -22,6 +24,7 @@ transient RingOMooreIterator : RingOIterator {
     return false;
   }
   
+  @Override
   virtual RingO & next() {
     if (!hasNext()) { Fail f; f.fail(); }
     EventWindow ew;

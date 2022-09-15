@@ -9,10 +9,44 @@ quark L2PlateBase : B2DStreamPlate6 + QStream12 + Payload + Stride1x1FP {
 }
 
 quark RingOL2Plate : L2PlateBase + RingOPlateBase {
+  //// RingO API
+  @Override
+  virtual Bool inCircuit(RingOCircuit & roc) {
+    return
+      roc is L1PlateRingOCircuit ||
+      roc is L2PlateRingOCircuit;
+  }
+  @Override
+  virtual RingOState & ringOState(RingOCircuit & roc) {
+    if (roc is L1PlateRingOCircuit) return mL1RingOState;
+    if (roc is L2PlateRingOCircuit) return mL2RingOState;
+    Fail f;
+    f.fail();
+    return mL1RingOState; // NOT REACHED
+  }
+
+
+  ARGB getRingOColor(Unsigned selector) {
+    if (selector == 0u) return super.getColor(selector);
+    ARGB l1col = mL1RingOState.color();
+    ARGB l2col = mL2RingOState.color();
+    ColorUtils cu;
+    return cu.between(cu.dimmer(l2col),l1col,75);
+  }
+
+  RingOState mL1RingOState;
+  RingOState mL2RingOState;
+
   //// RingOL2Plate SERVICES
   Bool updateRingOPlate() {
-    L2PlateRingOIterator itr;
-    return updateRingO(itr);
+
+    L2PlateRingOCircuit ckt2;
+    if (updateRingOCircuit(ckt2)) return true;
+
+    L1PlateRingOCircuit ckt1;
+    if (updateRingOCircuit(ckt1)) return true;
+
+    return false;
   }
 }
 
@@ -20,7 +54,7 @@ quark RingOL2Plate : L2PlateBase + RingOPlateBase {
    \symbol L2
    \color #2233bb
  */
-element L2Plate : RingOL2Plate + PayloadT(20u) + Plexer {
+element L2Plate : RingOL2Plate + PayloadT(14u) + Plexer {
   typedef EventWindow.SiteNum SN;
   typedef PlateUtils.PlateDir PD;
   typedef ClassUtils.ClassId ClassId; 
@@ -30,7 +64,7 @@ element L2Plate : RingOL2Plate + PayloadT(20u) + Plexer {
   //// UrSelf API
   @Override
   ARGB getColor(Unsigned selector) {
-    return getRingOColor();
+    return getRingOColor(selector);
   }
 
   //// L2PlateBase API
@@ -43,37 +77,6 @@ element L2Plate : RingOL2Plate + PayloadT(20u) + Plexer {
   //// Plexer API
   @Override
   virtual ClassId getPlex() { return MyPlex.classidof; }
-
-  //// RingO API
-
-  @Override
-  virtual SyncRelation syncRelation(RingO & other) {
-    C2D posl = positionOnL2Plate();
-    SyncRelation rel = RingO.cOTHER_IS_UNRELATED;
-    ByteStreamLogger bsl;
-    if (other as Self) {
-      C2D posr = other.positionOnL2Plate();
-      if (posl == posr) { // If in same L2 site,
-        posl = positionOnPlate();         // use L1 coords
-        posr = other.positionOnPlate();   // to determine syncrel
-      }
-      if (posl.min(posr) == posr)
-        rel = RingO.cOTHER_IS_UPSTREAM;
-      else if (posl.max(posr) == posr)
-        rel = RingO.cOTHER_IS_DOWNSTREAM;
-      EventWindow ew;
-      /*
-      bsl.printf("L2REL snl(%d) posl(%d,%d) snr(%d) posr(%d,%d) rel(%d)\n",
-                 ew.getSiteNumber(self),
-                 posl.x, posl.y,
-                 ew.getSiteNumber(other),
-                 posr.x, posr.y,
-                 rel);
-      */
-    } else bsl.printf("L2UNREL posl(%d,%d) \n",
-                      posl.x, posl.y);
-    return rel;
-  }
 
   //// L2Plate services
   @Override
@@ -282,6 +285,11 @@ transient L2PlateRingOIterator : RingOIterator {
   Unsigned mCount; // 0..39 SN 1..40
   SN mNextSN; // 1..40
 
+  SN snFromCount(Unsigned count) {
+    if (count <= cCOUNT_MAX)  return (SN) (count + 1u);
+    return SN.maxof;
+  }
+
   //// RingOIterator API
   @Override
   virtual Void init(RingO & on) {
@@ -294,18 +302,14 @@ transient L2PlateRingOIterator : RingOIterator {
     mL2Siz = l2.sizeOfL2Plate();
   }
 
-  SN snFromCount(Unsigned count) {
-    if (count <= cCOUNT_MAX)  return (SN) (count + 1u);
-    return SN.maxof;
-  }
-
-  virtual Bool hasNext() {
+  @Override
+  virtual Bool hasNext() { // For L2Plate as a whole
     EventWindow ew;
     for (; mCount <= cCOUNT_MAX; ++mCount) {
       mNextSN = snFromCount(mCount);
       if (!ew.isAccessible(mNextSN)) continue;
       Atom & a = ew[mNextSN];
-      if (a as L2Plate) {
+      if (a as RingOL2Plate) {
         C2D pos2r = a.positionOnL2Plate();
         if (mL2Pos != pos2r) return true;  // If different L2 site, okay
         if (mNextSN <= 8u) return true;    // If same L2 site and in Moore ngb, okay
@@ -314,12 +318,157 @@ transient L2PlateRingOIterator : RingOIterator {
     return false;
   }
   
+  @Override
   virtual RingO & next() {
     if (!hasNext()) { Fail f; f.fail(); }
     EventWindow ew;
     SN sn = snFromCount(mCount++);
     RingO & ret = (RingO&) ew[sn]; // Or fail if something changed under us
     return ret;
+  }
+
+}
+
+transient L1PlateRingOCircuit : RingOCircuit {
+  L1PlateRingOIterator mItr1;
+
+  //// RingOCircuit API
+  @Override
+  virtual RingOIterator & ringOIterator() {
+    return mItr1;
+  }
+
+  @Override
+  virtual SyncRelation syncRelation(RingO & me, RingO & other) {
+    SyncRelation rel = RingOCircuit.cOTHER_IS_UNRELATED;
+    ByteStreamLogger bsl;
+    if (me as L2Plate) {
+      if (other as L2Plate) {
+        C2D posl = me.positionOnL2Plate();
+        C2D posr = other.positionOnL2Plate();
+        if (posl != posr) { // If different L2 sites, unrelated
+          return rel;
+        }
+        posl = me.positionOnPlate();    // otherwise use L1 coords
+        posr = other.positionOnPlate(); // to determine syncrel
+
+        if (posl.min(posr) == posr)
+          rel = RingOCircuit.cOTHER_IS_UPSTREAM;
+        else if (posl.max(posr) == posr)
+          rel = RingOCircuit.cOTHER_IS_DOWNSTREAM;
+        EventWindow ew;
+          /*
+            bsl.printf("L2REL snl(%d) posl(%d,%d) snr(%d) posr(%d,%d) rel(%d)\n",
+            ew.getSiteNumber(me),
+            posl.x, posl.y,
+            ew.getSiteNumber(other),
+            posr.x, posr.y,
+            rel);
+          */
+      }
+    }
+    return rel;
+  }
+}
+
+transient L2PlateRingOCircuit : RingOCircuit {
+  L2PlateRingOIterator mItr2;
+  //// RingOCircuit API
+  @Override
+  virtual RingOIterator & ringOIterator() {
+    return mItr2;
+  }
+
+  @Override
+  virtual SyncRelation syncRelation(RingO & me, RingO & other) {
+    SyncRelation rel = RingOCircuit.cOTHER_IS_UNRELATED;
+    ByteStreamLogger bsl;
+    if (me as L2Plate) {
+      if (other as L2Plate) {
+        C2D posl = me.positionOnL2Plate();
+        C2D posr = other.positionOnL2Plate();
+        if (posl == posr) { // If in same L2 site,
+          posl = me.positionOnPlate();         // use L1 coords
+          posr = other.positionOnPlate();   // to determine syncrel
+        }
+        if (posl.min(posr) == posr)
+          rel = RingOCircuit.cOTHER_IS_UPSTREAM;
+        else if (posl.max(posr) == posr)
+          rel = RingOCircuit.cOTHER_IS_DOWNSTREAM;
+        EventWindow ew;
+      /*
+      bsl.printf("L2REL snl(%d) posl(%d,%d) snr(%d) posr(%d,%d) rel(%d)\n",
+                 ew.getSiteNumber(me),
+                 posl.x, posl.y,
+                 ew.getSiteNumber(other),
+                 posr.x, posr.y,
+                 rel);
+      */
+      } 
+    }
+    return rel;
+  }
+
+}
+
+transient L1PlateRingOIterator : RingOIterator {
+  typedef EventWindow.SiteNum SN;
+  constant Unsigned cCOUNT_MAX = 7u;
+  C2D mL2Pos;
+  Unsigned mCount; // 0..7 SN 1..8
+  SN mNextSN; // 1..8
+
+  SN snFromCount(Unsigned count) {
+    if (count <= cCOUNT_MAX)  return (SN) (count + 1u);
+    return SN.maxof;
+  }
+
+  //// RingOIterator API
+  @Override
+  virtual Void init(RingO & on) {
+    L2Plate & l2 = (L2Plate&) on; // or fail
+    mCount = 0u;
+    mL2Pos = l2.positionOnL2Plate();
+  }
+
+  @Override
+  virtual Bool hasNext() { // For 'L1Plate' view of L2 site
+    EventWindow ew;
+    for (; mCount <= cCOUNT_MAX; ++mCount) {
+      mNextSN = snFromCount(mCount);
+      if (!ew.isAccessible(mNextSN)) continue;
+      Atom & a = ew[mNextSN];
+      if (a as RingOL2Plate) {
+        C2D pos2r = a.positionOnL2Plate();
+        if (mL2Pos == pos2r) return true;  // If same L2 site, one of us
+      }
+    }
+    return false;
+  }
+  
+  @Override
+  virtual RingO & next() {
+    if (!hasNext()) { Fail f; f.fail(); }
+    EventWindow ew;
+    SN sn = snFromCount(mCount++);
+    RingO & ret = (RingO&) ew[sn]; // Or fail if something changed under us
+    return ret;
+  }
+
+}
+
+/** Make a 5x3 L2Plate
+    \color #6c3
+    \symbol S5
+ */
+element SeedL2Plate5x3 : Plate1 {
+  Void behave() {
+    PlateUtils pu;
+    EventWindow ew;
+    L2Plate pe;
+    pe.setPositionOnL2Plate(pu.c1x1);
+    pe.setSizeOfL2Plate(C2D.instanceof(5,3));
+    ew[0] = pe.atomof;
   }
 }
 

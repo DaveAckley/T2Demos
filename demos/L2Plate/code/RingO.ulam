@@ -1,11 +1,20 @@
 quark RingOState {
   Bool(1) mUpState;
   Bool(1) mDownState;
+
+  //// RingOState API
+  /** Get our current signal wire values, if any, from up if \c fromUp */
+  virtual Unsigned getSignals(Bool fromUp) { return 0u; } // No signals by default
+
+  /** Set our current signal wire values, if any, from up if \c fromUp */
+  virtual Void setSignals(Bool fromUp, Unsigned sig) { /* empty */ } // No signals by default
+
   Bool operator==(RingOState & other) {
     return mUpState == other.mUpState && mDownState == other.mDownState;
   }
   Bool operator!=(RingOState & other) {
-    return mUpState != other.mUpState || mDownState != other.mDownState;
+    //    return mUpState != other.mUpState || mDownState != other.mDownState;
+    return ! (mUpState == other.mUpState);
   }
   typedef Unsigned(2) StateIndex;
   constant StateIndex cRED_STATE = 2u;
@@ -27,45 +36,56 @@ quark RingOState {
 }
 
 /**
-   Sync using a General Distributed Ring Oscillator, given upstream and downstream iterators
+   Sync using a Generalized Distributed Ring Oscillator, given upstream and downstream iterators
  */
 quark RingO {
   typedef EventWindow.SiteNum SN;
   typedef BitStorageT(4096) BitStorage4K;
 
-  RingOState mRingOState;
-
-  typedef Unary(2) SyncRelation;
-  constant SyncRelation cOTHER_IS_UNRELATED = 0;
-  constant SyncRelation cOTHER_IS_UPSTREAM = 1;
-  constant SyncRelation cOTHER_IS_DOWNSTREAM = 2;
-
   //// RingO API
-  virtual SyncRelation syncRelation(RingO & other) ; //< How does other relate to self?
+  /** true if we participate in circuit roc */
+  virtual Bool inCircuit(RingOCircuit & roc) ;    
+
+  /** access state for circuit roc, or fail if !inCircuit(roc) */
+  virtual RingOState & ringOState(RingOCircuit & roc) ;
 
   /** return true to let root start next phase */
-  virtual Bool rootTick(RingONeighborhood & ngb) { return true; }
+  virtual Bool rootTick(RingOCircuit & roc, RingONeighborhood & ngb) { return true; }
 
   /** return true to let tail start next phase */
-  virtual Bool tailTock(RingONeighborhood & ngb) { return true; }
+  virtual Bool tailTock(RingOCircuit & roc, RingONeighborhood & ngb) { return true; }
 
   /** return true to let wire propagate change into self */
-  virtual Bool edge(RingONeighborhood & ngb, Bool fromUp, Bool newState) { return true; }
+  virtual Bool edge(RingOCircuit & roc, RingONeighborhood & ngb, Bool fromUp, Bool newState) { return true; }
   
   //// RingO SERVICES
-  Bool updateRingO(RingOIterator & itr) {                    //< returns true if state changes made
+  Bool updateRingOCircuit(RingOCircuit & ckt) {                    //< returns true if state changes made
+    ByteStreamLogger bsl;
+    if (!inCircuit(ckt)) return false; // ??
     RingONeighborhood ngb;
+    RingOIterator & itr = ckt.ringOIterator();
     itr.init(self);
+    if (false) {
+      ClassUtils clu;
+      Unsigned clid = clu.getClassId(ckt);
+      EventWindow ew;
+      bsl.printf("uROC %s - ",clu.getClassName(clid,false,false));
+      bsl.print(itr);
+      //      bsl.print(self);
+      bsl.printf(")\n");
+    }
     while (itr.hasNext()) {
       RingO & n = itr.next();
-      SyncRelation rel = self.syncRelation(n);
-      ngb.countRingOState(n, rel);
+      if (!n.inCircuit(ckt)) continue;
+      RingOState & ros = n.ringOState(ckt);
+      RingOCircuit.SyncRelation rel = ckt.syncRelation(self, n);
+      //      bsl.print(itr);
+      //      bsl.printf("n %d%d =%d\n",ros.mUpState,ros.mDownState,rel);
+      ngb.countRingOState(n, ros, rel);
     }
     
-    return ngb.update(self);
+    return ngb.update(ckt, self);
   }
-
-  ARGB getRingOColor() {  return mRingOState.color();  }
 
 }
 

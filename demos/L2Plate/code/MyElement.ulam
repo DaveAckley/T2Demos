@@ -1,18 +1,22 @@
 use B2DPlate;
 
-transient Zong : Plex {
+transient Zong {
   Bool mBong;
   constant Unsigned cONGS = 9;
   Unsigned(20) mUongs[cONGS];
   Bool mBong2;
   Bool commitUpdate() {
-    DebugUtils du;
-    du.printContext();
-    du.print(mUongs[0]++);
-    du.print(mUongs[mUongs[0]%cONGS]++);
-    du.print(mBong = !(mBong2 != mBong2));
-    du.print("WOWOWOONG");
-    du.print(self);
+    mUongs[0]++;
+    mUongs[mUongs[0]%cONGS]++;
+    if (false) {
+      DebugUtils du;
+      du.printContext();
+      du.print(mUongs[0]);
+      du.print(mUongs[mUongs[0]%cONGS]);
+      du.print(mBong = !(mBong2 != mBong2));
+      du.print("WOWOWOONG");
+      du.print(self);
+    }
     return true;
   }
 }
@@ -80,13 +84,13 @@ element MyElement : B2DPlate4 {
     Bool init = !bs.isChecksumValid(Zong.sizeof,cCHKBITS);
     if (init)
       du.print("REININININTITIITITIT");
-    du.print(init);
+    //    du.print(init);
     Zong & urs = (Zong&) bs.recast(Zong.classidof, init);
     //    du.print("MYSD 12");
     if (urs.commitUpdate()) {
       //      du.print("MYSD 13");
       Bool upd = bs.updateChecksum(Zong.sizeof,cCHKBITS);
-      du.print(upd);
+      //      du.print(upd);
       if (!scatter(bs)) { Fail f; f.fail(); }
     }
   }

@@ -246,7 +246,7 @@ transient L2SeqPlex : Plex {
   C2D mCenterPC; //< PC of plex ctr
   PlateUtils.PlateDir mPD; //< orientation of plex
   
-  constant Unsigned cMIN_CHECKSUM_BITS = 10u;
+  constant Unsigned cMIN_CHECKSUM_BITS = 8u;
 
   Bool tryConfigure() {
     PlateUtils pu;

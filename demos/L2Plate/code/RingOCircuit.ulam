@@ -1,0 +1,19 @@
+quark RingOCircuitState {
+  virtual RingOState & getRingOState() ;
+}
+
+transient RingOCircuit { 
+  typedef Unary(2) SyncRelation;
+  constant SyncRelation cOTHER_IS_UNRELATED = 0;
+  constant SyncRelation cOTHER_IS_UPSTREAM = 1;
+  constant SyncRelation cOTHER_IS_DOWNSTREAM = 2;
+
+  // RingOCircuit API
+  virtual RingOIterator & ringOIterator() ;
+
+  virtual SyncRelation syncRelation(RingO & me, RingO & other) ; //< How does other relate to me?
+
+  // RingOCircuit SERVICES
+  Void update() {
+  }
+}
