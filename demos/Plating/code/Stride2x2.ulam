@@ -22,7 +22,7 @@ quark Stride2x2F : Plate {
  */
 quark Stride1x1FP : Plate {
   @Override
-  virtual C2D stride() { return PlateUtils.c2x2; }
+  virtual C2D stride() { return PlateUtils.c1x1; }
   @Override
   virtual C2D phase() { return PlateUtils.c0x0; }
 

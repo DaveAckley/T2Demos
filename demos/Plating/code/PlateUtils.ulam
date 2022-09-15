@@ -83,6 +83,21 @@ quark PlateUtils {
     return false;
   }
 
+  C2D posAndSizeAlongDir(C2D pos, C2D size, PlateDir pd) {
+    which (pd) {
+    case cPLATE_GOES_N:
+    case cPLATE_GOES_S: {
+      return C2D.instanceof(pos.x, size.x);
+    }
+    case cPLATE_GOES_E:
+    case cPLATE_GOES_W: {
+      return C2D.instanceof(pos.y, size.y);
+    }
+    }
+    return c0x0;
+  }
+
+
   Unsigned strideInDir(PlateDir pd, C2D stride) {
     Int v;
     which (pd) {
@@ -150,13 +165,13 @@ quark PlateUtils {
 
   Bool inStride(C2D ew1, C2D ew2, C2D str, C2D & pcdiff) {
     C2D ewdiff = ew1 - ew2;
-    C2D pcdf = hadamardiv(ewdiff,str);
-    Bool ret = hadamard(pcdf,str) == ewdiff;
+    C2D pcdf = ewdiff/str;
+    Bool ret = pcdf*str == ewdiff;
     if (ret) pcdiff = pcdf;
     return ret;
   }
 
-  typedef Unary(6) PlateRelation;
+  typedef Unsigned(3) PlateRelation;
   constant PlateRelation cSAME_PLATE_AS = 0u;     //< L same size and net origin as R
   constant PlateRelation cCONTAINS_PLATE = 1u;    //< L wholly contains R 
   constant PlateRelation cCONTAINED_BY_PLATE = 2u;//< L wholly contained by R
@@ -164,6 +179,7 @@ quark PlateUtils {
   constant PlateRelation cOVERLAPS_PLATE = 4u;    //< L partially overlaps R (ooh bad?)
   constant PlateRelation cNOT_PLATE = 5u;         //< L and/or R is inaccessible or not a Plate
   constant PlateRelation cINTERPHASE_PLATE = 6u;  //< L and R have different strides and/or phases
+  constant PlateRelation cRELATION_UNKNOWN = 7u;  //< No plate relation information is available
   constant String mRelationNames[PlateRelation.maxof+1u] = {
     "SAME",
     "CONTAINS",
@@ -171,7 +187,8 @@ quark PlateUtils {
     "UNRELATED",
     "OVERLAPS",
     "NONPLATE",
-    "INTERPHASE"
+    "INTERPHASE",
+    "UNKNOWN",
   };
   String relationName(PlateRelation rel) {
     return mRelationNames[rel];
@@ -284,10 +301,10 @@ quark PlateUtils {
     /// Q2: Does outer's ew bbox completely contain inner's ew bbox?
     C2D ostride = outer.stride();
     C2D istride = inner.stride();
-    C2D oewsize = hadamard(outer.sizeOfPlate(),ostride);
-    C2D iewsize = hadamard(inner.sizeOfPlate(),istride);
-    C2D oewpos = hadamard(outer.positionOnPlate(),ostride) - ewoffseto;
-    C2D iewpos = hadamard(inner.positionOnPlate(),istride) - ewoffseti;
+    C2D oewsize = outer.sizeOfPlate() * ostride;
+    C2D iewsize = inner.sizeOfPlate() * istride;
+    C2D oewpos = outer.positionOnPlate() * ostride - ewoffseto;
+    C2D iewpos = inner.positionOnPlate() * istride - ewoffseti;
     TBox tbo(oewsize, -oewpos);
     TBox tbi(iewsize, -iewpos);
     TBox tbx = tbo.intersectionWith(tbi);
@@ -410,6 +427,7 @@ quark PlateUtils {
                           (C2D.Coord) mod(a.getY(),b.getY()));
   }
 
+/*
   C2D hadamard(C2D a, C2D b) { //< Component-wise multiplication
     return C2D.instanceof((C2D.Coord) (a.getX()*b.getX()),
                           (C2D.Coord) (a.getY()*b.getY()));
@@ -418,11 +436,11 @@ quark PlateUtils {
     return C2D.instanceof((C2D.Coord) (a.getX()/b.getX()),
                           (C2D.Coord) (a.getY()/b.getY()));
   }
-
+*/
   //// Relative size and positions
   C2D relativeToAbsolute(C2D plateAmount, B2D4 relative) {
     return
-      (hadamard(plateAmount, relative.toC2D()) +
+      (plateAmount * relative.toC2D() +
        C2D.instanceof(B2D4.cMAXVAL/2,B2D4.cMAXVAL/2)) /
       ((C2D.Coord) B2D4.cMAXVAL);
   }
@@ -431,37 +449,8 @@ quark PlateUtils {
     plateSize = plateSize.max(c1x1);         // size now (>0,>0)
     pos = pos.max(c0x0).min(plateSize); // pos now (0..sx,0..sy)
     C2D cmax((C2D.Coord) B2D4.cMAXVAL,(C2D.Coord) B2D4.cMAXVAL);
-    B2D4 ret(hadamardiv(hadamard(pos,cmax)+plateSize/2, plateSize));
+    B2D4 ret(pos * cmax + plateSize/2/plateSize);
     return ret;
-  }
-
-  /* SHOULD MOVE TO ColorUtils.ulam in ulam 5 */
-  ARGB rainbow(Int min, Int max, Int v) {
-    DebugUtils du;
-    ColorUtils cu;
-    typedef Unsigned(10) Range;
-    typedef Unsigned(48) BigU; // More than Int.sizeof + Range.sizeof;
-    typedef Bits(8) Byte;
-    if (min >= max) return cu.color(0xffffff); // WTH
-
-    if (v < min) v = min;
-    else if (v > max) v = max;
-
-    BigU scale = (BigU) (max - min);
-    BigU rev = (BigU) ((((BigU) (v - min)) * Range.maxof) / scale);
-
-    Unsigned group = (Unsigned) ((rev >> 8u) & 0x3);
-    Unsigned val = (Unsigned) (rev & 0xff);
-
-    ARGB c;
-    which (group) {
-    case 0u: { c = cu.color((Byte) 0xff,      (Byte) val,       (Byte) 0x00); }
-    case 1u: { c = cu.color((Byte) (0xff-val),(Byte) 0xff,      (Byte) 0x00); }
-    case 2u: { c = cu.color((Byte) 0x00,      (Byte) 0xff,      (Byte) val);  }
-    case 3u: { c = cu.color((Byte) 0x00,      (Byte) (0xff-val),(Byte) 0xff); }
-    }
-
-    return c;
   }
 
   SN findTypeInDir(SN cached, PlateDir dir, Unsigned classid) {
@@ -507,7 +496,7 @@ quark PlateUtils {
         du.print("FNCONTR 12");
 
         C2D offsetew = offsetr - pewc;
-        C2D offsetpc = hadamardiv(offsetew, a.stride());
+        C2D offsetpc = (offsetew / a.stride());
         C2D contpos = a.positionOnPlate();
         containerew = offsetr;
         selfpc = contpos - offsetpc;

@@ -1,0 +1,15 @@
+ulam 3;
+
+quark C2DT(Unsigned coordBits) {
+  typedef Int(coordBits) Coord;
+
+load "C2D.inc";
+
+}
+
+quark C2D { 
+  typedef Int(16) Coord;
+
+load "C2D.inc";
+
+}

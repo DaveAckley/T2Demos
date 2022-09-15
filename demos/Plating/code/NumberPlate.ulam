@@ -1,8 +1,38 @@
+quark QNumber {
+  typedef Int Number;
+  typedef Unsigned(5) BitWidth;
+  //// Number API
+  virtual Number getNumber() ;
+  virtual Number getMaxof() ;
+  virtual Number getMinof() ;
+}
+
+quark QMutableNumber : QNumber {
+  //// QMutableNumber API
+  virtual Bool setNumber(Number n) ;
+}
+
+quark QMutableNumberT(Unsigned(5) cBITS) : QMutableNumber {
+  typedef Int(cBITS) MutableNumber;
+  MutableNumber mMutableNumber = MutableNumber.minof;
+
+  //// QNumber API
+  virtual Number getNumber() { return (Number) mMutableNumber; }
+  virtual Number getMaxof() { return (Number) MutableNumber.maxof; }
+  virtual Number getMinof() { return (Number) MutableNumber.minof; }
+
+  //// QMutableNumber API
+  virtual Bool setNumber(Number n) {
+    mMutableNumber = (MutableNumber) n;
+    return n == (Number) mMutableNumber;
+  }
+}
+
 /** NumberPlate - Hold a 24-bit number for display
     \symbol NP
     \color #aaa
  */
-element NumberPlate : B2DPlate + CategorizedSite + Flood {
+element NumberPlate : B2DPlate + CategorizedSite + Flood + QMutableNumberT(24u) {
 
   typedef EventWindow.SiteNum SN;
   DebugUtils du;
@@ -11,8 +41,7 @@ element NumberPlate : B2DPlate + CategorizedSite + Flood {
   FontSet.FontNumber mFontNumber;
   DigitCount mDigitCount;
 
-  typedef Int(24) Number;
-  Number mNumber; //< Number.minof -> unset
+  typedef MutableNumber Number;
 
   Void configure(FontSet.FontNumber fn, DigitCount digs) {
     self.mFontNumber = fn;
@@ -39,7 +68,7 @@ element NumberPlate : B2DPlate + CategorizedSite + Flood {
   virtual Bool consider(Flood& ngb, Bool isup) {
     if (isup) {
       if (ngb as Self) {
-        mNumber = ngb.mNumber;
+        setNumber(ngb.getNumber());
       } else return false;
     }
     return true;
@@ -115,12 +144,13 @@ element NumberPlate : B2DPlate + CategorizedSite + Flood {
     Atom & a = ew[3];
     if (a as ASCIIPlate) {
       Unsigned atdigit = (Unsigned) (mDigitCount - (pos.getX() - 1) / digitSize.getX());
-      Unsigned numdigs = countAbsDigits(mNumber);
+      Number num = (Number) getNumber();
+      Unsigned numdigs = countAbsDigits(num);
       ASCII byte;
       if (atdigit > numdigs) {
-        if (atdigit == numdigs + 1u && mNumber < 0) byte = '-';
+        if (atdigit == numdigs + 1u && num < 0) byte = '-';
         else byte = ' ';
-      } else byte = getDigit(atdigit-1u, mNumber);
+      } else byte = getDigit(atdigit-1u, num);
       if (a.mDisplayByte != byte || a.mFontNumber != mFontNumber) {
         a.mDisplayByte = byte;
         a.mFontNumber = self.mFontNumber;
@@ -174,7 +204,7 @@ element SeedNumberPlate {
     Random random;
     PlateUtils pu;
     ad.configure(mFontNum, mDigits);
-    ad.mNumber = 0;
+    ad.setNumber(0);
     ew[0] = ad;
   }
 }
@@ -193,7 +223,7 @@ element Renumber {
       if (a as NumberPlate) {
         if (a.positionOnPlate() == pu.c0x0) {
           Random random;
-          a.mNumber = (NumberPlate.Number) random.between(-1000,1000);
+          a.setNumber((NumberPlate.Number) random.between(-1000,1000));
           break;
         }
       }

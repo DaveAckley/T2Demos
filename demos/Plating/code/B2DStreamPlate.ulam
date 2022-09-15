@@ -115,4 +115,6 @@ quark B2DStreamPlateT(Unary(8) cBITS_PER_COORD)
 
 quark B2DStreamPlate : B2DStreamPlateT(7u) { }
 
+quark B2DStreamPlate4 : B2DStreamPlateT(4u) { }
+
 

@@ -50,18 +50,17 @@ element WeightMatrix : B2DPlate + CategorizedSite + StdLink + Stride2x2 {
 
   ARGB getColor(Unsigned selector) {
     ColorUtils cu;
-    PlateUtils pu;
     DisplayMap show = mDisplays[(Unary(2)) selector];
     ARGB ret;
     
     if (show == cSHOW_WEIGHT) {
       Weight w = getWeight();
-      return pu.rainbow(w.minof/2,w.maxof/2,w);
+      return cu.rainbow(w.minof/2,w.maxof/2,w);
     }
 
     if (show == cSHOW_SUM) {
       Sum s = getSum();
-      return pu.rainbow(s.minof/4,s.maxof/4,s);
+      return cu.rainbow(s.minof/4,s.maxof/4,s);
     }
 
     if (show == cSHOW_STATE) {

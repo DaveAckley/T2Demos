@@ -126,6 +126,14 @@ quark Plate {
     Bool dieDown = (db & cDIE_AND_DOWN) != 0;
     Bool dieUp = (db & cDIE_AND_UP) != 0;
 
+    // Basic consistency check.
+    if (!sizeOfPlate().contains(positionOnPlate())) {
+      if (!weAreDying) {
+        setDeathBits(cDIE_EITHER);
+        return true;
+      }
+    }
+
     for (SN sn = 1u; sn < 41u; ++sn) {
       if (!ew.isAccessible(sn)) continue;
       Atom & a = ew[sn];
@@ -143,7 +151,8 @@ quark Plate {
           else if (rel == pu.cCONTAINS_PLATE && dieDown) killit = true;
           else if (rel == pu.cCONTAINED_BY_PLATE && dieUp) killit = true;
 
-          if (killit) a.setDeathBits(db);
+          if (killit)
+            a.setDeathBits(db);
         } else if (rel == pu.cSAME_PLATE_AS) {
 
           if (a.priority() > ourpriority) { // outranked on plate: you must hodl
@@ -219,7 +228,7 @@ quark Plate {
     C2D ourPlatePos = positionOnPlate();   // Location in plate coords
     C2D offset = plateCoord - ourPlatePos; // Plate coord offset us to them
     C2D phaseOffset = onPhase - ourPhase;  // phase difference us to them
-    C2D theirEWc = pu.hadamard(offset,ourStride) + ourEWc + phaseOffset; // Where they'd be in the ew
+    C2D theirEWc = offset*ourStride + ourEWc + phaseOffset; // Where they'd be in the ew
 
     if (!ew.isAccessible(theirEWc)) {
       du.print("PC2ESN INACCESSIBLE");

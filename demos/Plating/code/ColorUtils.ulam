@@ -1,0 +1,122 @@
+ulam 1;
+
+quark ColorUtils {
+  typedef Unsigned(8) Channel;
+  typedef Bits(8) Byte;
+  typedef Channel ARGB[4];
+
+  ARGB color(Int hex) {
+    return color((Bits) hex);
+  }
+
+  ARGB color(Unsigned hex) {
+    return color((Bits) hex);
+  }
+
+  ARGB color(Bits hex) {
+    ARGB ret;
+    ret[0] = (Channel) ((hex >> 24) & 0xff);
+    ret[1] = (Channel) ((hex >> 16) & 0xff);
+    ret[2] = (Channel) ((hex >>  8) & 0xff);
+    ret[3] = (Channel) ((hex >>  0) & 0xff);
+    return ret;
+  }
+  ARGB color(Byte red, Byte green, Byte blue) {
+    ARGB ret;
+    ret[0] = (Channel) 0xff;
+    ret[1] = (Channel) (red & 0xff);
+    ret[2] = (Channel) (green & 0xff);
+    ret[3] = (Channel) (blue & 0xff);
+    return ret;
+  }
+
+  ARGB modify(ARGB this, Unsigned percent) {
+    return between(color(255,255,255),this,percent);
+    /*
+    Unsigned rest = (Unsigned) 100u - percent;
+    for (Int i = 1; i < 4; ++i) {
+      Unsigned old = (Unsigned) this[i];
+      Unsigned new = (old * rest + (Unsigned) 0xff * percent) / 100u;
+      this[i] = (Channel) new;
+    }
+    return this;
+    */
+  }
+
+  /** \returns the color that is \c percentOfThis of \c this, and
+   * (100u-percentOfThis) of \c that.
+   *
+   * \since ulam-5
+   */
+  ARGB between(ARGB this, ARGB that, Unsigned percentOfThis) {
+    if (percentOfThis > 100u) percentOfThis = 100u;
+    Unsigned percentOfThat = (Unsigned) 100u - percentOfThis;
+    for (Int i = 1; i < 4; ++i) {
+      Unsigned new = (this[i] * percentOfThis +
+                      that[i] * percentOfThat) / 100u;
+      this[i] = (Channel) new;
+    }
+    return this;
+  }
+
+  /** Return a brighter version of a color.  Sort of like the Java
+    brighten() method does it. The comment on their code says:
+
+     From 2D group:
+      1. black.brighter() should return grey
+      2. applying brighter to blue will always return blue, brighter
+      3. non pure color (non zero rgb) will eventually return white
+  */
+  ARGB brighter(ARGB than) {
+    than[0] = 0xff;
+    if (than[1] == 0u && than[2] == 0u && than[3] == 0u)
+      return color((Unsigned) 0x030303);
+    for (Int i = 1; i < 4; ++i) {
+      if (than[i] < 3u) than[i] = 3u;
+      than[i] = (Channel) (100u*than[i]/70u);
+
+    }
+    return than;
+  }
+
+  /** Return a dimmer version of a color.  Sort of like the Java
+    dimmer() method does it.
+  */
+  ARGB dimmer(ARGB than) {
+    than[0] = 0xff;
+    for (Int i = 1; i < 4; ++i)
+      than[i] = (Channel) (70u*than[i]/100u);
+    return than;
+  }
+
+  /** Return a rainbow color from red (when \c v is \c min) to blue
+      (when \c v is \c max).  Returns white if \c min >= \c max.
+
+     \since ulam-5
+  */
+  ARGB rainbow(Int min, Int max, Int v) {
+    typedef Unsigned(10) Range;
+    typedef Unsigned(48) BigU; // More than Int.sizeof + Range.sizeof;
+
+    if (min >= max) return color(0xffffffff); // WTH
+
+    if (v < min) v = min;
+    else if (v > max) v = max;
+
+    BigU scale = (BigU) (max - min);
+    BigU rev = (BigU) ((((BigU) (v - min)) * Range.maxof) / scale);
+
+    Unsigned group = (Unsigned) ((rev >> 8u) & 0x3);
+    Unsigned val = (Unsigned) (rev & 0xff);
+
+    ARGB c;
+    which (group) {
+    case 0u: { c = color((Byte) 0xff,      (Byte) val,       (Byte) 0x00); }
+    case 1u: { c = color((Byte) (0xff-val),(Byte) 0xff,      (Byte) 0x00); }
+    case 2u: { c = color((Byte) 0x00,      (Byte) 0xff,      (Byte) val);  }
+    case 3u: { c = color((Byte) 0x00,      (Byte) (0xff-val),(Byte) 0xff); }
+    }
+
+    return c;
+  }
+}

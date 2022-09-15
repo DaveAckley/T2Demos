@@ -1,8 +1,8 @@
-/** SubplateSequencer.  A plate sequencer emphasizing packing and layout within a containing plate.
-    \symbol Sq
+/** SubplateOperator.  A plate operator emphasizing packing and layout within a containing plate.
+    \symbol SO
     \color #33a
  */
-element SubplateSequencer : PlSqUtils {
+element SubplateOperator : PlOpUtils {
   typedef B2DStreamPlate MyContainer;
   typedef B2DStreamPlate.B2DStreamPayload MyPayload;
   DebugUtils du;
@@ -190,10 +190,10 @@ element SubplateSequencer : PlSqUtils {
       //      du.print(isGrow);
 
       Unsigned thisscore = 0u;
-      if (incr.dot(targetdeltaposPL) > 0u) ++thisscore;
+      if ((incr.dot(targetdeltaposPL)) > 0u) ++thisscore;
       if (isGrow) {
         // Shrinking NYI
-        if (incr.abs().dot(targetdeltasizPL) > 0u) ++thisscore;
+        if ((incr.abs().dot(targetdeltasizPL)) > 0u) ++thisscore;
         else continue; // Skip this possibility entirely if deltasiz < 0 in dir
       }
       //      du.print("CONSDR12");
@@ -311,7 +311,7 @@ element SubplateSequencer : PlSqUtils {
 
  */
 
-element SeedSubplateSequencer {
+element SeedSubplateOperator {
   Unsigned(10) mEvents;
   Void behave() {
     EventWindow ew;
@@ -340,7 +340,7 @@ element SeedSubplateSequencer {
     {
       C2D at(0,-1);
       if (ew[at] is AtomDeque) {
-        PlateSequencer po;
+        PlateOperator po;
         po.mDesiredPlateSize.init(15,10);
         ew[at] = po.atomof;
       }
@@ -349,7 +349,7 @@ element SeedSubplateSequencer {
     {
       C2D at(2,1);
       if (ew[at] is AtomDeque) {
-        SubplateSequencer sp;
+        SubplateOperator sp;
         sp.mRelativeSize.init(rando(), rando());
         sp.mRelativePos.init(rando(), rando());
         //        sp.mRelativeSize.init(7, 7);  // about half size

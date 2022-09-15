@@ -238,7 +238,7 @@ element Tecton : B2DPlate + PlateUtils + Stride2x2 {
       // SPAWN INTO ew[sib]
       Self bein = self; // Start with us
       bein.mBlockedStart.reset();
-      bein.mPosOnPlate.fromC2D(self.mPosOnPlate.toC2D() + hadamardiv(offsetewc,stride()));
+      bein.mPosOnPlate.fromC2D(self.mPosOnPlate.toC2D() + offsetewc/stride());
       bein.mSidesReady[0] = bein.mSidesReady[1] = false;  // Decide for themselves
       ew[sib] = bein.atomof;
       return false;
@@ -343,10 +343,13 @@ element Tecton : B2DPlate + PlateUtils + Stride2x2 {
       }
       if (doswap) {
         //feedWatchdog(); // OK, this is progress
-        //        bsl.printf("TFSDKON15 fwdewc(%d,%d)\n",
-        //                   fwdewc.getX(),fwdewc.getY());
+        bsl.printf("TFSDKON15 fwdewc(%d,%d)\n",
+                   fwdewc.getX(),fwdewc.getY());
         Self me = self;         // Remember me
-        me.mPosOnPlate.fromC2D(pos + hadamardiv(fwdewc,stride()));    // Advance me (in plate coords)
+        C2D dest = pos + fwdewc/stride();
+        bsl.printf("TFSDKON15 dest(%d,%d)\n",
+                   dest.getX(),dest.getY());
+        me.mPosOnPlate.fromC2D(dest);    // Advance me (in plate coords)
         Atom & a = ew[fwdewc];
         //        bsl.printf("TFSDKON16 mgrowline %d istargetplate %d\n",mGrowLine, istargetplate);
 
@@ -395,7 +398,12 @@ element Tecton : B2DPlate + PlateUtils + Stride2x2 {
 
               //              bsl.printf("++++++++++GNEC17 msizeplate(%d,%d)\n",a.mSizeOfPlate.mX,a.mSizeOfPlate.mY);
             }
-          } else return setDeathBits(cDIE_AND_DOWN); 
+          } else {
+            bsl.print("NOT B2DPLATE?\n");
+            DebugUtils du;
+            du.print(a);
+            return setDeathBits(cDIE_AND_DOWN);
+          }
         }
       //        bsl.printf("TFSDKON212\n");
         ew[0] = ew[fwdewc];    // Shift some Plate (or empty or whatevs)!

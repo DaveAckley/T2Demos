@@ -1,32 +1,15 @@
 use EventWindow;
-quark B2DTPlate(Unary(8) cBITS_PER_COORD) : Plate {
-  typedef B2DT(cBITS_PER_COORD) MyB2D;
+quark B2DPlateBase : Plate {
   typedef EventWindow.SiteNum SN;
-  MyB2D mSizeOfPlate;
-  MyB2D mPosOnPlate;
-  DeathBits mDeathBits;
   
-  //// B2DPlate API
+  //// B2DPlateBase API
+  virtual Bool setSizeOfPlate(C2D size) ;
+  virtual Bool setPositionOnPlate(C2D pos) ;
   virtual Atom copyOf() { //< A copy of self suitable for healing
     return self.atomof;
   }
 
-  //// Plate API
-  @Override
-  virtual C2D sizeOfPlate() { return mSizeOfPlate.toC2D(); }
-  @Override
-  virtual C2D positionOnPlate() { return mPosOnPlate.toC2D(); }
-  @Override
-  virtual DeathBits getDeathBits() { return mDeathBits; }
-  @Override
-  virtual Void setDeathBits(DeathBits bits) { mDeathBits = bits; }
-
-  //// B2DPlate utilities
-
-  Bool setSizeOfPlate(C2D size) { return mSizeOfPlate.fromC2D(size); }
-
-  Bool setPositionOnPlate(C2D pos) { return mPosOnPlate.fromC2D(pos); }
-
+  //// B2DPlateBase utilities
   Bool checkGrowthAndHealing() {
     EventWindow ew;
     PlateUtils pu;
@@ -41,7 +24,7 @@ quark B2DTPlate(Unary(8) cBITS_PER_COORD) : Plate {
       for (C2D.Coord x = -2; x <= 2; ++x) {
         if (x == 0 && y == 0) continue;
 
-        C2D ewc = pu.hadamard(C2D.instanceof(x,y),mystr);
+        C2D ewc = (C2D.instanceof(x,y) * mystr);
         EventWindow.SiteNum sn = md.getSiteNumber(ewc);
         if (sn == sn.maxof) continue;
 
@@ -66,7 +49,7 @@ quark B2DTPlate(Unary(8) cBITS_PER_COORD) : Plate {
           //          du.print("OANZC");
           //          du.print(ewc);
           //          du.print(pc);
-          bein.mPosOnPlate.fromC2D(pc);
+          bein.setPositionOnPlate(pc);
           ew[sn] = bein.atomof;
           grew = true;  // Wanted it and got it
           continue;
@@ -97,7 +80,7 @@ quark B2DTPlate(Unary(8) cBITS_PER_COORD) : Plate {
       if (pos.getY() < size.getY() - 1) incrpc.setY(+1); else incrpc.setX(+1);
     }
     }
-    C2D incr = pu.hadamard(incrpc,stride());
+    C2D incr = (incrpc * stride());
     MDist md;
     EventWindow ew;
     SN ret = md.getSiteNumber(incr); // XXX ASSUMES WE'RE AT ew[0];
@@ -125,15 +108,42 @@ quark B2DTPlate(Unary(8) cBITS_PER_COORD) : Plate {
       if (pos.getY() > 0) incrpc.setY(-1); else incrpc.setX(+1);
     }
     }
-    C2D incr = pu.hadamard(incrpc,stride());
+    C2D incr = (incrpc * stride());
     MDist md;
     return md.getSiteNumber(incr); // XXX ASSUMES WE'RE AT ew[0]
   }
 }
 
+quark B2DTPlate(Unary(8) cBITS_PER_COORD) : B2DPlateBase {
+  typedef B2DT(cBITS_PER_COORD) MyB2D;
+  typedef EventWindow.SiteNum SN;
+  MyB2D mSizeOfPlate;
+  MyB2D mPosOnPlate;
+  DeathBits mDeathBits;
+  
+  //// Plate API
+  @Override
+  virtual C2D sizeOfPlate() { return mSizeOfPlate.toC2D(); }
+  @Override
+  virtual C2D positionOnPlate() { return mPosOnPlate.toC2D(); }
+  @Override
+  virtual DeathBits getDeathBits() { return mDeathBits; }
+  @Override
+  virtual Void setDeathBits(DeathBits bits) {
+    mDeathBits = bits;
+  }
+
+  //// B2DPlateBase API
+  @Override
+  virtual Bool setSizeOfPlate(C2D size) { return mSizeOfPlate.fromC2D(size); }
+  @Override
+  virtual Bool setPositionOnPlate(C2D pos) { return mPosOnPlate.fromC2D(pos); }
+}
+
 quark B2DPlate : B2DTPlate(7) {
 }
 
-quark B2DPlate2 : B2DTPlate(2) {
-}
+quark B2DPlate4 : B2DTPlate(4) { }
+
+quark B2DPlate2 : B2DTPlate(2) { }
 

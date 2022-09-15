@@ -134,10 +134,10 @@ element SeedSIGH2 {
 
     NumberPlate ad;
     ad.configure(0u, 4u);
-    ad.mNumber = 0;
+    ad.setNumber(0);
     C2D npsiz = ad.sizeOfPlate();
     C2D adpos(1, 0);
-    ad.mPosOnPlate.fromC2D(adpos); // Upper right of np
+    ad.mPosOnPlate.fromC2D(adpos); // Almost upper left of np
     ew[23] = ad.atomof;
 
     // Containing Plate

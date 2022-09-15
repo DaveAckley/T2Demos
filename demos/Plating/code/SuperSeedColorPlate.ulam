@@ -79,7 +79,7 @@ element SuperSeedColorPlate : Plate1 + Stride2x2 {
     for (C2D.Coord x = 0; x <= 2; ++x) {
       for (C2D.Coord y = 0; y <= 2; ++y) {
         C2D plc(x,y);
-        C2D ewc(pu.hadamard(plc,str));
+        C2D ewc(plc * str);
         if (!ew.isAccessible(ewc)) continue; // Die?
         if (x == 1 && y == 1) {
           SubplateSequencer so;
@@ -109,7 +109,7 @@ element SuperSeedColorPlate : Plate1 + Stride2x2 {
     for (C2D.Coord x = 0; x < 3; ++x) {
       for (C2D.Coord y = 0; y < 3; ++y) {
         C2D plc(x,y);
-        C2D ewc(pu.hadamard(plc,str));
+        C2D ewc(plc * str);
         if (!ew.isAccessible(ewc)) continue; // Die?
         if (x == 1 && y == 1) {
           SubplateSequencer so;
@@ -139,7 +139,7 @@ element SuperSeedColorPlate : Plate1 + Stride2x2 {
     for (C2D.Coord x = 0; x < 3; ++x) {
       for (C2D.Coord y = 0; y < 3; ++y) {
         C2D pc(x,y);
-        C2D ewc(pu.hadamard(pc,str));
+        C2D ewc((pc * str));
         if (!ew.isAccessible(ewc)) continue; // Die?
         if (x == 1 && y == 1) {
           SubplateSequencer so;
@@ -285,7 +285,7 @@ element SuperSeedColorPlate : Plate1 + Stride2x2 {
     } else if (random.oneIn(1000)) { // attempt to spawn
       C2D str = stride();
       C2D plc(-2,0);
-      C2D ewc = pu.hadamard(plc,str);
+      C2D ewc = (plc * str);
       if (ew.isAccessible(ewc) && ew[ewc] is Empty) {
         ew[ewc] = SuperSeedColorPlate.instanceof;
       }

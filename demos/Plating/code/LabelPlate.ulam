@@ -28,7 +28,7 @@ quark LabelPlate : B2DStreamPlateBase + Flood + ByteBox {
 
     /// Find bytebox coord of pospc
     C2D pixpospc = pospc + labelpospc;
-    C2D byteposbb = pu.hadamardiv(pixpospc,sizfont);
+    C2D byteposbb = pixpospc/sizfont;
 
     if (!sizbb.contains(byteposbb)) return false;
     ASCII byte = getByteFromBox(byteposbb);

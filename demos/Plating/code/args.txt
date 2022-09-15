@@ -1,1 +1,1 @@
-{{1F1}} -p 30 -e 0 --accelerate 90 --surge 90 --maxepochlength 200 -a 0 -d /data/ackley/SIMDATA
+{{1F1}} -p 30 -e 0 --accelerate 30 --maxepochlength 200 -a 0 -d /data/ackley/SIMDATA

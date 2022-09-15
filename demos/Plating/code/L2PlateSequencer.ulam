@@ -1,0 +1,459 @@
+/** L2Plate
+    \symbol L2
+    \color #929
+ */
+element L2Plate : B2DStreamPlate + CategorizedSite + B2DStreamPayload + Stride1x1FP {
+  B2DPlate4 mL2Info;
+  C2D sizeOfL2Plate() { return mL2Info.sizeOfPlate(); }
+  C2D positionOnL2Plate() { return mL2Info.positionOnPlate(); }
+  Bool setSizeOfL2Plate(C2D siz) { return mL2Info.setSizeOfPlate(siz); }
+  Bool setPositionOnL2Plate(C2D pos) { return mL2Info.setPositionOnPlate(pos); }
+
+  constant Unsigned cTIMER_BITS = 4u;
+  typedef XTimer(cTIMER_BITS,Unsigned(cTIMER_BITS).maxof,4096u) BlockDog;
+  BlockDog mBlockDogTimer; //  About one in half a billion cumulative shot
+
+  //// UrSelf API
+  @Override
+  ARGB getColor(Unsigned selector) {
+    ColorUtils cu;
+
+    if (self.hasPayload()) {
+      return cu.color((Unsigned) (0xffff0000|self.peekAtPayload()));
+    }
+    return super.getColor(selector);
+  }
+
+
+  Bool die() {
+    DebugUtils du;
+    du.printContext();
+    du.print("DYIINNG");
+    setDeathBits(cDIE_AND_DOWN);
+    return true;
+  }
+
+  Bool checkLocalActions() {
+    if (neighborShowdown()) return true;
+    if (neighborSeed()) return true;
+    if (addSequencer()) return true;
+    return false;
+  }
+
+  Bool neighborShowdown() {
+    PlateUtils pu;
+    EventWindow ew;
+    for (SN sn = 37u; sn <= 40u; ++sn) { // corners of the diamond
+      if (!ew.isAccessible(sn)) continue;
+      Atom & a = ew[sn];
+      Bool go = false;
+      if (a is Plate) { // First check L1 plate relation 
+        PlateUtils.PlateRelation rel1 = pu.relationTo(0u,sn);
+        if (rel1 == pu.cUNRELATED_TO_PLATE) {
+          go = true;
+          break;
+        }
+      }
+      if (!go) return false;
+      if (a as Self) { // Now check L2 plate relation
+        MDist md;
+        C2D offsetl = md.getSiteCoord(0u);   // (0,0)
+        C2D offsetr = md.getSiteCoord(sn)/4; // unit vec in dir
+
+        PlateUtils.PlateRelation rel2 =
+          pu.relationTo(self.mL2Info, offsetl, a.mL2Info, offsetr);
+        if (rel2 == pu.cOVERLAPS_PLATE) {
+          // Competitor for same L2 pos?  Who's bigger in L1?
+          DebugUtils du;
+          du.printContext();
+          du.print("SDLKSDFLKEWOI");
+          Unsigned bigem = a.sizeOfPlate().area();
+          Unsigned bigus = self.sizeOfPlate().area();
+          C2D origus = self.positionOnPlate();
+          C2D origthem = a.positionOnPlate() - md.getSiteCoord(sn);
+          Bool wedie =
+            (bigem > bigus) ||
+            ((bigem == bigus) &&
+             (origus.x > origthem.x || origus.y > origthem.y));
+
+          if (wedie) self.die();
+          else a.die();
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  Bool addSequencer() {
+    PlateUtils pu;
+    C2D pos1 = positionOnPlate();
+    if (pos1 != pu.c1x1) return false;
+    Random random;
+    if (!random.oneIn(5)) return false; // Don't spawn too fast
+    L2PlateSequencer seq;
+    EventWindow ew;
+    ew[0] = seq.atomof;
+    return true;
+  }
+
+  C2D flipPos(C2D pos1, C2D siz1, C2D incr) {
+    PlateUtils pu;
+    if (incr.getX() < 0) return pos1.takex(siz1-1);
+    if (incr.getX() > 0) return pos1.takex(pu.c0x0);
+    if (incr.getY() < 0) return pos1.takey(siz1-1);
+    /*if(incr.getY()>0)*/return pos1.takey(pu.c0x0);
+  }
+
+  Bool neighborSeed() {
+    if (!isPlateBorder()) return false;
+    Random random;
+    if (!random.oneIn(5)) return false; // Don't spawn too fast
+
+    PlateUtils pu;
+    EventWindow ew;
+    C2D pos1 = positionOnPlate();
+    C2D siz1 = sizeOfPlate();
+    PlateUtils.PlateDir pd = pu.borderDir(pos1,siz1);
+
+    C2D ps1 = pu.posAndSizeAlongDir(pos1,siz1,pd);
+    if (ps1.getX() != ps1.getY()/2) return false; // Not midpoint
+
+    C2D pos2 = mL2Info.positionOnPlate();
+    C2D siz2 = mL2Info.sizeOfPlate();
+
+    C2D incr = pu.stepInDir(pd);
+
+    C2D ngbpos2 = pos2 + incr;
+    if (!siz2.contains(ngbpos2)) return false; // No L2 ngb that way
+
+    for (C2D at = incr; ew.isAccessible(at); at += incr) {
+      if (!ew[at] is Empty) return false; // Something there already
+    }
+    
+    // Nothing found in ew ortho to midpoint
+    // Make seed at ew[incr*2] and ew[incr*(3|4)]
+    Self ngb = self;
+    ngb.mL2Info.setPositionOnPlate(ngbpos2);
+    ngb.setPositionOnPlate(flipPos(pos1,siz1,incr));
+    ew[incr*2] = ngb.atomof; // Seed L2
+
+    Bool upleft = incr.x < 0 || incr.y < 0;
+    C2D inat = upleft ? incr*2 : incr;
+    Atom content = ew[-inat]; // Copy interior ngb
+    if (!(content is Self)) { // But not if it's L2Plate
+      Atom & a = content;
+      if (a as B2DPlateBase) {
+        C2D posn = a.positionOnPlate();
+        C2D sizn = a.sizeOfPlate();
+        a.setPositionOnPlate(flipPos(posn,sizn,incr));
+        ew[incr*(upleft ? 3 : 4)] = content;
+      }
+    }
+    return true;
+  }
+
+  Void behave() {
+    if (mustBlockOrDie()) {
+      //// WARNING: self might be erased at this point!
+      EventWindow ew;   
+      Atom & a = ew[0];  // So get a new ref from the ew
+      if (a as Self) 
+        a.mBlockDogTimer.reset(); // If it's still alive, it was blocked
+      return;
+    }
+    // Block dog alarm means there's been no movement or growth for a looong time
+    if (mBlockDogTimer.countAlarm()) return (Void) die();
+
+    checkGrowthAndHealing();
+    updateStream();
+    if (checkLocalActions()) return;
+  }
+  
+}
+
+/** L2PlateEngulfer
+    \symbol E2
+    \color #aa3
+ */
+element L2PlateEngulfer : Plate1 {
+  typedef EventWindow.SiteNum SN;
+  typedef L2Plate MyEngulfer;
+  EventWindow ew;
+  PlateUtils pu;
+  L2Plate.B2DPlate4 mL2InfoInit;
+  Void bail() { ew[0] = Empty.instanceof; }
+
+  Void behave() {
+    for (SN sn = 1u; sn <= 8u; ++sn) {
+      if (!ew.isAccessible(sn)) return bail();
+      Atom & a = ew[sn];
+      if (a is MyEngulfer) return bail();
+      if (a as Plate) {
+        if (!a.isPlateBorder()) continue;
+        if (a.stride() != pu.c1x1) continue; // Only engulf solid plate for now
+        PlateUtils.PlateRelation rel = pu.relationTo(0u,sn);
+        if (rel != pu.cUNRELATED_TO_PLATE) continue;
+        // OK, we've found a non-L2Plate to engulf
+        MDist md;
+        C2D theirpos = a.positionOnPlate();
+        C2D theirsiz = a.sizeOfPlate();
+        C2D oursizc2d = theirsiz + pu.c3x3; // +2 N+W, +1 E+S
+        B2D oursiz;
+        if (!oursiz.fromC2D(oursizc2d))
+          return bail(); // they too big
+        C2D usew = md.getSiteCoord(0u);
+        C2D themew = md.getSiteCoord(sn);
+        C2D tousew = usew - themew;
+        MyEngulfer l2;
+        l2.setSizeOfPlate(oursizc2d);
+        l2.setPositionOnPlate(theirpos+tousew+pu.c2x2);
+        //        l2.setSizeOfL2Plate(pu.c1x1);
+        //        l2.setPositionOnL2Plate(pu.c0x0);
+        l2.mL2Info = self.mL2InfoInit;
+        ew[0] = l2;
+        return;
+      }
+    }
+  }
+}
+
+element SeedL2Plate : Plate1 {
+  Void behave() {
+    L2PlateEngulfer pe;
+    PlateUtils pu;
+    EventWindow ew;
+    pe.mL2InfoInit.setPositionOnPlate(pu.c1x1);
+    pe.mL2InfoInit.setSizeOfPlate(pu.c3x3);
+    ew[0] = pe.atomof;
+  }
+}
+
+/** L2PlateSequencer
+    \symbol Q2
+    \color #33a
+ */
+element L2PlateSequencer : PlSqUtils + Plate1 + Stride2x2 {
+  typedef EventWindow.SiteNum SN;
+  typedef B2DStreamPlate.B2DStreamPayload MyPayload;
+  DebugUtils du;
+  Random random;
+  SN mRootSN;
+  SN mRPeerSN;
+  Bool mNoDiffuse; //< true to suppress seeking open areas if nothing else to do
+
+  typedef Unsigned(3) Clearance;
+  typedef Clearance DirClearance[4];
+  DirClearance mOuterClearance;
+
+  typedef PlateUtils.PlateRelation PlateRelation;
+  typedef PlateRelation DirPlateRelation[4];
+  DirPlateRelation mDirPlateRelation;
+  
+  typedef B2D SizeCoord;
+  SizeCoord mDesiredPlateSize;
+
+  constant Unsigned cTIMER_BITS = 4u;
+  typedef XTimer(cTIMER_BITS,Unsigned(cTIMER_BITS).maxof,1u) CommandTimer;
+  CommandTimer mCmdTimer;
+
+  typedef UMod(8,3) CommandSpinner;
+  CommandSpinner mCommandSpinner;
+
+  typedef B2DPacketAct.ActTag CommandTag;
+
+  CommandTag nextCommandTag() {
+    ++mCommandSpinner;
+    return (CommandTag) mCommandSpinner.get();
+  }
+
+  Unsigned(2) nextSenseTag() {
+    Unsigned v = nextCommandTag();
+    return (Unsigned(2)) (v&0x3);
+  }
+
+  /** \returns < 0 to indicate incomparability; caller should take extreme measure like dying.
+      \returns == 0 to indicate exact command tag expected
+      \returns > 0 to indicate \c tag is obsolete, but not invalid.
+   */
+  Int interpretCommandTag(CommandTag tag) {
+    CommandSpinner tmp;
+    tmp.set(tag);
+    if (!mCommandSpinner.isComparable(tmp)) return -1;
+    if (mCommandSpinner.isEqual(tmp)) return 0;
+    return 1;
+  }
+
+  //// UrSelf API
+  @Override
+  ARGB getColor(Unsigned selector) {
+    ARGB ret = super.getColor(selector);
+    ColorUtils cu;
+    //ret = cu.between(ret,cu.color(0xffff0000),75);
+    return ret;
+  }
+
+  Void considerOuter() {  // We just got new outer data.  Should we act on it?
+    if (!mDesiredPlateSize.isValid()) return;  // Nothing to do without a valid size
+    EventWindow ew;
+    MyContainer & root = (MyContainer&) ew[mRootSN];
+    C2D rootsiz = root.sizeOfPlate();
+    C2D targetsiz = mDesiredPlateSize.toC2D();
+
+    Bool needx = rootsiz.getX() < targetsiz.getX();
+    Bool needy = rootsiz.getY() < targetsiz.getY();
+
+    ByteStreamLogger bsl;
+    //    bsl.printf("CONSIDROO:(%d,%d)\n",needx,needy);
+
+    Unsigned actcount = 0;
+    Bool actwantsgrow;
+    PlateUtils.PlateDir actdir;
+    PlateUtils pu;
+    Random random;
+    //    C2D str = self.Stride2x2.stride();
+    C2D str = self.Stride2x2.stride();
+    for (Unsigned i = 0; i < 4u; ++i) {
+      PlateUtils.PlateDir pd = (PlateUtils.PlateDir) i;
+      PlateUtils.PlateDir oppd = (PlateUtils.PlateDir) ((i+2u)%4u);
+      Unsigned strindir = pu.strideInDir(pd,str);
+      if (mOuterClearance[i] < strindir+1u) continue;
+
+      C2D incr = pu.stepInDir(pd);
+      //      bsl.printf("CONSIDROO11:%d=%d/%d=%d(%d,%d)\n",
+      //                 pd,mOuterClearance[pd],
+      //                 oppd,mOuterClearance[oppd],
+      //                 incr.getX(),incr.getY());
+
+      if (needx && incr.getX() != 0) {
+        if (random.oneIn(++actcount)) { actdir = pd; actwantsgrow = true; }
+      } else if (needy && incr.getY() != 0) {
+        if (random.oneIn(++actcount)) { actdir = pd; actwantsgrow = true; }
+      } else if ((mOuterClearance[pd] - 1u > mOuterClearance[oppd]) ||
+                 (!mNoDiffuse && mOuterClearance[pd] > 3u)) {
+        //        bsl.printf("CONSIDROO1110:%d\n",actcount);
+        if (random.oneIn(++actcount)) { actdir = pd; actwantsgrow = false; }
+        //        bsl.printf("CONSIDROO1111:%d/%d/%d\n",actcount,actdir,actwantsgrow);
+      }
+    }
+    //    bsl.printf("CONSIDROO12:%d/%d)\n",actcount,actdir);
+
+    if (actcount > 0u) {
+      B2DPacket pkt;
+      B2DPacketAct.ActOp op = B2DPacketAct.cAOP_SIDE_MOVE;
+      if (actwantsgrow && actdir != pu.cPLATE_GOES_E && actdir != pu.cPLATE_GOES_S)
+        op = B2DPacketAct.cAOP_SIDE_GROW;
+      pkt.initAct(op,actdir,nextCommandTag());
+      MyPayload pay;
+      pay.mBits = (MyPayload.MyBits) pkt;
+      pay.mHasPayload = true;
+      //      bsl.printf("CONSIDROO13:%x -- ",pay.mBits);
+      //      pkt.print(bsl);
+      //      bsl.printf("\n");
+      if (root.trySendPayload(true,pay)) {
+        mCmdTimer.set(1u);
+        return;
+      }
+      //      bsl.printf("CONSIDROO14\n");
+    }
+
+  }
+
+  Void receivePacket(B2DPacket bp) {
+    ByteStreamLogger bsl;
+    if (bp.isSense()) {
+      //    bsl.printf("RECVOO:");
+      //bp.print(bsl);
+      //bsl.printf("\n");
+      B2DPacketSense & sp = bp.asSense();
+      Bool outer = sp.mSenseDir == sp.cSDIR_OUTWARD;
+      for (Unsigned i = 0; i < 4u; ++i) {
+        B2DPacketSense.Clearance c = sp.mDirData[i];
+        if (c > 4u) continue;
+        if (outer)
+          mOuterClearance[i] = c;
+      }
+
+      if (outer) {
+        Unsigned tagbits = sp.mSenseTag;
+        Unsigned lasttag = mCommandSpinner.get();
+        Unsigned mask = ((Unsigned) (1u << sp.mSenseTag.sizeof))-1u;
+        if ((tagbits & mask) == (lasttag & mask))
+          considerOuter();
+        else {       
+          bsl.printf("Mismatch sense tag %x vs %x (on %x)\n",
+                     (tagbits & mask), (lasttag & mask), lasttag);
+          mCmdTimer.set(1u); // don't ship anything in response to this.
+        }
+      }
+    } else if (bp.isAct()) {
+      B2DPacketAct & ap = bp.asAct();
+      Unsigned tagbits = ap.mActTag;
+      Unsigned lasttag = mCommandSpinner.get();
+      Unsigned mask = ((Unsigned) (1u << ap.mActTag.sizeof))-1u;
+
+      if ((tagbits & mask) != (lasttag & mask)) {
+          bsl.printf("Mismatch act tag %x vs %x (on %x)\n",
+                     (tagbits & mask), (lasttag & mask), lasttag);
+          mCmdTimer.set(1u); // don't ship anything in response to this.
+      }
+    }
+  }
+
+  /** search the ew for any tecton, regardless of plate relationships.
+     This is big bogus hammer by the way.
+   */
+  Bool iSeeTecton() {
+    EventWindow ew;
+    for (SN sn = 1u; sn < 41u; ++sn) {
+      if (!ew.isAccessible(sn)) continue;
+      Atom & a = ew[sn];
+      if (a as Tecton) return true;
+    }
+    return false;
+  }
+
+  Void behave() {
+    EventWindow ew;
+    if (mustBlockOrDie()) return;
+    if (iSeeTecton()) return;
+    if (!tryToFindContainer(mRootSN, mRPeerSN, false)) return;
+    {
+      ByteStreamLogger bsl;
+      // PLATEOPS
+      MyContainer & root = (MyContainer&) ew[mRootSN];
+      MyContainer & rpeer = (MyContainer&) ew[mRPeerSN];
+
+      // If we don't have a reasonable desired size, assume existing size is desired
+      if (!mDesiredPlateSize.isValid() || mDesiredPlateSize.toC2D().length() == 0u)
+        mDesiredPlateSize.fromC2D(root.sizeOfPlate());
+
+      MyPayload pay;
+      Random random;
+      DebugUtils du;
+      B2DPacket bp;
+      if (rpeer.tryRecvPayload(false,pay)) {
+        mCmdTimer.reset();
+        bp = (B2DPacket) pay.mBits;
+        receivePacket(bp);
+      } else if (mCmdTimer.current() == 0u) {
+        bp.initSense(random.oddsOf(4,5), nextSenseTag()); 
+        //        bsl.printf("SENDOO:");
+        //        bp.print(bsl);
+        //        bsl.printf("\n");
+        pay.mBits = (MyPayload.MyBits) bp;
+        pay.mHasPayload = true;
+        //        du.printContext();
+        //        du.print("RELKEKLASKLAKRKEN");
+        //        du.print((Unsigned) pay.mBits);
+        mCmdTimer.set(1u);
+        if (root.trySendPayload(true,pay)) return;
+        //        du.print("AWAYRELKEKLASKLAKRKEN");
+      } else if (mCmdTimer.countAlarm()) {
+        du.printContext();
+        du.print("LOST CMD TIMER RESET");
+        mCmdTimer.reset();
+      }
+    }
+  }
+}

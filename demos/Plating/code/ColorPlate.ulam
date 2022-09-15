@@ -15,7 +15,7 @@ element ColorPlate : B2DStreamPlate + CategorizedSite + B2DStreamPayload + Strid
       RawBits dump;
       s.storeTo(dump);
       s.mBufferStatus = QStream12.cBUFFER_EMPTY;
-  }
+    }
     return s.atomof;
   }
 
@@ -248,5 +248,27 @@ element JumpSeeder {
       ew[mNextSN] = ew[0];
       ew[0] = Empty.instanceof;
     }
+  }
+}
+
+element IshColorPlate {
+  Void behave() {
+    DebugUtils du;
+    EventWindow ew;
+    ColorPlate cp;
+    ew[1] = cp.atomof;
+    Atom & a = ew[1];
+    if (a as B2DPlateBase) {
+      du.print("OK - ew[1] IS B2DPlate");
+      du.print(a);
+      B2DPacketSense aQuark;
+      du.print(aQuark);
+      ByteStreamLogger aTransient;
+      du.print((UrSelf&) aTransient);
+    } else {
+      du.print("WRONG");
+      du.print(a);
+    }
+    ew[0] = Empty.instanceof;
   }
 }

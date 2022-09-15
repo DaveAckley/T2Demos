@@ -1,0 +1,91 @@
+/** Miscellaneous PlateOperator utilities
+ */
+quark PlOpUtils {
+  typedef EventWindow.SiteNum SN;
+  typedef B2DStreamPlateBase MyContainer;
+  // Look for container plate root site
+
+  Bool lookForContainerRootAt(C2D c, SN & rootsn, SN & rpeersn, C2D & contstride) {
+    EventWindow ew;
+    if (!ew.isAccessible(c)) return false;
+    Atom & a = ew[c];
+    if (a as MyContainer) {
+      C2D spos = a.positionOnPlate();
+      if (spos.length() == 0u) {
+        rootsn = ew.getSiteNumber(c);
+        C2D str = a.stride();
+        C2D rpoffset((C2D.Coord) 0,(C2D.Coord) str.getY());
+        C2D rpc = c+rpoffset;
+        if (ew.isAccessible(rpc)) {
+          Atom & a2 = ew[rpc];
+          if (a2 as MyContainer) {
+            C2D spos2 = a2.positionOnPlate();
+            if (spos2 == PlateUtils.c0x1) {
+              rpeersn = ew.getSiteNumber(rpc);
+              contstride = str;
+              return true;
+            }
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  /** \returns true if died, false if container was found
+   */
+  Bool findContainerOrDie(SN & rootsn, SN & rpeersn) {
+    EventWindow ew;
+    if (!tryToFindContainer(rootsn,rpeersn,false))
+      ew[0] = Empty.instanceof; // or die
+    return true;
+  }
+
+  /** \returns true if container found (and both rootsn and rpeersn
+       are set) else false
+   */
+  Bool tryToFindContainer(SN & rootsn, SN & rpeersn, Bool tracking) {
+
+    DebugUtils du;
+    EventWindow ew;
+    C2D contstride;
+    // If previous results still good, just use them
+    if (rootsn != 0u) {
+      C2D c = ew.getCoord(rootsn);
+      if (lookForContainerRootAt(c,rootsn,rpeersn,contstride))
+        return true;
+    }
+    // Otherwise search for it
+    rootsn = 0u;
+    MDist md;
+    du.printContext();
+    for (C2D.Coord x = 1; x > -4; --x) {
+      for (C2D.Coord y = 1; y > -4; --y) {
+        C2D ewc(x,y);
+        du.print(ewc);
+        if (lookForContainerRootAt(ewc,rootsn,rpeersn,contstride)) {
+          if (tracking) {
+            du.print("FINDCNT 12");
+            // OK we found it at ewc.  Can we move to ewc+plate(1,1) (== stride)?
+            C2D ourgoalewc = ewc + contstride;
+            du.print(ourgoalewc);
+            if (ew.isAccessible(ourgoalewc)) {
+              MyContainer & root = (MyContainer&) ew[rootsn];
+              du.print("FINDCNT 13");
+              if (root.isEmptyOrField(ourgoalewc)) {
+                du.print("FINDCNT 14");
+                ew[ourgoalewc] = self.atomof;
+                ew[0] = Empty.instanceof;
+              }
+            }
+          }
+          du.print("FINDCNT 15");
+          return true; // Either way we found it
+        }
+      }
+    }
+    du.print("FINDCNT 16");
+
+    return false;
+  }
+}

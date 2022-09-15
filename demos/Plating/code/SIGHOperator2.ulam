@@ -1,8 +1,8 @@
-/** SIGHSequencer2
+/** SIGHOperator2
     \symbol So
     \color #0ff
  */
-element SIGHSequencer2 : Plate1 {
+element SIGHOperator2 : Plate1 {
   typedef ReinforcementMatrix.Reinforcement Reinforcement;
   typedef Evaluator.FuncBits FuncBits;
 
@@ -22,8 +22,8 @@ element SIGHSequencer2 : Plate1 {
   SN mRMRoot;
   /*  SN mEVStateGate; */
   SN mFTs;
-  SN mRC;      //< ReinforcementComparison site
-  SN mNP;      //< NumberPlate for current score
+  SN mRC;
+  SN mNP;
 
   Void findSites() {
     PlateUtils pu;
@@ -59,20 +59,6 @@ element SIGHSequencer2 : Plate1 {
                              C2D.instanceof(0,1),
                              NumberPlate.classidof);
 
-    {
-      // Maxplate creation
-      EventWindow ew;
-      SN mpSN = 26u;
-      if (!(ew[mpSN] is NumberPlate)) {
-        NumberPlate maxnp;
-        maxnp.configure(0u, 4u);
-        maxnp.setNumber(-999); // Worst in four digits
-        C2D npsiz = maxnp.sizeOfPlate();
-        C2D pos((C2D.Coord) (npsiz.getX() - 1), 0);
-        maxnp.mPosOnPlate.fromC2D(pos); // Upper right of np
-        ew[mpSN] = maxnp;
-      }
-    }
   }
 
   Bool getReinforcement(Reinforcement & r) { //< Ready from mEVRoot, compute via mFUT
@@ -92,24 +78,12 @@ element SIGHSequencer2 : Plate1 {
       }
     } else return false;
 
-    // Route score to maxplate for accumulation!
-    SN departureSN = 6u;
-    if (!ew.isAccessible(departureSN)) return false;
-    C2D departureEW = ew.getCoord(departureSN);
-    if (!isEmptyOrField(departureEW, true)) return false;
-    MigratoryUpdater mu;
-    mu.mGoalPos.fromC2D(C2D.instanceof(3,26)); // go here, and then do
-    mu.mUpdateMode = mu.cUPM_MAX;              // this to the nearest MutableNumber
-    mu.mUpdateNumber = score;                  // using this.
-    ew[departureSN] = mu; // The Bird Is Away
-
     if (mRC == 0u || mRC == SN.maxof) return false;
     if (!ew.isAccessible(mRC)) return false;
     Atom & a2 = ew[mRC];
     if (a2 as ReinforcementComparison) {
       r = a2.judge(score);
     } else return false;
-
 
     return true;
   }

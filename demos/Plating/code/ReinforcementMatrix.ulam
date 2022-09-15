@@ -103,7 +103,7 @@ element ReinforcementMatrix : B2DPlate + Flood/* + CategorizedSite*/ + Stride2x2
     /*
     if (selector == 2u) {
       Reinforcement w = getReinforcement();
-      return pu.rainbow(w.minof/2,w.maxof/2,w);
+      return cu.rainbow(w.minof/2,w.maxof/2,w);
     }
     return super.getColor(selector);
     */
