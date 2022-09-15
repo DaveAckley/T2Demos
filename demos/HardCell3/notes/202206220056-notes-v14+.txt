@@ -1,4 +1,4 @@
-{162}  -*-  mode: text; fill-column: 50;  -*-
+{198}  -*-  mode: text; fill-column: 50;  -*-
 [0:
 
 Wed Jun 22 00:56:16 2022 OK, starting a new notes
@@ -29,7 +29,8 @@ DONE :14] - HC3 survey battle damage
 DONE :37] - push
 [38:
 DONE :38] - Pocket brainstorming
- - Initialize quark Code(Unary(5) cTYPE_BITS)
+[163: Wed Jul  6 10:53:10 2022 mooted therefore
+DONE :163] - Initialize quark Code(Unary(5) cTYPE_BITS)
     virtual step() {
 
 map from state bits to ulam class
@@ -673,14 +674,18 @@ DONE :58] - Brainstorm some kind of 'side iterator' to
    tell whether adjacent pockets are bent
 
 :71]
- - Add an inMyGroup() to swapworm
+[164: Wed Jul  6 10:53:36 2022 Not swapworm but
+:164] - Add an inMyGroup() to swapworm
 
- - element HC3SwapWorm -> quark QSwapWormHC3
+[165: Wed Jul  6 10:54:23 2022 did quark Segment but
+DONE :165] - element HC3SwapWorm -> quark QSwapWormHC3
 
- - Come make more to-do
+[166:
+DONE :166] - Come make more to-do
 [52: Sat Jun 25 02:20:40 2022
 
- - Consider changing SwapWorm concept to something
+[167: Did Segment, with Chain (atm just implied)
+DONE :167] - Consider changing SwapWorm concept to something
    linking to polymer
 
 :52]
@@ -928,7 +933,8 @@ DONE :107] - Finally return to SwapWormHC3 and evaluate
    where we are, particularly regarding segment
    type representation
 
- - Spike a 8-segment wander-inside-diamond-SW and
+[168: Wed Jul  6 10:56:00 2022
+DONE! :168] - Spike a 8-segment wander-inside-diamond-SW and
    HAVE FUN watching it wander.
 
 :76]
@@ -1351,9 +1357,9 @@ TODO
 as a new start,
 DONE :108] - Strip out type
 
- - Add Body/World/CmdWDir stuff
+[169: DONE  :169] - Add Body/World/CmdWDir stuff
 
- - Keep going
+[170: DONE  :170] - Keep going
 
 :106]
 :105]
@@ -2020,6 +2026,426 @@ moving. They just kept on doing their thing.
 
 Wed Jul  6 10:45:47 2022 OK, let's have a WIP
 commit following t2sup3124 and then see where we
-are. 
+are.
+[162:
+
+Wed Jul  6 10:52:35 2022 OK did that. Quick
+to-do review:
+[171:
+
+Wed Jul  6 10:56:25 2022 OK it looks like all
+existing to-dos are now mooted or done.
+
+Existing concerns in my head:
+
+ - Still no edge protection for HC3
+
+ - How how how to grow a Segment loop?
+
+ - Current Demo : Segment too stretchy
+
+Is that really it? Seemed like a lot more in my
+head.
+
+[172:
+
+Wed Jul  6 11:38:02 2022 Possible next steps:
+
+ - Smarter head segments
+
+ - Smarter tail segments?
+   = Form loops by exchanging position info and
+     navigating to each other?
+
+For later:
+
+ - Some kind of growth wart?
+
+  v,^ : single direction pointer
+  |,- : bidirectional pointers
+
+          S1 - S2 - S3 - S4 - S5
+
+
+               G1
+                v
+          S1 - S2 - S3 - S4 - S5
+
+
+               G1 - G2
+                v    v
+          S1 - S2 - S3 - S4 - S5
+
+
+               S2 - G2
+                ^    v
+          S1 - G1 - S3 - S4 - S5
+
+
+               S2 - S3
+                ^    v
+          S1 - G1 - G2 - S4 - S5
+
+
+               S2 - S3
+                ^    |
+          S1 - G1   Sx - S4 - S5
+
+
+               S2 - S3
+                |    |
+          S1 - Sy   Sx - S4 - S5
+
+
+               S3 - S4
+                |    |
+          S1 - S2   S5 - S6 - S7
+
+
+NOTE: G1 or G2 can turn into a moving temp segment
+if growing by an odd length is needed. That will
+leave an available spot at the ring head or tail
+that can be used for later growth.
+
+NOTE 2: S2/S3 don't need additional pointers or
+anything special, but all involved need to know
+they have to block rather than swap with a G.
+[174:
+
+Thu Jul  7 02:49:34 2022
+
+NOTE 3: We do need to somehow avoid multiple
+growth warts happening on opposite sides of
+overlapping segments, though. That might (?)
+require additional participation from S2/S3 or
+surrounding segments.
+
+[175:
+
+Thu Jul  7 03:26:51 2022 Depending how deep we go
+with the quoting framework, the Gs might start out
+by quoting the Ss they're attaching to? But no we
+were thinking most Ss would already be quoted. So
+unless we had special extra quoting levels --
+which we may well might.
+
+:175]
+
+:174]
+[173:
+
+Thu Jul  7 02:48:55 2022 Well, so that seems
+pretty plausible? Could we spike that?
+[176:
+
+Thu Jul  7 03:34:39 2022 Let's try a spike, with
+no specified mechanism to avoid interactions.
+
+:176]
+:173]
+:172]
+
+:171]
+
+:162]
 
 :161]
+[177:
+
+Thu Jul  7 04:10:27 2022 Actually, let's try a
+spike where if a head happens to see a tail, links
+up and converts to an 'origin' or something. We
+should be able to create rings just 'by accident'.
+
+TODO this spike:
+
+[178: Thu Jul  7 04:33:48 2022 First cut
+DONE :178] - Lift guts of Demo into say QChain
+
+[179: Ditto
+DONE :179] - Get Demo : QChain working
+
+[181: Thu Jul  7 05:46:09 2022 First cut
+DONE :181] - Make Clasp : QChain
+
+ - Have Demo head turn to Clasp and link tail
+   = But only if it has a temp behind it?
+
+ - Have Clasp send up and downs to roll the ring
+
+ - Perhaps have Clasp spontaneously open on odds
+
+:177]
+[180:
+
+Thu Jul  7 04:47:07 2022 Need some calldowns from
+QChain.. Which specifically?
+
+:180]
+[182:
+
+Thu Jul  7 10:58:39 2022 Well I left it running
+while I napped but no sign of an lucky ourobouros
+formation..
+
+So, to make a ring from nothing --
+
+[183: Thu Jul  7 12:04:21 2022
+
+  v,^ : single direction pointer
+  |,- : bidirectional pointers
+  =   : pair of bidirectional pointers
+
+      S             // Seed
+
+      Cl = S1       // Clasp + seg in ring
+
+      G1
+       v            // Clasp triggers grow
+      Cl = S1
+
+      G1 - G2
+       v            // Scaffolding expands
+      Cl = S1
+
+      G1 - G2       // Scaffolding complete
+       v    v
+      Cl = S1
+
+      Cl - G2       // Interposition 1
+       ^    v
+      G1 = S1
+
+      Cl - S1
+       ^    v       // Interposition 2
+      G1 = G2
+
+
+      Cl - S1
+       ^    |       // Substitution 1
+      G1 - Sx
+
+      Cl - S1
+       |    |       // Substitution 2 / Done
+      Sy - Sx
+
+
+
+:183]
+
+:182]
+[184:
+
+Fri Jul  8 05:12:21 2022 OK so we have a Clasp
+doubly-linked to a Demo, created atomically by a
+SeedClasp. And they survive and bop around in
+their pockets just fine. Their mSegsDown both
+climb to SegCount.maxof == 15u, but other than
+that things seem sensible enough.
+
+So now are we sure we have a clean way to stop
+swapping during a Growth sequence?[185:
+
+Fri Jul  8 06:35:22 2022 It doesn't look like we
+do. I'm thinking we need
+
+ virtual Bool QChain.isSwappable(QChainState & qs);
+
+or something?
+
+Not sure this really wants to be QChain level
+rather than Segment level but at the moment
+Segment knows nothing about swappingk so.
+
+:185]
+
+:184]
+[186:
+
+Fri Jul  8 10:49:11 2022 OK going to need a nap
+soon but this idea seems plausible:
+
+How to grow a ring:
+ (1) Send out a 'grow mover' in phase 1 GM1
+ (2) If GM1 see adjacent empty, spawns configured
+     grower GW1(fwd=DIR), and goes to
+     GM2(try=DIR), which then blocks on watchdog
+ (3) GM1 checks for adjacent empty in the DIR
+     direction. If not available, reconfigures
+     GW1(fwd=BLOCKED) and GM3. If available spawns
+     configured GW2
+
+[187:
+
+Sat Jul  9 00:35:32 2022 Well it does get a little
+bit complicated. And that started feeling less
+stigmergic than we'd like. Shouldn't be so focused
+on changing internal states; should be more
+focused on occupying potentially useful space,
+blocking dead ends, transforming when success is
+reached, and cleaning up when failure is
+inevitable.
+
+We want this to be clean!
+
+Maybe it should be enough for GM to specify the
+fwd direciton its trying to expand around.
+[188:
+
+Sat Jul  9 01:20:34 2022 Specify fwd direction and
+spawn to both sides as available. Spawnees try to
+spawn into given direction as available. Success
+and failure feed back. Eventually GM
+
+:188]
+
+:187]
+
+:186]
+[189:
+
+Sat Jul  9 02:08:32 2022 You know, thinking this
+way makes me wonder if we could have a little
+minilanguage of spawning and configuring that
+could suffice to express 'grow mover' and its
+associated stigmergic subtasks
+[190:
+
+Sat Jul  9 06:18:01 2022
+
+GM and GW are the same thing just with different
+origins and symmetries.
+
+Do the logic as if traveling E, say.
+
+Use Int(2)[2] offsets
+
+-2 : invalid
+-1
+0
+1
+
+position (4 bits) + question (2 bits) + answer (1 bit)
+
+ question 0: Can you reach (1,0)?
+ question 1: Have you finished connecting to (1,0)? 
+ question 2: Have you finished cleaning up without
+             connecting to (1,0)?
+
+
+So (0,0) waits for answers to Q0, then decides
+what to do, then issues new questions - Q1 to the
+winner and Q2 to the loser (if any).
+
+:190]
+:189]
+[191:
+
+Sun Jul 10 08:39:34 2022 Been trying to implement
+a 'GrowBomb', here, using the 'questions' approach
+above, but haven't made a lot of progress
+yet. Part of the issue, I guess, is that the
+growbombs sometimes do, but sometimes don't, want
+to act like mostly normal qchain segs.
+
+:191]
+[192:
+
+Mon Jul 11 02:06:41 2022 I need a 'reset to
+stigmergy' moment, I think. I should ditch or at
+least defer the whole 'Q+A' approach, in favor of
+predicates on reachable ngbs.
+
+Like:
+ - Which way should scaffolding expand?
+   -> In the 'forward' dir of the adjacent Seg
+
+Hmm is that the only one??
+
+In any case, also, we should have a concept of
+before-vs-after calling QChain.update(). When we
+do stuff before (or instead of) calling update,
+we're acting like a special purpose atom; when we
+do it after, we're acting like a custom QChain.
+
+[193:
+
+Mon Jul 11 02:15:16 2022 And we shouldn't need to
+know or care about 2x2 spatial indexing because
+all we need to know is the forward direction.
+
+And the corners convey to the center whether
+they've successfully expanded by whether they have
+a forward link or not. So the center can check
+without additional state.
+
+Except how do the corners signal failure vs
+haven't-tried-yet?
+
+[194:
+
+Mon Jul 11 02:19:02 2022 Weh-ell, PocketPtr has
+both cPP_SELF and cPP_NULL.. former could mean
+"haven't tried" and latter could mean "tried and
+failed". Right?
+
+:194]
+
+:193]
+
+:192]
+[195:
+
+Mon Jul 11 03:11:43 2022 Well, cases? -- 
+
+IF BASE:
+
+ - Should I block?
+   = Any active corners? -> yes
+
+ - Should I advance?
+   = No empty adjacents? -> yes
+   = One or two done corners? -> erase them, then yes
+   = else no
+
+ - Should I deploy new corners?
+   = Any empty adjacents? -> yes
+
+IF CORNER:
+
+ - Should I block?
+   = Am I halted? -> yes
+
+ - Should I extend?
+   = Empty fwd? -> yes
+   = else no
+
+ - Should I halt?
+   = Blocked fwd? -> yes
+   = Halted extension? -> erase it, then yes
+
+IF EXTENSION:
+
+ - Should I block?
+   = Can't access
+
+:195]
+[196:
+
+Tue Jul 12 14:56:30 2022 OK so flag moved again,
+and I shifted to quark GrowBomb : QChain, with
+subclasses for BaseGB, CornerGB, and SideGB. My
+thinking, such as it was, was that there seemed to
+be a fair amount of behavior for each one so we
+didn't want to smash them all together.. We'll
+see. 
+
+Trying to implement from the :195: notes above.
+[197:
+
+Wed Jul 13 02:26:30 2022 OK so BaseGB.ulam has
+some shape and takes events but so far isn't doing
+any logic.
+
+:197]
+:196]
