@@ -1,0 +1,109 @@
+/** Summarization of the state of an HC3 .
+ */
+transient HC3State + DiamondTypes {
+  EventWindow ew;
+  Random random;
+
+  Unsigned myUpHops;
+  Unsigned myUpHopsGoal; // IN EFFECT myUpHopsGoal
+
+  Unsigned minUpHops;
+  Unsigned maxUpHopsGoal;
+  HC3NgbState mHC3NgbStates[4];
+
+  Bool uninits = false;
+
+  constant C2D mNgbOffs[4] = {
+    { .x = -3, .y = 0 },           // 0: W
+    { .x =  0, .y = -3 },          // 1: N
+    { .x =  0, .y = 3 },           // 2: S
+    { .x =  3, .y = 0 },           // 3: E
+  };
+
+  Unsigned getFoamCount() {
+    Unsigned ret = 0u;
+    for (Unsigned i = 0u; i < 4u; ++i) 
+      ret += mHC3NgbStates[i].foamCount();
+    return ret;
+  }
+
+  Void summarizeRels(NgbRels & rels) {
+    for (Unsigned i = 0u; i < 4u; ++i) {
+      rels[i] = mHC3NgbStates[i].summarizeRel();
+    }
+  }
+
+  Void init(QHardCell & q) {
+    init(q.getUpHops(), q.getMaxHopsGoal());
+  }
+
+  Void init(Unsigned uphops, Unsigned maxhopsgoal) {
+    myUpHops = uphops;
+    myUpHopsGoal = maxhopsgoal;
+  }
+
+  Void examineNgbs(QHardCell & qhc) {
+    uninits = false;
+    minUpHops = Unsigned.maxof;
+    maxUpHopsGoal = Unsigned.minof;
+    for (Unsigned i = 0u; i < mHC3NgbStates.lengthof; ++i) {
+      HC3NgbState & n = mHC3NgbStates[i];
+      C2D nbgoff = mNgbOffs[i];
+      n.init(nbgoff, qhc);
+
+      qhc.mNgbRels[i] = cNGBREL_OFFN; // Assume the worst
+      if (n.hasValidNeighbor()) {
+        
+        if (n.foundUninitialized()) uninits = true;
+        else if (n.getUpHops() < minUpHops) {
+          minUpHops = n.getUpHops();
+          Unsigned mg = n.getMaxGoalHops();
+          if (mg > maxUpHopsGoal) maxUpHopsGoal = mg;
+        }
+      }
+    }
+    summarizeRels(qhc.mNgbRels);
+  }
+
+  Void updateNgbsForMove(SN movedir) {
+    DebugUtils du;
+    if (movedir < 1u || movedir > 4u) {
+      du.print("UNFM10");
+      du.print(movedir);
+      Fail f; 
+      f.fail("movedir ^^^ outside 1..4");
+    }
+    C2D mc = ew.getCoord(movedir);
+    for (Unsigned i = 0u; i < mHC3NgbStates.lengthof; ++i) {
+      HC3NgbState & n = mHC3NgbStates[i];
+      NgbState ns = n.mState;
+      if (ns > cNGB_EAST) continue; // XXX MIGHT BE WRONG?
+      C2D themc = n.getNgbCoord();    // Find where they should be
+      //      du.print("UNFM11");
+      //      du.print(themc);
+      Atom & a = ew[themc];
+      if (a as QHardCell) {    
+        C2D nc = ew.getCoord(ns); // offset relative to our start position
+        C2D newc = nc - mc;       // offset relative to our new position
+        SN newsn = ew.getSiteNumber(newc);
+        if (newsn > 4u) {
+        du.print("UNFM11");
+        du.print(ns);
+        du.print(newsn);
+        du.print(nc);
+        du.print(newc);
+          Fail f;
+          f.fail("UNFM12 BAD newc");
+        } // No good? Then how were we moving?
+        n.mState = (NgbState) newsn;             // updated state
+        a.mNgbRels[3u-i] = n.summarizeRel();              // Summarize to neighbor now
+      } else {
+        ByteStreamLogger bsl;
+        bsl.printf("UNFM NGB LOST? md %d i %d tc (%d,%d)\n",
+                   movedir, i, themc.x, themc.y);
+      }
+    }
+  }
+
+}
+

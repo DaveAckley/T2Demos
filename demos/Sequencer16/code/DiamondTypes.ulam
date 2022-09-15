@@ -1,0 +1,61 @@
+/** A zero-length collection of typedefs and constants
+    useful for life on a diamond
+ */
+quark DiamondTypes {
+  //// WIDELY-KNOWN ALIASES
+  typedef EventWindow.SiteNum SN;
+
+  //// QUADRANT NAMES (FOR BOTH POCKETS WRT AN HC3 AND HC3S WRT A POCKET)
+  typedef Unsigned(2) PocketDir;
+  constant PocketDir cQUAD_NW = 0u; // --
+  constant PocketDir cQUAD_NE = 1u; // +-
+  constant PocketDir cQUAD_SE = 2u; // ++
+  constant PocketDir cQUAD_SW = 3u; // -+
+
+  //// NOMINAL OFFSETS FOR POCKETDIR QUADRANTS
+  constant C2D cC2D_BY_QUAD_NW = { .x = -1, .y = -1 };
+  constant C2D cC2D_BY_QUAD_NE = { .x =  1, .y = -1 };
+  constant C2D cC2D_BY_QUAD_SE = { .x =  1, .y =  1 };
+  constant C2D cC2D_BY_QUAD_SW = { .x = -1, .y =  1 };
+
+  constant C2D cC2D_BY_QUAD[4] = {
+    cC2D_BY_QUAD_NW,
+    cC2D_BY_QUAD_NE,
+    cC2D_BY_QUAD_SE,
+    cC2D_BY_QUAD_SW,
+  };
+
+  //// STATES OF A POINTER TO A POCKET OR SELF
+  typedef Unsigned(3) PocketPtr;
+  constant PocketPtr cPP_SELF  = 0u;  //< Ptr center
+  constant PocketPtr cPP_WEST  = 1u;  //< Ptr west
+  constant PocketPtr cPP_NORTH = 2u;  //< Ptr north
+  constant PocketPtr cPP_SOUTH = 3u;  //< Ptr south
+  constant PocketPtr cPP_EAST  = 4u;  //< Ptr east
+  constant PocketPtr cPP_RSRV1 = 5u;  //< Don't use
+  constant PocketPtr cPP_RSRV2 = 6u;  //< Don't use
+  constant PocketPtr cPP_NULL  = 7u;  //< Null pointer
+
+  //// RELATIVE ALIGNMENTS OF AN HC3 NEIGHBOR
+  typedef Unsigned(2) NgbRel;
+  constant NgbRel cNGBREL_OFFN = 0u; //< ngb off axis or non-existent
+  constant NgbRel cNGBREL_GAP1 = 1u; //< ngb on axis pocket gap 1
+  constant NgbRel cNGBREL_GAP2 = 2u; //< ngb on axis pocket gap 2
+  constant NgbRel cNGBREL_GAP3 = 3u; //< ngb on axis pocket gap 3
+
+  typedef NgbRel NgbRels[4];
+
+  //// STATES OF AN HC3 NEIGHBOR OF AN HC3
+  typedef Unsigned(4) NgbState; // 0..4 -> align, 5 -> empty, 6 -> conflicted, 14 -> init
+  constant NgbState cNGB_CENTER = 0u; // Found us in SN0/ctr only
+  constant NgbState cNGB_WEST   = 1u; // Found us in SN1/west only
+  constant NgbState cNGB_NORTH  = 2u; // Found us in SN2/north only
+  constant NgbState cNGB_SOUTH  = 3u; // Found us in SN3/south only
+  constant NgbState cNGB_EAST   = 4u; // Found us in SN4/east only
+  constant NgbState cNGB_EMPTY  = 5u; // All SN0..4 were empty
+  constant NgbState cNGB_MULTI  = 6u; // Found more than one us in SN0..4
+  constant NgbState cNGB_BLOCK  = 7u; // Found none of us but something nonempty
+
+  constant NgbState cNGB_INIT   = NgbState.maxof; // Found nothing so far
+
+}

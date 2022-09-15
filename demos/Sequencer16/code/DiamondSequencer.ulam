@@ -1,0 +1,318 @@
+/** An 8 bit map from processor unit type to pocket direction relative
+ * to the processor. ProcUnits may appear any number of times in a
+ * map; drawQuadrantForPU selects a matching quadrant at random if any
+ * exist.
+ */
+quark QProcUnitMap + DiamondTypes {
+  typedef Unsigned(2) ProcUnit;
+  constant ProcUnit cPUNIT_REG = 0u; //< 'Registers' - stack, temp, scratch..
+  constant ProcUnit cPUNIT_INP = 1u; //< Input chain
+  constant ProcUnit cPUNIT_OUT = 2u; //< Output chain
+  constant ProcUnit cPUNIT_INS = 3u; //< Instruction chain
+
+  constant Unsigned cPUColors[4] = {
+    0xff0000cc,                 // cPUNIT_REG: Blue
+    0xff00cc00,                 // cPUNIT_INP: Green
+    0xffcc0000,                 // cPUNIT_OUT: Red
+    0xffcccccc,                 // cPUNIT_INS: White
+  };
+
+  typedef ProcUnit QuadrantPUArray[PocketDir.maxof + 1u];
+  QuadrantPUArray mQuadrantPUArray =
+    {                           // Default mapping:
+      cPUNIT_INP,               // cQUAD_NW -> INP
+      cPUNIT_REG,               // cQUAD_NE -> REG
+      cPUNIT_INS,               // cQUAD_SE -> INS
+      cPUNIT_OUT,               // cQUAD_SW -> OUT
+    };
+
+  Void reset() { self = Self.constantof; }
+  
+  ProcUnit procUnitInQuadrant(PocketDir dir) {
+    return mQuadrantPUArray[dir];
+  }
+
+  Void setProcUnitInQuadrant(PocketDir dir, ProcUnit pu) {
+    mQuadrantPUArray[dir] = pu;
+  }
+
+  /** Map from the c2d of a pocket corner to the PocketDir of (0,0)
+      RELATIVE TO THAT CORNER. \returns false if either x or y of
+      cornerc is 0 (since we're not in a legitimate pocket then),
+      otherwise \returns true and sets \c pd to (0,0)s quadrant
+      relative to cornerc
+   */
+  Bool pocketDirFromCorner(C2D cornerc, PocketDir & pd) {
+    C2D c = cornerc;
+    if (c.x == 0 || c.y == 0) return false;
+    else if (c.x < 0 && c.y < 0) pd = cQUAD_SE; 
+    else if (c.x > 0 && c.y < 0) pd = cQUAD_SW;
+    else if (c.x > 0 && c.y > 0) pd = cQUAD_NW;
+    else /* c.x < 0 && c.y > 0*/ pd = cQUAD_NE;
+    return true;
+  }
+
+  Bool drawQuadrantForPU(ProcUnit type, PocketDir & pdr) {
+    Random random;
+    PocketDir pd;
+    Unsigned count = 0u;
+    for (Unsigned i = 0u; i < mQuadrantPUArray.lengthof; ++i) {
+      if (mQuadrantPUArray[i] == type &&
+          random.oneIn(++count))
+        pd = (PocketDir) i;
+    }
+    if (count == 0u) return false;
+    pdr = pd;
+    return true;
+  }
+}
+
+
+/* An 8 bit map from quadrant direction to processing status of that
+ * pocket.
+ */
+quark QDirStatusMap + DiamondTypes {
+  typedef Unsigned(2) ProcStatus;
+  constant ProcStatus cDSTATUS_IDLE = 0u; //< Ready for new adventure
+  constant ProcStatus cDSTATUS_UPWD = 1u; //< Needs roll toward body up
+  constant ProcStatus cDSTATUS_DNWD = 2u; //< Needs roll toward body down
+  constant ProcStatus cDSTATUS_TEMP = 3u; //< Needs a temp
+
+  typedef ProcStatus QuadrantPStatusArray[PocketDir.maxof + 1u];
+  QuadrantPStatusArray mQuadrantPStatusArray =
+    {                           // Default mapping:
+      cDSTATUS_IDLE,            // cQUAD_NW -> IDLE
+      cDSTATUS_IDLE,            // cQUAD_NE -> IDLE
+      cDSTATUS_IDLE,            // cQUAD_SE -> IDLE
+      cDSTATUS_IDLE,            // cQUAD_SW -> IDLE
+    };
+
+  ProcStatus statusFromQuadrant(PocketDir pd) {
+    return mQuadrantPStatusArray[pd];
+  }
+
+  Void reset() { self = Self.constantof; }
+  
+ }
+
+/**
+   \symbol DS
+   \color #aaa
+ */
+element DiamondSequencer : QHardCellG {
+  QProcUnitMap mProcUnitMap;          //< Process function to direction
+  QDirStatusMap mDirStatusMap;        //< Quadrant direction to process status
+
+  //// UrSelf API
+  @Override
+  ARGB getColor(Unsigned selector) {
+    ColorUtils cu;
+    return super.getColor(selector);
+  }
+
+  @Override
+  virtual Void renderGraphics() {
+    renderPUs(300u);
+  }
+
+  //// DIAMONDSEQUENCER SERVICES
+  Void renderPU(C2D off, QProcUnitMap.ProcUnit func, Bool idle, Unsigned size) {
+    Drawable drawable;
+    if (!drawable.canDraw()) return;
+    ColorUtils cu;
+    ARGB col = cu.color(QProcUnitMap.cPUColors[func]);
+    print("RNPU11");
+    if (!idle) col = cu.dimmer(col);
+    C2D ctr = off*(2*Drawable.cUNITS_PER_SITE/8); 
+    C2D start = ctr-(C2D.Coord) (size/2u);
+    /* end was supposed to be 'start+' etc, trying
+       to make a horizontal line. But I like the diagonal
+       diamonds this makes better, at least for now.
+     */
+    C2D end = ctr+C2D.instanceof(0,(C2D.Coord) size/2u);
+    drawable.drawMaskedLine(start, end, col, col, (Bits) 0xffffffff, size);
+  }
+
+  Void renderPUs(Unsigned size) {
+    for (Unsigned i = 0u; i < cC2D_BY_QUAD.lengthof; ++i) {
+      PocketDir pd = (PocketDir) i;
+      print("RPUS10");
+      print(mDirStatusMap.statusFromQuadrant(pd));
+      print(mDirStatusMap.statusFromQuadrant(pd) == QDirStatusMap.cDSTATUS_IDLE);
+      renderPU(cC2D_BY_QUAD[pd],
+               mProcUnitMap.procUnitInQuadrant(pd),
+               mDirStatusMap.statusFromQuadrant(pd) == QDirStatusMap.cDSTATUS_IDLE,
+               size);
+    }
+  }
+
+}
+
+/** An anchored, directed loop seed
+    \symbol L1
+    \color #ff0
+ */
+element SeedLoop11 + DiamondTypes {
+  EventWindow ew;
+  Random random;
+
+  PocketPtr mSeedDir = cPP_NULL;
+  PocketDir mTargetQuadrant;
+
+  Void die() { ew[0] = Empty.instanceof; }
+
+  Void block() { /* empty */ }
+
+  Void pdiff(C2D empc) {
+    if (empc.length() > 0u) { // diffuse
+      C2D origin;
+      ew.swap(origin,empc);
+    } // else block
+  }
+
+  Void behave() {
+    if (mSeedDir < cPP_WEST || mSeedDir > cPP_EAST) return die();
+
+    PocketHC3 p;
+    PocketHC3.Status pstat = p.init();
+    if (pstat == PocketHC3.cSTATUS_EDGE ||
+        pstat == PocketHC3.cSTATUS_OPEN ||
+        pstat == PocketHC3.cSTATUS_BENT) return block(); // wait for clarity
+
+    RectIterator ri;
+
+    // First make sure we're alone in here
+    if (!p.initIterator(ri, 0u, true)) return block();
+    C2D empc;
+    Unsigned ecount = 0;
+    Bool foundbad = false;
+    while (ri.hasNext()) {
+      C2D n = ri.next();
+      if (!ew.isAccessible(n)) return; // in center pocket??
+      if (ew[n] is Empty) {
+        if (random.oneIn(++ecount))
+          empc = n;
+        continue;
+      }
+      if (!(ew[n] is Self))     // whather that is
+        foundbad = true;
+    }
+
+    // Now look for empty adjacent
+    SN openptr = (SN) mSeedDir;
+    if (!p.initIterator(ri, openptr, true)) return pdiff(empc); // diffuse or block
+
+    C2D pickc;
+    Unsigned count;
+    while (ri.hasNext()) {
+      C2D n = ri.next();
+      if (!ew.isAccessible(n) || !(ew[n] is Empty))
+        return pdiff(empc);
+
+      if (random.oneIn(++count))
+        pickc = n;
+    }
+    if (count == 0u) return pdiff(empc);
+
+    Demo d;
+    d.mDemoProvider = true;     // I make the loop grow
+    PocketDir tq = mTargetQuadrant;
+    d.mTargetQuadrant = tq;
+    d.mSegsDown = 0u;
+    d.mTempsDown = 0u;
+    d.mDSType = Demo.cDS_NORM;
+    d.mPocketPtrs[Segment.cBODY_UP] = (PocketPtr) openptr; // Up and down are 
+    d.mPocketPtrs[Segment.cBODY_DOWN] = (PocketPtr) openptr; // both thataway
+
+    ShapeShifter g;
+    g.mDSType = g.cDS_DUMB;                // We don't auto move or grow
+    g.mTargetQuadrant = tq;
+    g.mSegsDown = 0u;
+    g.mTempsDown = 0u;
+    g.mDSType = Demo.cDS_NORM;
+    g.mPocketPtrs[Segment.cBODY_UP] = (PocketPtr) (5u-openptr);
+    g.mPocketPtrs[Segment.cBODY_DOWN] = (PocketPtr) (5u-openptr);
+    ShSfISide1 it;
+    it.adopt(g);
+
+    ew[pickc] = g.atomof;
+    ew[0] = d.atomof;
+    return;
+  }
+}
+
+element SeedSeq : XTimer(3u,6u,4u) + DiamondTypes + QDebugUtils {
+  EventWindow ew;
+  Bool mPhase2 = false;
+
+  Void die() { ew[0] = Empty.instanceof; }
+  Void makeSL(C2D at, SN dir, PocketDir targq) {
+    SeedLoop11 sl;
+    sl.mSeedDir = (PocketPtr) dir;
+    sl.mTargetQuadrant = targq;
+    ew[at] = sl.atomof;
+    
+    print("makeSL");
+    print(at);
+    print(dir);
+  }
+
+  Void behave() {
+    setDebugOutputEnabled(true);
+    
+    if (countAlarm()) return die();
+
+    if (!mPhase2) {
+      C2D d(0,4);
+      if (ew.isAccessible(d) && ew[d] is Empty) {
+        HardCellG g;
+        g.makeRoot();
+        ew[d] = g.atomof;
+        reset();
+        mPhase2 = true;
+      }
+      return;
+    }
+
+    if (mPhase2) {
+      C2D d(0,1);
+      if (!ew.isAccessible(d))
+        return;
+      Atom & a = ew[d];
+      if (a as QHardCellG) {
+        if (a.getSettledDownHops() < 2u) // Let diamond build out a little
+          return;
+        
+        makeSL(C2D.instanceof(1,2), cPP_EAST, cQUAD_SE);
+        makeSL(C2D.instanceof(1,0), cPP_EAST, cQUAD_NE);
+        makeSL(C2D.instanceof(-1,2), cPP_WEST, cQUAD_SW);
+        makeSL(C2D.instanceof(-1,0), cPP_WEST, cQUAD_NW);
+
+        QHardCellG & gd = (QHardCellG&) ew[d];
+        DiamondSequencer ds;
+        QHardCellG & rds = ds;
+        rds = gd; // pick up all QHardCellG fields
+        print(gd);
+        print(ds);
+        if (ds.mMaxHops != gd.mMaxHops) {
+          Fail f;
+          f.fail();
+        }
+
+        ew[d] = ds.atomof;
+        die();
+      }
+
+      /*
+      QHardCellG & gd = (QHardCellG&) ew[d];
+      DiamondSequencer ds;
+      ds.mDefCons = gd.mDefCons;  // DEWLine
+      ds.mNgbRels = gd.mNgbRels;  // QHardCell
+      ds.mMaxHops = gd.mMaxHops;  // QHardCellG
+      ds.mUpHops = gd.mUpHops;    // QHardCellG
+      ds.mColor = gd.mColor;      // QHardCellG
+      */
+      
+    }
+  }
+}

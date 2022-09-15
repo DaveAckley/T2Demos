@@ -1,0 +1,68 @@
+transient DemoIntention : Intention {
+  typedef EventWindow.SiteNum SN;
+  Bool tryMove(DemoIntender & in, SN dir) {
+    EventWindow ew;
+    if (ew.isAccessible(dir) && ew.isEmpty(dir)) {
+      if (++in.mDistanceTravelled == in.mDistanceTravelled.maxof) {
+        if (in.mIntentionCode == in.mIntentionCode.maxof)
+          in.mIntentionCode = 0u;
+        else
+          ++in.mIntentionCode;
+        in.mDistanceTravelled = 0u;
+      }
+      ew.swap(0,dir);
+      return true;
+    }
+    return false;
+  }
+  //// Intention API
+  @Override
+  virtual Bool init(Intender & in) { return false; }
+
+  @Override
+  virtual Bool act(Intender & in) {
+    DemoIntender & di = (DemoIntender &) in;
+    SN dir = getDir();
+    return tryMove(di,dir);
+  }
+
+  //// DemoIntention API
+  virtual SN getDir() ;
+}
+
+transient DemoAct10 : DemoIntention { SN getDir() { return 1u; } }
+transient DemoAct11 : DemoIntention { SN getDir() { return 2u; } }
+transient DemoAct12 : DemoIntention { SN getDir() { return 4u; } }
+transient DemoAct13 : DemoIntention { SN getDir() { return 3u; } }
+
+/** \symbol DI
+    \color #faa
+ */
+element DemoIntender : Intender {
+  typedef Unsigned(4) Distance;
+  Distance mDistanceTravelled;
+
+  typedef Unsigned(2) IntentionCode;
+  constant ClassId cINTENTIONS[] = {
+    DemoAct10.classidof,
+    DemoAct11.classidof,
+    DemoAct12.classidof,
+    DemoAct13.classidof,
+  };
+
+  IntentionCode mIntentionCode;
+  @Override
+  virtual ClassId getIntentionClass() {
+    DemoAct10 a10; //ugh
+    DemoAct11 a11;
+    DemoAct12 a12;
+    DemoAct13 a13;
+    return cINTENTIONS[mIntentionCode];
+  }
+
+  Void behave() {
+    DebugUtils du;
+    if (pursueIntention()) return;
+  }
+
+}

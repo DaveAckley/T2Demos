@@ -1,0 +1,173 @@
+transient SfSideState : PocketChainState {
+  
+  //// SfSideState API
+  virtual Void setIntentionClass(SfSide & ns) ;
+
+  //// Intention API
+  @Override
+  virtual Bool init(Intender & in) {
+    SfSide & n = (SfSide&) in;
+    if (super.init(n)) return true;
+
+    return false;
+  }
+
+  @Override
+  virtual Bool adopt(Intender & in) {
+    SfSide & n = (SfSide&) in;
+    if (super.init(n)) return true;
+    setIntentionClass(n);
+    return false;
+  }
+}
+
+transient SfSideIDeploy : SfSideState {
+
+  @Override
+  virtual Void setIntentionClass(SfSide & n) { n.mIntentionIndex = n.cIIDX_DEPLOY; }
+
+  //// Intention API
+
+  @Override
+  virtual Bool act(Intender & in) {
+    print("NSIDep10");
+    if (super.act(in)) return true;
+    print("NSIDep11");
+    SfSide & n = (SfSide&) in;
+    if (n.tryDeploy(self)) return true;
+    print("NSIDep12");
+    return false;
+  }
+
+}
+
+transient SfSideIFailed : SfSideState {
+
+  @Override
+  virtual Void setIntentionClass(SfSide & n) { n.mIntentionIndex = n.cIIDX_FAILED; }
+
+  //// Intention API
+
+  @Override
+  virtual Bool act(Intender & in) {
+    print("NSIFai10");
+    if (super.act(in)) return true;
+    print("NSIFai11");
+    SfSide & n = (SfSide&) in;
+    //    if (trySide(ng,true)) return true;
+    print("NSIFai12");
+    return false;
+  }
+
+}
+
+transient SfSideISucceeded : SfSideState {
+
+  @Override
+  virtual Void setIntentionClass(SfSide & n) { n.mIntentionIndex = n.cIIDX_SUCCEEDED; }
+
+  //// Intention API
+
+  @Override
+  virtual Bool act(Intender & in) {
+    print("NSISuc10");
+    if (super.act(in)) return true;
+    print("NSISuc11");
+    SfSide & n = (SfSide&) in;
+    //    if (trySide(ng,true)) return true;
+    print("NSISuc12");
+    return false;
+  }
+
+}
+
+/**
+   \symbol Fs
+   \color #55f
+*/
+element SfSide : PocketChain {
+  typedef Unary(2) IntentionIndex;
+  constant IntentionIndex cIIDX_DEPLOY = 0u;
+  constant IntentionIndex cIIDX_FAILED = 1u;
+  constant IntentionIndex cIIDX_SUCCEEDED = 2u;
+  IntentionIndex mIntentionIndex = cIIDX_DEPLOY;
+
+  //// Intender API
+  @Override
+  virtual ClassId getIntentionClass() {
+    which (mIntentionIndex) {
+    case cIIDX_DEPLOY: { SfSideIDeploy i; return i.classidof; }
+    case cIIDX_FAILED: { SfSideIFailed i; return i.classidof; }
+    case cIIDX_SUCCEEDED: { SfSideISucceeded i; return i.classidof; }
+    }
+    return 0u; // not reached
+  }
+  @Override
+  ARGB getColor(Unsigned selector) { return self.UrSelf.getColor(selector); }
+  PocketPtr mToCorner;
+  PocketPtr mToGoal;
+
+  //// PocketChain API
+  virtual Bool isSwappable(PocketChainState & ds) { return false; }
+
+  //// SfSide SERVICES
+  Bool tryDeploy(SfSideState & st) {
+
+    EventWindow ew;
+    Random random;
+    typedef ClassUtils.ClassId ClassId;
+
+    ByteStreamLogger bsl;
+    ClassUtils csu;
+    DebugUtils du;
+
+    PocketHC3 & pocket = st.mPocket;
+
+    if (st.mPocketInaccessible[mToGoal] != 0u)
+      return diffuse(st);       // Wait for better days
+
+    SN goalsn = pocket.searchPocket(mToGoal, PocketChain.classidof);
+    if (goalsn == SN.maxof) return diffuse(st); // bent or missing - block
+
+    if (goalsn == 0u) {         // If no PocketChain we failed
+      SfSideIFailed i;     
+      i.adopt(self);   
+      return true;
+    }
+
+    //// GOALSN IS OUR QCHAIN TARGET
+
+    /* OK now we want to do this:
+
+       Nc . Ns*                Nc . Ns          Ng is left inconsistent
+       .    .         ->       .    ||          (its next's prev isn't it), but
+       De = Ng = De = De       De = Ng > De = De     it's pending and doesn't check?
+    */
+
+    PocketChain & de = (PocketChain&) ew[goalsn];
+
+    de.mPocketPtrs[Segment.cBODY_UP] = (PocketPtr) (5u - mToGoal); // we are upstream of de
+    self.mPocketPtrs[Segment.cBODY_DOWN] = (PocketPtr) mToGoal;    // it is downstream of us
+
+    SfSideISucceeded i;     
+    i.adopt(self);   
+
+    return true;                // Our part is finished!
+  }
+
+  Void behave() {
+    pursueIntention();
+  }
+
+  /*
+  Bool update(INTENTION & ngs) {
+    DebugUtils du;
+
+    if (ngs.init(self)) return true; // Block on bad pocket
+
+
+    if (super.update(ngs)) return true;
+    return false;
+  }
+  */
+}

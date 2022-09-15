@@ -1,0 +1,50 @@
+transient PocketQuadrant + QDebugUtils + DiamondTypes {
+
+  Bool mInQuadrant;
+  PocketDir mQuadrant;
+  Unsigned mUpHopContour;
+
+  Bool init(PocketHC3 & p) {
+    mInQuadrant = false;        // First assume bad
+    print("PKQD10");
+    if (p.mStatus != PocketHC3.cSTATUS_OK) return true;
+    print("PKQD11");
+    Unsigned nw = p.mCornerHops[cQUAD_NW];
+    Unsigned ne = p.mCornerHops[cQUAD_NE];
+    Unsigned se = p.mCornerHops[cQUAD_SE];
+    Unsigned sw = p.mCornerHops[cQUAD_SW];
+    Int h1 = (Int) nw - (Int) se;
+    Int h2 = (Int) ne - (Int) sw;
+
+    if (false) { }
+    else if (h1 == 0 && h2 == 2) {
+
+      mQuadrant = cQUAD_NE;
+      mUpHopContour = nw;
+
+    } else if (h1 == 0 && h2 == -2) {
+
+      mQuadrant = cQUAD_SW;
+      mUpHopContour = nw;
+
+    } else if (h2 == 0 && h1 == 2)  {
+
+      mQuadrant = cQUAD_NW;
+      mUpHopContour = ne;
+
+    } else if (h2 == 0 && h1 == -2) {
+
+      mQuadrant = cQUAD_SE;
+      mUpHopContour = ne;
+
+    } else { // Unrecognized hop status
+
+      mUpHopContour = 0u; 
+      return true;
+    }
+    print("PKQD12");
+
+    mInQuadrant = true; // We're good
+    return false;
+  }
+}

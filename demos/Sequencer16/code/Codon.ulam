@@ -1,0 +1,184 @@
+transient CodonState : SequenceableState {
+
+  @Override
+  virtual Bool init(Intender & in) {
+    // XXXX
+    /*
+    setDebugOutputEnabled(true);
+    if (in as QDebugUtils) {
+      in.setDebugOutputEnabled(true);
+    }
+    */
+    print("SQBST10");
+    if (super.init(in)) // If true we might be dead (from PocketChain)
+      return true;        
+    print("SQBST11");
+    Sequenceable & s = (Sequenceable&) in;
+    print("SQBST12");
+
+    // Successfully initted
+    print(self);
+    return false;
+  }
+
+  @Override
+  virtual Bool act(Intender & in) {
+    print("CDAC10");
+    if (super.act(in)) return true;
+    
+    print("CDAC11");
+    Codon & c = (Codon&) in;
+    Codon.ExecutionContext ec = c.getExecutionContext(self);
+    if (ec == Codon.cEXCT_ACTV) {       // If executable, leave it to
+      print("CDAC11EXECT");
+      return false;                   // subclasses to handle!
+    }
+
+    // XXX IMPLEMENT PASSIVE CODON BEHAVIORS HERE:
+
+    //// IS DOWNSTREAM A TEMP?
+    SN downsn = self.mEWSNMate[Segment.cBODY_DOWN];
+    if (downsn == 0u) return c.diffuse(self); // No mate??
+
+    Atom & a = ew[downsn];
+    if (a as PocketChain) {
+      if (a.mDSType != c.cDS_DOWN &&
+          a.mDSType != c.cDS_UP) return true; // mate not temp XX WAS true
+    } else return c.diffuse(self);             // mate not qchain??
+    //// DOWNSTREAM IS A TEMP.
+
+    PocketChain & qd = (PocketChain&) a;
+    if (random.oneIn(15u)) {
+      /// GO FOR GROW!
+      ShapeShifter g;
+      if (c as Demo) { //// XXXXX DISGUSTOHACKHERE
+        g.mTargetQuadrant = c.mTargetQuadrant;
+      }
+      PocketChain & qg = g;
+      qg = qd;             // Copy qd's qchain info
+      Segment & sg = g;
+      sg = qd;             // and their Segment info
+
+      g.mDSType = Demo.cDS_NORM;
+
+      if (true /*random.oneIn(2u)*/ ) { // XXX ALL GROW FOR NOW
+        ShSfISide1 it;
+        it.adopt(g);
+      } else {
+        ShSfIWormHead it;
+        g.mAction = true;  // You are H*
+        it.adopt(g);
+      }
+
+      ew[downsn] = g.atomof;
+      return c.diffuse(self);
+    }
+
+    return true;                // And block subclass act
+  }
+
+}
+
+quark Codon : Sequenceable {
+
+  //// CODON SERVICES
+
+  /** Return coord of (any) DiamondSequencer or (0,0) if none found */
+  C2D chooseSequencer(PocketHC3 & p) {
+    C2D ret(0,0);
+    if (p.mStatus != PocketHC3.cSTATUS_OK)
+      return ret;
+
+    EventWindow ew;
+    Random random;
+    Unsigned seqcount = 0u;
+
+    for (Unsigned i = 0u; i < p.mCoords.lengthof; ++i) {
+      C2D c = p.mCoords[i];
+      Atom & a = ew[c];
+      if (a as DiamondSequencer) {
+        if (random.oneIn(++seqcount))
+          ret = c;
+      }
+    }
+    return ret;
+  }
+
+  typedef Unsigned(2) ExecutionContext;
+  constant ExecutionContext cEXCT_ACTV = 0u; //< Active, we are code, we do our special thing
+  constant ExecutionContext cEXCT_PASV = 1u; //< Passive, we are data, we shuffle as directed
+  constant ExecutionContext cEXCT_FREE = 2u; //< Free, we are chain, we manage ourselves
+  constant ExecutionContext cEXCT_DIFF = 3u; //< Diffuse, try to get around something unsettled
+
+  /** Determine our current execution context */
+  ExecutionContext getExecutionContext(Intention & it) {
+    print("SQIS10");
+    PocketableState & ps = (PocketableState&) it;
+
+    C2D seqc = chooseSequencer(ps.mPocket);
+    print("SQIS11");
+    print(seqc);
+    if (seqc.length() == 0u)
+      return cEXCT_FREE;        // No sequencer around
+
+    EventWindow ew;
+    DiamondSequencer & ds = (DiamondSequencer&) ew[seqc];
+
+    print("SQIS12");
+    // Find our quadrant relative to ds
+    PocketDir ourq;
+    if (!ds.mProcUnitMap.pocketDirFromCorner(seqc, ourq))
+      return cEXCT_DIFF;
+    print("SQIS13");
+    print(ourq);
+
+    // Find the function of our quadrant
+    QProcUnitMap.ProcUnit ourpu = ds.mProcUnitMap.procUnitInQuadrant(ourq);
+    print("SQIS14");
+    print(ourpu);
+
+    // Is it instruction stream?
+    if (ourpu != QProcUnitMap.cPUNIT_INS)
+      return cEXCT_PASV;        // No: We are data
+
+    // It is.
+    print("SQIS15");
+
+    // Is it ready for us to act?
+    QDirStatusMap.ProcStatus quadstatus = ds.mDirStatusMap.statusFromQuadrant(ourq);
+    print("SQIS16");
+    print(quadstatus);
+    if (quadstatus != QDirStatusMap.cDSTATUS_IDLE)
+      return cEXCT_PASV;        // Instruction stream but not our moment to shine
+
+    // IT IS READY FOR US TO ACT!!
+    print("SQIS17");
+
+    return cEXCT_ACTV;          // DO THE THING
+  }
+
+  /** Return a hashed shade of blue depending on atomic details */
+  ARGB quotedColor() {
+    AtomUtils au;
+    ColorUtils cu;
+    if (!au.hasAtomof(self)) return cu.color(0xff000000); //black
+    Atom a = self.atomof;
+    Bits(16) b = (Bits(16)) au.getType(a);
+    for (Unsigned i = 0u; i < 71u; i += 8u) {
+      Unsigned len = 8;
+      if (i+len >= 71u) len = 71u-i;
+      Bits f = au.read(a, i, len);
+      b = ((b<<3)|f)^(b>>9);
+    }
+    Unsigned(16) c = (Unsigned(16)) b;
+    constant Unsigned cMIN_BLUE = 32u;
+    constant Unsigned cMAX_BLUE = 256u-32u;
+    constant Unsigned cBLUE_RANGE = cMAX_BLUE-cMIN_BLUE;
+    Unsigned blue = c*cBLUE_RANGE/c.maxof + cMIN_BLUE;
+    typedef ColorUtils.Byte Byte;
+    constant Byte cRED = 16u;
+    constant Byte cGREEN = 16u;
+    ARGB ret = cu.color(cRED, cGREEN, (Byte) blue);
+    return ret;
+  }
+}

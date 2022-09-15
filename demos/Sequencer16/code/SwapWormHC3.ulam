@@ -1,0 +1,67 @@
+quark QSwapWormHC3 {
+  typedef Unsigned(3) Type;
+  constant Type cSW_HEAD =    0u; //< Head of worm, no forward()
+  constant Type cSW_MIDDLE =  1u; //< Stable middle segment
+  constant Type cSW_TAIL =    2u; //< Tail of worm, no backward()
+  constant Type cSW_ADVANCE = 3u; //< Tailward-moving temp to advance the worm
+  constant Type cSW_RETREAT = 4u; //< Headward-moving temp to backup the worm
+  constant Type cSW_UNUSED1 = 5u; //< Reserved
+  constant Type cSW_UNUSED2 = 6u; //< Reserved
+  constant Type cSW_UNUSED3 = 7u; //< Reserved
+
+  typedef EventWindow.SiteNum SN;
+
+  virtual SN forward() ; //< Which way forward or 0 if head
+  virtual SN backward() ; //< Which way backward or 0 if tail
+
+  Unsigned(2) mNextDir;
+
+  Bool update() {
+    EventWindow ew;
+    Random random;
+    DebugUtils du;
+    PocketHC3 p;
+    if (p.init() != 0u) return true; // Distorted pocket
+   
+    C2D epick;
+    Unsigned ecount;
+    RectIterator itr;
+    p.initIterator(itr,mNextDir+1u,true); // Iterate over full west pocket
+    while (itr.hasNext()) {
+      C2D d = itr.next();
+      if (ew.isAccessible(d) && ew[d] is Empty) {
+        if (random.oneIn(++ecount)) 
+          epick = d;
+      }
+    }
+    if (ecount > 0u) {
+      if (mNextDir++ == mNextDir.maxof) mNextDir = 0u;
+      ew.swap(C2D.instanceof,epick); // leap west?
+      return true; // Moved!
+    }
+    return false; // Nothing going on
+  }
+}
+
+quark QSwapHeadHC3 : QSwapWormHC3 {  @Override SN forward() { return 0u; } }
+quark QSwapTailC3 : QSwapWormHC3 {  @Override SN backward() { return 0u; } }
+quark QSwapMidC3 : QSwapWormHC3 {   }
+
+/** Demo diamond swapworm
+   \symbol SW
+   \color #00f0ff
+ */
+element SwapWormHC3 : QSwapWormHC3 {
+  Type mType = cSW_HEAD;
+
+  typedef Unsigned(2) Dir;
+  Dir mFwd, mBck;
+
+  @Override
+  virtual SN forward() { if (mType == cSW_HEAD) return 0; return mFwd; }
+  virtual SN backward(){ if (mType == cSW_TAIL) return 0; return mBck; }
+
+  Void behave() {
+    update();
+  }
+}

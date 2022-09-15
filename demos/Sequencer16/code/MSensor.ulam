@@ -1,0 +1,102 @@
+transient MembraneSensorState : MembraneState {
+}
+/**
+   \symbol MS
+   \color #0ff
+ */
+element MSensor : Membrane + Random {
+  
+  //// DEWLine API
+  @Override
+  virtual DefCon signalDC() {
+    return cDC_SGHT; // MSensor signals 'sighting'
+  }
+
+  virtual ClassId getIntentionClass() {
+    return MembraneSensorState.classidof;
+  }
+
+  Void behave() {
+    DebugUtils du;
+    //// Find base or die
+    SN bsn = SN.maxof;
+    Unsigned bsndist = Unsigned.maxof;
+    Unsigned bsnc = 0u;
+    SN nesn = SN.maxof;
+    Unsigned nesnc = 0u;
+    Unsigned selfc = 0u;
+    Unsigned mtipc = 0u;
+    Bool sawmultidir = false;
+    for (SN sn = 1u; sn < 41u; ++sn) {
+      if (!ew.isAccessible(sn)) continue;
+      C2D c = ew.getCoord(sn);
+      Atom & a = ew[sn];
+      if (a as QHardCell) {
+        if (!a.isTail()) return die(); // We mustn't be inside
+      }
+      if (a as MBase) {
+        if (!a.mDirBound) continue;
+        if (!mDirBound) {
+          mOpenDir = a.mOpenDir;
+          mDirBound = true;
+          return;
+        }
+        if (a.mOpenDir == mOpenDir) {
+          Unsigned dist = c.length();
+          if (dist < bsndist) {
+            bsn = sn;
+            bsnc = 1u;
+            bsndist = dist;
+          } else if (dist == bsndist && oneIn(++bsnc))
+            bsn = sn;
+        }
+      } else if (a is Self && sn <= 8u) {
+        ++selfc;
+        Self & sa = (Self &) a;
+        if (!sa.mDirBound) continue;
+        if (!mDirBound) continue;
+        if (mOpenDir != sa.mOpenDir)
+          sawmultidir = true;
+      } else if (a as MTip) {
+        if (mtipc == 0u) mtipc = sn;
+        if (!a.mAxisBound) continue;
+        if (!mDirBound) continue;
+        continue;
+      }
+
+      else if (a is Empty && sn <= 8u && oneIn(++nesnc))
+        nesn = sn;
+    }
+    if (bsnc == 0u) return die();
+    if (ew.getCoord(bsn).length() < 2u) // too close
+      return die();
+
+    /// scan quadrant
+
+    /// track base
+    if (nesnc > 0u) {
+      C2D mc; // origin
+      C2D bc = ew.getCoord(bsn);
+      C2D ec = ew.getCoord(nesn);
+      Unsigned curd = bc.manhattanDistance(mc);
+      Unsigned newd = bc.manhattanDistance(ec);
+      Int curoff = curd < 3u ? 3 - (Int) curd : (Int) curd - 3;
+      Int newoff = newd < 3u ? 3 - (Int) newd : (Int) newd - 3;
+      if (newoff < curoff) {
+        ew.swap(0u,nesn);
+        return;
+      }
+      if (mtipc == 0u && sawmultidir) {
+        ew[nesn] = MTip.instanceof;
+        return;
+      }
+      if (selfc < 2u) {
+        ew[nesn] = self.atomof; // be like me
+        return;
+      }
+    }
+
+    scanOuterQuadrant();
+  }
+}
+

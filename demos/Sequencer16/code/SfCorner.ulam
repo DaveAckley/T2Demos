@@ -1,0 +1,347 @@
+transient SfCornerState : PocketChainState {
+  
+  //// SfCornerState API
+  virtual Void setIntentionClass(SfCorner & ng) ;
+
+  //// Intention API
+  @Override
+  virtual Bool init(Intender & in) {
+    SfCorner & n = (SfCorner&) in;
+    if (super.init(n)) return true;
+
+    return false;
+  }
+  
+  @Override
+  virtual Bool adopt(Intender & in) {
+    SfCorner & nc = (SfCorner&) in;
+    if (super.init(nc)) return true;
+    setIntentionClass(nc);
+    return false;
+  }
+
+}
+
+transient SfCornerStateIDeploySide : SfCornerState {
+
+  @Override
+  virtual Void setIntentionClass(SfCorner & n) { n.mIntentionIndex = n.cDEPLOY_SIDE; }
+
+  @Override
+  virtual Bool act(Intender & in) {
+    EventWindow ew;
+    Random random;
+    typedef ClassUtils.ClassId ClassId;
+    PocketHC3 & pocket = self.mPocket;
+    ByteStreamLogger bsl;
+    ClassUtils csu;
+
+    print("SFCIDNAct10");
+    if (super.act(in)) return true;
+    print("SFCIDNAct11");
+
+    SfCorner & n = (SfCorner&) in;
+
+    /*
+    if (n.mResult == n.cRS_FAILED) { // Just wait to be killed
+      DebugUtils du;
+      return n.diffuse(self);        // if we've already failed
+    }
+    */
+
+    //// CHECK FOR EXISTING Ns
+    PocketPtr side = n.mToSide;
+    SN sidesn = pocket.searchPocket(side, SfSide.classidof);
+
+    if (sidesn != 0u) {           // if Ns exists, or bent, or inacc,
+      if (random.oneIn(10u))      // 10% shot to
+        return n.deployFailed();  // give up,
+      return n.diffuse(self);     // but usually just block
+    }
+
+    //// TRY TO SPAWN Ns
+
+    if (self.mPocketInaccessible[side] != 0u)
+      return n.diffuse(self); // if can't see whole pocket, block
+
+    if (self.mPocketEmpty[side] != self.mPocketSize[side])
+      return n.deployFailed();   // If anythind non-Ns in there, fail
+        
+    // all accessible and all empty to grow into
+
+    SN fillsn = self.mEWSNAvailables[side]; // A random empty
+    SfSide nus;
+    nus.mDSType = nus.cDS_DUMB;                // We don't auto move or grow
+    nus.mToCorner = (PocketPtr) (5u - side); // Its base is me
+    nus.mToGoal = n.mToBase; // Its way to goal is my way to base
+    
+    // XXXX SfSide ADOPT INTENTION
+
+    print("COPNUCO11 SEEDING");
+    print(fillsn);
+    print(nus);
+    ew[fillsn] = nus.atomof;
+
+    print(ew[fillsn]);
+
+    SfCornerStateIAwaitSide i; 
+    i.adopt(n);  // Change our intention to waiting
+    
+    return true; // Initted Ns
+  }
+  
+}
+
+transient SfCornerStateIAwaitSide : SfCornerState {
+
+  @Override
+  virtual Void setIntentionClass(SfCorner & n) { n.mIntentionIndex = n.cAWAIT_SIDE; }
+
+  @Override
+  virtual Bool act(Intender & in) {
+    EventWindow ew;
+    Random random;
+    typedef ClassUtils.ClassId ClassId;
+    PocketHC3 & pocket = self.mPocket;
+    ByteStreamLogger bsl;
+    ClassUtils csu;
+
+    print("SFCIANAct10");
+    if (super.act(in)) return true;
+    print("SFCIANAct11");
+
+    SfCorner & n = (SfCorner&) in;
+
+    /*
+    if (n.mResult == n.cRS_FAILED) { // Just wait to be killed
+      DebugUtils du;
+      return n.diffuse(self);        // if we've already failed
+    }
+    */
+
+    //// SEARCH FOR EXISTING Ns THAT WE DEPLOYED
+    PocketPtr side = n.mToSide;
+    SN sidesn = pocket.searchPocket(side, SfSide.classidof);
+
+    if (sidesn == 0u || sidesn == sidesn.maxof) { // if missing, bent, or inacc,
+      return n.diffuse(self);     // block indefinitely
+    }
+
+    //// HERE IF SOME Ns FOUND
+    SfSide & ns = (SfSide&) ew[sidesn];
+    ClassId intid = ns.getIntentionClass();
+    
+    if (intid == SfSideISucceeded.classidof) {
+      SfCornerStateISucceed i; 
+      i.adopt(n);  // Change our intention to succeeding
+      return true;
+    }
+
+    if (intid == SfSideIFailed.classidof) {
+      // If it fails, we fail
+      ew[sidesn] = Empty.instanceof;
+      return n.deployFailed();
+    }
+
+    return false;
+  }
+  
+}
+
+transient SfCornerStateIFailDeploy : SfCornerState {
+
+  @Override
+  virtual Void setIntentionClass(SfCorner & n) { n.mIntentionIndex = n.cFAIL_DEPLOY; }
+
+  @Override
+  virtual Bool act(Intender & in) {
+    print("SFCIFDAct10");
+    if (super.act(in)) return true;
+
+    print("SFCIFDAct11");
+
+    //// WE'RE JUST WAITING TO BE KILLED
+    SfCorner & n = (SfCorner&) in;
+
+    // Try to make sure Ng is awake to kill us
+
+    EventWindow ew;
+    PocketHC3 & pocket = mPocket;
+    SN basesn = pocket.searchPocket(n.mToBase, ShapeShifter.classidof);
+    if (basesn == SN.maxof || basesn == 0u) return n.diffuse(self);
+
+    ShapeShifter & base = (ShapeShifter&) ew[basesn];
+    base.mSuspended = false;
+
+    return n.diffuse(self);
+  }
+}
+
+transient SfCornerStateISucceed : SfCornerState {
+
+  @Override
+  virtual Void setIntentionClass(SfCorner & n) { n.mIntentionIndex = n.cSUCCEED; }
+
+  @Override
+  virtual Bool act(Intender & in) {
+    print("SFCISAct10");
+    if (super.act(in)) return true;
+
+    print("SFCISAct11");
+    SfCorner & n = (SfCorner&) in;
+
+    /* Now we want to do all of this:
+       Nc*. Ns                 Md = Md          Md : Move down temp
+       .    ||        ->       ||   ||          Mu : Move up temp
+       De = Ng > De = De       De = Mu   De = De
+    */
+
+    EventWindow ew;
+    PocketHC3 & pocket = mPocket;
+
+    // Step 1: Need access to both Ns and Ng
+    SN sidesn = pocket.searchPocket(n.mToSide, SfSide.classidof);
+    if (sidesn == SN.maxof || sidesn == 0u) return n.diffuse(self);
+    SfSide & ns = (SfSide&) ew[sidesn];
+
+    SN basesn = pocket.searchPocket(n.mToBase, ShapeShifter.classidof);
+    if (basesn == SN.maxof || basesn == 0u) return n.diffuse(self);
+    ShapeShifter & base = (ShapeShifter&) ew[basesn];
+
+    /*
+    ClassId sideintid = ns.getIntentionClass();
+    if (sideintid != NSISucceeded.classidof) {
+      print("SFCISAct12");
+      print("SIDE NOT SUCCEED?");
+      Fail f; f.fail();
+    }
+    // XXX CHECK baseintid?
+    */
+
+    // Step 2: Swing pointers
+    ns.mPocketPtrs[Segment.cBODY_UP] = (PocketPtr) (5u - n.mToSide); // we are upstream of side
+    n.mPocketPtrs[Segment.cBODY_DOWN] = (PocketPtr) n.mToSide;       // it is downstream of us
+    /* Giving us:
+       Nc*= Ns
+       .    ||
+       De = Ng > De = De
+    */
+
+    ShapeShifter & ng = (ShapeShifter&) ew[basesn];
+    ng.mPocketPtrs[Segment.cBODY_DOWN] = (PocketPtr) (5u - n.mToBase); // we are downstream of base
+    n.mPocketPtrs[Segment.cBODY_UP] = (PocketPtr) (n.mToBase);         // it is upstream of us
+    /* Giving us:
+       Nc*= Ns
+       ||   ||
+       De = Ng   De = De
+    */
+
+    // Step 3: Up temp to replace Ng
+    Demo mup;                
+    {
+      PocketChain & qmup = mup;   // Can't cast on LHS of assign, so make ref
+      qmup = ng;             // Copy ng's qchain info  
+      Segment & smup = mup;  
+      smup = ng;             // and their Segment info
+
+      mup.mPocketPtrs[Segment.cBODY_DOWN] = // except we're downstream of them
+        (PocketPtr) (5u - n.mToBase);
+
+      mup.mDSType = n.cDS_UP;  // mark as an upbound temp
+    }
+
+    // Step 4: Down temp to replace Ns
+    Demo mds;                
+    {
+      PocketChain & qmds = mds;
+      qmds = ns;             // Copy ns's qchain info
+      Segment & smds = mds;
+      smds = ns;             // and their Segment info
+
+      // except fixup pointer
+      mds.mPocketPtrs[Segment.cBODY_UP] =
+        (PocketPtr) (5u - n.mToSide);
+
+      mds.mDSType = n.cDS_DOWN;  // mark as a down temp
+    }
+
+    // Step 5: Down temp to replace Nc 
+    Demo mdc;                
+    {
+      PocketChain & qmdc = mdc;
+      qmdc = n;                 // Copy nc's qchain info
+      Segment & smdc = mdc;
+      smdc = n;                 // and their Segment info
+
+      // except fixup pointers.
+      mdc.mPocketPtrs[Segment.cBODY_DOWN] = n.mToSide;
+      mdc.mPocketPtrs[Segment.cBODY_UP] = n.mToBase;
+
+      mdc.mDSType = n.cDS_DOWN;  // mark as a down temp
+    }
+
+    // Step 6: DEPLOY ALL
+    ew[basesn] = mup.atomof;     // Ng is now up temp
+    ew[sidesn] = mds.atomof;     // Ns is now down temp
+    ew[0] = mdc.atomof;          // We are now down temp
+
+    /* wah lah
+
+       Md = Md          Md : Move down temp
+       ||   ||          Mu : Move up temp
+       De = Mu   De = De
+    */
+
+    return true;
+  }
+}
+
+
+/**
+   \symbol Fc
+   \color #44e
+*/
+element SfCorner : PocketChain {
+  typedef Unsigned(2) IntentionIndex;
+  constant IntentionIndex cDEPLOY_SIDE = 0u;
+  constant IntentionIndex cAWAIT_SIDE = 1u;
+  constant IntentionIndex cFAIL_DEPLOY = 2u;
+  constant IntentionIndex cSUCCEED = 3u;
+  IntentionIndex mIntentionIndex;
+
+  //// Intender API
+  @Override
+  virtual ClassId getIntentionClass() { 
+    which (mIntentionIndex) {
+    case cDEPLOY_SIDE:      {  SfCornerStateIDeploySide i; return i.classidof; }
+    case cAWAIT_SIDE:       {  SfCornerStateIAwaitSide i; return i.classidof; }
+    case cFAIL_DEPLOY:      {  SfCornerStateIFailDeploy i; return i.classidof; }
+    case cSUCCEED:          {  SfCornerStateISucceed i; return i.classidof; }
+    }
+    // NOT REACHED
+    Fail f;
+    f.fail();
+    return 0u;
+  }
+
+  @Override
+  ARGB getColor(Unsigned selector) {
+    return self.UrSelf.getColor(selector);
+  }
+  PocketPtr mToSide;
+  PocketPtr mToBase;
+
+  ///// SfCorner SERVICES
+  Bool deployFailed() {
+    SfCornerStateIFailDeploy i; 
+    i.adopt(self);  // Change our intention to failing
+    return true;
+  }
+
+//// PocketChain API
+  virtual Bool isSwappable(PocketChainState & ds) { return false; }
+
+  Void behave() {
+    pursueIntention();
+  }
+}

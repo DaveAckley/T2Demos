@@ -1,0 +1,121 @@
+transient PocketableState : Intention + DiamondTypes {
+
+  EventWindow ew;
+  Random random;
+  DebugUtils du;
+  PocketHC3 mPocket;
+
+  // availability data valid after init(..) returns true
+  SN mEWSNAvailables[Pocketable.cPP_EAST+1u]; // 0..4 
+  Bool mPocketIterable[Pocketable.cPP_EAST+1u]; // 0..4 
+  Unsigned mPocketSize[Pocketable.cPP_EAST+1u]; // 0..4 
+  Unsigned mPocketUsCount[Pocketable.cPP_EAST+1u]; // 0..4 
+  Unsigned mPocketFull[Pocketable.cPP_EAST+1u]; // 0..4 
+  Unsigned mPocketEmpty[Pocketable.cPP_EAST+1u]; // 0..4 
+  Unsigned mPocketInaccessible[Pocketable.cPP_EAST+1u]; // 0..4 
+
+  //// Intention API
+  @Override
+  virtual Bool init(Intender & seg) {
+    print("PKBST10");
+    if (super.init(seg)) return true;
+    print("PKBST11");
+    if (mPocket.init() != PocketHC3.cSTATUS_OK) return true; // Distorted pocket
+    print("PKBST12");
+    return false;
+  }
+
+  //// PocketableState SERVICES
+
+}
+
+quark Pocketable : Intender + DiamondTypes {
+
+  PocketPtr clockwise(PocketPtr from) {
+    which (from) {
+    case cPP_WEST:  { return cPP_NORTH; }
+    case cPP_NORTH: { return cPP_EAST; }
+    case cPP_EAST:  { return cPP_SOUTH; }
+    case cPP_SOUTH: { return cPP_WEST; }
+    otherwise: { return from; }
+    }
+  }
+
+  PocketPtr counterclockwise(PocketPtr from) {
+    which (from) {
+    case cPP_WEST:  { return cPP_SOUTH; }
+    case cPP_SOUTH: { return cPP_EAST; }
+    case cPP_EAST:  { return cPP_NORTH; }
+    case cPP_NORTH: { return cPP_WEST; }
+    otherwise: { return from; }
+    }
+  }
+
+  //// Pocketable API
+
+  /** Determine if a another Pocketable is related to me
+
+      Determines what counts as 'us' in mPocketUsCount
+
+      By default, this returns \c true if and only if self and other are
+      identical concrete classes
+   */
+  virtual Bool inMyGroup(Self & other) {
+    ClassUtils cu;
+    return cu.getClassId(self) == cu.getClassId(other);
+  }
+
+  PocketPtr reversePocket(PocketPtr ptr) {
+    if (ptr == cPP_NULL || ptr == cPP_SELF) return ptr;
+    if (ptr > cPP_EAST) { Fail f; f.fail("BAD PTR"); }
+    return (PocketPtr) (5u - ptr);
+  }
+
+  /** false if any bad pockets else true
+      (Note all pockets are checked; caller can 
+      iterate over ss.mPocketFull[..] etc even
+      if false is returned here)
+   */
+  Bool findAvailables(PocketableState & ss) {
+    Bool sallgood = true;
+    for (PocketPtr ngb = cPP_SELF; ngb <= cPP_EAST; ++ngb) {
+      if (!findAvailable(ss,ngb))
+        sallgood = false;
+    }
+    return sallgood;
+  }
+  
+  /** true if pocket good, false if the pocket's unstable.
+   */
+  Bool findAvailable(PocketableState & ss, PocketPtr ptr) {
+    EventWindow ew;
+    Random random;
+    if (ptr > cPP_EAST) { Fail f; f.fail("BAD ARG PTR"); }
+    RectIterator ri;
+    ss.mPocketIterable[ptr] = true; // optimism..
+    if (!ss.mPocket.initIterator(ri, ptr, true))
+      return ss.mPocketIterable[ptr] = false; // ..unjustified
+
+    SN randemp = SN.maxof;
+    Unsigned pocketsize, empcount, inaccesscount, uscount;
+    while (ri.hasNext()) {
+      ++pocketsize;
+      C2D n = ri.next();
+      if (!ew.isAccessible(n)) { ++inaccesscount; continue; }
+      Atom & a = ew[n];
+      if (a is Empty && random.oneIn(++empcount)) randemp = ew.getSiteNumber(n);
+      else if (a as Self) {
+        if (inMyGroup(a)) ++uscount;
+      }
+    }
+
+    // Stash findings
+    ss.mEWSNAvailables[ptr] = randemp;
+    ss.mPocketUsCount[ptr] = uscount;
+    ss.mPocketSize[ptr] = pocketsize;
+    ss.mPocketFull[ptr] = pocketsize - empcount;
+    ss.mPocketEmpty[ptr] = empcount;
+    ss.mPocketInaccessible[ptr] = inaccesscount;
+    return true;
+  }
+}

@@ -1,0 +1,82 @@
+/** \symbol SL
+    \color #b0b
+ */
+element SeedLoop : XTimer(3u,6u,4u) + DiamondTypes {
+  EventWindow ew;
+  Random random;
+  DebugUtils du;
+
+  typedef EventWindow.SiteNum SN;
+  typedef Segment.PocketPtr PocketPtr;
+
+  Void die() { ew[0] = Empty.instanceof; }
+  Void diffuse() {
+    SN n = (SN) random.between(1,4);
+    if (ew.isEmpty(n))
+      ew.swap(0u,n);
+  }
+
+  Void behave() {
+
+    if (random.oneIn(4u)) return diffuse(); // Mix up pocket position
+    if (countAlarm()) return die(); // one shot lives to shoot
+
+    PocketHC3 p;
+    PocketHC3.Status pstat = p.init();
+    if (pstat == PocketHC3.cSTATUS_EDGE ||
+        pstat == PocketHC3.cSTATUS_OPEN)
+      return diffuse(); // seek greener pastures
+    if (pstat == PocketHC3.cSTATUS_BENT) return;           // wait for clarity
+
+    RectIterator ri;
+
+    // First make sure we're alone in here
+    if (!p.initIterator(ri, 0u, true)) return; // block
+    while (ri.hasNext()) {
+      C2D n = ri.next();
+      if (!ew.isAccessible(n)) return; // in center pocket??
+      if (!(ew[n] is Empty || ew[n] is Self)) // whather that is
+        return diffuse();                     // we don't like it
+    }
+
+    // Now look for empty adjacent
+    SN openptr = (SN) random.between(1u,4u);
+    if (!p.initIterator(ri, openptr, true)) return; // block
+
+    C2D pickc;
+    Unsigned count;
+    while (ri.hasNext()) {
+      C2D n = ri.next();
+      if (!ew.isAccessible(n) || !(ew[n] is Empty)) return; // block
+
+      if (random.oneIn(++count))
+        pickc = n;
+    }
+    if (count == 0u) return;
+
+    Demo d;
+    d.mDemoProvider = true;     // I make the loop grow
+    PocketDir tq = (PocketDir) random.between(PocketDir.minof,PocketDir.maxof);
+    d.mTargetQuadrant = tq;
+    d.mSegsDown = 0u;
+    d.mTempsDown = 0u;
+    d.mDSType = Demo.cDS_NORM;
+    d.mPocketPtrs[Segment.cBODY_UP] = (PocketPtr) openptr; // Up and down are 
+    d.mPocketPtrs[Segment.cBODY_DOWN] = (PocketPtr) openptr; // both thataway
+
+    ShapeShifter g;
+    g.mDSType = g.cDS_DUMB;                // We don't auto move or grow
+    g.mTargetQuadrant = tq;
+    g.mSegsDown = 0u;
+    g.mTempsDown = 0u;
+    g.mDSType = Demo.cDS_NORM;
+    g.mPocketPtrs[Segment.cBODY_UP] = (PocketPtr) (5u-openptr);
+    g.mPocketPtrs[Segment.cBODY_DOWN] = (PocketPtr) (5u-openptr);
+    ShSfISide1 it;
+    it.adopt(g);
+
+    ew[pickc] = g.atomof;
+    ew[0] = d.atomof;
+    return;
+  }
+}

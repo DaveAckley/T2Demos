@@ -1,0 +1,35 @@
+/**
+   Iterate over a rectangle of C2Ds in row-major order, given
+   NON-INCLUSIVE min and max bounds.  E.g. 
+
+     init(C2D.instanceof(-3,-1),C2D.instanceof(-1,1));
+
+   will visit ONLY (-2,1)
+
+ */
+transient RectIterator {
+
+  /** Set up to iterate inside of min..max */
+  Void init(C2D min, C2D max) {
+    mMin = min; mMax = max;
+    mNext = mMin + C2D.instanceof(1,1);
+  }
+
+  /** \c true if another C2D available */
+  Bool hasNext() {
+    return mNext.x < mMax.x && mNext.y < mMax.y;
+  }
+
+  /** Get next C2D or fail if none */
+  C2D next() {
+    if (!hasNext()) { Fail f; f.fail("RectIterator: No next"); }
+    C2D ret = mNext;
+    if (++mNext.x >= mMax.x) {
+      ++mNext.y;
+      mNext.x = (C2D.Coord) (mMin.x + 1);
+    }
+    return ret;
+  }
+
+  C2D mMin, mMax, mNext;
+}

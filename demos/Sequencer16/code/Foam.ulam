@@ -1,0 +1,284 @@
+transient FoamState {
+  typedef EventWindow.SiteNum SN;
+  Unsigned eoucount = 0u;
+  SN eousn;
+  Unsigned uninitcount = 0u;
+  SN uninitsn;
+  Unsigned insidecount = 0u;
+  SN insidesn;
+  Unsigned neardist = 5u;
+  Unsigned nearcount = 0u;
+  SN nearsn;
+  Unsigned emptydist = 5u;
+  Unsigned emptycount = 0u;
+  SN emptysn;
+  Unsigned anyemptycount = 0u;
+  Unsigned anyemptydist = 5u;
+  SN anyemptysn;
+  Unsigned foamdist = 5u;
+  Unsigned foamcount = 0u;
+  Unsigned foamtotalcount = 0u;
+  Unsigned foamtotalconfidence = 0u;
+  SN foamsn;
+  Unsigned ofoamdist = 5u;
+  Unsigned ofoamcount = 0u;
+  Unsigned ofoamtotalcount = 0u;
+  Unsigned ofoamtotalconfidence = 0u;
+  SN ofoamsn;
+  Unsigned dfoamdist = 5u;
+  Unsigned dfoamcount = 0u;
+  Unsigned dfoamtotalcount = 0u;
+  Unsigned dfoamtotalconfidence = 0u;
+  SN dfoamsn;
+  Unsigned otherdist = 5u;
+  Unsigned othercount = 0u;
+  SN othersn;
+
+  Void block() { /* doc only */ }
+  Void pop() {
+    EventWindow ew;
+    ew[0] = Empty.instanceof;
+  }
+
+  Bool init(QFoam & f) {
+    EventWindow ew;
+    Random random;
+    for (SN sn = 1u; sn < 41u; ++sn) {
+      if (!ew.isAccessible(sn)) {
+        if (random.oneIn(++eoucount)) 
+          eousn = sn;
+        continue;
+      }
+      //// NGB IS ACCESSIBLE.
+      
+      C2D at = ew.getCoord(sn);
+      Unsigned dist = at.length();
+
+      if (ew.isEmpty(sn)) {
+        if (random.oneIn(++anyemptycount)) {
+          anyemptysn = sn;
+          anyemptydist = dist;
+        }
+        if (dist < emptydist) {
+          emptydist = dist;
+          emptycount = 1u;
+          emptysn = sn;
+        } else if (dist == emptydist && random.oneIn(++emptycount))
+          emptysn = sn;
+        continue;
+      }
+      //// NGB IS NON-EMPTY.
+
+      Atom & a = ew[sn];
+      if (a as QHardCell) {
+        Unsigned upHops = a.getUpHops();
+        Unsigned maxHop = a.getMaxHopsGoal();
+        if (upHops > maxHop) { // Uninitted?
+          if (random.oneIn(++uninitcount))
+            uninitsn = sn;
+        } else if (upHops < maxHop - 1u) { // Not tail?
+          if (random.oneIn(++insidecount))
+            insidesn = sn;
+        } else {
+          if (dist < neardist) {
+            neardist = dist;
+            nearcount = 1u;
+            nearsn = sn;
+          } else if (dist == neardist && random.oneIn(++nearcount))
+            nearsn = sn;
+        }
+        continue;
+      }
+
+      if (a as Foam) {
+        ++foamtotalcount;
+        foamtotalconfidence += a.mContactConfidence;
+        if (dist < foamdist) {
+          foamdist = dist;
+          foamcount = 1u;
+          foamsn = sn;
+        } else if (dist == foamdist && random.oneIn(++foamcount))
+          foamsn = sn;
+        continue;
+      }
+      
+      if (a as OFoam) {
+        ++ofoamtotalcount;
+        ofoamtotalconfidence += a.mContactConfidence;
+        if (dist < ofoamdist) {
+          ofoamdist = dist;
+          ofoamcount = 1u;
+          ofoamsn = sn;
+        } else if (dist == ofoamdist && random.oneIn(++ofoamcount))
+          ofoamsn = sn;
+        continue;
+      }
+      
+      if (a as DFoam) {
+        ++dfoamtotalcount;
+        dfoamtotalconfidence += a.mContactConfidence;
+        if (dist < dfoamdist) {
+          dfoamdist = dist;
+          dfoamcount = 1u;
+          dfoamsn = sn;
+        } else if (dist == dfoamdist && random.oneIn(++dfoamcount))
+          dfoamsn = sn;
+        continue;
+      }
+      
+      //// NGB IS SOMETHING OTHER THAN FOAM OR EMPTY OR EOU
+      
+      if (true) {
+        if (dist < otherdist) {
+          otherdist = dist;
+          othercount = 1u;
+          othersn = sn;
+        } else if (dist == otherdist && random.oneIn(++othercount))
+          othersn = sn;
+        continue;
+      }
+    }
+
+    //// HAVE INFO.
+    return false;
+  }
+}
+
+quark QFoam {
+  typedef Unsigned(4) Confidence;
+  constant Confidence cCONFIDENCE_THRESHOLD = Confidence.maxof/2u;
+  Confidence mContactConfidence;
+  Bool contactWarning() {
+    return mContactConfidence >= cCONFIDENCE_THRESHOLD;
+  }
+  @Override
+  ARGB getColor(Unsigned selector) {
+    ARGB ret = super.getColor(selector);
+    if (contactWarning()) {
+      ColorUtils cu;
+      ret = cu.brighter(ret);
+    }
+    return ret;
+  }
+}
+
+/**
+   \color #aaa
+ */
+element Foam : QFoam {
+  EventWindow ew;
+  ColorUtils cu;
+  Random random;
+  Void behave() {
+    FoamState fs;
+    if (fs.init(self)) return;
+
+    if (fs.uninitcount > 0u) return fs.block(); // Block on uninitted
+    if (fs.insidecount > 0u) return fs.pop();   // Die if see internal
+
+    if (fs.nearcount == 0u) return fs.pop();    // Die if no see external
+    if (fs.neardist < 3u) return fs.pop();      // Die if too close to external
+
+    if (fs.ofoamcount == 0u) ++mContactConfidence;
+    else mContactConfidence = (Confidence) (fs.ofoamtotalconfidence / fs.ofoamtotalcount);
+
+    if (fs.anyemptycount > 0u && fs.ofoamcount == 0u && random.oneIn(100u)) {
+      ew[fs.anyemptysn] = OFoam.instanceof;
+      return;
+    }
+
+    if (fs.emptycount > 0u && fs.foamcount < 6u) {
+      C2D ec = ew.getCoord(fs.emptysn);
+      C2D nc = ew.getCoord(fs.nearsn);
+      Unsigned dist = ec.manhattanDistance(nc);
+      if (dist <= 4u) {
+        Self copy = self;
+        //        mContactWarning = false;
+        ew[fs.emptysn] = copy.atomof; // Spawn
+        return;
+      }
+    }
+  }
+}
+
+/**
+   \color #44a
+ */
+element OFoam : QFoam {
+  EventWindow ew;
+  ColorUtils cu;
+  Random random;
+
+  Void behave() {
+    FoamState fs;
+    if (fs.init(self)) return;
+
+    if (fs.nearcount > 0u) return fs.pop();    // Die if see grid
+
+    if (fs.foamcount == 0u) return fs.pop();    // Die if no see foam
+    if (fs.foamdist < 2u) return fs.pop(); // Die if too close to foam
+
+    if (fs.dfoamcount == 0u) ++mContactConfidence;
+    else mContactConfidence = (Confidence) (fs.dfoamtotalconfidence / fs.dfoamtotalcount);
+
+    if (fs.anyemptycount > 0u && fs.dfoamcount == 0u && random.oneIn(100u)) {
+      ew[fs.anyemptysn] = DFoam.instanceof;
+      return;
+    }
+
+    if (fs.emptycount > 0u && fs.ofoamcount < 4u) {
+      C2D ec = ew.getCoord(fs.emptysn);
+      C2D nc; // me
+      Unsigned dist = ec.manhattanDistance(nc);
+      if (dist == 1u) {
+        Self copy = self;
+        //        copy.mContactWarning = false;
+        copy.mContactConfidence = 0u;
+        ew[fs.emptysn] = copy.atomof; // Spawn
+        return;
+      }
+    }
+  }
+}
+
+/**
+   \color #4a4
+ */
+element DFoam : QFoam {
+  EventWindow ew;
+  ColorUtils cu;
+  Void behave() {
+    FoamState fs;
+    if (fs.init(self)) return;
+
+    if (fs.nearcount > 0u) return fs.pop();    // Die if see grid
+    if (fs.foamcount > 0u) return fs.pop();    // Die if see foam
+
+    if (fs.ofoamcount == 0u) return fs.pop();    // Die if no see ofoam
+    if (fs.ofoamdist < 2u) return fs.pop(); // Die if too close to ofoam
+
+    if (fs.othercount > 0u) {
+      // Can we push away other?
+      if (fs.anyemptycount > 0u && fs.anyemptydist > fs.otherdist) {
+        ew.swap(fs.othersn,fs.anyemptysn);
+        return;
+      }
+      ++mContactConfidence;
+    } else
+      mContactConfidence =
+        fs.eoucount > 0u ? mContactConfidence.maxof : mContactConfidence/2u;
+
+    if (fs.emptycount > 0u && fs.dfoamcount < 4u) {
+      C2D ec = ew.getCoord(fs.emptysn);
+      C2D nc; // me
+      Unsigned dist = ec.manhattanDistance(nc);
+      if (dist == 1u) {
+        Self copy = self;
+        //        self.mContactWarning = false;
+        //        copy.mContactConfidence = 0u;
+        ew[fs.emptysn] = copy.atomof; // Spawn
+        return;
+      }
+    }
+  }
+}

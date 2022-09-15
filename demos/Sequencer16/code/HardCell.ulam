@@ -1,0 +1,211 @@
+/** HardCell: A Low-Density Mobile Grid
+   \symbol H3
+   \color 0xf0f0f0
+ */
+element HardCell : QHardCell {
+  typedef XTimer(4u,10u,250u) HardCellWatchdog;
+  HardCellWatchdog mHardCellWatchdog;
+
+  //// QHardCell API
+  @Override
+  virtual Bool countWatchdog() { return mHardCellWatchdog.countAlarm(); }
+  @Override
+  virtual Void resetWatchdog() { mHardCellWatchdog.reset(); }
+
+  //// DEWLine API
+  @Override
+  virtual DefCon signalDC() { // HC3 signals 'contact' or 'damage'
+    return isTail() ? cDC_CONT : cDC_DAMG; 
+  }
+
+
+  typedef EventWindow.SiteNum SN;
+  typedef Unsigned(5) HopCount;
+  constant HopCount cMAX_MAX_HOPS = 18u;
+  constant HopCount cMIN_MAX_HOPS = 6u;
+  HopCount mMaxHops;
+
+  constant Unsigned cDIFFUSE_ODDS = 1u;
+
+  HopCount mUpHops = HopCount.maxof;//cMAX_HOPS;
+
+  HopCount mSettledDownHops = 0u;
+
+  typedef Unsigned(3) NChan;
+  typedef NChan NColor[3];
+  NColor mColor;
+
+  typedef Int(5) DirSpeed;
+  constant DirSpeed cMAX_NW = DirSpeed.minof + 1;
+  constant DirSpeed cMAX_SE = -cMAX_NW;
+  DirSpeed mDirs[2];
+
+  Void changeDir() {
+    Random random;
+    Bool moving = false;
+    while (!moving) {
+      for (Unsigned i = 0u; i < mDirs.lengthof; ++i) {
+        mDirs[i] = (DirSpeed) random.between(cMAX_NW, cMAX_SE);
+        if (mDirs[i] != 0) moving = true;
+      }
+    }
+  }
+
+  /*
+  Super.ContactWarnings mContactWarnings;
+  @Override
+  virtual ContactWarnings getContactWarnings() {
+    return mContactWarnings;
+  }
+  @Override
+  virtual Void setContactWarnings(ContactWarnings cw) {
+    mContactWarnings = cw;
+  }
+  */
+
+  SN updatePick(SN curpick, SN newdir, Unsigned & totwgt, Int newwgt) {
+    Random random;
+    if (newwgt < 0) {
+      newdir += 2u;  // 1=>3, 2=>4
+      newwgt = -newwgt;
+    }
+    Unsigned wgt = (Unsigned) newwgt;
+    totwgt += wgt;
+    if (random.oddsOf(wgt, totwgt))
+      curpick = newdir;
+    return curpick;
+  }
+
+  SN pickDir(Unsigned diffuseOdds) {
+    Random random;
+    Unsigned totw = diffuseOdds;
+    SN curPick = (SN) random.between(1u,4u);
+    for (Unsigned i = 0u; i < mDirs.lengthof; ++i) {
+      curPick = updatePick(curPick, (SN) (i+1u), totw, mDirs[i]);
+    }
+    return curPick;
+  }
+
+  Void mutateColor() {
+    Random random;
+    for (Unsigned i = 0u; i < mColor.lengthof; ++i) {
+      Int delta = random.between(-3,3);
+      mColor[i] = (NChan) (mColor[i] + delta);
+    }
+  }
+
+  ARGB baseColor() {
+    ColorUtils cu;
+    return cu.color((ASCII) (mColor[0]*12 + 70),
+                    (ASCII) (mColor[1]*12 + 70),
+                    (ASCII) (mColor[2]*12 + 70));
+  }
+
+  typedef Unsigned(2) MoveDir; // 0..3 => SN 1..4
+  MoveDir mMoveDir;
+
+  ARGB getColorDefault() {
+    ColorUtils cu;
+    Unsigned hc = getUpHops();
+    Unsigned maxhc = getMaxHopsGoal();
+    if (hc >= maxhc) {
+      return cu.color(0xff, 0xff, 0x00);
+    }
+    Unsigned closeness = maxhc - hc;
+    Unsigned pct = 30u + 40u * closeness / maxhc;
+    ARGB base = baseColor();
+    ARGB black;
+    ARGB ret = cu.between(base,black,pct);
+    Unsigned max = maxDCs();
+    if (max > 0u)
+      return cu.color(0xff,0u,0u);
+    return ret;
+  }
+  
+  ARGB getColorMinSettled() {
+    ColorUtils cu;
+    Unsigned dh = getSettledDownHops();
+    Unsigned mdh = cMIN_DOWN_SETTLED;
+    if (dh > mdh)  return cu.color(0xffffffff);
+    return cu.between(cu.color(0xffffff00),
+                      cu.color(0xff000000),
+                      100u * dh / mdh);
+  }
+
+  //// UrSelf API
+  @Override
+  virtual ARGB getColor(Unsigned selector) {
+    if (selector == 2u) return getColorMinSettled();
+    if (selector == 1u) return getColorDefault();
+    return super.getColor(selector);
+  }
+
+  //// QHardCell API
+  @Override
+  virtual Unsigned getMaxHopsGoal() { return mMaxHops; }
+  @Override
+  virtual Void setMaxHopsGoal(Unsigned maxup) {
+    if (maxup > mMaxHops.maxof) {
+      Fail f;
+      f.fail("QHardCell maxup too big");
+    }
+    mMaxHops = (HopCount) maxup;
+  }
+
+  @Override
+  virtual Unsigned getUpHops() { return mUpHops; }
+  @Override
+  virtual Void setUpHops(Unsigned uphops) { mUpHops = (HopCount) uphops; }
+
+  @Override
+  virtual Unsigned getSettledDownHops() { return mSettledDownHops; }
+  @Override
+  virtual Void setSettledDownHops(Unsigned settledown) { mSettledDownHops = (HopCount) settledown; }
+
+  @Override
+  virtual Void initCopy() {
+    super.initCopy();
+    mutateColor();
+  }
+
+  @Override
+  virtual Bool rootBehave(HC3State &hcs) {
+    DebugUtils du;
+    /// AM I ROOT?
+    if (mUpHops != 0u) return false;
+    /// I AM ROOT.
+
+    /// AM I BLOCKED BY UNSETTLED DOWNSTREAM?
+    if (getSettledDownHops() < cMIN_DOWN_SETTLED) {
+      return block(); // we have to wait
+    }
+    /// DOWNSTREAM IS SUFFICIENTLY ALIGNED WITH ME 
+
+    Random random;
+    if (true /*random.oneIn(200)*/) {
+      EventWindow ew;
+      SN sn = pickDir(cDIFFUSE_ODDS);
+      // Reroute if heading into trouble
+      if (mDefCons[sn-1u] == 0u &&
+          ew.isAccessible(sn) && ew[sn] is Empty) {
+        setSettledDownHops(0u);
+        moveEntourage(hcs,sn);
+        return true; // CANNOT SAFELY CALL (eg) done() HERE!
+      }
+      changeDir();
+    }
+    return false;
+  }
+
+  Void behave() {
+    ByteStreamLogger bsl;
+    if (!update()) return;
+
+    /*
+    bsl.printf("al %d una %d\n",
+               hcs.mAlignedCount,
+               hcs.mUnalignedCount);
+    */
+  }
+}
+

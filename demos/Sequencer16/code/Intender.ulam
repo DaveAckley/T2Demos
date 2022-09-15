@@ -1,0 +1,45 @@
+quark Intender + QDebugUtils {
+  typedef ClassUtils.ClassId ClassId;
+
+  //// Intender API
+  virtual ClassId getIntentionClass() ;
+
+  //// Intender SERVICES
+  constant Unsigned cMAX_RECAST_SIZE = 4096u;
+  typedef BitStorageT(cMAX_RECAST_SIZE) IntentionBuffer;
+  
+  Bool trueFail(String msg) {
+    voidFail(msg);
+    return true; // Not reached
+  }
+  
+  Void voidFail(String msg) {
+    Fail f;
+    f.fail(msg);
+  }
+
+  Bool pursueIntention() {
+    ClassId cid = getIntentionClass();
+    if (cid == 0u) return false; // We have no intention?
+    print("SIND10");
+
+    ClassUtils cu;
+    if (!cu.isBase(cid, Intention.classidof))
+      return trueFail("Not Intention");
+    print("SIND11");
+
+    IntentionBuffer ib;
+    Intention & intent = (Intention&) ib.recast(cid,true);
+
+    print("SIND12");
+    if (intent.init(self)) return true;
+
+    print("SIND13");
+    if (intent.pursue(self)) return true;
+
+    print("SIND14");
+
+    //// INTENTIONS GOT NOWHERE THIS TIME, BOSS..
+    return false;
+  }
+}

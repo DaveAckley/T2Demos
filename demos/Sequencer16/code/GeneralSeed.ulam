@@ -1,0 +1,54 @@
+transient GeneralSeedState : SequenceableState {
+
+  Bool act(Intender & in) {
+
+    GeneralSeed & gs = (GeneralSeed&) in;
+
+    DebugUtils du;
+    du.print("GSA10");
+    ClassUtils cu;
+    Int t = cu.getElementType(gs.mElementClassId);
+
+    du.print("GSA11");
+    AtomUtils au;
+
+    Atom a = au.new(t);
+    du.print("GSA12");
+    if (au.getType(a) != t) {
+      Fail f;
+      f.fail("Invalid element type");
+    }
+    du.print("GSA13");
+    a = au.writeCopy(a, (Bits) (gs.mArgBits>>gs.cEXCESS_BITS), 25u, 32u);
+    du.print("GSA14");
+    a = au.writeCopy(a, (Bits) gs.mArgBits, 25u+32u, gs.cEXCESS_BITS);
+    du.print("GSA15");
+
+    EventWindow ew;
+    du.print("GSA16");
+    ew[0] = a;
+    du.print("GSA17");
+    return true;
+  }
+}
+
+element GeneralSeed : Codon {
+
+  //// Intender API 
+  @Override
+  virtual ClassId getIntentionClass() { return GeneralSeedState.classidof; }
+  
+  constant Unsigned cTYPE_BITS = 10u;
+  typedef Unsigned(cTYPE_BITS) ElementClassId;
+  ElementClassId mElementClassId = S.classidof;
+
+  constant Unsigned cGENERAL_BITS = 36u;
+  constant Unsigned cEXCESS_BITS = cGENERAL_BITS-32u;
+
+  Bits(cGENERAL_BITS) mArgBits;
+
+  Void behave() {
+    pursueIntention();
+  }
+
+}

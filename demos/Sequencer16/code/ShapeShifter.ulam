@@ -1,0 +1,485 @@
+transient ShSfState : PocketChainState {
+  PocketPtr mSides[2]; // 0 CW, 1 CCW
+  
+  //// ShSfState API
+  virtual Void setIntentionClass(ShapeShifter & ng) ;
+ 
+  //// Intention API
+  @Override
+  virtual Bool init(Intender & in) {
+    print("ShSfSt10");
+    ShapeShifter & ng = (ShapeShifter&) in;
+    if (super.init(ng)) return true;
+
+    print("ShSfSt11");
+    if (ng.mSuspended) return true; // XXX BUT WATCHDOGGERY -- SEE BEHAVE
+
+    print("ShSfSt12");
+    PocketPtr down = ng.mPocketPtrs[Segment.cBODY_DOWN];
+    if (down >= 1u && down <= 4u) {
+      mSides[0] = ng.clockwise(down);
+      mSides[1] = ng.counterclockwise(down);
+      print("ShSfSt13");
+    }
+
+    print("ShSfSt14");
+    return false;
+  }
+
+  @Override
+  virtual Bool adopt(Intender & in) {
+    ShapeShifter & ng = (ShapeShifter&) in;
+    if (super.init(ng)) return true;
+    setIntentionClass(ng);
+    return false;
+  }
+
+  //// ShSfState SERVICES
+
+  Bool moveOn(ShapeShifter & ng, Bool side1) {
+    if (side1) { // If on first side
+      ShSfISide2 n2;
+      n2.adopt(ng); // Go on to second side
+      return true;
+    }
+    ShSfIAdvance na; // Else time to move on
+    na.adopt(ng);
+    return true;
+  }
+
+  Bool trySide(ShapeShifter & ng, Bool side1) {
+    EventWindow ew;
+    Random random;
+    typedef ClassUtils.ClassId ClassId;
+    PocketHC3 & pocket = self.mPocket;
+    ByteStreamLogger bsl;
+    ClassUtils csu;
+    print("COPSHFR10NNN");
+    print(self);
+               
+    //// Check if this is an opportune site to even try growing from
+    PocketQuadrant & pq = pocket.mPocketQuadrant;
+    if (!pq.mInQuadrant) print("quadrant undetermined");
+    else {
+      print("0:NW 1:NE 2:SE 3:SW");
+      print(pq.mQuadrant);
+      print("at uphops contour");
+      print(pq.mUpHopContour);
+      Unsigned max = pocket.mCornerMaxHopsGoal[2u];
+      print(max);
+      PocketDir tq = ng.mTargetQuadrant;
+      print(tq);
+      Bool intight = pq.mUpHopContour < 2u; // Can grow to get started
+      Bool quadrange = pq.mQuadrant == tq && pq.mUpHopContour < max-3u;
+      if (!intight && !quadrange)
+        return moveOn(ng, false); // just move on
+    }
+
+    Bool doCW = ng.mCWFirst == side1; 
+
+    Unsigned try = doCW ? 0u : 1u;
+
+    PocketPtr side = self.mSides[try];
+    //bsl.printf("COPSHFR13 side=%d\n", side);
+
+    SN cornersn = pocket.searchPocket(side, SfCorner.classidof);
+    if (cornersn == SN.maxof) {  // bent or missing 
+      if (random.oneIn(4u))     // 25%
+        return moveOn(ng, side1); // move on
+      return ng.diffuse(self);    // but 75% block
+    }
+
+    if (cornersn == 0u) {
+      /// NO SfCorner FOUND ON SIDE - TRY TO SPAWN
+
+      if (mPocketIterable[side] &&
+          mPocketInaccessible[side] == 0u &&
+          mPocketEmpty[side] == mPocketSize[side]) {
+        // all accessible and all empty to grow into
+          
+        SN fillsn = mEWSNAvailables[side]; // A random empty
+        //bsl.printf("COPSHFR14 fillsn=%d\n", fillsn);
+        if (fillsn == 0u) { Fail f; f.fail("mEWSNAvailables[side] == 0"); }
+
+        SfCorner nuc;
+        nuc.mDSType = ng.cDS_DUMB; // We don't auto move or grow
+        nuc.mToBase = (PocketPtr) (5u - side); // Its base is me
+        nuc.mToSide = ng.mPocketPtrs[ng.cBODY_DOWN]; // Its side is my down
+
+        SfCornerStateIDeploySide nc;         // Initial corner intention
+        nc.adopt(nuc);
+          
+        ng.mSuspended = true;    // and zonking for the duration
+        ew[fillsn] = nuc.atomof;
+        return true;          // Out to start next try
+      }
+
+      /// CAN'T SPAWN THIS TIME
+      if (random.oneIn(4u))   // Maybe 25% give up on this idea
+        return moveOn(ng,side1);
+
+      return ng.diffuse(self); /// else 75% just block
+    }
+    
+    //// OK, WE FOUND A SfCorner ON SIDE, in cornersn
+    SfCorner & nc = (SfCorner&) ew[cornersn];
+
+    // It's ours if its base is pointing at us
+
+    if (nc.mToBase != (PocketPtr) (5u - side))
+      return ng.diffuse(self);          // Just block if not
+
+    ClassId ncintid = nc.getIntentionClass();
+    if (ncintid == SfCornerStateIFailDeploy.classidof) {
+
+      // OK, that side's no good
+      ew[cornersn] = Empty.instanceof; // so wipe out that corner
+      return moveOn(ng,side1);
+    }
+
+    // If Nc hasn't failed we should just be waiting for it to replace
+    /// Why are we not suspended if the Nc's still pending?
+    bsl.printf("COPSHFR17 Nc pending\n");
+    return ng.diffuse(self);          // Just block for now
+  }
+}
+
+transient ShSfISide1 : ShSfState {
+
+  @Override
+  virtual Void setIntentionClass(ShapeShifter & ng) { ng.mIntentionIndex = ng.cIIDX_SIDE1; }
+
+  @Override
+  virtual Bool adopt(Intender & in) {
+    ShapeShifter & ng = (ShapeShifter&) in;
+    print("NGIS1i10");
+    if (super.adopt(ng)) return true;
+    print("NGIS1i11");
+    ng.mCWFirst = random.oneIn(2);
+    return false;
+  }
+
+  @Override
+  virtual Bool act(Intender & in) {
+    print("NGIS1Act10");
+    if (super.act(in)) return true;
+    print("NGIS1Act11");
+    ShapeShifter & ng = (ShapeShifter&) in;
+
+    if (trySide(ng,true)) return true;
+    print("NGIS1Act12");
+    return false;
+  }
+}
+
+transient ShSfISide2 : ShSfState {
+  @Override
+  virtual Void setIntentionClass(ShapeShifter & ng) { ng.mIntentionIndex = ng.cIIDX_SIDE2; }
+
+  @Override
+  virtual Bool act(Intender & in) {
+    print("NGIS2Act10");
+    if (super.act(in)) return true;
+    print("NGIS2Act11");
+    ShapeShifter & ng = (ShapeShifter&) in;
+    if (trySide(ng,false)) return true;
+    print("NGIS2Act12");
+    return false;
+  }
+
+}
+
+transient ShSfIAdvance : ShSfState {
+  @Override
+  virtual Void setIntentionClass(ShapeShifter & ng) { ng.mIntentionIndex = ng.cIIDX_ADVANCE; }
+
+  @Override
+  virtual Bool act(Intender & in) {
+    print("NGIAdv10");
+    if (super.act(in)) return true;
+    print("NGIAdv11");
+    ShapeShifter & ng = (ShapeShifter&) in;
+
+    //// CAN WE ADVANCE DOWNSTREAM?
+    PocketHC3 & pocket = self.mPocket;
+    PocketPtr down = ng.mPocketPtrs[Segment.cBODY_DOWN];
+    Bool linked = down >= ng.cPP_WEST && down <= ng.cPP_EAST;
+    if (!linked) { print("NGIAdv1110 Unlinked?"); return ng.die(); }
+    
+    SN downsn = pocket.searchPocket(down, PocketChain.classidof);
+    if (downsn == SN.maxof) return ng.diffuse(self); // bent or missing - block
+    if (downsn == 0u) {
+      print("NGIAdv1111 No down?");
+      return ng.die("NGIAdv1111 No down?");
+    }
+
+    PocketChain & qc = (PocketChain&) ew[downsn];
+    Bool downIsProvider = false;
+    if (qc as Demo) {
+      downIsProvider = qc.mDemoProvider;
+    }
+
+    // If can't or shouldn't move downstream..
+    if (downIsProvider || !qc.isSwappable(self) || qc is ShapeShifter) { 
+      // Make down temp to replace ng
+      Demo d;
+      PocketChain & qd = d;
+      qd = ng;             // Copy ng's qchain info
+      Segment & sd = d;
+      sd = ng;             // and their Segment info
+      d.mDSType = ng.cDS_DOWN;  // except mark as a down temp
+      print("NGIAdv1112 down temp");
+      ew[0] = d.atomof;
+      return true;
+    }
+    /// HERE DOWNSTREAM IS SWAPPABLE
+    print("NGAdv12");
+    Segment.PocketPtrs temp = qc.mPocketPtrs; // Exchange ptrs
+    qc.mPocketPtrs = ng.mPocketPtrs;  // Down gets ours
+    ng.mPocketPtrs = temp;            // We get theirs
+    ShSfISide1 i;                       // New intention
+    i.adopt(ng);                      // Return to side 1
+    ew.swap(0u,downsn);               // Then swap wholesale
+    /// WE ADVANCED IN OUR MOVING DIRECTION
+    return true;
+  }
+
+}
+
+transient ShSfIWormHead : ShSfState {
+  @Override
+  virtual Void setIntentionClass(ShapeShifter & ng) {
+    ng.mIntentionIndex = ng.cIIDX_WORM_HEAD; }
+
+  @Override
+  virtual Bool act(Intender & in) {
+    print("SFIWH10");
+    if (super.act(in)) return true;
+    print("SFIWH11");
+    ShapeShifter & ng = (ShapeShifter&) in;
+
+    //// CAN WE ADVANCE DOWNSTREAM?
+    PocketHC3 & pocket = self.mPocket;
+    PocketPtr down = ng.mPocketPtrs[Segment.cBODY_DOWN];
+    Bool linked = down >= ng.cPP_WEST && down <= ng.cPP_EAST;
+    if (!linked) { print("SFIWH1110 Unlinked?"); return ng.die(); }
+    
+    SN downsn = pocket.searchPocket(down, PocketChain.classidof);
+    if (downsn == SN.maxof) return ng.diffuse(self); // bent or missing - block
+    if (downsn == 0u) {
+      print("SFIWH1111 No down?");
+      return ng.die("SFIWH1111 No down?");
+    }
+
+    PocketChain & qc = (PocketChain&) ew[downsn];
+    Bool downIsProvider = false;
+    if (qc as Demo) {
+      downIsProvider = qc.mDemoProvider;
+    }
+
+    // If can't or shouldn't move downstream..
+    if (downIsProvider || !qc.isSwappable(self) || qc is ShapeShifter) { 
+      // Make down temp to replace ng
+      Demo d;
+      PocketChain & qd = d;
+      qd = ng;             // Copy ng's qchain info
+      Segment & sd = d;
+      sd = ng;             // and their Segment info
+      d.mDSType = ng.cDS_DOWN;  // except mark as a down temp
+      print("SFIWH1112 down temp");
+      ew[0] = d.atomof;
+      return true;
+    }
+    /// HERE DOWNSTREAM IS SWAPPABLE
+    print("SFIWH12");
+    Segment.PocketPtrs temp = qc.mPocketPtrs; // Exchange ptrs
+    qc.mPocketPtrs = ng.mPocketPtrs;  // Down gets ours
+    ng.mPocketPtrs = temp;            // We get theirs
+    ShSfISide1 i;                       // New intention
+    i.adopt(ng);                      // Return to side 1
+    ew.swap(0u,downsn);               // Then swap wholesale
+    /// WE ADVANCED IN OUR MOVING DIRECTION
+    return true;
+  }
+
+}
+
+transient ShSfIWormMid : ShSfState {
+  @Override
+  virtual Void setIntentionClass(ShapeShifter & ng) {
+    ng.mIntentionIndex = ng.cIIDX_WORM_MID; }
+
+  @Override
+  virtual Bool act(Intender & in) {
+    print("SFIWM10");
+    if (super.act(in)) return true;
+    print("SFIWM11");
+    ShapeShifter & ng = (ShapeShifter&) in;
+
+    //// CAN WE ADVANCE DOWNSTREAM?
+    PocketHC3 & pocket = self.mPocket;
+    PocketPtr down = ng.mPocketPtrs[Segment.cBODY_DOWN];
+    Bool linked = down >= ng.cPP_WEST && down <= ng.cPP_EAST;
+    if (!linked) { print("SFIWM1110 Unlinked?"); return ng.die(); }
+    
+    SN downsn = pocket.searchPocket(down, PocketChain.classidof);
+    if (downsn == SN.maxof) return ng.diffuse(self); // bent or missing - block
+    if (downsn == 0u) {
+      print("SFIWM1111 No down?");
+      return ng.die("SFIWM1111 No down?");
+    }
+
+    PocketChain & qc = (PocketChain&) ew[downsn];
+    Bool downIsProvider = false;
+    if (qc as Demo) {
+      downIsProvider = qc.mDemoProvider;
+    }
+
+    // If can't or shouldn't move downstream..
+    if (downIsProvider || !qc.isSwappable(self) || qc is ShapeShifter) { 
+      // Make down temp to replace ng
+      Demo d;
+      PocketChain & qd = d;
+      qd = ng;             // Copy ng's qchain info
+      Segment & sd = d;
+      sd = ng;             // and their Segment info
+      d.mDSType = ng.cDS_DOWN;  // except mark as a down temp
+      print("SFIWM1112 down temp");
+      ew[0] = d.atomof;
+      return true;
+    }
+    /// HERE DOWNSTREAM IS SWAPPABLE
+    print("NGAdv12");
+    Segment.PocketPtrs temp = qc.mPocketPtrs; // Exchange ptrs
+    qc.mPocketPtrs = ng.mPocketPtrs;  // Down gets ours
+    ng.mPocketPtrs = temp;            // We get theirs
+    ShSfISide1 i;                       // New intention
+    i.adopt(ng);                      // Return to side 1
+    ew.swap(0u,downsn);               // Then swap wholesale
+    /// WE ADVANCED IN OUR MOVING DIRECTION
+    return true;
+  }
+
+}
+
+transient ShSfIWormTail : ShSfState {
+  @Override
+  virtual Void setIntentionClass(ShapeShifter & ng) {
+    ng.mIntentionIndex = ng.cIIDX_WORM_TAIL; }
+
+  @Override
+  virtual Bool act(Intender & in) {
+    print("SFIWT10");
+    if (super.act(in)) return true;
+    print("SFIWT11");
+    ShapeShifter & ng = (ShapeShifter&) in;
+
+    //// CAN WE ADVANCE DOWNSTREAM?
+    PocketHC3 & pocket = self.mPocket;
+    PocketPtr down = ng.mPocketPtrs[Segment.cBODY_DOWN];
+    Bool linked = down >= ng.cPP_WEST && down <= ng.cPP_EAST;
+    if (!linked) { print("SFIWT1110 Unlinked?"); return ng.die(); }
+    
+    SN downsn = pocket.searchPocket(down, PocketChain.classidof);
+    if (downsn == SN.maxof) return ng.diffuse(self); // bent or missing - block
+    if (downsn == 0u) {
+      print("SFIWT1111 No down?");
+      return ng.die("SFIWT1111 No down?");
+    }
+
+    PocketChain & qc = (PocketChain&) ew[downsn];
+    Bool downIsProvider = false;
+    if (qc as Demo) {
+      downIsProvider = qc.mDemoProvider;
+    }
+
+    // If can't or shouldn't move downstream..
+    if (downIsProvider || !qc.isSwappable(self) || qc is ShapeShifter) { 
+      // Make down temp to replace ng
+      Demo d;
+      PocketChain & qd = d;
+      qd = ng;             // Copy ng's qchain info
+      Segment & sd = d;
+      sd = ng;             // and their Segment info
+      d.mDSType = ng.cDS_DOWN;  // except mark as a down temp
+      print("SFIWT1112 down temp");
+      ew[0] = d.atomof;
+      return true;
+    }
+    /// HERE DOWNSTREAM IS SWAPPABLE
+    print("NGAdv12");
+    Segment.PocketPtrs temp = qc.mPocketPtrs; // Exchange ptrs
+    qc.mPocketPtrs = ng.mPocketPtrs;  // Down gets ours
+    ng.mPocketPtrs = temp;            // We get theirs
+    ShSfISide1 i;                       // New intention
+    i.adopt(ng);                      // Return to side 1
+    ew.swap(0u,downsn);               // Then swap wholesale
+    /// WE ADVANCED IN OUR MOVING DIRECTION
+    return true;
+  }
+
+}
+
+/**
+   \symbol Sf
+   \color #33d
+*/
+element ShapeShifter : PocketChain + DiamondTypes {
+
+  PocketDir mTargetQuadrant;
+
+  //// Intender API
+  virtual ClassId getIntentionClass() { //< default unless overridden
+    which (mIntentionIndex) {
+    case cIIDX_SIDE1: { ShSfISide1 i; return i.classidof; }
+    case cIIDX_SIDE2: { ShSfISide2 i; return i.classidof; }
+    case cIIDX_ADVANCE: { ShSfIAdvance i; return i.classidof; }
+    }
+    return 0u; // not reached
+  }
+
+  typedef XTimer(4u,11u,1u) SuspendWatchdog;
+  SuspendWatchdog mSuspendWatchdog;
+
+  @Override
+  ARGB getColor(Unsigned selector) { return self.UrSelf.getColor(selector); }
+
+  Bool mCWFirst; //< What order we're trying sides
+
+  typedef Unsigned(3) IntentionIndex;
+  /// GROWTH INTENTIONS
+  constant IntentionIndex cIIDX_SIDE1 = 0u;
+  constant IntentionIndex cIIDX_SIDE2 = 1u;
+  constant IntentionIndex cIIDX_ADVANCE = 2u;
+
+  /// SHRINK INTENTIONS
+  constant IntentionIndex cIIDX_WORM_HEAD = 3u;
+  constant IntentionIndex cIIDX_WORM_MID =  4u;
+  constant IntentionIndex cIIDX_WORM_TAIL = 5u;
+
+  constant IntentionIndex cIIDX_RESERVE1 = 6u;
+  constant IntentionIndex cIIDX_RESERVE7 = 7u;
+
+  IntentionIndex mIntentionIndex = cIIDX_SIDE1;
+
+  Bool mSuspended; // Set when I might be inconsistent
+
+  Bool mAction;    // Set when I have the 'action' flag
+
+  //// PocketChain API
+  virtual Bool isSwappable(PocketChainState & ds) { return false; }
+
+  Void behave() {
+    print("SSHF10");
+    if (mSuspended) {
+      if (!mSuspendWatchdog.countAlarm())
+        return;
+      mSuspended = false;
+    }
+    mSuspendWatchdog.reset();
+    pursueIntention();
+  }
+
+}
+
+
