@@ -1,4 +1,4 @@
-{246}  -*-  mode: text; fill-column: 50;  -*-
+{270}  -*-  mode: text; fill-column: 50;  -*-
 [0:
 
 Mon Oct 18 00:02:48 2021 So I've been blasting
@@ -2995,6 +2995,388 @@ That's not so unreasonable, I think..
 [245:
 
 Sun Nov 28 00:33:22 2021 Are we clean here?  Need
-a commit before we start this?
+a commit before we start this?[246:
+
+Sun Nov 28 00:35:52 2021 OK, committed.  Let's
+make getRingOState().
+
+:246]
 
 :245]
+[247:
+
+Sun Nov 28 00:46:33 2021 OK so of course it does
+spread its fingers into a bunch of things.  In
+particular, the 'general' RingOMooreIterator class
+does like
+
+      virtual Bool hasNext() {
+        EventWindow ew;
+ ..
+          if (ew[mNextSN] is RingO) return true;
+ ..
+      }
+
+so that's going to visit all kinds of RingOs.
+
+So we probably need something like
+
+  /** true if othr should be considered a neighbor */
+  Bool ourKindOfRingo(RingO & othr) ;
+
+also added to the RingO API.  And iterators do:
+
+          Atom & n = ew[mNextSN];
+          if (n as RingO) {
+            if (ourKindOfRingo(n)) return true;
+          }
+
+Or I suppose we could have the RingO API be like
+
+  /** true if othr should be considered a neighbor */
+  Bool isARingONeighbor(Atom & othr) ;
+
+and have the iterator be like
+
+          if (isARingONeighbor(ew[mNextSN])) return true;
+
+and have each subclass do
+
+  Bool isARingONeighbor(Atom & other) {
+    return other is Self;
+  }
+
+to visit only their own kind.
+
+:247]
+[248:
+
+Sun Nov 28 12:01:39 2021 Well, shifted to Search
+Quiet Wake for most of last night.  (It's
+currently at 5,776 words; destination 5K.)
+
+:248]
+[249:
+
+Sun Nov 28 12:05:27 2021 So, wait.  I was trying
+to do Bool RingO.isOurKindOfRingO(RingO & othr),
+but now I don't think it works.  Suppose self is
+an L2Plate: How is its isOurKindOfRingO supposed
+to know whether it's currently doing an L2Plate
+iteration or an L2 site (== L1 Plate) iteration?
+
+The Whole Point of this is we're trying to support
+multiple RingOs in a single atom.
+
+So it seems that API method needs to be part of
+RingOIterator, not RingO itself.
+[250:
+
+Sun Nov 28 12:11:18 2021 And similar
+considerations are going to apply to
+getRingOState() too, right?  The whole core of our
+idea was messed up: We were still just thinking
+about having different RingOState in different
+subclasses, not having multiple RingOStates in a
+single subclass.
+
+[251:
+
+Sun Nov 28 12:22:42 2021 Trying to work through
+it: Do we really need isOurKindOfRingO, if we're
+delegating getRingOState to RingOIterator
+subclasses?  Can't the various RingOIterators just
+do whatever specific tests they want?
+
+Well, except: There is currently some code
+duplicated between L1PlateIterator and
+L2PlateIterator.  We'd like to clean that up
+maybe?
+
+[252:
+
+Sun Nov 28 12:28:28 2021 Well, maybe not.  The
+L1PlateRingOIterator currently duplicates chunks
+of L2PlateRingOIterator mostly because it hasn't
+been really settled yet.  Eventually, the
+cCOUNT_MAX will be different, and snFromCount and
+hasNext too.  So let's not worry about refactoring
+the remainder now.
+
+[253:
+
+Sun Nov 28 12:36:15 2021 So that means we're
+ditching isOurKindOfRingO?  Let's think so.
+
+:253]
+:252]
+
+:251]
+
+:250]
+
+:249]
+[254:
+
+Sun Nov 28 12:56:41 2021 OK I think we're up to
+first build attempts on this; see what blows
+up.[255:
+
+Sun Nov 28 13:07:14 2021 First issue was
+getRingOColor() accessing mRingOState directory.
+That's going to have to go API.
+
+But I'm currently thinking about how upstream and
+downstream are defined.  It seems there's no
+reason that the L2Plate RingO and the 'L2 site'
+RingO should have to have the same definition of
+upstream and downstream, so I was thinking of
+trying to vary them to make the combined dynamics
+more distinct.  (As visualized by the yet-to-be
+created L2Plate.getRingOColor()..)
+
+But upstream and downstream are currently defined
+by RingO.syncRelation(RingO& other).  It seems it
+would also need to be moved to RingOIterator so it
+could vary depending on our view.
+
+[256:
+
+Sun Nov 28 13:16:35 2021 (It's also increasingly
+seems like 'iterator' is an underpowered concept
+for what's developing here.  I feel like it should
+be something more like 'RingOCircuit'.  Or maybe
+'RingOGeometry'.  Or retarget the name
+'RingONeighborhood' to this.[257: And I see that
+RingONeighborhood is going to need significant
+work anyway, because it's hardcoding .mRingOState
+accesses all over the place. :257])
+
+[258:
+
+Fri Dec 17 01:49:02 2021 OK, back on RingO for a
+day or two.
+
+First stop, try this RingOIterator reboot.
+
+ - [DONE] Start a new spike (s14-L2Plate)
+
+ - Take a look at RingONeighborhood.ulam, see
+   about its problems 
+
+:258]
+
+:256]
+
+:255]
+
+:254]
+[259:
+
+Fri Dec 17 02:40:48 2021 So, RingONeighborhood
+currently lives in RingO.ulam, and is used only
+there.  It maintains the upstream and downstream
+counts for determining consensus, and has
+RingONeighborhood.update(RingO&) which does the
+root and tail ticking and wire propagation.
+
+So that's kind of important, in the grand scheme
+of things.  Maybe we leave it alone for now, and
+do something else with RingOIterator?
+
+Maybe RingOCircuit is an okay way to go.
+
+Let's review what's in RingOIterator[260:
+
+Fri Dec 17 02:49:50 2021 Umm, wait.  This
+s14-L2Plate code appears not to be the latest I
+was working from..[261:
+
+Fri Dec 17 02:51:26 2021 Actually it looks like
+demos/L2Plate itself is the latest one, but I
+copied s13-L2Plate to s14-L2Plate like a dork.
+[262:
+
+Fri Dec 17 02:53:01 2021 Yeah, demos/L2Plate/ has
+the first cuts at supporting multiple RingO
+circuits through a single atom:
+
+     quark RingOL2Plate : L2PlateBase + RingOPlateBase {
+    +  RingOState mL1RingOState;
+    +  RingOState mL2RingOState;
+
+and looking at that makes me think that it would
+be nice to tie a RingOState together with a (say)
+RingOCircuit and do like this:
+
+     quark RingOL2Plate : L2PlateBase + RingOPlateBase {
+       RingOCircuitStateL1 mL1RingOState;
+       RingOCircuitStateL2 mL2RingOState;
+
+So that would be like.. 
+
+quark RingOCircuitState {
+  virtual RingO ..
+}
+
+well not clear yet.  Need a bigger review here,
+after so many days away.
+[263:
+
+Fri Dec 17 03:01:41 2021 And we note the
+L2Plate/code is currently not building due to (at
+least) mRingOState being half-torn-out.
+
+:263]
+:262]
+
+:261]
+
+:260]
+
+:259]
+[264:
+
+Fri Dec 17 03:09:12 2021 OK start 'fresh'.
+
+A full RingOCircuit, in principle, needs to
+specify:
+
+ - How to determine if a site is upstream,
+   downstream, or neither wrt self (syncRel). 
+
+ - How to access this circuit's RingOState in a
+   site.
+
+ - How (much) to iterate over while assessing
+   consensus signals. (? overlaps with syncRel a
+   bit, then?)
+
+ - How to rootTick and tailTock
+
+And RingOCircuit stock services would
+
+ - provide update() that iterates as directed,
+   accessing and updating this circuit's
+   RingOState's and ticking and tocking as
+   necessary. 
+
+And how do we access this circuit's RingOState in
+a site?  It's a double dispatch, right?
+
+transient RingOCircuit { 
+  virtual Bool inCircuit(RingOCircuitState &) ;
+  virtual RingOState & getRingOState(RingOCircuitState &) ;
+ ..
+}
+
+transient RingOCircuitL1 : RingOCircuit {
+  virtual Bool inCircuit(RingOCircuitState & rocs) { return rocs is ROCSL1; }
+  virtual RingOState & getRingOState(RingOCircuitState & rocs) { return ((ROCSL1&) rocs).getRingOState(); }
+}
+
+transient RingOCircuitL2 : RingOCircuit {
+  virtual Bool inCircuit(RingOCircuitState & rocs) { return rocs is ROCSL2; }
+  virtual RingOState & getRingOState(RingOCircuitState & rocs) { return ((ROCSL2&) rocs).getRingOState(); }
+}
+
+quark RingOCircuitState {
+  virtual RingOState & getRingOState() ;
+}
+
+quark ROCSL1 : RingOCircuitState {
+  RingOState mL1ROS;
+  virtual RingOState & getRingOState() { return mL1ROS; }
+}
+
+quark ROCSL2 : RingOCircuitState {
+  RingOState mL2ROS;
+  virtual RingOState & getRingOState() { return mL2ROS; }
+}
+
+element L2Plate : .. + ROCSL1 + ROCSL2 + .. {
+  Void behave() {
+    RingOCircuitL1 l1c;
+    l1c.update(); // ?? around ew[0]?
+    RingOCircuitL2 l2c;
+    l2c.update(); 
+  }
+}
+
+maybe?  
+[265:
+
+Fri Dec 17 04:22:48 2021 Well, maybe.
+
+:265]
+:264]
+[266:
+
+Fri Dec 17 13:57:01 2021 Sooo, what does RingO
+plain RingO provide?  Currently is:
+
+  /** return true to let root start next phase */
+  virtual Bool rootTick(RingONeighborhood & ngb) { return true; }
+
+  /** return true to let tail start next phase */
+  virtual Bool tailTock(RingONeighborhood & ngb) { return true; }
+
+  /** return true to let wire propagate change into self */
+  virtual Bool edge(RingONeighborhood & ngb, Bool fromUp, Bool newState) { return true; }
+
+But we're not sure if that's really going to be
+RingOCircuit business now.
+
+Possibly it should be just
+
+  /** access state of return true to let root start next phase */
+  virtual RingOState& getRingOState() ;
+
+but how does the subclass redirect to the
+appropriate base class, then?
+
+Could RingO just be a flag base class, with nothing?
+
+:266]
+[267:
+
+Sat Dec 18 16:44:47 2021 OK, well, the code's
+pretty disgusting in several places but we have
+L2Plate sites participating in two RingO circuits
+simultaneously, and displaying with dimmed/mixed
+colors enough to tell -- more or less -- what's
+going on.
+
+Question is: Do we have ANY CHANCE of letting
+l2(0,0) diffuse and having the rest of the plates
+track?
+
+I guess we'd need to block L2Circuit propagation
+if we're an out of position L2 site?  So the idea
+could be that the L2(0,0) could diffuse on each L2
+root B->R transition (say), and then we 'wouldn't'
+see another similar transition until the L2 tail
+L2 site had caught up and allowed L2 propagation
+to continue.
+
+Or something like that.
+
+:267]
+[268:
+
+Sun Dec 19 00:04:12 2021 Wow so I just did a
+little write faults test and a 'L1-ish' RingODemo
+outlasted two 3x3 L2Plates.  Problem seemed to be
+(was) failure to respawn L2Plate when an adjacent
+site was blocked by MyElement.  And since
+MyElement was so block-head dumb, it basically
+never rewrites itself.  If we changed MyElement to
+do ++mBits it would be a different story by far..
+[269:
+
+Sun Dec 19 01:46:53 2021 Actually it looked like
+mBits was trying to do a scatter/gather thing, but
+it never did anything with the gathered stuff?
+
+:269]
+:268]
