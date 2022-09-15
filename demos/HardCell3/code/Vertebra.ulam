@@ -1,0 +1,50 @@
+quark CmdWDir {
+  typedef Unsigned(2) Cmd;
+  constant Cmd cEND  = 0u;  //< We're last in this dir (ignore mDir)
+  constant Cmd cSTAY = 1u;  //< Not last but don't autoswap this way
+  constant Cmd cGO   = 2u;  //< Not last, do autoswap this way
+  constant Cmd cBLOCK= 3u;  //< Prevent autoswap this way
+
+  typedef Unsigned(2) WorldDir; //< 0..3 - WNSE
+  Cmd mCmd;                     // <what to do in this dir
+  WorldDir mWorld;              //< which way next up or down
+}
+
+quark Vertebra {
+  typedef EventWindow.SiteNum SN;
+
+  typedef Unsigned(1) BodyDir;
+  constant BodyDir cBODY_UP = 0u;
+  constant BodyDir cBODY_DOWN = 1u;
+  CmdWDir mCmdWDirs[BodyDir.maxof+1u]; // fwd[0] bck[1] 8 bits total
+
+  //// QVertebra API
+  virtual Bool updateVertebra() {
+
+    EventWindow ew;
+    Random random;
+    DebugUtils du;
+    PocketHC3 p;
+    if (p.init() != PocketHC3.cSTATUS_OK) return true; // Distorted pocket
+   
+    Unsigned mNextDir = 0u; // XXX placeholder, go west
+    //du.print("GO");
+    C2D epick;
+    Unsigned ecount;
+    RectIterator itr;
+    p.initIterator(itr,(SN) (mNextDir+1u),true); // Iterate over full west pocket
+    while (itr.hasNext()) {
+      C2D d = itr.next();
+      if (ew.isAccessible(d) && ew[d] is Empty) {
+        if (random.oneIn(++ecount)) 
+          epick = d;
+      }
+    }
+    if (ecount > 0u) {
+      if (mNextDir++ == mNextDir.maxof) mNextDir = 0u;
+      ew.swap(C2D.instanceof,epick); // leap west?
+      return true; // Moved!
+    }
+    return false; // Nothing going on
+  }
+}

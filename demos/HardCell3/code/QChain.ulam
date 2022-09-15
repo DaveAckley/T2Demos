@@ -1,0 +1,339 @@
+transient QChainState : SegmentState {
+  Bool mGrowTemp = false;
+  
+  Bool init(QChain & qc) {
+    if (super.init(qc)) return true;
+    return false;
+  }
+}
+
+quark QChain : Segment {
+  typedef Unsigned(4) SegCount;
+  constant SegCount cMAX_SEG = 12u;
+  constant SegCount cMAX_TMP = 2u;
+  SegCount mSegsDown;
+  SegCount mTempsDown;
+  SegCount mSegsUp;
+  SegCount mTempsUp;
+  
+  typedef Unsigned(2) DemoSegType;
+  constant DemoSegType cDS_INIT = 0u;
+  constant DemoSegType cDS_NORM = 1u;
+  constant DemoSegType cDS_DOWN = 2u;
+  constant DemoSegType cDS_UP =   3u;
+
+  DemoSegType mDSType = cDS_INIT;
+
+  //// UrSelf API
+  @Override
+  ARGB getColor(Unsigned selector) {
+    ColorUtils cu;
+    if (mDSType == cDS_INIT) return cu.color(0xffffff);
+    if (mDSType == cDS_UP)   return cu.color(0x00ffff);
+    if (mDSType == cDS_DOWN) return cu.color(0xffff00);
+    // cDS_NORM
+    ARGB head = cu.color(0x0000ff);
+    ARGB tail = cu.color(0x00ff00);
+    return cu.between(tail, head, 100u*mSegsDown/cMAX_SEG);
+  }
+
+  //// Segment API
+  virtual Bool inMyGroup(Segment & other) {
+    return other is Self; // We'll dance with any other QChain!
+  }
+
+  //// QChain API
+  /** Can this segment be swapped by moving segments? Default says
+      true.
+   */
+  virtual Bool isSwappable(QChainState & ds) { return true; }
+
+  virtual Bool chainOp(QChainState & ds) {
+    return false;
+  }
+
+  Bool diffuse(QChainState & ds) {
+    EventWindow ew;
+    Random random;
+    DebugUtils du;
+    PocketHC3 & p = ds.mPocket;
+    RectIterator ri;
+    //    du.print("DIFIF");
+    if (!p.initIterator(ri)) {
+      //      du.print("BADPCOKKKKK");
+      return true; // Bad pocket
+    }
+    Unsigned empcount = 0u;
+    SN empsn;
+    while (ri.hasNext()) {
+      C2D n = ri.next();
+      if (!ew.isAccessible(n)) continue;
+      //      du.print(n);
+      if (ew[n] is Empty && random.oneIn(++empcount))
+        empsn = ew.getSiteNumber(n);
+    }
+    if (empcount > 0u) {
+      //      du.print("diffSWAP");
+      ew.swap(0u,empsn);
+    }
+    return true;
+  }
+
+  Bool die() {
+    DebugUtils du;
+    du.print("QChain.die");
+    EventWindow ew;
+    ew[0] = Empty.instanceof;
+    return true;
+  }
+
+  Bool die(String msg) {
+    DebugUtils du;
+    du.print("DYING");
+    du.print(msg);
+    du.print(self);
+    return die();
+  }
+
+  Bool updateGradients(QChainState & ds) {
+    EventWindow ew;
+
+    // Check downs if any
+    if (mPocketPtrs[cBODY_DOWN] == cPP_NULL) {
+      mSegsDown = 0u; // Tail has nobody down
+      mTempsDown = (mDSType == cDS_DOWN) ? 1u : 0u;
+    } else {
+      SN down = ds.mEWSNMate[Segment.cBODY_DOWN];
+      Atom & a = ew[down];
+      if (a as Self) {
+        if (mDSType == cDS_DOWN) {
+          mSegsDown = a.mSegsDown;
+          mTempsDown = (SegCount) (a.mTempsDown + 1u);
+        } else {
+          mSegsDown = (SegCount) (a.mSegsDown + 1u);
+          mTempsDown = a.mTempsDown;
+        }
+      } else die("updateGradients: Down not Self");
+    }
+    
+    // Check ups if any
+    if (mPocketPtrs[cBODY_UP] == cPP_NULL) {
+      mSegsUp = 0u; // Head has nobody up
+      mTempsUp = (mDSType == cDS_UP) ? 1u : 0u;
+    } else {
+      SN up = ds.mEWSNMate[Segment.cBODY_UP];
+      Atom & a = ew[up];
+      if (a as Self) {
+        if (mDSType == cDS_UP) {
+          mSegsUp = a.mSegsUp;
+          mTempsUp = (SegCount) (a.mTempsUp + 1u);
+        } else {
+          mSegsUp = (SegCount) (a.mSegsUp + 1u);
+          mTempsUp = a.mTempsUp;
+        }
+      } else die("updateGradients: Up not Self");
+    }
+    return false;
+  }
+
+  /** \returns true if caller should block */
+  Bool update() {
+    QChainState ds;
+
+    return update(ds);
+  }
+
+  Bool update(QChainState & ds) {
+
+    EventWindow ew;
+    Random random;
+    DebugUtils du;
+    
+    //// DO WE HAVE A GOOD POCKET?
+    if (ds.init(self)) return true;
+    PocketHC3 & p = ds.mPocket;
+
+    if (p.mStatus != ds.mPocket.mStatus) {
+      Fail f; f.fail("THIS SHOULD NEVER FAIL RIGHT?");
+    }
+
+    //    du.print(p);
+
+    //    du.print("DEMOB11");
+    //    du.print(p.mCoordCount);
+    //    du.print(ds.mPocket.mCoordCount);
+    //    du.print(p.mStatus);
+    //    du.print(ds.mPocket.mStatus);
+    if (p.mStatus != PocketHC3.cSTATUS_OK) return true; // Distorted pocket
+    //// WE HAVE A GOOD POCKET.
+
+    //    du.print("DEMOB12");
+    //// CAN WE FIND OUR CHAIN NGBS?
+    Segment.MateStatus ms = findMates(ds);
+    if (ms > Segment.cMATE_UNSURE) {
+      du.print(ms);
+      return die("QChain:>MATE_UNSURE");
+    }
+    if (ms > Segment.cMATE_OK) return diffuse(ds);
+    //// WE FOUND OUR CHAIN NGBS.
+
+    //du.print("DEMOB13");
+
+    updateGradients(ds);
+
+    //// ARE WE A MOVING SEG?
+    if (mDSType == cDS_UP || mDSType == cDS_DOWN) {
+      BodyDir movedir =
+        (mDSType == cDS_UP) ? Segment.cBODY_UP : Segment.cBODY_DOWN;
+      BodyDir backdir = (BodyDir) (1u - movedir);
+
+      /// HAVE WE REACHED THE END OF OUR MOVE?
+      if (mPocketPtrs[movedir] == cPP_NULL) {
+        /// WE HAVE REACHED THE END OF OUR MOVE.
+
+        /// ARE WE DETACHED FROM THE CHAIN?
+        if (mPocketPtrs[backdir] != cPP_NULL) {
+          /// WE ARE NOT DETACHED FROM THE CHAIN.
+
+          SN backsn = ds.mEWSNMate[backdir];
+
+          /// CAN WE ACCESS OUR BACK BEIN?
+          if (backsn == 0u) 
+            return diffuse(ds); // No, go jiggle maybe
+          /// WE CAN ACCESS OUR BACK BEIN.
+
+          Atom & a = ew[backsn];
+          if (a as Self) {
+            a.mPocketPtrs[movedir] = cPP_NULL;
+            // XXX PRE-FIXUP mTempDown IF DOWN?
+          } else {
+            Fail f; f.fail("DETACHING SEG BACK MISSING");
+          }
+        }
+        /// WE ARE DETACHED FROM THE CHAIN.
+
+        ew[0u] = Empty.instanceof;
+        /// WE ARE GONE.
+        return true;
+      }
+      /// WE HAVE NOT REACHED THE END OF OUR MOVE.
+
+      /// CAN WE ADVANCE IN OUR MOVING DIRECTION?
+      SN movesn = ds.mEWSNMate[movedir];
+      if (movesn == 0u)
+        return diffuse(ds); // No go jiggly puff
+
+      /// WE CAN ACCESS OUR NEXT BEIN.
+      Atom & a = ew[movesn];
+      if (a as Self) {
+        if (a.isSwappable(ds)) {
+          PocketPtrs temp = a.mPocketPtrs; // Exchange ptrs
+          a.mPocketPtrs = mPocketPtrs;
+          mPocketPtrs = temp;
+          ew.swap(0u,movesn);     // Then swap wholesale
+          /// WE ADVANCED IN OUR MOVING DIRECTION
+          return true;
+        }
+        // ELSE FALL THROUGH
+      } else {
+        Fail f; f.fail("MOVING SEG NEXT MISSING");
+      }
+    }
+    
+    findAvailables(ds); 
+
+    //// SHALL WE GROW OR MOVE FROM THE HEAD?
+    Bool canGrow = mSegsDown < cMAX_SEG;
+    Bool canMove = mTempsDown < cMAX_TMP;
+    if (isHead() && (canGrow || canMove)) {
+
+      SN newsn;
+      Unsigned newcount;
+      PocketPtr pickedptr;
+      for (PocketPtr ptr = cPP_SELF; ptr <= cPP_EAST; ++ptr) {
+        if (ds.mPocketUsCount[ptr] > 0u) continue; // can't go there if we are there
+        if (ds.mPocketEmpty[ptr] > 0u &&           // if has an empty
+            ds.mPocketFull[ptr] < 2u &&            // and not too full
+            ds.mPocketInaccessible[ptr] == 0u) {   // and no hidden surprises
+          if (random.oneIn(++newcount)) {          // count and maybe pick
+            pickedptr = ptr;
+            newsn = ds.mEWSNAvailables[pickedptr];
+          }
+        }
+      }
+      if (newcount > 0u) {
+        // init new head
+        Atom a = self.atomof;       // Copy as is
+        Self & copy = (Self&) a;
+        copy.mPocketPtrs[Segment.cBODY_DOWN] = reversePocket(pickedptr);
+        self.mPocketPtrs[Segment.cBODY_UP] = pickedptr;
+        
+        if (canGrow) {
+          ++copy.mSegsDown;       // Preupdate for us as a new segment
+        } else /* canMove */ {
+          self.mDSType = cDS_DOWN; // We're a new temp
+          Unsigned pres = copy.mSegsDown;
+          Unsigned prec = copy.mTempsDown;
+          ++copy.mTempsDown;      // Preupdate them for that
+          Unsigned posts = copy.mSegsDown;
+          Unsigned postc = copy.mTempsDown;
+
+          if (pres != posts || postc != prec + 1u) {
+            Fail f; f.fail("THIS CANNOT HAPPEN RIGHT?");
+          }
+        }
+
+        // plant new head
+        ew[newsn] = copy.atomof;
+
+        //// WE GREW OR MOVED FROM THE HEAD.
+        return true;
+      }
+    }
+    //// WE DID NOT GROW OR MOVE FROM THE HEAD.
+
+    //// SHALL WE MOVE FROM THE TAIL?
+    Bool canTailMove = mTempsUp < cMAX_TMP;
+    if (isTail() && canTailMove) {
+
+      SN newsn;
+      Unsigned newcount;
+      PocketPtr pickedptr;
+      for (PocketPtr ptr = cPP_SELF; ptr <= cPP_EAST; ++ptr) {
+        if (ds.mPocketUsCount[ptr] > 0u) continue; // can't go there if we are there
+        if (ds.mPocketEmpty[ptr] > 0u &&           // if has an empty
+            ds.mPocketFull[ptr] < 2u &&            // and not too full
+            ds.mPocketInaccessible[ptr] == 0u) {   // and no hidden surprises
+          if (random.oneIn(++newcount)) {          // count and maybe pick
+            pickedptr = ptr;
+            newsn = ds.mEWSNAvailables[pickedptr];
+          }
+        }
+      }
+      if (newcount > 0u) {
+        // init new head
+        Atom a = self.atomof;       // Copy as is
+        Self & copy = (Self&) a;
+        copy.mPocketPtrs[Segment.cBODY_UP] = reversePocket(pickedptr);
+        self.mPocketPtrs[Segment.cBODY_DOWN] = pickedptr;
+        
+        self.mDSType = cDS_UP; // We're a new temp
+        ++copy.mTempsUp;      // Preupdate them for that
+
+        // plant new tail
+        ew[newsn] = copy.atomof;
+
+        //// WE GREW OR MOVED FROM THE TAIL.
+        return true;
+      }
+    }
+    //// WE DID NOTHING EXCITING.
+
+    //// DO WE HAVE ANYTHING MORE SPECIFIC TO DO?
+    if (chainOp(ds)) return true;  // Apparently.
+    //// WE HAD NOTHING SPECIFIC TO DO.
+
+    return diffuse(ds);
+  }
+}
+

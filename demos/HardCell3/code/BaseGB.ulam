@@ -1,0 +1,32 @@
+transient BaseGBState : GBState {
+  PocketPtr mAxis = Segment.cPP_NULL;
+  PocketPtr mCorners[2] = { Segment.cPP_NULL, Segment.cPP_NULL };
+
+  Bool init(BaseGB & bgb) {
+    if (super.init(bgb)) return true;
+    //// FIND FWD AXIS
+    if (bgb.mPocketPtrs[Segment.cBODY_DOWN] != Segment.cPP_NULL) {
+      mAxis = bgb.mPocketPtrs[Segment.cBODY_DOWN];
+      // Init corner dirs
+      mCorners[0] = bgb.clockwise(mAxis);
+      mCorners[1] = bgb.counterclockwise(mAxis);
+    }
+  }
+}
+
+/**
+   \symbol BB
+   \color #c00
+ */
+element BaseGB : GrowBomb {
+  @Override
+  Bool preup(GBState & gbs) { return false; }
+  @Override
+  Bool postup(GBState & gbs) { return false; }
+
+  @Override
+  Void behave() {
+    BaseGBState bgb;
+    update(bgb);
+  }
+}

@@ -1,0 +1,86 @@
+/**
+   \color #c00
+ */
+element Clasp : QChain {
+  //// UrSelf API
+  @Override
+  ARGB getColor(Unsigned selector) {
+    return self.UrSelf.getColor(selector);
+  }
+  
+  Void behave() {
+    update();
+  }
+}
+
+/** Seed Clasp
+   \symbol SC
+ */
+element SeedClasp : XTimer(3u,6u,2u)  {
+  typedef EventWindow.SiteNum SN;
+  typedef Segment.PocketPtr PocketPtr;
+  EventWindow ew;
+  Random random;
+  Void die() { ew[0] = Empty.instanceof; }
+  Void diffuse() {
+    SN n = (SN) random.between(1,4);
+    if (ew.isEmpty(n))
+      ew.swap(0u,n);
+  }
+  Void behave() {
+    if (countAlarm()) return die(); // one shot lives to shoot
+    
+    PocketHC3 p;
+    PocketHC3.Status pstat = p.init();
+    if (pstat == PocketHC3.cSTATUS_EDGE) return diffuse(); // seek greener pastures
+    if (pstat == PocketHC3.cSTATUS_OPEN) return die();     // give up
+    if (pstat == PocketHC3.cSTATUS_BENT) return;           // wait for clarity
+
+    Unsigned availcount = 0u;
+    SN sidesn;
+    PocketPtr ptr;
+    for (PocketPtr side = 1u; side <= 4u; ++side) {
+      RectIterator ri;
+      if (!p.initIterator(ri, side, true)) continue;
+      Bool allemp = true;
+      Unsigned empcount = 0;
+      SN empsn;
+      while (ri.hasNext()) {
+        C2D n = ri.next();
+        if (!ew.isAccessible(n) || !(ew[n] is Empty)) {
+          allemp = false;
+          break;
+        }
+        if (random.oneIn(++empcount))
+          empsn = ew.getSiteNumber(n);
+      }
+      if (allemp) {
+        if (random.oneIn(++availcount)) {
+          sidesn = empsn;
+          ptr = side;
+        }
+      }
+    }
+    if (availcount == 0u) return;
+
+    //// Init loop in ew[0] and ew[sidesn]
+
+    Clasp c;
+    c.mSegsDown = 0u;
+    c.mTempsDown = 0u;
+    c.mDSType = Demo.cDS_NORM;
+    c.mPocketPtrs[Segment.cBODY_UP] = ptr; 
+    c.mPocketPtrs[Segment.cBODY_DOWN] = ptr;
+
+    BaseGB s;
+    s.mSegsDown = 0u;
+    s.mTempsDown = 0u;
+    s.mDSType = Demo.cDS_NORM;
+    s.mPocketPtrs[Segment.cBODY_UP] = (PocketPtr) (5u - ptr); 
+    s.mPocketPtrs[Segment.cBODY_DOWN] = (PocketPtr) (5u - ptr);
+
+    ew[sidesn] = s.atomof;
+    ew[0] = c.atomof;
+    return;
+  }
+}

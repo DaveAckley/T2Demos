@@ -1,0 +1,61 @@
+transient GBState : QChainState {
+}
+
+quark GrowBomb : QChain {
+
+  virtual Bool preup(GBState & gsb) ;
+  virtual Bool postup(GBState & gsb) ;
+
+  //// UrSelf API
+  @Override
+  ARGB getColor(Unsigned selector) {
+    return self.UrSelf.getColor(selector);
+  }
+  
+  //// QChain API
+  virtual Bool isSwappable(QChainState & ds) { return false; }
+
+  virtual Bool chainOp(QChainState & ds) {
+    return false;
+  }
+
+  Void behave() {
+    GBState gbs;
+    update(gbs);
+  }
+
+  Bool update(GBState & gbs) {
+    if (gbs.init(self)) return true; // Block on bad pocket
+
+    if (preup(gbs)) return true;
+    if (super.update(gbs)) return true;
+    if (postup(gbs)) return true;
+    return false;
+  }
+}
+
+/**
+   \symbol CB
+   \color #0c0
+ */
+element CornerGB : GrowBomb {
+  PocketPtr mToBase;
+  PocketPtr mToSide;
+  @Override
+  Bool preup(GBState & gbs) { return false; }
+  @Override
+  Bool postup(GBState & gbs) { return false; }
+}
+
+/**
+   \symbol SB
+   \color #00c
+ */
+element SideGB : GrowBomb {
+  PocketPtr mToCorner;
+  PocketPtr mToReturn;
+  @Override
+  Bool preup(GBState & gbs) { return false; }
+  @Override
+  Bool postup(GBState & gbs) { return false; }
+}

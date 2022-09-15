@@ -28,17 +28,20 @@ transient SegmentState {
     return false;
   }
 
+  /*
   virtual Bool doSwap(Segment & seg, Segment.BodyDir bd) {
     Fail f;
     f.fail("doSwap IMPLEMENT ME");
     return true;
   }
 
+  
   virtual Bool doGrow(Segment & seg, Segment.BodyDir bd) {
     Fail f;
     f.fail("doGrow IMPLEMENT ME");
     return true;
   }
+  */
 
   //// SegmentState SERVICES
   Segment.MateStatus findMate(Segment & seg, Segment.BodyDir bd) {
@@ -97,6 +100,26 @@ quark Segment {
   constant PocketPtr cPP_RSRV1 = 5u;  //< Don't use
   constant PocketPtr cPP_RSRV2 = 6u;  //< Don't use
   constant PocketPtr cPP_NULL  = 7u;  //< Null pointer
+
+  PocketPtr clockwise(PocketPtr from) {
+    which (from) {
+    case cPP_WEST:  { return cPP_NORTH; }
+    case cPP_NORTH: { return cPP_EAST; }
+    case cPP_EAST:  { return cPP_SOUTH; }
+    case cPP_SOUTH: { return cPP_WEST; }
+    otherwise: { return from; }
+    }
+  }
+
+  PocketPtr counterclockwise(PocketPtr from) {
+    which (from) {
+    case cPP_WEST:  { return cPP_SOUTH; }
+    case cPP_SOUTH: { return cPP_EAST; }
+    case cPP_EAST:  { return cPP_NORTH; }
+    case cPP_NORTH: { return cPP_WEST; }
+    otherwise: { return from; }
+    }
+  }
 
   typedef Unsigned(1) BodyDir;
   constant BodyDir cBODY_UP = 0u;
