@@ -1,0 +1,4059 @@
+{319}  -*-  mode: text; fill-column: 50;  -*-
+[0:
+
+Wed Jun 22 00:56:16 2022 OK, starting a new notes
+file, since 202205301551-notes.txt got really
+messed up in the linearity dept. (I really like
+the new 'add at the front' style for fresh parts,
+but not clear it works for standard dev notes.)
+
+:0]
+[1:
+
+Wed Jun 22 00:57:37 2022 So, we're just past t2sup
+#3123, and I don't want to lose state on where we
+are with HC3.
+
+So let's build again, here, play a little bit, and
+try to get a possible to-do for another cleanup,
+commit, and plan for next steps.
+[2:
+
+Wed Jun 22 02:15:52 2022
+
+TODO
+[14: Thu Jun 23 02:08:10 2022
+DONE :14] - HC3 survey battle damage
+[15:   :15] - Simplify / remediate briefly
+[37: Fri Jun 24 10:01:31 2022
+DONE :37] - push
+[38:
+DONE :38] - Pocket brainstorming
+[163: Wed Jul  6 10:53:10 2022 mooted therefore
+DONE :163] - Initialize quark Code(Unary(5) cTYPE_BITS)
+    virtual step() {
+
+map from state bits to ulam class
+[4:
+
+Wed Jun 22 04:34:35 2022 STATE BIT CANDIDATES
+
+DATA{UD}{NSEWR} - 10 types
+{{DATA,MOVD,MOVU}{U,D}{N,S,E,W,R},LIVE}
+     2b           1b   3b          1b == 7b?
+
+[5:
+
+Wed Jun 22 04:48:22 2022
+
+event window assembler: single atom,
+
+8 bit code, 8 codes, ->      64 bits
+3 bit instruction pointer -> 67 bits
+2 bit acc pointer ->         68 bits
+
+constant pool, allows refering to selected
+ constants
+ type instanceofs
+ members within types
+ methods within types
+ ops
+
+push pop dup swap arithop compop
+
+declarations:
+ engine tries to make them true
+ blocks or aborts if it can't
+
+[6:
+
+Wed Jun 22 05:02:44 2022
+
+event window assembler seems very low level
+
+let's first prefer whole atom semantics, and you
+copy and modify and remode and deploy them
+
+try to be straight relative to your upstream.
+if you're not straight with your upstream,
+and you see an empty that is, you can move
+to that empty upstream and leave behind a
+downstream space where you were. (Unless you
+already have a downstream space downstream of you?
+want to bound the land grab somehow, probably.)
+
+
+:6]
+
+:5]
+
+TEMP{UD
+
+
+:4]
+transient Dictionary { }
+[3:
+Wed Jun 22 03:55:00 2022
+
+transient PhysicsModel { }
+
+:3]
+:2]
+:1]
+[7:
+
+Thu Jun 23 01:23:46 2022 HC3 survey. OK, let's
+start with this:
+
+  /*__________________________________________________
+  | COMPONENTS of HardCell <12> (63 bits/8 unused):
+  |
+  | Pos	| Bits	| Name	| Type <classid>
+  | 0	| 3	| mRootWatchdog	| XTimer(3,7u,500u) <13>
+  | 3	| 5	| mUpHops	| Unsigned(5)
+  | 8	| 5	| mMinDownHops	| Unsigned(5)
+  | 13	| 5	| mSettledDownHops	| Unsigned(5)
+  | 18	| 12	| mColor[3]	| Unsigned(4)
+  | 30	| 10	| mDirs[2]	| Int(5)
+  | 40	| 8	| mContactWarnings[4]	| Unary(2)
+  | 48	| 8	| mUpCounts[4]	| Unsigned(2)
+  | 56	| 2	| mMoveDir	| Unsigned(2)
+  | 58	| 5	| mStepsRemaining	| Unsigned(5)
+  | 63	| 0	| super	| QHardCell <9>
+  | 63	| 0	| base	| UrSelf <0>
+  |___________________________________________________
+  */ //gcnl:NodeBlockClass.cpp:2644
+
+Is mMinDownHops doing anything?[8:
+
+Thu Jun 23 01:54:22 2022 Appears not. Commented
+all refs out and things still seem to run.
+
+mSettledDownHops is used for sure, though,
+  right?[9:
+
+Thu Jun 23 01:55:59 2022 Yes for sure.
+
+mUpCounts?
+[10:
+
+Thu Jun 23 01:56:46 2022 It's associated with
+
+  virtual Void observeStreamDirection(SN dir, Bool isup) {
+
+and
+
+  virtual Bool isPlausibleUpStreamDirection(SN dir) {
+
+which also both appear to be used nowhere. Can we
+kill that stuff too?[11:
+
+Thu Jun 23 01:59:41 2022 Appears so.
+
+mStepsRemaining?
+
+[12:
+
+Thu Jun 23 02:00:15 2022 No refs; killing.[13:
+
+Thu Jun 23 02:01:29 2022 OK well that was
+refreshing. Now we're at:
+
+  /*__________________________________________________
+  | COMPONENTS of HardCell <12> (45 bits/26 unused):
+  |
+  | Pos	| Bits	| Name	| Type <classid>
+  | 0	| 3	| mRootWatchdog	| XTimer(3,7u,500u) <13>
+  | 3	| 5	| mUpHops	| Unsigned(5)
+  | 8	| 5	| mSettledDownHops	| Unsigned(5)
+  | 13	| 12	| mColor[3]	| Unsigned(4)
+  | 25	| 10	| mDirs[2]	| Int(5)
+  | 35	| 8	| mContactWarnings[4]	| Unary(2)
+  | 43	| 2	| mMoveDir	| Unsigned(2)
+  | 45	| 0	| super	| QHardCell <9>
+  | 45	| 0	| base	| UrSelf <0>
+  |___________________________________________________
+
+
+[16:
+
+Thu Jun 23 02:08:23 2022 Let's push this as is to
+capture the lay of the land, then clean out the
+XXX after.
+[17:
+
+Thu Jun 23 03:01:19 2022 OK, pushed. Now clean
+  up.[18:
+
+Thu Jun 23 03:02:46 2022 OK, cut XXXs. Pushing
+again.
+
+:18]
+
+:17]
+:16]
+
+:13]
+
+:12]
+
+:11]
+
+:10]
+
+:9]
+
+:8]
+
+:7]
+[19:
+
+Thu Jun 23 06:10:56 2022 Text from fresh part:
+
+[:
+
+Thu Jun 23 03:05:05 2022 Going again
+
+PROMPT: Moving Pockets
+
+QHC3SwapWorm
+ typedef Unsigned(2) Dir
+ Dir mUp, mDown;
+ typedef Unsigned(3) Role;
+
+ constant Role cTOP = 0u;
+ constant Role cBOT = 1u;
+ constant Role cMID = 2u;
+ constant Role cTDN = 3u;
+ constant Role cTUP = 4u;
+
+reporting conflicts in HC3NgbState ?
+
+PROMPT:
+
+grips and poses and moves
+
+srl we can reverse flows dynamically and easily
+
+we do have some unclarity in how the
+whole control plane operates
+and is itself gripped and regripped
+
+
+
+
+
+
+PROMPT: Elements of a spatial recurrence language
+
+set assignments
+for simplicity reduce RHS to scalar,
+but you don't have to
+
+state declarations
+s : Foo.m1.
+
+predicate declarations
+b : Foo?
+
+
+a : Foo.m1
+
+a(us)
+
+us, them, me, nobody, somebody, anybody
+
+poses and grips and moves
+
+it's easy to break things
+when you clean things
+
+us - me == them
+us - me - them == nobody
+
+
+'me' the set consisting of just ew[0]
+
+implied trailing 'me'? so postfix + , - ..
+
+
+notations
+
+ predications
+ trailing apostrophe means 'result'
+
+language uses single write model
+
+set language
+statically it looks like set relations
+but the sets act like processes
+
+a <<a set of data members of atoms in the ew>>
+
+that we can identify however we choose
+
+Thu Jun 23 03:11:57 2022 c/
+
+:]
+
+:19]
+[20:
+
+Thu Jun 23 06:12:21 2022
+
+ - Need inter-HC3 swapworm capability else how to
+   transfer code to the daughter.
+
+1: Open a port on this HC3 edge.
+2: Build out an adhoc scaffolding from the port
+3: Seed a virgin HC3 with low maxhops
+4: Wait for it to sprout a bit
+5: Open a port on that HC3 edge.
+
+[21:
+
+Thu Jun 23 06:21:01 2022 Or what if it's all
+internal?
+
+1. Try to grow grid to size X
+
+release sw heads with configurations about where
+to grow, so multiple worms can be growing
+simultaneously, without necessarily blocking each
+other, by having compatible growth patterns (like
+'fold left' vs 'fold right', if that could somehow
+help.)
+
+:21]
+
+:20]
+[22:
+
+Thu Jun 23 12:03:06 2022 Again, think about
+internal replication, where we can hope to have
+some control.
+
+Main Sequence:
+1. Survive and grow to size R (reproduction size)
+2. Deploy and position mother and daughter control anchors
+3. Deploy mother (sender) and daughter (receiver) control loops
+4. Mother rolls full genome sending copy to daughter
+5. Mother drops maxhops to size S (split size)
+6. Daughter declares as second root (maxhops S)
+7. Excess tissue withers in mother and daughter
+8. Mother and daughter each return to step 1
+
+[23:
+
+Thu Jun 23 13:44:12 2022 If the genome is normally
+deployed around/near the HC3 root, we have to
+reposition it as well as positioning the daughter
+copy. Maybe have corresponding streams out from
+the center, like N->E->S for the mother, and
+S->W->N for the daughter, as the original mother's
+genome gets consumed, freeing up the center, which
+eventually fills up with the daughter (to the W)
+and the moved mother (to the E).
+
+:23]
+
+:22]
+[24:
+
+Thu Jun 23 14:10:44 2022 Fantasizing is getting
+way way ahead of anything like plausibility, but I
+am liking the concept of deploying little code
+rings, copied off segments of the genome, and sent
+different places to control things. Like, the
+daughter receiver section is a little code ring.
+
+Also liking the idea that the 'current
+instruction', by default, just repeats and
+repeats. Until it (at least) initiates a process
+to move on.
+
+And that process, at least in principle, could be
+just quoting itself and dequoting the instruction
+it wants to take over? Question is whether there's
+associated spatial machinery that the (to-become)
+active instruction needs to be near, or whether
+the execution can just flow down the sequence.
+
+Dequote head.
+
+How do we grow a swapworm ring? If the head and
+tail are both pinned? We send out some kind of
+grow request, which swaps on the existing line,
+but when it sees an available adjacent spot, it
+splices a Move Down (or whatever) in there, and
+also turns itself into a Move Down, so from one
+available ring (that the grow request had been
+occupying) you now have two available ring spots.
+
+[25:
+
+Thu Jun 23 15:53:34 2022 Have to pack up here, but
+thinking we should do some HC3 swapworm mechanic
+spikes just to see what we could get going.
+
+:25]
+:24]
+[26:
+
+Thu Jun 23 23:34:00 2022 OK, going for a spike
+HC3SwapWorm, premised upon having one segment per
+pocket. Absolutely quick-n-dirty to start, come on
+come on let's see it before 1am.[27:
+
+Thu Jun 23 23:35:05 2022 Need a
+  PocketIterator..[28:
+
+Thu Jun 23 23:57:48 2022 Working on transient
+HC3PocketIterator (in HC3SwapWorm.ulam) and
+starting to get into.. issues.
+
+Current issue is: What are the bounds of a Pocket?
+In the relaxed case it's easy to say like: All
+coords with
+
+  x > W.x && x < E.x, and
+  y > N.y && y < S.y
+
+but what are we to say about like this:
+
+            H . . .
+            . 1 2 H
+            . . . .
+            H . . H
+
+when it's 1 that's asking to iterate the pocket?
+What about when it's 2 asking?
+
+I had been thinking we'd do min on the coords, so
+1 and 2 would both see an invalid cSTATUS_EDGE
+when they to init the iterator, since the upper
+right H is at y == 0 wrt both of them.
+
+So, obvious thing is say NO POCKET EXISTS and tell
+any pocket-dependent content to block until a
+better day. It's like Plate when a swapline's
+coming through.
+
+Let's just say we require a consistent four
+corners in one of these configurations:
+
+  1x2 2x1 2x2 3x2 2x3
+
+or we can't iterate. We should distinguish,
+though, between:
+
+ (1) seeing four corners in a transitional state,
+ (2) seeing less than four corners
+
+On (1) we're likely willing to block a long while,
+ since that's business as usual while moving
+
+On (2) we might be a bit more impatient, since
+ we'd expect a respawning. (Really tho?)
+
+:28]
+
+:27]
+
+:26]
+[29:
+
+Fri Jun 24 07:44:22 2022 OK so have a first cut at
+HC3PocketIterator.init(), and starting to think
+downstream. In particular, what are we going to do
+about the fact that, from a given HC3 pocket, it's
+not possible to iterate over all of all of the
+neighboring pockets? In a 2x2 pocket, we can see
+all of two neighbor pockets, but only 3 of 4 of
+the other two neighboring pockets.
+
+It'll be worse in 2x3s. Might be able to see all
+of only one neighbor.. and on top of all that, the
+neighboring pocket might not be OK, but pocket
+contents won't even be able to tell that.
+
+We could search across a face of a pocket, to
+examine whatever we could reach of outside-pocket
+space. I guess that's what we'd have to do, and
+just opportunistically take anything that matched
+our expectations.
+
+And keep swap swap swap within the pocket, to keep
+churning the availabilities.
+
+So we'd like a pocket iterator to provide a
+best-effort edge iterator, as well as the pocket
+contents. [30:
+
+Fri Jun 24 08:21:56 2022 Oh and here's another
+issue: From any corner of a 2x3 or 3x2 stretch
+pocket, the iterator reports OPEN because it can't
+see the diagonal corner.
+
+[31:
+
+Fri Jun 24 08:25:44 2022 What if we distinguished
+between seeing two vs three corners. Two corners
+is hopeless (or at least suspect, if diagonal),
+but with three corners we might 'assume' the
+fourth even though we can't see it right now. That
+might not be true in maxhops situations, but we
+could deal with that separately.
+
+Other safer possibility is just to block-n-swap,
+so maybe we'll see a full pocket next time.
+
+Maybe pocket content preferentially tries to swap
+toward the centers of 2x3 and 3x2? How about that?
+
+[32:
+
+Fri Jun 24 08:48:58 2022 Pocket content could go
+double redundant and hog the pocket. No tie
+breaker tho.
+
+:32]
+
+:31]
+
+:30]
+
+:29]
+[33:
+
+Fri Jun 24 08:55:39 2022 OK come on some
+
+TODO
+
+[34: Fri Jun 24 09:45:10 2022
+DONE :34] - Get iterator iterating internally
+ - Create pocket coordinates? Find self in them?
+[35: Fri Jun 24 09:58:15 2022
+DONE :35] - Demo single worm randomly jumping around its pocket
+[50: Sat Jun 25 02:13:43 2022
+DONE :50] - Consider how to implement HC3 moving pocket content
+
+:33]
+[36:
+
+Fri Jun 24 09:58:32 2022 OK, so we've got HCSW
+hopping around in its pocket, until it gets left
+behind when the pocket moves. Need HC3 pocket
+pushing now for reals.
+
+Suppose the goal is to take all four diago pocket
+sites with you when you move. That's unproblematic
+except for the two possibly occupied sites ahead
+of your leading diagos. And we're thinking they're
+supposed to 'push out' any content ahead of them.
+
+And if either of those 'out' destinations are
+occupied? Block the move, kill the occupier, or
+randomize between them?
+
+[39:
+
+Fri Jun 24 10:21:25 2022 I'm pretty tempted to
+start exploring kill the occupier. If we start
+saying HC3 is kind inside a diamond, then it's up
+to everybody else to stay out of the way.
+
+Unless? Is it possible that multiple purely HC3
+moves could cause this situation? No, I think no,
+so long as pocket content doesn't exceed half
+full. And HC3 pushing will never cause content to
+switch pockets, so it won't violate the invariant
+on its own.
+
+So okay, can we try to go for this?[40:
+
+Fri Jun 24 10:30:12 2022 Well looking at QHardCell
+right now, the easiest thing is to nuke the
+outliers if they're occupied on a push. So let's
+just do that why don't we and see how it goes.[41:
+
+Fri Jun 24 11:31:53 2022 OK, so got a first cut at
+moving the entourage. Seems like there's some
+failing cases, though, where pocket content ends
+up in a driving lane. Have to run that down.
+
+But still, progress!
+
+:41]
+
+:40]
+
+:39]
+
+:36]
+[42:
+
+Fri Jun 24 12:05:06 2022 OK. Can we see a
+driving-lane failure happening here?
+[43:
+
+Fri Jun 24 12:08:27 2022 OK yes, here I see H3
+heading N and failing to push its NE sw, so that
+ends up in the driving lane.
+
+Let's look for another failure and look for
+similarities. Like, does heading S push its SW?
+[44:
+
+Fri Jun 24 12:17:25 2022 Here's another H3 heading
+N and failing to pull its SW.
+
+:44]
+:43]
+:42]
+[45:
+
+Fri Jun 24 12:40:54 2022 I got it: It's the root
+moving without using moveEntourage.[46:
+
+Fri Jun 24 13:34:41 2022 OK, things seem pretty
+solid now. Now have a cubic animation running just
+to capture the moment..
+
+:46]
+
+:45]
+[47:
+
+Sat Jun 25 00:36:27 2022 OK, so the moment has
+been captured pretty well in 20220624141438.mp4,
+with the following takeaways after >600KAEPS:
+
+ - Pocket transport seems rock solid with no
+   losses or leaks
+
+ - We still got one random grid lockup :(
+   with apparently nothing to do with pocket
+   content.
+
+I have to believe (still) the latter is somehow
+due to propagation delays but not sure how to
+respond to it.
+
+Would it help to have a display showing settled
+distance ?[48:
+
+Sat Jun 25 02:12:34 2022 Well, now have a settled
+distance color on Atom #2, and it's interesting to
+look at but didn't immediately lead to actionable
+insights. (Partly because I didn't wait (hours?)
+to see a failure.)
+
+:48]
+
+:47]
+[49:
+
+Sat Jun 25 02:13:29 2022 Review our to-do
+[51:
+
+Sat Jun 25 02:13:59 2022 OK need more
+
+TODO
+
+[58: Sat Jun 25 06:52:01 2022
+DONE :58] - Brainstorm some kind of 'side iterator' to
+   visit neighboring pocket sites on a best-effort
+   basis. Perhaps just the strip immediately
+   across the border?
+
+[59: DONE  :59] - Implement side pocket iterator
+[71: Sun Jun 26 02:59:27 2022 Well, needed more..
+
+[72: DONE :72] - Implement neighbor relations so pockets can
+   tell whether adjacent pockets are bent
+
+:71]
+[164: Wed Jul  6 10:53:36 2022 Not swapworm but
+:164] - Add an inMyGroup() to swapworm
+
+[165: Wed Jul  6 10:54:23 2022 did quark Segment but
+DONE :165] - element HC3SwapWorm -> quark QSwapWormHC3
+
+[166:
+DONE :166] - Come make more to-do
+[52: Sat Jun 25 02:20:40 2022
+
+[167: Did Segment, with Chain (atm just implied)
+DONE :167] - Consider changing SwapWorm concept to something
+   linking to polymer
+
+:52]
+:51]
+:49]
+[53:
+
+Sat Jun 25 02:33:24 2022 Diamond Residing Polymer?
+DiaPoly? PolyD? PolymerHC3? [54:
+
+Sat Jun 25 02:58:47 2022 Doped Diamond? That's
+kind of what it's like; the swapworms are the
+dopants.
+
+[55:
+
+Sat Jun 25 04:53:42 2022 OK so here's thing: I was
+imagining we'd be using a lot of loops, rather
+than strictly linear worms. And I was imagining
+we'd be able to grow that worm 'from the side',
+while both the head and the tail are pinned.
+
+But that's not at all easy to do, given we don't
+expect to be able to access diagonal pockets.
+
+And we can't have more than one segment of a given
+worm in a pocket, or we'll lose their relative
+ordering. Or is that true? If we had 'local
+backward' and 'local forward' states, we could
+have two in a pocket, and the fwd one would report
+0 for backward() and the bck one would report 0
+for forward(), and off we go.
+
+Then, if we had two in a pocket, could we
+'spike one out' to an orthogonal pocket?
+
+                         .      .
+                           f3
+       .      .          . b3   .
+     f2  f1 f0 f1 ->   f2  f1 f2 f1
+     b4  b0 b0 b4      b4  b2 b0 b4
+       .      .          .      .
+
+[56:
+
+Sat Jun 25 05:16:03 2022 So that seems somewhat
+plausible -- except how do we know there isn't
+already another worm of this type in the
+spiked-into pocket? We can't see that whole
+pocket.
+
+Well, there couldn't be another segment that's
+part of us unless it was pointing back at us.
+
+But could we have two chains running through us,
+and end up swapping the connectivity between them?
+Which would be a cool capability to have but we'd
+like to not do it by accident very often.
+
+[57:
+
+Sat Jun 25 05:59:14 2022 About out of gas here,
+but noting that having same-category worms running
+parallel to each other along the same pockets is
+like foggen crossover -- there would be total
+ambiguity about which upstream and which
+downstream you'd match up with, at any given
+moment.
+
+If the worms ran parallel but in adjacent pockets,
+one could insert deliberate crossover points,
+crossing the streams, just by relabeling.. is that
+true? We'd need two segments in each pocket, and
+need to see all four segments at once to do the
+cross.
+
+Anyway.
+
+:57]
+
+:56]
+
+:55]
+
+:54]
+
+:53]
+[60:
+
+Sat Jun 25 10:24:26 2022 So here's a thing: From
+a HC3 entourage postion, a pocket CAN see all of
+the adjacent pockets if they're relaxed or
+squished. But it can't
+(1) see all of a 3x2 neighbor, or
+(2) tell if any neighbors are bent or not
+
+which means a pocket can't tell if it can see all
+of a neighboring pocket.
+[61:
+
+Sat Jun 25 10:35:34 2022 What I'm wondering is
+whether a little bit of redundant info in the HC3
+might help pockets things out, and possibly even
+help HC3 out detecting or dealing with
+inconsistencies.
+
+HC3's currently at 45 bits all in, with lots to
+squeeze if needed (e.g., 12 bits color, 10 bits of
+root direction vector).
+
+We could certainly afford another at least
+Unsigned(2)[4] for ngb info
+
+0: ngb at 2
+1: ngb at 3
+2: ngb off axis
+3: no ngb
+
+or even Unsigned(3)[4] and basically store (and
+maintain ugh and repair ugh ugh and so much for
+stigmergy) the full HC3NgbState.
+
+[62:
+
+Sat Jun 25 10:51:28 2022 An idea which I largely
+mostly hate hate, but would it help the pockets?
+They still wouldn't be able to tell if the
+neighboring pocket was bent, right? Or, wait,
+maybe they could?
+
+By looking at the TWO HC3 along the side they're
+interested in, the pocket COULD determine the
+alleged status of the adjacent pocket. They could
+tell if they can iterate over the whole adjacent
+pocket.
+
+Now, if the HC3 itself set up this mNgbInfo, but
+never used it itself (except perhaps during POST
+up front) would that make it less nasty? It would
+be like courtesy info for the pockets, like handy
+signage, rather than something HC3 itself depended
+on.
+
+So, we could derive this map from the HC3State,
+and update our map and our ngb's maps when we
+move.
+[63:
+
+Sat Jun 25 13:38:32 2022 Well. So are we
+(1) thinking about really doing this?
+(2) Now?
+
+(Cassoulet now in the oven low.)
+[64:
+
+Sat Jun 25 13:42:28 2022 Well let's look at
+setting it up anyway.[65:
+
+Sat Jun 25 13:54:21 2022 I wonder if we shouldn't
+let QHardCell own some of this storage. Right now
+it's 0 bits plus virtual functions to get at
+storage -- and I justified that because subclasses
+might want to allocate different amounts of
+storage for hopcount and so on.
+
+But this 'ngb map' thing would be Unsigned(2)[4]
+regardless of hopcount bits..
+
+..let's put it in QHardCell for now and see how it
+feels.
+[66:
+
+Sat Jun 25 14:23:35 2022 OK now we have
+
+  /*__________________________________________________
+  | COMPONENTS of QHardCell <9> (8 bits/56 unused):
+  |
+  | Pos	| Bits	| Name	| Type <classid>
+  | 0	| 8	| mNgbRels[4]	| Unsigned(2)
+  | 8	| 0	| super	| UrSelf <0>
+  |___________________________________________________
+  */ //gcnl:NodeBlockClass.cpp:2644
+
+and we need to make some code to
+
+[74: Sun Jun 26 03:01:15 2022
+DONE :74] - set them up, and
+
+[75:
+DONE :75] - maintain them on a swap
+[67:
+
+Sat Jun 25 14:30:47 2022 Or do we want to merge
+those steps, and.. nah don't be tricky, not
+yet.[68:
+
+Sun Jun 26 01:24:59 2022 OK so we kind of made a
+mess in here. Made an HC3State.examineNgbs(.., C2D
+offset) to specify where we wanted to compute
+ngbstatus relative to. First time we pass in
+(0,0), but when we're going to move we call again,
+passing in (0,1) or whatever depending on the
+direction.
+
+But that's blowing up, I think because we end up
+scanning outside the ew without checking for
+it. And we don't want to have to check for it in
+this case.
+
+This was the wrong way to go.[69:
+
+Sun Jun 26 01:56:20 2022 I think we want separate
+new code for updating ngb status based on old
+status plus a planned move. My question is how
+much of the recent changes should/must I tear out?
+[70:
+
+Sun Jun 26 02:57:20 2022 OK so it looks like we've
+gotten HC3State.updateNgbsForMove(SN dest) working
+fairly plausibly. Does that mean we can claim some
+to-do and maybe take a break?
+[73:
+
+Sun Jun 26 03:00:33 2022 Well, we hadn't
+to-do-ified the ngbrel stuff, so not so
+satisfying.
+
+[76:
+
+Sun Jun 26 03:01:35 2022 Well found a couple
+dashed items to claim so that's a little better.
+
+TODO
+
+[81: Sun Jun 26 12:27:30 2022
+DONE :81] - Brainstorm how PocketHC3 could digest and
+   present this information
+
+[86: Mon Jun 27 02:25:28 2022 Done? Oh not
+yet. [91: Mon Jun 27 05:55:13 2022  OK now
+DONE :91]:86] - Spike something for that
+
+[107: Tue Jun 28 00:50:44 2022 Made a bold start anyway
+DONE :107] - Finally return to SwapWormHC3 and evaluate
+   where we are, particularly regarding segment
+   type representation
+
+[168: Wed Jul  6 10:56:00 2022
+DONE! :168] - Spike a 8-segment wander-inside-diamond-SW and
+   HAVE FUN watching it wander.
+
+:76]
+
+:73]
+:70]
+:69]
+
+:68]
+
+:67]
+:66]
+:65]
+
+:64]
+:63]
+
+:62]
+
+:61]
+
+:60]
+[77:
+
+Sun Jun 26 11:13:34 2022 OK, so, right now
+PocketHC3.initIterator iterates over single
+adjacent edge in the direciton requested. We could
+add a Bool or something to request 'entire side
+pocket' maybe.
+
+How does PocketHC3 use the ngbrel info? Well,
+right now it iterates out to find the four nearest
+corners. It could check for the ngbrel as it finds
+them, and.. stash them all? We're in a transient;
+room to burn.
+
+And then what? When asked about a side pocket, we
+need to
+
+ (1) Find the two HC3 corners touching that side
+ (2) Make sure the ngbrels of those two corners
+     match in the direction of the side we're
+     considering.
+ (3) If they do, succeed with the 'full' side
+     pocket iterator.
+
+Scare quotes in (3) because we don't know if the
+full side pocket is actually accessible.
+
+Caller might or might not care about full
+accessibility -- they might be able to execute
+opportunistically if they get lucky.
+
+[78:
+
+Sun Jun 26 12:05:52 2022 Well, try that?
+[79:
+
+Sun Jun 26 12:09:59 2022 OK except the natural
+implementation is an array of arrays but ulam
+doesn't have that. We'd need to wrap the inner
+array in a struct and make an array of them.
+
+[80:
+
+Sun Jun 26 12:13:36 2022 Made 'transient
+PocketHC3_CornerInfo'.
+
+:80]
+:79]
+:78]
+
+:77]
+[82:
+
+Sun Jun 26 12:27:39 2022 OK, we're now gathering
+all the pocket corner ngbrels in
+PocketHC3.mCornerInfo[4], but we haven't extended
+initIterator and we're not yet using the
+mCornerInfo.
+
+Have to do some early cooking for dins.
+
+:82]
+[83:
+
+Mon Jun 27 00:32:37 2022 OK, so we got
+HC3State.updateNgbsForMove(destsn) apparently
+working, but then as I was laying down I realized
+that we had only updated QHardCell.mNgbRels for
+ourselves, forgetting about the mNgbRels of the
+HC3 neighbors.[84:
+
+Mon Jun 27 01:46:37 2022 Hmm, I hadn't realized
+that the NgbRel states are all symmetric wrt a
+pair of HC3s: If A is (OFFN, GAP1, GAP2, GAP3) to
+B, then B is the same back to A. But you do have
+to put that same value in complementary slots of
+their mNgbRels, one in [i] and the other in [3-i].
+[85:
+
+Mon Jun 27 02:23:47 2022 OK that appears to be
+working and updating the "ngb's ngbrels" during
+the move. Pop pop.
+[87:
+
+Mon Jun 27 02:26:06 2022 Now we need to implement
+the extra cases in initIterator.
+[88:
+
+Mon Jun 27 04:23:24 2022 Well, implemented a bunch
+of stuff, but nothing's asking for side pockets
+yet so it's untested?
+[89:
+
+Mon Jun 27 04:45:57 2022 OK, so hopping west
+pocket-to-pocket works. Let's hop in rotating
+directions! [90:
+
+Mon Jun 27 05:53:36 2022 OK, so that revealed
+systematic fencepost problems in the side pocket
+iterator init, but we now appear to be pretty
+solid for side pocket iteration and SW segments
+leaping in all four directions.
+
+:90]
+
+:89]
+:88]
+
+:87]
+:85]
+:84]
+
+:83]
+[92:
+
+Mon Jun 27 06:13:00 2022 OK, next stop will be
+returning to the SW segment type design and maybe
+it's a good time for a nap first.
+
+:92]
+[93:
+
+Mon Jun 27 11:53:35 2022 OK here we go. What are
+we going to do for SW type info? In particular:
+Subtypes or (moral equivalent to) enum? Well,
+
+ - How many types would we be talking?
+
+Group1: Head, Tail, Middle  // 'static' spatial segments
+Group2: Down, Up            // 'dynamic' moving temps
+Group3: GrowD, ShrinkD, GrowU, ShrinkU // size change temps
+
+[94:
+
+Mon Jun 27 12:03:01 2022 Not clear we would really
+want or need group3. Or at least not being types.
+
+Main disadvantage of types is statefully changing
+types in a PiTA.
+
+A supposed advantage of types is Head and Tail
+would only have to represent one pointer, so
+they'd save space.
+
+Let's think data members for a bit. How many bits
+is all this going to cost us?
+
+ typedef Unsigned(2) Dir;
+ Dir mFwd, mBck;          // 4
+
+How about think 'affordances'?
+
+quark CmdDir {
+ typedef Unsigned(2) Cmd;
+ typedef Unsigned(2) Dir;
+ Cmd mCmd; // what to do in this dir
+ Dir mDir; // which way to next
+}
+
+quark SWHC3 {
+ CmdDir mCmdDirs[2]; // fwd[0] bck[1] 8 bits total
+}
+
+with perhaps like
+
+ constant Cmd cEND  = 0u;  //< We're last in this dir (ignore mDir)
+ constant Cmd cSTAY = 1u;  //< Not last but don't swap this way
+ constant Cmd cGO   = 2u;  //< Not last, do swap this way
+ constant Cmd cRSRV = 3u;  //< Something else cool
+
+[95:
+
+Mon Jun 27 12:53:27 2022 OK we need language to
+distinguish between 'direction' meaning
+
+ - toward head vs toward tail, vs
+ - NSEW on the diamond
+
+[96:
+
+Mon Jun 27 13:10:08 2022 Forward, aft.. okay but
+what's the collective noun for them?
+
+Directions vs Headings? Which is which?
+
+ Directions: Fwd, aft
+ Headings:   NSEW
+
+Internal: Fwd, aft
+External: NSEW
+
+Static: headward, tailward
+Dynamic: NSEW
+
+Body:
+World:
+
+that's not bad.
+
+BodyDir: fwd/headward/up, back/tailward/down
+WorldDir: NSEW
+
+[97:
+
+Mon Jun 27 13:16:45 2022 So it could be
+
+quark CmdWDir {
+ typedef Unsigned(2) Cmd;
+ typedef Unsigned(2) WorldDir;
+ Cmd mCmd; // what to do in this dir
+ WorldDir mWorld; // which way to next
+}
+
+quark SWHC3 {
+ typedef Unsigned(1) BodyDir;
+ constant BodyDir cBODY_UP = 0u;
+ constant BodyDir cBODY_DOWN = 1u;
+ CmdWDir mCmdWDirs[BodyDir.maxof]; // fwd[0] bck[1] 8 bits total
+}
+
+although could we maybe ditch DIR completely, or
+at least use it only once, so abbrs could be less
+similar? Or just use WDIR / BDIR everywhere?
+
+[98:
+
+Mon Jun 27 14:00:58 2022 OK come on drifting here.
+
+Let's say yes B(ody) vs W(orld). U(p) and D(own)
+for body directions. NSEW for world directions.
+
+And note we're still going to have U and D even
+when we're using rings. And we won't be able to
+map U/D to clockwise/anticlockwise because we
+aren't constraining which way a ring will turn.
+
+A ring, to first order, will have neither head nor
+tail, but will have U and D directions -- which
+are thus, in fact, more primary that
+Head/Tail. Head is 'just' where U runs out, etc.
+
+So okay.
+
+I guess a next question is how many segment
+'types' can we infer from mCmdWDirs, so we
+wouldn't have to represent the type separately?
+
+ constant Cmd cEND  = 0u;  //< We're last in this dir (ignore mDir)
+ constant Cmd cSTAY = 1u;  //< Not last but don't autoswap this way
+ constant Cmd cGO   = 2u;  //< Not last, do autoswap this way
+ constant Cmd cBLOCK= 3u;  //< Prevent autoswap this way
+
+
+mCmdWDirs[cBODY_UP].mCmd == cEND    -> 'Head'
+mCmdWDirs[cBODY_DOWN].mCmd == cEND  -> 'Tail'
+mCmdWDirs[*].mCmd == cStay          -> 'Middle'
+mCmdWDirs[cBODY_DOWN].mCmd == cGO   -> 'Advance'
+mCmdWDirs[cBODY_UP].mCmd == cGO     -> 'Retreat'
+
+mCmdWDirs[*].mCmd == cGO            -> 'Diffuse'?
+
+How would we distinguish the desire to swap off
+the end vs not?
+
+mCmdWDirs[cBODY_UP].mCmd == cEND &&
+mCmdWDirs[cBODY_DOWN].mCmd == cBLOCK   -> 'HeadAnchor' ?
+
+Then stuff will come up to it and stop
+
+[99:
+
+Mon Jun 27 14:59:35 2022 Now, a big part of this
+overall story is we want standard processing of
+all this as much as possible.
+
+Could we be saying just a single bit for like a
+Bool mQuoted ?
+
+And if it's quoted we do this standard body
+processing and that's it:
+
+element DoStuff : Instruction {
+  Void behave() {
+    if (handleQuoted()) return;
+    ..do stuff..
+  }
+}
+
+quark Instruction : SwapWormHC3 {
+ ..
+}
+
+well or maybe better:
+
+element DoStuff : Instruction {
+  @Override
+  virtual Status doInstruction(Interpreter & itp) {
+    ..do stuff..
+  }
+}
+
+quark Instruction : SwapWormHC3 {
+  Void behave() {
+    if (handleQuoted()) return;
+    Interpreter itp;
+    if (findInterpreter(itp)) {
+      Status stat = doInstruction(itp);
+      which (stat) {
+      case cISTAT_DONE: { return; }
+      case cISTAT_NEXT: { tryItpAdvance(); ? }
+   ..
+      }
+    }
+  }
+}
+
+[100:
+
+Mon Jun 27 15:11:43 2022 If tryItpAdvance()
+somehow succeeds, perhaps it quotes the
+instruction on the way out?
+
+Getting waaay ahead of ourselves.
+
+  :100]
+
+:99]
+
+:98]
+:97]
+:96]
+:95]
+
+:94]
+
+:93]
+[101:
+
+Mon Jun 27 15:37:03 2022
+
+
+
+spike steps:
+
+ - 1: Grow to 8 long, wander
+   2: Make 8 long ring, circulate
+
+ - Make quark Vertebrae // base class of spine
+
+ - Add Vertebrae.mCmdWDirs..
+ - Add Vertebrae.mQuoted..
+
+ - Vertebrae API
+
+ - Implement Vertebrae methods
+   Bool update()
+
+ - Make quark Instruction : Vertebrae
+   Instruction API
+     virtual Status execute(Interpreter & itp)
+
+
+
+:101]
+[102:
+
+Mon Jun 27 15:52:16 2022
+
+Have Interpreter be a subclass of HC3
+
+:102]
+[103:
+
+Mon Jun 27 16:22:17 2022 Key Instruction classes
+get distinctive colors, plus some default grey for
+the rest.
+
+:103]
+[104:
+
+Mon Jun 27 16:52:07 2022 Also have/see potential
+for swapping Cmd values but NOT state.
+
+:104]
+[105:
+
+Tue Jun 28 00:20:09 2022 OK come on we need
+code. I want to see a worm worming in the next
+twelve hours tops.
+[106:
+
+Tue Jun 28 00:20:52 2022 Saving
+SwapWormHC3.ulam-hold and tearing into it..
+
+TODO
+
+[108: Tue Jun 28 00:51:20 2022 Made Vertebra.ulam
+as a new start,
+DONE :108] - Strip out type
+
+[169: DONE  :169] - Add Body/World/CmdWDir stuff
+
+[170: DONE  :170] - Keep going
+
+:106]
+:105]
+[109:
+
+Tue Jun 28 00:51:41 2022 Made Vertebra.ulam with
+the minimal but nothing's using it yet.[110:
+
+Tue Jun 28 01:04:36 2022 OK, element Demo : Vertebra
+now goes west all the time.
+
+Let's have it bounce off the edge of the
+  diamond.[111:
+
+Tue Jun 28 01:07:16 2022 But moving around in free
+(pocket) space at all, vs maintaining the worm
+invariants.
+
+We should go for a grow-to-length-8 instead.
+
+ - Seed configures head/tail with desired length
+
+ - It grows, maintains segment # gradient
+
+:111]
+
+:110]
+
+:109]
+[112:
+
+Tue Jun 28 02:14:07 2022 OK, SeedDemo is making a
+single Demo with an mSegNo of 10, and we're
+thinking it should at some point grow a tail with
+mSegNo of 9 and etc.
+
+When would that Demo-specific processing happen?
+It's going to take some tinkering to get all these
+levels sorted out regarding behavior and
+sequencing.
+
+[113:
+
+Tue Jun 28 03:03:23 2022
+
+Behavioral components
+
+ - POST / apoptosis [114: Tue Jun 28 03:48:18 2022 Defer  :114]
+ - Pocket init
+ - Vertebra invariants
+ - Subclass actions
+
+[115:
+
+Tue Jun 28 04:29:20 2022 Damnit drifted again. So
+in the case of Demo here, how about:
+
+  Demo.behave() {
+    // doPOST(); // later
+    if (updateVertebra()) return;
+    // more stuff later
+  }
+
+quark Vertebra {
+  /** Do type-specific actions given the
+      Vertebra invariant(s) are satisfied
+    */
+  virtual Bool action() ;
+}
+
+I guess we really need to break down
+Vertebra.update() to understand when action()
+would get called.
+
+Vertebra.update() :
+
+  - Death processing
+  - Init pocket or return true
+  - Rationalize upstream or die
+  - Rationalize downstream or die
+ ..
+
+[116:
+
+Tue Jun 28 04:41:29 2022 I think we should
+probably go with a VertebraState-based approach.
+
+Demo.behave() {
+  VertebraState vs;
+  vs.init(self);
+  if (vs.status() == cVS_DIE) return die();
+  if (vs.status() == cVS_BLOCK) return;
+  // cVS_OK: We are good, connections are good
+  ..do our stuff..
+}
+
+[117:
+
+Tue Jun 28 04:44:08 2022 But manoman I'm really
+hating saying 'ver-TEE-bra' (or 'ver-tuh-BRAY' for
+that matter) over and over in my head and
+keyboard.
+
+I want to call them like 'Vert' and have that be
+short for Vertebra, Vertebrae, and Vertex for good
+measure. But that's not a word, not flavorful, and
+uggy.
+[118:
+
+Tue Jun 28 11:22:35 2022 About time to move the
+flag so we're going to have to wait, here. Still
+wanting another name
+
+ Segment   Worm
+ Vertebra  Spine
+ Bone      Spine
+ Bone      Skeleton
+ Link      Chain
+ Car       Train
+ Monomer   Polymer
+[119:
+
+Tue Jun 28 16:12:18 2022 Flag moved
+
+ Base      Strand?
+ Instruction  Program
+ Node      List
+ Point     Line
+
+hmm that's temptingly bland
+[120:
+
+Tue Jun 28 16:42:14 2022 Damnit come on pick pick
+pick something.
+
+Both Point and Link are so overloaded in their
+blandness.. Which is good and bad.
+
+LinkHC3 ?
+
+Maybe stick with Segment, at least implying
+SwapWorm, out of solidarity with our history,
+critics mocking our jargon notwithstanding.
+
+Let's do quark Segment. And not QSegment either.
+[121:
+
+Tue Jun 28 17:05:02 2022 OK it's Segment.ulam.
+
+Next steps, after the evening?
+
+:121]
+
+:120]
+
+:119]
+
+:118]
+:117]
+:116]
+:115]
+:113]
+
+:112]
+[122:
+
+Wed Jun 29 00:35:37 2022 OK again come on. Demo
+grow and move tonight.
+
+transient SegmentState {
+  PocketHC3 mPock;
+  Bool init(Segment& seg) {
+    if (p.init() != PocketHC3.cSTATUS_OK) return true; // Distorted pocket
+    return false;
+  }
+}
+
+transient DemoState : SegmentState {
+  Bool init(Demo & demo) {
+    if (super.init(demo)) return true;
+
+    return false;
+  }
+}
+
+ Demo.behave() {
+   //post
+   DemoState ds;
+   if (ds.init(self)) return;
+
+updateSegment();
+ }
+
+.. Segment.updateSegment
+
+
+:122]
+[123:
+
+Wed Jun 29 02:08:59 2022 OK built cuts at
+DemoState and SegmentState, moved the PocketHC3
+into SegmentState, and things are working as they
+were. Still have to write the 'default Segment
+rules' and decide where to call them.
+
+Default Segment rules:
+
+ - Sanity checks / rationalization
+ - Randomize over bdir
+     Bits(1) d = random.between(0,1);
+     for (Unsigned i = 0; i < 2; ++i) {
+      d ^= 1u;
+      CmdWDir & wd = mCmdWDirs[(Unsigned) d];
+      if (wd.doStuff()) return true;
+     }
+     return false;
+
+[124:
+
+Wed Jun 29 04:16:28 2022
+
+SegmentState
+PocketHC3 mPocket
+SN mLink[2] - where mate was found (or 0u)
+Status mItsStatus[2] - its link type to us
+
+[125:
+
+Wed Jun 29 04:40:03 2022 what about
+
+ Bool mNull  = false; //      has link      /       no link
+ Bool mFixed = false; // movable | anchored / growable | cauterized
+ Unsigned(2) mWDir;
+
+
+[126:
+
+Wed Jun 29 04:45:51 2022 Block stuff in one
+direction so you get an event to look at it. While
+not blocking in the other direction so you
+
+DEFAULT BEHAVIOR
+ consider U, D in random order
+ if link+movable check mate for movable, vote if so
+ {if nolink+movable check random for availability,
+   store somehow and vote it so}
+
+ If find a l+m, call down
+    Bool
+
+[127:
+
+Wed Jun 29 05:02:52 2022 What if it's not
+'movable' but 'quoted'?
+
+ Unsigned(3) mWDir
+   cNULL = 0u
+   CWEST..cEAST = 1u..4u
+
+ consider U, D in random order
+   if !cNULL
+     SN ngb = pocketFindMate
+     Bool do = self.wantMove(
+     if do && ngb != 0
+       doswap(0,ngb)
+       return true;
+
+   else
+     SN engb = pocketFindAvailable
+     Bool do = self.wantGrow(
+     if do && engb != 0
+       dogrow(UD,ngb)
+       return true
+
+ return false
+
+:127]
+
+:126]
+:125]
+
+:124]
+:123]
+[128:
+
+Thu Jun 30 02:01:35 2022 OK so we stubbed in
+findMate / findAvailable and we hit findAvailable
+first. So, what exactly do we want that to do?
+
+ - Pick a random pocket ngb.
+ - Iterate over it
+ - If the sum of its
+   = occupied sites, and its
+   = inaccessible sites
+   are 0 or 1,
+ - return a randomly selected empty sn
+ - otherwise return 0u
+
+:128]
+[129:
+
+Thu Jun 30 04:37:17 2022 OK, got as far as needing
+doGrow but taking a nap first.
+[130:
+
+Thu Jun 30 08:35:01 2022 OK, so what should be a
+first stab at doGrow? We get the Seg& that decided
+wantGrow, an (ew) sn of an empty in the pocket in
+the bd direction.
+
+ - First off: Let's override this in DemoState?
+
+[131:
+
+Thu Jun 30 08:39:12 2022 OK, now we're
+implement-me in DemoState.doGrow.
+
+We're going to say
+
+ - Copy self to temp atom
+
+ - copy..
+
+wait how do we know what PocketPtr the empty is
+in?
+[132:
+
+Thu Jun 30 09:21:55 2022 OK a first cut doGrow
+just worked. Now need findMate for the ensuing
+events.
+
+:132]
+
+:131]
+
+:130]
+
+:129]
+[133:
+
+Thu Jun 30 10:29:38 2022 Hmm using PocketPtr == 0u
+as NULL means we can't point to our own pocket. We
+knew that, and we thought we didn't want to point
+at our own pocket, but as we work through findMate
+it starts to look like we maybe could handle self
+ptrs except for this representation of
+NULL. A-and, we have three codes in PocketPtr left
+unused anyway.
+
+Let's try to push back to running, but then
+consider moving to cPP_NULL = 7u instead of 0u
+[134:
+
+Thu Jun 30 10:52:53 2022 OK we ran, and now we
+need doSwap (for some reason), but let's try for
+moving NULL first.[135:
+
+Thu Jun 30 11:15:24 2022 OK when do we get do
+doSwap?
+
+[136:
+
+Thu Jun 30 11:15:52 2022 We successfully found a
+mate and then called wantMove, and Demo.wantMove
+just returns true. That's why.
+[137:
+
+Thu Jun 30 11:33:12 2022 OK, now we have more
+successful in-place growth, as yet with no
+movement. Current issue is we're looking at a case
+where growth grows back into a partially populated
+pocket. Did we want to allow that?[138:
+
+Thu Jun 30 11:36:18 2022 Well,
+Segment.findAvailable allows one occupied site,
+and it doesn't do any checks about what that
+existing occupant might be.
+
+So maybe it's okay?
+[139:
+
+Thu Jun 30 11:46:22 2022 Well, we're declaring it
+okay for the moment. It doesn't appear to mess
+anything up, except to make things more
+complicated visually.
+[140:
+
+Thu Jun 30 11:57:20 2022 OK we added Demo.getColor
+and can trace the chain better.
+
+Next up is trying to move the chain. What are some
+steps for that?
+
+ - A Demo segment type member?
+   godown, goup, stay?
+
+ - Also, a relaxation step for Demo, like to
+   recheck the mseqno gradient.
+
+:140]
+
+:139]
+
+:138]
+
+:137]
+:136]
+
+:135]
+
+:134]
+:133]
+[141:
+
+Thu Jun 30 13:34:08 2022 OK we've sprouted one Demo
+with Demo.mDSType == Demo.cDS_DOWN behind the
+head, and now it just sits there.
+
+How do we get the cDS_DOWN to swap down?[142:
+
+Thu Jun 30 13:35:31 2022 Demo.wantMove(..) I
+guess.
+
+[143:
+
+Thu Jun 30 13:52:33 2022 OK so I think we have
+wantMove saying true to cDS_DOWN, so presumably
+we'll blow up on doSwap again, and ha
+
+[144:
+
+Thu Jun 30 13:57:50 2022 OK, blew up on doSwap at
+a believable point.
+[145:
+
+Thu Jun 30 14:10:34 2022 Hmm,
+
+ - wantMove() should probably be wantSwap(), and
+
+ - wantSwap needs to know which bdir we are
+   considering swapping. The answer will
+   often/usually depend on that.
+
+:145]
+:144]
+
+:143]
+
+:142]
+
+:141]
+[146:
+
+Thu Jun 30 15:15:13 2022 OK, now we need a way for
+the temps to disappear when they get to the end.
+
+(It also looks like we have a possible deadlock
+also with trying to swap into a pocket with two
+Demos. Like we're refusing to try even if the
+PocketPtrs suffice to distinguish which is
+which. We'll see.)
+
+:146]
+[147:
+
+Fri Jul  1 01:11:02 2022 Well, issues for next
+time:
+
+ - Demos should diffuse if they didn't do anything
+   else.
+
+   = We see a persistent blockage caused by a
+     pocket having two occupants plus an
+     inaccessible site; diffusion would see into
+     the inaccessible site sooner or later.
+
+
+ - Brainstorm about ditching Segment.update and
+   instead provide lower-level services that
+   Demo.behave (or similar) can mix and match.
+
+   = Feeling like the fixed-path-plus-calldowns is
+     going to be way constricting, rather than
+     liberating, going forward.
+
+   = E.g., we're going to want to limit the
+     in-flight temps, but doing that in the
+     current framework feels awul.
+
+:147]
+[148:
+
+Fri Jul  1 10:14:11 2022 It's Friday before T2sday
+and we're going to have to be locking down pretty
+damn soon, here.. but I want to try a fresh cut
+with Demo on top and Segment/SegmentState offering
+services.
+
+Actually let's do a WIP push.[149:
+
+Fri Jul  1 10:17:54 2022 OK pushed.
+
+Let's -hold Demo, scrape it out, and try to come
+in from the top "the way an app coder would want
+to" or something smelling vaguely like that.
+
+:149]
+
+:148]
+[150:
+
+Fri Jul  1 10:29:28 2022 So, what does high-level
+app coder want Demo to do?
+
+ - Have a good pocket or block
+
+ - Find upstream and downstream as needed
+   = Or diffuse if can't
+
+ - Do type-specific processing (move up/down, ..)
+   = Leading all the way to the swap or not
+
+:150]
+[151:
+
+Fri Jul  1 15:00:15 2022 OK first cut
+Demo.behave() 'in control' built. Feels a good
+deal more obvious.. but we haven't started growing
+the chain yet.
+
+:151]
+[152:
+
+Fri Jul  1 18:04:44 2022 OK have to finish cooking
+dinner but the current issue is: We have a
+stretched pocket next to a square one:
+
+
+        H . . . H . . H
+        . b . . . . c .
+        . . . . . . . .
+        H . . . H . . H
+
+and
+
+ - Demo 'b' is upstream of 'c', but when
+ - 'c' gets an event, it can't see 'b', so
+ - SegmentState.findMate returns cMATE_MISSING (I
+   think), and then Demo.behave does
+
+    if (ms > Segment.cMATE_UNSURE) return die();
+
+ and dies because cMATE_UNSURE == 2 and
+ cMATE_MISSING == 3.
+
+SO:
+ (1) Is findMate returning cMATE_MISSING? It
+     should be returning cMATE_UNSURE.
+
+so confirm that and continue from there.
+
+
+:152]
+[153:
+
+Sat Jul  2 03:01:02 2022 OK, so we've caught a
+case where, I believe, a chain pingponging between
+two pockets absolutely results in an ambiguity
+about who is connected to who.
+
+In pocket above
+  segsdown  forward  backward
+     3        3        4
+     5        3        3
+
+In pocket below
+     4        2        2
+     6        7        2
+
+So 3 & 5 both point forward to 3 (below), and
+4 & 6 both point backward to 2 (above).
+
+Without examining the segsdown you can't tell
+who's 'right' -- but the segsdown are meant to be
+DERIVED from the chain relationships, not to
+DEFINE them.
+
+[154:
+
+Sat Jul  2 03:29:23 2022 OK, I think the only sane
+thing to do here is say we can only grow (and
+later move) into a pocket if that pocket contains
+0 segments that are inMyGroup.
+
+In this case, that would have blocked 4 below from
+growing 5 above, because 3 was already above.
+[155:
+
+Sat Jul  2 03:51:45 2022 OK that fixed the
+proximal problem, and also makes the worms look
+quite a bit more stretched out and wormier, so I
+guess that's good.
+
+:155]
+:154]
+
+:153]
+[156:
+
+Sat Jul  2 07:31:01 2022 OK, so can we make these
+more-coder-friendly diamond swapworms move, here?
+
+:156]
+[157:
+
+Sat Jul  2 12:39:34 2022 OK so we're finally
+starting to move somewhat plausibly, but we given
+that we're restricted to one of our segs in any
+given pocket, the head can wind itself into a trap
+fairly easily. There's lots of ways and intents to
+deal with that but for now let's take it as
+motivation to get backing up working..
+
+[158:
+
+Sat Jul  2 12:53:35 2022 Do we want to have a
+mTempsUp (and mSegsUp) and all? Go fully
+symmetric?
+
+I'm also wondering how we're possibly going to do
+a grow-out-the-side mechanism so that we can grow
+ringworms (eew). Say instead diamond rings how
+about that?
+
+:158]
+
+:157]
+[159:
+
+Sat Jul  2 13:33:33 2022 OK went full
+temps/segsup. Now we need to generate some UPs and
+see if we can jiggle out of jams.
+
+:159]
+[160:
+
+Sun Jul  3 13:38:16 2022 Fudge. We had the thing
+running on the grid and it locked up after several
+hours. Another instance of the weird HC3 problem
+where, I think, the root dies for some reason, and
+then everybody else starts decrementing their
+hopcounts (since they see no root), and eventually
+the periphery starts to die, and then an uninitted
+takes its place, and, somehow, we end up with a
+checkerboard of not-yet-deads and uninitteds. With
+no root so nothing else happens.
+
+Pleasantly in this case, though, the diamond
+chains didn't GAF that the grid was no longer
+moving. They just kept on doing their thing.
+
+:160]
+[161:
+
+Wed Jul  6 10:45:47 2022 OK, let's have a WIP
+commit following t2sup3124 and then see where we
+are.
+[162:
+
+Wed Jul  6 10:52:35 2022 OK did that. Quick
+to-do review:
+[171:
+
+Wed Jul  6 10:56:25 2022 OK it looks like all
+existing to-dos are now mooted or done.
+
+Existing concerns in my head:
+
+ - Still no edge protection for HC3
+
+ - How how how to grow a Segment loop?
+
+ - Current Demo : Segment too stretchy
+
+Is that really it? Seemed like a lot more in my
+head.
+
+[172:
+
+Wed Jul  6 11:38:02 2022 Possible next steps:
+
+ - Smarter head segments
+
+ - Smarter tail segments?
+   = Form loops by exchanging position info and
+     navigating to each other?
+
+For later:
+
+ - Some kind of growth wart?
+
+  v,^ : single direction pointer
+  |,- : bidirectional pointers
+
+          S1 - S2 - S3 - S4 - S5
+
+
+               G1
+                v
+          S1 - S2 - S3 - S4 - S5
+
+
+               G1 - G2
+                v    v
+          S1 - S2 - S3 - S4 - S5
+
+
+               S2 - G2
+                ^    v
+          S1 - G1 - S3 - S4 - S5
+
+
+               S2 - S3
+                ^    v
+          S1 - G1 - G2 - S4 - S5
+
+
+               S2 - S3
+                ^    |
+          S1 - G1   Sx - S4 - S5
+
+
+               S2 - S3
+                |    |
+          S1 - Sy   Sx - S4 - S5
+
+
+               S3 - S4
+                |    |
+          S1 - S2   S5 - S6 - S7
+
+
+NOTE: G1 or G2 can turn into a moving temp segment
+if growing by an odd length is needed. That will
+leave an available spot at the ring head or tail
+that can be used for later growth.
+
+NOTE 2: S2/S3 don't need additional pointers or
+anything special, but all involved need to know
+they have to block rather than swap with a G.
+[174:
+
+Thu Jul  7 02:49:34 2022
+
+NOTE 3: We do need to somehow avoid multiple
+growth warts happening on opposite sides of
+overlapping segments, though. That might (?)
+require additional participation from S2/S3 or
+surrounding segments.
+
+[175:
+
+Thu Jul  7 03:26:51 2022 Depending how deep we go
+with the quoting framework, the Gs might start out
+by quoting the Ss they're attaching to? But no we
+were thinking most Ss would already be quoted. So
+unless we had special extra quoting levels --
+which we may well might.
+
+:175]
+
+:174]
+[173:
+
+Thu Jul  7 02:48:55 2022 Well, so that seems
+pretty plausible? Could we spike that?
+[176:
+
+Thu Jul  7 03:34:39 2022 Let's try a spike, with
+no specified mechanism to avoid interactions.
+
+:176]
+:173]
+:172]
+
+:171]
+
+:162]
+
+:161]
+[177:
+
+Thu Jul  7 04:10:27 2022 Actually, let's try a
+spike where if a head happens to see a tail, links
+up and converts to an 'origin' or something. We
+should be able to create rings just 'by accident'.
+
+TODO this spike:
+
+[178: Thu Jul  7 04:33:48 2022 First cut
+DONE :178] - Lift guts of Demo into say QChain
+
+[179: Ditto
+DONE :179] - Get Demo : QChain working
+
+[181: Thu Jul  7 05:46:09 2022 First cut
+DONE :181] - Make Clasp : QChain
+
+ - Have Demo head turn to Clasp and link tail
+   = But only if it has a temp behind it?
+
+ - Have Clasp send up and downs to roll the ring
+
+ - Perhaps have Clasp spontaneously open on odds
+
+:177]
+[180:
+
+Thu Jul  7 04:47:07 2022 Need some calldowns from
+QChain.. Which specifically?
+
+:180]
+[182:
+
+Thu Jul  7 10:58:39 2022 Well I left it running
+while I napped but no sign of an lucky ourobouros
+formation..
+
+So, to make a ring from nothing --
+
+[183: Thu Jul  7 12:04:21 2022
+
+  v,^ : single direction pointer
+  |,- : bidirectional pointers
+  =   : pair of bidirectional pointers
+
+      S             // Seed
+
+      Cl = S1       // Clasp + seg in ring
+
+      G1
+       v            // Clasp triggers grow
+      Cl = S1
+
+      G1 - G2
+       v            // Scaffolding expands
+      Cl = S1
+
+      G1 - G2       // Scaffolding complete
+       v    v
+      Cl = S1
+
+      Cl - G2       // Interposition 1
+       ^    v
+      G1 = S1
+
+      Cl - S1
+       ^    v       // Interposition 2
+      G1 = G2
+
+
+      Cl - S1
+       ^    |       // Substitution 1
+      G1 - Sx
+
+      Cl - S1
+       |    |       // Substitution 2 / Done
+      Sy - Sx
+
+
+
+:183]
+
+:182]
+[184:
+
+Fri Jul  8 05:12:21 2022 OK so we have a Clasp
+doubly-linked to a Demo, created atomically by a
+SeedClasp. And they survive and bop around in
+their pockets just fine. Their mSegsDown both
+climb to SegCount.maxof == 15u, but other than
+that things seem sensible enough.
+
+So now are we sure we have a clean way to stop
+swapping during a Growth sequence?[185:
+
+Fri Jul  8 06:35:22 2022 It doesn't look like we
+do. I'm thinking we need
+
+ virtual Bool QChain.isSwappable(QChainState & qs);
+
+or something?
+
+Not sure this really wants to be QChain level
+rather than Segment level but at the moment
+Segment knows nothing about swappingk so.
+
+:185]
+
+:184]
+[186:
+
+Fri Jul  8 10:49:11 2022 OK going to need a nap
+soon but this idea seems plausible:
+
+How to grow a ring:
+ (1) Send out a 'grow mover' in phase 1 GM1
+ (2) If GM1 see adjacent empty, spawns configured
+     grower GW1(fwd=DIR), and goes to
+     GM2(try=DIR), which then blocks on watchdog
+ (3) GM1 checks for adjacent empty in the DIR
+     direction. If not available, reconfigures
+     GW1(fwd=BLOCKED) and GM3. If available spawns
+     configured GW2
+
+[187:
+
+Sat Jul  9 00:35:32 2022 Well it does get a little
+bit complicated. And that started feeling less
+stigmergic than we'd like. Shouldn't be so focused
+on changing internal states; should be more
+focused on occupying potentially useful space,
+blocking dead ends, transforming when success is
+reached, and cleaning up when failure is
+inevitable.
+
+We want this to be clean!
+
+Maybe it should be enough for GM to specify the
+fwd direciton its trying to expand around.
+[188:
+
+Sat Jul  9 01:20:34 2022 Specify fwd direction and
+spawn to both sides as available. Spawnees try to
+spawn into given direction as available. Success
+and failure feed back. Eventually GM
+
+:188]
+
+:187]
+
+:186]
+[189:
+
+Sat Jul  9 02:08:32 2022 You know, thinking this
+way makes me wonder if we could have a little
+minilanguage of spawning and configuring that
+could suffice to express 'grow mover' and its
+associated stigmergic subtasks
+[190:
+
+Sat Jul  9 06:18:01 2022
+
+GM and GW are the same thing just with different
+origins and symmetries.
+
+Do the logic as if traveling E, say.
+
+Use Int(2)[2] offsets
+
+-2 : invalid
+-1
+0
+1
+
+position (4 bits) + question (2 bits) + answer (1 bit)
+
+ question 0: Can you reach (1,0)?
+ question 1: Have you finished connecting to (1,0)?
+ question 2: Have you finished cleaning up without
+             connecting to (1,0)?
+
+
+So (0,0) waits for answers to Q0, then decides
+what to do, then issues new questions - Q1 to the
+winner and Q2 to the loser (if any).
+
+:190]
+:189]
+[191:
+
+Sun Jul 10 08:39:34 2022 Been trying to implement
+a 'GrowBomb', here, using the 'questions' approach
+above, but haven't made a lot of progress
+yet. Part of the issue, I guess, is that the
+growbombs sometimes do, but sometimes don't, want
+to act like mostly normal qchain segs.
+
+:191]
+[192:
+
+Mon Jul 11 02:06:41 2022 I need a 'reset to
+stigmergy' moment, I think. I should ditch or at
+least defer the whole 'Q+A' approach, in favor of
+predicates on reachable ngbs.
+
+Like:
+ - Which way should scaffolding expand?
+   -> In the 'forward' dir of the adjacent Seg
+
+Hmm is that the only one??
+
+In any case, also, we should have a concept of
+before-vs-after calling QChain.update(). When we
+do stuff before (or instead of) calling update,
+we're acting like a special purpose atom; when we
+do it after, we're acting like a custom QChain.
+
+[193:
+
+Mon Jul 11 02:15:16 2022 And we shouldn't need to
+know or care about 2x2 spatial indexing because
+all we need to know is the forward direction.
+
+And the corners convey to the center whether
+they've successfully expanded by whether they have
+a forward link or not. So the center can check
+without additional state.
+
+Except how do the corners signal failure vs
+haven't-tried-yet?
+
+[194:
+
+Mon Jul 11 02:19:02 2022 Weh-ell, PocketPtr has
+both cPP_SELF and cPP_NULL.. former could mean
+"haven't tried" and latter could mean "tried and
+failed". Right?
+
+:194]
+
+:193]
+
+:192]
+[195:
+
+Mon Jul 11 03:11:43 2022 Well, cases? --
+
+IF BASE:
+
+ - Should I block?
+   = Any active corners? -> yes
+
+ - Should I advance?
+   = No empty adjacents? -> yes
+   = One or two done corners? -> erase them, then yes
+   = else no
+
+ - Should I deploy new corners?
+   = Any empty adjacents? -> yes
+
+IF CORNER:
+
+ - Should I block?
+   = Am I halted? -> yes
+
+ - Should I extend?
+   = Empty fwd? -> yes
+   = else no
+
+ - Should I halt?
+   = Blocked fwd? -> yes
+   = Halted extension? -> erase it, then yes
+
+IF EXTENSION:
+
+ - Should I block?
+   = Can't access
+
+:195]
+[196:
+
+Tue Jul 12 14:56:30 2022 OK so flag moved again,
+and I shifted to quark GrowBomb : QChain, with
+subclasses for BaseGB, CornerGB, and SideGB. My
+thinking, such as it was, was that there seemed to
+be a fair amount of behavior for each one so we
+didn't want to smash them all together.. We'll
+see.
+
+Trying to implement from the :195: notes above.
+[197:
+
+Wed Jul 13 02:26:30 2022 OK so BaseGB.ulam has
+some shape and takes events but so far isn't doing
+any logic.
+
+:197]
+:196]
+[198:
+
+Sun Jul 17 02:51:48 2022 Well so I switched from
+growing loop to building cell wall, but I hadn't
+given up on coming back to growing loop.
+
+Once I was desperate enough yano.
+
+And now it's T2sday Sunday. Pretty desperate.
+
+:198][199:
+
+Sun Jul 17 02:57:38 2022 So the idea still
+standing is simplification.
+
+ - Don't have separate feasibility checking vs
+   implementation phases.
+
+ - Have the attempt go to completion as soon as
+   feasibility is established.
+
+ - Have base remember whether it's tried the
+   opposite side, so if an attempt fails back to
+   it, it will know whether to just advance or
+   not.
+
+[200:
+
+Sun Jul 17 03:03:23 2022 Could we write it in
+SPLAT?
+
+And even if that turns out to be a bad idea, could
+trying that helps us stand to write the ulam code?
+
+It's been a long time since we've splattred. Let's
+refresh that path. DO IT DO IT DO
+
+[201:
+
+Sun Jul 17 03:29:12 2022 Well no we can't actually
+literally write this code in SPLAT can we? Because
+SPLAT does sites, not pockets.
+
+We could do a site-ish version in SPLAT but only
+for inspiration.
+
+:201]
+
+:200]
+
+
+:199]
+[202:
+
+Sun Jul 17 04:52:52 2022 So have been trying to do
+a new-ish start in NuGrow.ulam, and we've just
+gotten as far as setting up a NuGrow <=> Demo two
+loop successfully.
+
+:202]
+[203:
+
+Sun Jul 17 21:43:25 2022 Well we've gotten as far
+as needing behavior for 'NuSide' in the following
+sort of (pocket) structure:
+
+       Nc. . Ns        Nc NuCorner
+       .     .         Ns NuSide
+       .     .         Ng NuGrow
+       Ng <> De        De Demo
+
+First thing I'm wishing for is an intermediate Nu
+(or something) quark that could (perhaps among
+other things) represent failure, so (for example)
+NuCorner could signal failure in its NuGrow when
+it discovers some obstacle where it wanted a
+NuSide to go.
+
+[204:
+
+Sun Jul 17 22:33:43 2022 Also going to need some
+way to identify an index point on the loop, so a
+NuGrow doesn't just circle endlessly in a crowd.
+
+Even if we want it to circle endlessly we should
+probably know when we loop?
+[205:
+
+Sun Jul 17 22:48:15 2022 And while we're
+refactoring should we think about ditching the
+'nu' for something a bit less temporal?
+
+Nah fuck it nu it is.
+
+:205]
+:204]
+
+:203]
+[206:
+
+Mon Jul 18 00:16:45 2022 OK, so we see NuCorner
+mark itself as cRS_FAILED when it sees the NuSide
+pocket is occupied.
+
+Now Ng is supposed to
+
+(1) Notice that
+(2) Mark that direction tried
+(3) Erase the Nc
+[207:
+
+Mon Jul 18 17:10:53 2022 Well, might have a cut at
+most of that, but the current example is a success
+one - Ns is saying "MSG: print: "Want to succeed
+here but don't know what to do yet" and what
+should we be telling it?
+
+We need to look down the road a bit at the rest of
+the loop-grow sequence, because there's a bunch
+more steps and the code we're writing needs to
+recognize where it is during those steps.
+:207] (and eventually circle back to check if
+there's another untried side.)
+
+But taking a break to think big picture for t2sup.
+
+:206]
+[208:
+
+Mon Jul 18 17:21:06 2022 Reviewing :183: above..
+
+So we have versions of
+
+ - Clasp triggers grow
+ - Scaffolding expands
+ - Scaffolding complete
+
+and we('ll soon) need
+ - Interposition 1
+ - Interposition 2
+ - Substitution 1
+ - Substitution 2
+
+[209:
+
+Mon Jul 18 18:46:35 2022 Let's try to see what
+those look like in current terminology
+
+Interposition 1
+
+          Nc . Ns                 Nc = De
+          .    .         ->       .    v
+     De = Ng = De = De       De = Ng = Ns = De
+
+
+..well I'm not sure that pattern is what we
+want. What if we start acting the instant Ns sees
+success is possible?
+
+          Nc . Ns*                Nc . Ns          Ng is left inconsistent
+          .    .         ->       .    ||          (its next's prev isn't it), but
+     De = Ng = De = De       De = Ng > De = De     it's pending and doesn't check?
+
+
+          Nc*. Ns                 Md = Md          Md : Move down temp
+          .    ||        ->       ||   ||          Mu : Move up temp
+     De = Ng > De = De       De = Mu   De = De
+
+[210:
+
+Mon Jul 18 19:00:18 2022 So that kind of argues we
+could do it in only two more steps, with Nc
+batting cleanup rather than Ng.
+
+:210]
+
+
+:209]
+
+:208]
+[211:
+
+Mon Jul 18 22:51:55 2022 Well so we actually saw
+our first successfl loop-grow, about an hour ago,
+and since then we've been debugging cases and
+watching it go.
+
+Current problem, tentatively identified, is that
+this claim notwithstanding:
+
+         Ng is left inconsistent
+         (its next's prev isn't it), but
+         it's pending and doesn't check?
+
+it appears that it actually does check, and that
+Ng is detecting the inconsistency:
+
+    20220718224840-42661: 607AEPS [34EEA1F7]MSG: print: "DEMOB12"
+    20220718224840-42662: 607AEPS [34EEA1F7]MSG: print: Unsigned: 3
+    20220718224840-42663: 607AEPS [34EEA1F7]MSG: print: "DYING"
+    20220718224840-42664: 607AEPS [34EEA1F7]MSG: print: "QChain:>MATE_UNSURE"
+    20220718224840-42665: 607AEPS [34EEA1F7]MSG: (Ng) NuGrow
+     :87F800264040A40000000000
+    (
+     NuGrow(
+     mTrying=1,
+     mTried=[0]=false,[1]=false,
+     )QNu(
+     mResult=2/0x3,
+     )QChain(
+     mSegsDown=2/0x2,
+     mTempsDown=0,
+     mSegsUp=2/0x2,
+     mTempsUp=0,
+     mDSType=1,
+     )Segment(
+     mPocketPtrs=[0]=2/0x2,[1]=2/0x2
+    )
+
+    20220718224840-42666: 607AEPS [34EEA1F7]MSG: print: "QChain.die"
+
+[212:
+
+Mon Jul 18 22:57:23 2022 And if we want to avoid
+that, we have to be sure not to go to
+QChain.update(..) while we're inconsistent. How
+would we do that, given that we're in chainOp via
+QChain.update for almost everything else?
+
+[213:
+
+Mon Jul 18 23:14:36 2022 Well, if we cut out early
+on cRS_PENDING, we never sprout the Nc to start
+the process.
+
+Use an additional flag? Which Nc will have to know
+to clear on failure?[214:
+
+Mon Jul 18 23:29:07 2022 OK it's all a disgusting
+hack as always, but we have SeedSmallDiamond
+pushing out two SeedLoops which seem to decay into
+2-loops which expand to 4-loops.
+
+There's a ton of boundary cases unconsidered,
+though. Like we search side pockets by type (e.g.,
+NuSide.classidof) and don't then consistency check
+the result. If there's any way for NuSides from
+two different grow attempts to get into the same
+pocket.. but we don't really think we'll do that
+though, right?
+
+We'll see. Plenty more issues I'm sure.
+
+Let's play around a couple more times, then think
+about
+
+(1) How can we mark an 'index point' that will
+    count as an end to upstream and downstream?
+
+(2) How can we have our index point occasionally
+    convert a waiting temp up into a NuGrow, so
+    the loop can grow beyond four?
+
+:214]
+
+:213]
+
+:212]
+
+  :211]
+[215:
+
+Mon Jul 18 23:43:34 2022 OK, playing around drove
+home that we need one more crucial bit: Ng has to
+be able to advance if it's tried and failed on
+both sides. (I'm also not completely convince the
+'try second side' part is all working..)
+
+:215]
+[216:
+
+Fri Jul 22 10:37:44 2022 OK so I want to push on
+border issues a bit more here. In particular, some
+kind of mechanism like this:
+
+ - An 'anchor' element that loves to live
+   specifically in open pockets (3 sided)
+
+ - Erases itself when 0,1,2,4 HC3 corners are
+   found
+
+ - Erases itself if either 'open adjacent' corner
+   isn't at maxhops - 1
+
+ - The open side determines the 'anchor diagonal'
+   (5,6,7, or 8)
+
+ -
+
+
+:216]
+[217:
+
+Fri Jul 22 10:54:37 2022 (Other issues:
+
+ - Nc doesn't seem to fail if pocket for Ns is
+   open. Probably it should?[218:
+
+Fri Jul 22 10:59:26 2022 Unfortunately
+PocketHC3.initFullSide_ explicitly merges
+the 'incomplete' and the 'bent' cases, but we want
+Nc to die on incomplete but block on bent?
+
+Can we just have it fail in both cases, as a test
+anyway? [219:
+
+Fri Jul 22 11:03:13 2022 And ah we can't fail
+until we've awoken the base. So maybe only die if
+the Ns side is uniterable AND we successfully woke
+the base. Otherwise diffuse and see what comes.
+[220:
+
+Fri Jul 22 11:26:56 2022 Aaand we can't and don't
+want to fail if we've already sprouted Ns but we
+just can't see it right now because of inacc. So
+we need a Mr State flag saying we've sprouted Ns,
+because we can't necessarily detect that
+stigmergically.
+
+[221:
+
+Fri Jul 22 12:03:49 2022 Aand it doesn't seem like
+we want to die just because we can't see a whole
+neighboring pocket once. What to do?
+
+ - Timer ugh?
+
+ - Try to distinguish inacc from bent?
+
+ - But we're now saying we don't want Nc to die on
+   inacc, at least not right away..
+
+   .. so Timer ugh?
+
+[222:
+
+Fri Jul 22 12:18:06 2022 It's like we want to have
+an internal 'intention' expressing what we're
+waiting to do. And we set a timer on achieving our
+current intention.
+
+And we're going to need that pretty often while
+writing, for example, multi-pocket processes
+
+Ng intentions               awaiting
+ - advance or finish        downbody site accessible
+ - try side 1               cw or ccw pocket accessible
+ - try side 2               ccw or cw pocket accessible
+
+Nc intentions
+ - suspend Ng               Ng site accessible
+ - deploy Ns                Ns pocket accessible
+ - finish                   Ns and Nc sites accessible
+
+Ns intentions
+ - finish                   downchain site accessible
+
+[223:
+
+Sat Jul 23 01:09:58 2022 So can we get somehow to
+implementability, here?
+
+I sort of feel like trying to manifest an
+Intention structure might help beyond just Ng/c/s
+-- like might help with border patrol also..
+
+How could it go?
+
+Key points:
+
+ - Basic structure is
+     transient Intention
+     quark Intender
+
+ - The current Intention is selected _internally_
+   by the Intender
+
+     virtual Intention & Intender.getIntention(?);
+
+ - An Intention determines whether the Intender
+   should block or die or diffuse or take some
+   other custom action
+
+ - Intention subclasses separate and encapsulate
+   details.
+
+ - Maybe
+
+     virtual Intention & Intender.getIntention(BitStorage & bs);
+
+with conventional use like:
+
+quark Intender {
+  virtual Intention & getIntention(BitStorage & bs) ;
+}
+
+element Foo : Intender .. {
+  typedef Unsigned(2) IntentionNumber
+  IntentionNumber mIntentionNumber;
+  @Override
+  virtual Intention & getIntention(BitStorage & bs) {
+    if (mIntentionNumber == 0u)
+     return (Intention &) bs.recast(MyFooIntention.classidof, true);
+    return (Intention &) bs.recast(MyBarIntention.classidof, true);
+  }
+  Void behave() {
+     BitStorageT(4000) bs;
+     Intention & intent = getIntention(bs);
+     if (intent.isAchievable()) ..
+   }
+}
+
+transient Intention {
+  virtual Bool pursue(Intender & id) ;
+}
+transient FooIntention : Intention {
+  // FooIntention-specific data members
+}
+
+transient NgIntention : FooIntention { }
+
+transient NgAdvance : NgIntention {
+  @Override
+  virtual Bool pursue(Intender & id) {
+
+  }
+}
+
+[224:
+
+Sat Jul 23 04:53:30 2022 Or maybe just bite the
+bullet and go via class ids:
+
+ quark Intender {
+   typedef ClassUtils.ClassId ClassId;
+   virtual ClassId getClassIdOfIntention() ;
+   Bool pursueIntention() {
+     ClassId cid = getClassIdOfIntention();
+     ClassUtils cu;
+     if (!cu.isBase(cid, Intention.classidof))
+       return die();
+
+     BitStorageT(4000) bs;
+     Intention & intent = (Intention&) bs.recast(cid, true);
+
+   }
+ }
+
+ element Foo : Intender {
+   typedef Unsigned(3) IntentionIdx;
+   IntentionIdx mIntentionIdx;
+   constant ClassId cIntentions[IntentionIdx.maxof + 1u] = {
+     FooAdvanceIntention.classidof,
+     FooTry1Intention.classidof,
+     FooTry2Intention.classidof,
+   }
+   @Override
+   ClassId getClassIdOfIntention() {
+     return cIntentions[mIntentionIdx];
+   }
+ }
+
+:224]
+:223]
+
+:222]
+
+:221]
+:220]
+
+:219]
+
+:218]
+
+)
+
+:217]
+[225:
+
+Sat Jul 23 10:52:57 2022 Moving to Border11 before
+trying this Intention stuff.
+
+:225]
+[226:
+
+Sat Jul 23 10:54:33 2022 OK, let's try it.
+
+:226]
+[227:
+
+Sat Jul 23 13:36:11 2022 OK, we have a
+DemoIntender.ulam that -- at the moment --
+perpetually has the intention to go west. How do
+we want to expression changing intentions?[228:
+
+Sat Jul 23 14:10:04 2022 Well we just hacked
+intention changing in Intention.pursue ->
+DemoIntention.pursue -> DemoIntention.tryMove, and
+now we have DemoIntenders walking around side-16
+boxes -- and blocking for obstructtions without
+losing the count.
+
+I think I need a break, but then maybe we take on
+Ng & co..[229:
+
+Sat Jul 23 22:51:20 2022 OK LET'S GO
+[230:
+
+Sat Jul 23 22:52:42 2022 First question: Are we
+unifying the whole 'State' concept (SegmentState
+-> QChainState -> NGState) with Intention?
+[231:
+
+Sun Jul 24 10:36:59 2022 Well, so we're now
+running with
+
+    transient SegmentState : Intention {
+and
+    quark Segment : Intender {
+
+and it seems to be working, but the IntenX
+sections aren't really doing much work yet.[232:
+
+Sun Jul 24 11:00:12 2022 In particular,
+Intender.pursueIntention() isn't called anywhere
+in the Segment/QChain code.
+
+What exactly is the flow we're imagining for all
+this?
+
+[233:
+
+Sun Jul 24 11:04:54 2022 Well, like
+
+    element DemoIntender : Intender {
+ ..
+      Void behave() {
+        DebugUtils du;
+        if (pursueIntention()) return;
+        du.print("XXX POST PURSINT");
+      }
+    }
+
+is what we have so far.
+
+:233]
+
+:232]
+
+:231]
+
+:230]
+:229]
+
+:228]
+
+:227]
+[234:
+
+Mon Jul 25 00:21:10 2022 OK let's try to
+reorganize around pursueIntention() and see how
+far we get.
+[235:
+
+Mon Jul 25 00:24:08 2022 Well watch out for that
+first step. We already have a pretty deep stack
+from, say, NuGrow.behave().. [236:
+
+Mon Jul 25 00:29:33 2022 Maybe we should do a few
+more Intender spikes first and see if that helps
+see what we want.
+
+:236]
+
+:235]
+:234]
+[237:
+
+Mon Jul 25 03:08:28 2022 So if we're going to work
+our way down through abstract Intentions, we need
+to know what pursuing an intention means
+potentially at each level.
+
+Right now we have Intender doing:
+
+      Bool pursueIntention() {
+        ClassId cid = getIntentionClass();
+ ..
+        IntentionBuffer ib;
+        Intention & intent = (Intention&) ib.recast(cid,true);
+
+        if (intent.init(self)) return true;
+
+        if (intent.pursue(self)) return true;
+ ..
+        return false;
+      }
+
+which is finishing a double-dispatch to convert an
+Intender.pursueIntention() into an
+Intention.pursue(Intender&)
+
+And right now that's leading to SegmentState:
+
+  virtual Bool pursue(Intender & in) {
+    Fail f;
+    f.fail("SegmentState.pursue unimplemented");
+    return true;
+  }
+
+[238:
+
+Mon Jul 25 04:14:28 2022 So I'd kind of think that
+doesn't want to be there at all; that we want to
+drop essentially all the way to the concrete
+class, and come back up with services as helpful.
+
+Let's try knocking that out and see how many
+places complain.
+
+[239:
+
+Mon Jul 25 04:18:13 2022 And actually, let's pick
+up there after second sleep.
+
+:239]
+
+:238]
+
+:237]
+[240:
+
+Mon Jul 25 15:08:30 2022 OK, so we've been at it
+for some hours here, and we've 'converted' the
+existing QChain stuff to Intenders. It's really
+getting messy though and I should really do a
+fresh start from Intender and reimplement.
+
+In any case, though, the current situation is
+SeedLoop pops the Ng/De pair, but then Ng never
+pops the Nc. So let's take a look at that, just to
+keep the context alive in my head, if nothing
+else.
+
+[241:
+
+Mon Jul 25 15:12:06 2022 So, NuGrow and such do
+most of their work in their chainOp methods. Are
+we even getting there?
+[242:
+
+Mon Jul 25 15:14:59 2022 Yes we are.
+
+:242]
+:241]
+
+:240]
+[243:
+
+Mon Jul 25 22:27:52 2022 OK so we made some
+progress before the evening and actually got a
+4-loop built sometimes. But sometimes not, and
+looking at one case now it looks like Nc doesn't
+block even once if it can't deploy Ns? It just
+fails itself and un-suspends the Ng? Is that
+really what we had/wanted?[244:
+
+Mon Jul 25 22:37:48 2022 Well, it's clearly what
+we implemented, whenever we did that 'badside'
+refactoring in Nc.chainOp..
+
+:244]
+
+:243]
+[245:
+
+Tue Jul 26 23:53:11 2022 Flag moved.
+
+Where are we at in loop growing? We know we didn't
+have an advance method - could we aim at that?
+[246:
+
+Wed Jul 27 01:22:56 2022 Well kind of 'officially'
+what I ought to be doing is reexpressing NuGrow
+(say) as Intentions. 'Then advancing would be
+easy'
+
+:246]
+:245]
+[247:
+
+Wed Jul 27 08:45:34 2022 OK so let's review the
+control flow for NuGrow, and end up showing how to
+Intention it and where advance fits in.
+
+
+ NuGrow.behave() ->
+  Intender.pursueIntention() ->
+    NuGrow.getIntentionClass() <- NGState
+    NGState.init(nuGrow)
+
+Well so one thing is we want to subclass NGState
+for our different intentions, then add advance
+eventually. But to continue:
+
+    QChainState.pursue(nuGrow) ->
+      QChain.update(QChainState&) ->
+        NGState.init(qchain) <<<<--- AGAIN?
+        Segment.findMates(ngs)
+        QChain.updateGradients(ngs)
+        if (moving segment) { .. return true }
+        Segment.findAvailables(ngs)
+        if (head grow|move) { .. return true }
+        if (tail move) { .. return true }
+        NuGrow.chainOp(ngs)
+
+[252:
+
+Thu Jul 28 11:54:14 2022 So okay come on here. We
+want to figure a systematized control flow through
+all this stuff, that accounts for the levels
+(Segment, QChain, QNu, ..) and the steps of
+pursuing an intention (init, gather information,
+self-stabilize, act, change intention, ..).
+
+Intender stack:      Intender    Segment    QChain       QNu       NuGrow
+
+Control flow:
+ Intender
+
+   behave                                                            1
+
+   pursueIntention     2
+
+   getIntention                                                      3
+
+ Intention
+
+   init                            4          5           6          7
+
+   observe                         8          9          10         11
+
+   stabilize                      12         13          14         15
+
+   act                            16         17          18         19
+
+   plan                                                             20
+
+
+[253:
+
+Thu Jul 28 13:24:29 2022 Well that's a lot of
+complexity in one go.
+[254:
+
+Thu Jul 28 16:30:47 2022 Well, suppose we go ahead
+and expand the Intention API to support all that
+stuff, but all with null defaults.. and just try
+to remember to pick the right place to put any
+given behavior as we go along..
+[255:
+
+Thu Jul 28 16:32:47 2022 Hmm we already have
+Intention.pursue(Intender&) but that doesn't
+appear anywhere in that chart..[256:
+
+Thu Jul 28 16:39:14 2022 I guess the point is that
+the post-init Intention steps would be sequenced
+by Intention.purue(Intender&) as a service,
+instead of having it be API as it is now.
+
+Buut it's also cocktail hour and I'm not going to
+tear into anything that big now.
+
+ - Intention.pursue() : from API to SERVICE
+
+ - Calling new APIs observe / stabilize / act /
+   plan
+
+ - Distribute behavior from existing pursue()
+   impls to 'appropriate' APIs
+
+[257:
+
+Thu Jul 28 22:25:51 2022 OK let's go.
+
+:257]
+
+:256]
+
+:255]
+:254]
+:253]
+
+
+:252]
+[249:
+
+Wed Jul 27 09:15:26 2022 OK, so if we're having
+multiple NuGrow intentions, we have to know how to
+figure out our current intention. We currently
+have ad hoc state in NuGrow:
+
+      typedef Unary(2) Try;
+      Try mTrying = 2u; // 0 CW, 1 CCW, 2 INIT
+      Bool mTried[2]; // 0 CW, 1 CCW
+
+      Bool mSuspended; // Set when I might be inconsistent
+
+that we'd like to fold into intention
+determination.
+
+[250:
+
+Wed Jul 27 10:14:52 2022 From :222: above
+
+    Ng intentions               awaiting
+     - advance or finish        downbody site accessible
+     - try side 1               cw or ccw pocket accessible
+     - try side 2               ccw or cw pocket accessible
+
+Now how are we going to distinguish which is side
+one vs side 2? Set a flag when we pick side 1, I guess.
+
+
+:250]
+
+:249]
+[248:
+
+Wed Jul 27 09:15:00 2022 Back after meal planning.
+
+:248]
+
+:247]
+[251:
+
+Wed Jul 27 12:53:47 2022 Seems like we want/need
+an explicit 'make intention' step, when we can run
+one-time state-entering code. Like when entering
+'try side 1' is when we pick which direction side
+1 actually is.
+
+But then how do we boot this? We don't want to
+start in 'try side 1' if we haven't run its 'make
+intention' code. Maybe the 'make intention' step
+doesn't care what the current intention is, so as
+long as we arrange to call makeIntention when
+seeding the thing, it will pick its initial side
+then.
+
+:251]
+[258:
+
+Fri Jul 29 01:15:17 2022
+
+Intender stack:      Intender    Segment    QChain       QNu       NuGrow
+
+Control flow:
+ Intender
+
+   behave                                                            1
+
+   pursueIntention     2
+
+   getIntention                                                      3
+
+ Intention
+
+   init                            4          5           6          7
+
+   observe                         8          9          10         11
+                                         findMates
+
+
+   stabilize                      12         13          14         15
+                                         updateGradients
+
+   act                            16         17          18         19
+                                         movingSeg
+                                         chainOp
+
+   plan                                                             20
+
+
+
+
+:258]
+[259:
+
+Sat Jul 30 00:34:55 2022 OK, really trying to burn
+through to buildable on this Intense stuff.[260:
+
+Sat Jul 30 00:56:27 2022 And we're at the question
+of whether we should ditch the 'chainOp' concept
+in favor of subclasses just defining their own
+
+  @Override
+  virtual Bool act(Intender & in) {
+    if (super.act(in)) return true;
+    QChain & qc = (QChain &) in;
+    // SUBCLASS (EG CHAIN) OPERATIONS..
+    // else..
+    return false;
+  }
+
+[261:
+
+Sat Jul 30 01:47:43 2022 Let's ditch chainOp.
+
+:261]
+
+:260]
+
+  :259]
+[262:
+
+Sat Jul 30 02:54:04 2022 Well, it's scars
+everywhere, but we're back to runnability. Ng and
+De still sprout, but don't do anything.
+
+That's the place to pick up after second sleep.
+
+:262]
+[263:
+
+Sat Jul 30 07:02:34 2022 OK let's debug.
+
+:263]
+[264:
+
+Sat Jul 30 07:54:28 2022 OK, Ng is now back to
+sprouting Nc. We hadn't defined NGISide1.act(..)
+so the NGState.trySide(..) service -- which
+incorporated the main chunk of previous code --
+was never getting called.
+
+Next up is convert the Nc code, I guess.[265:
+
+Sat Jul 30 08:13:15 2022 Aand how many intentions
+does Nc want?
+
+[266:
+
+Sat Jul 30 08:13:56 2022 Well, from :222: above
+
+    Nc intentions              (awaiting)
+     - suspend Ng               Ng site accessible
+     - deploy Ns                Ns pocket accessible
+     - finish                   Ns and Nc sites accessible
+
+aand is there any kind of findable split in the Nc
+code corresponding to that stuff?
+
+[267:
+
+Sat Jul 30 08:53:54 2022 Well, maybe. Let's set up
+some Nc intentions and see how it goes. Not sure
+we need 'suspend Ng', though, since I think Ng
+does that itself while creating the Nc.[268:
+
+Sat Jul 30 09:32:11 2022 OK so we have
+NuCorner.mDeployedNs, the setting of which, I
+believe, amounts to changing intention. Do we
+ditch that? We do, right? Replace it with adopting
+NCIFinish instead?
+[269:
+
+Sat Jul 30 14:50:08 2022 Now I'm not sure if we
+need a separate intention for 'Report Failure' vs
+'Wait For Success'.
+
+  Nc intentions     (awaiting)
+   - deployNs        Ns pocket all accessible
+   - failDeploy      Ng site accessible
+   - succeed         Ns and Ng sites accessible
+
+[270:
+
+Sat Jul 30 15:25:58 2022 Urgh is it really four
+intentions, if we're going to split each different
+waiting condition?
+
+  Nc intentions    (awaiting)              (leading to)
+   - deployNs       Ns full pocket access  waitForNs or failDeploy
+   - waitForNs      Ns site done           succeed or failDeploy
+   - failDeploy     Ng site access          x
+   - succeed        Ns & Ng sites access    x
+
+The thing is, if some actions are done to us by
+others -- such as de-suspending Ng is done by Nc
+-- do we need separate intentions for before and
+after such an action?
+
+Maybe the point is all such acts should be
+implemented by an intention change? So, others can
+change our intention for us?
+
+That seems bad. In particular, we wouldn't want Nc
+to have to know or care whether it's side1 or
+side2 in the Ng.. but the next intention depends
+on that.
+
+The whole suspending thing seems like a hack
+anyway though. We needed it because Ng becomes
+inconsistent for a while so we needed to avoid
+going through normal Segment and QChain
+processing. So we needed a 'push' into Ng state,
+because Ng couldn't even search pockets without
+having its own inconsistency be detected.
+
+We were hoping to never leave anyboyd inconsistent
+but we couldn't figure out how to do that.
+
+Note, though, that we have been fantasizing a lot
+about quote-like mechanisms for segments --
+perhaps 'suspend' could be performed by quoting
+the Ng, and waiting for Nc to dequote it.
+
+That at least has the virtue of being general over
+Segments.
+
+And the point is that Ng's 'instruction' nature IS
+all this intention processing that we're
+struggling with now. So quoting it, to mean "Stop
+doing your instruction nature at the moment", seem
+pretty right. Other Segments, whose instruction
+nature has little or nothing to do with QChain
+mechanics, would use quoting and dequoting in very
+different circumstances.
+
+I like that it's general, but I had also began
+fantasizing that maybe it wasn't necessary if we
+said that all 'instructions' are automatically
+quoted unless they are executed by a 'processor'
+-- so quoted/executable is stigmeric state rather
+than internal state relatiev to a Segment.
+
+But that seems like a to0-narrow notion of
+quotation vs active -- we're definitely going to
+need 'processing' to happen without a 'general
+purpose' processor nearby. Like the head of QChain
+searching for a particular target.
+
+So maybe this distinction is really more like
+active processing vs suspended, rather than quoted
+or not. And once something is suspended, it has to
+be externally reactivated; it cannot do it
+itself. (We could add an internal watchdog
+mechanism.)
+
+And if an external 'CPU' decides to execute this
+Seg, it doesn't matter if its active or not? Or
+maybe an HC3PU skips over active processes and
+only executes suspended instructions?
+
+[271:
+
+Sat Jul 30 16:07:46 2022 Alternatively to all of
+this, could we have a way for an Ng intention to
+survive being inconsistent? Just block or diffuse?
+With the hope that Nc will eventually restore Ng
+consistency one way or another.
+
+Argh. This is not the time to be spinning out such
+fantasies.
+
+How can we get to implementable pronto. Restate.
+[272:
+
+Sat Jul 30 16:14:05 2022 How to do Nc intentions?
+What's a minimal approach, how about that?
+
+Or, how about: What's wrong with this picture:
+
+  Nc intentions    (awaiting)              (leading to)
+   - deployNs       Ns full pocket access  waitForNs or failDeploy
+   - waitForNs      Ns site done           succeed or failDeploy
+   - failDeploy     Ng site access          x
+   - succeed        Ns & Ng sites access    x
+
+Anything? How does it interact with Ns and Ng?
+
+Ng{side1}.act spawns Nc{deployNs} and Ng suspends
+  Nc{deployNs} -> Nc{failDeploy} and awakens Ng
+  Nc{deployNs} -> Nc{waitForNs} and deploys Ns
+
+  Nc{waitForNs} -> Nc{failDeploy} and erases Ns if Ns fails
+  Nc{waitForNs} -> Nc{succeed} if Ns succeeds
+
+  Nc{succeed}
+
+[273:
+
+Sat Jul 30 16:42:12 2022 Well time to break for
+dinner but we're circling circling here gah.
+
+Back and forth on Intention granularity. One view
+says:
+
+ - Intention alone should suffice: There should be
+   no need for internal state except for the
+   intention itself.
+
+   = Challenge: The intention has to distinguish
+     stigmeric conditions anyway?
+
+while another view says:
+
+ - Intention is high-level: Several different
+   conditions and steps may be handled by the same
+   intention, which may (have to) check both
+   internal and stigmergic state on each event to
+   determine what (sub)step it's on.
+
+   = Challenge: What cleanliness or goodness is
+     the Intention framework then actually
+     providing, if there's going to be like
+     persistent flags littered all over anyway?
+
+:273]
+
+:272]
+           
+:271]
+
+:270]
+:269]
+
+:268]
+
+:267]
+
+:266]
+
+:265]
+
+:264]
+[274:
+
+Sun Jul 31 00:21:00 2022 Well, let's go 'high
+level Intention' -- it's the only way I can
+imagine getting something working, if hackily, in
+the next day or so at most.
+
+[276:
+
+Sun Jul 31 01:13:18 2022
+
+
+NuGrow
+  Bool mSuspended
+-Intentions 
+  NGISide1 - suspends when Nc created
+  NGISide2 -    "
+  NGIAdvance
+
+NuCorner
+
+-Intentions
+  NCIDeployNs
+  NCIFailDeploy
+  NCISucceed
+
+And we need in particular to recognize that we
+have to be checking our internal and stigmergic
+signals on each attempt to pursue our current
+intention.
+
+[277:
+
+Sun Jul 31 01:26:33 2022 So the point at the
+moment is that when Ng spawns Nc, Ng suspends, but
+does not change its intention? So, when Nc resumes
+it, Ng comes right back into NGISide1 or NGISide2?
+We can't divert until we discover there's a
+stigmergic Nc in the pocket we were looking for?
+How do we know we really deployed that Nc vs some
+other Ng? We have to check the Nc is consistent
+with us? That's all happy happy crap we
+stigmergically signed up for?
+
+I guess so, really, because even if we had
+internal state telling us we'd deployed Nc
+already, it would be more robust if we confirmed
+the Nc we find is consistent with us. And if we're
+going to make that confirmation, then what does
+the internal state really add for us.
+
+So be it. In NGState.trySide (I guess), check for
+and divert on consistent Nc.[278:
+
+Sun Jul 31 01:56:56 2022 OK so we bashed Ng.act
+down some, but we still have a lot of crap to
+rework in Nc.act.. so that's where we are.
+
+Can we take some hints from our Ng rework to guide
+the Nc hack?
+
+ (1) Don't divert on our own state; just look if
+     our spawnee already exists and divert on that.
+
+:278]
+
+  :277]:276]
+[275:
+
+Sun Jul 31 01:11:45 2022 So to be specific, let's
+review our Intentions and their associated
+state. (Sheesh! Another hour blown with twtr and
+the wordle family. Dammit!)
+
+:275]
+
+:274]
+[279:
+
+Sun Jul 31 04:56:14 2022 OK so what's the deal
+with NuSide and Intentions?
+
+Well, from :222: again - 
+
+    Ns intentions
+     - finish                   downchain site accessible
+
+So certainly part of the confusion in all this is
+the QNu.mResult member, which is or could largely
+be redundant with Intentions. Like NSIAttach /
+NSIDeployFailed / NSISucceeded, instead of
+cRS_PENDING, cRS_FAILED, cRS_SUCCEEDED.
+
+The difference is that Intentions give us places
+to put the code for those cases, while GNu.mResult
+does not.
+
+Well, let's try it with NuSide. Can we easily have
+NuSide not inherit from QNu?
+[280:
+
+Sun Jul 31 05:44:01 2022 Yes
+
+    element NuSide : QChain {
+  ..
+
+Let's try going with
+
+    NSIAttach
+    NSIDeployFailed
+    NSISucceeded
+
+and see how it goes.[281:
+
+Sun Jul 31 07:07:41 2022 OK well it's half-patched
+up and not buildable, but I'm running out of gas..
+
+For after second sleep:
+
+[283:
+DONE :283] - NCISucceed.act(..) needs to do all the final
+   changes.
+
+[284: Sun Jul 31 13:57:41 2022 Maybe mostly
+DONE :284] - NGIAdvance.act(..) needs to exist. And if
+   body_down is non-swappable, the NuGrow decays
+   to a down-temp.
+
+[285: Sun Jul 31 13:58:06 2022 Just checks body down
+DONE :285] - NGISide1.adopt(..) needs to check that in and
+   body_down of in are both swappable. If either
+   isn't it should adopt NGIAdvance instead.
+
+:281]
+
+:280]
+:279]
+[282:
+
+Sun Jul 31 13:02:13 2022 OK, so we're finally back
+to working in the simplest case. 
+
+:282]
+[286:
+
+Sun Jul 31 13:58:33 2022 OK well, conceivably
+we're at the point we need something to respawn
+another Ng so our loop can grow more than once..
+
+We just have Demo do that? But we need a
+privileged Demo so that there's only one 'index
+point' to coordinate the growth process.
+
+:286]
+[287:
+
+Sun Jul 31 14:33:07 2022 OK so I think it's time
+to get more real on the 'index point' idea, where
+one (or more) segs on a loop declare themselves to
+be 'index points' which means they are neither
+moved nor swapped by QChain moving segs. Moving
+segs instead just stall against the index.
+
+Should we call them 'anchor points' maybe instead?
+  [288:
+
+Sun Jul 31 14:43:03 2022 Orr, is the existing
+QChain.isSwappable(..) enough by itself?
+[289:
+
+Sun Jul 31 14:51:41 2022 So trying to understand
+the random code in DemoState.act(..), which seems
+to be intended to replace the Demo with a Clasp,
+but only if it finds a random neighboring QChain
+that claims it isTail.
+
+Current challenge is:
+
+ - SeedLoop makes a two loop. One 'needs' to be
+   the Ng, and the other needs to NOT be an
+   anchor/index whatever -- so that Ng will be
+   willing to move it when Nc does the prestige.
+
+   But wait: Does the original downstream actually
+   move, or just get repointed? It doesn't move,
+   does it? We can remove that check from Ng?
+
+:289]
+
+:288]
+
+:287]
+[290:
+
+Mon Aug  1 02:25:18 2022 OK so was getting close
+to starting a run on the grid, but now seeing some
+more issues in mfms. One thing bugging me is we
+really need to distinguish between bent and
+missing corners in PocketHC3.searchPocket(..),
+which currently returns SN.maxof for both.
+
+We could use (SN.maxof-1u) for another error
+return, but anything excent SN.maxof is pretty
+non-standard in my code so far.[291:
+
+Mon Aug  1 02:30:37 2022 Actually ugh the problem
+is deeper: PocketHC3.initFullSide_ returns Bool,
+failing to distinguish:
+
+ - Illegally asking for center pocket
+
+ - HC3 corner missing vs bent
+[292:
+
+Mon Aug  1 03:03:40 2022 Except, hmm, the pocket
+itself has mStatus:
+
+      typedef Unsigned(2) Status;
+      constant Status cSTATUS_OK =   0u;     //< Properly-bounded pocket found
+      constant Status cSTATUS_EDGE = 1u;     //< No pocket: Pocket on axis
+      constant Status cSTATUS_OPEN = 2u;     //< No pocket: At least one corner missing
+      constant Status cSTATUS_BENT = 3u;     //< No pocket: Unaligned adjacent corners or unitted
+      Status mStatus = cSTATUS_BENT;
+
+Could I check that for disambiguation? But that's
+just the center pocket, right? I don't think that
+helps with the side pockets?
+[293:
+
+Mon Aug  1 03:05:02 2022 Yeah well initIterator
+opens with:
+
+    if (mStatus != cSTATUS_OK) return false;
+
+so no, I don't think so.
+
+But I just can't go down another redesign
+rabbithole at this hugely late date. I can't I
+can't.
+
+:293]
+:292]
+
+:291]
+
+:290]
+[294:
+
+Thu Aug  4 15:56:49 2022 So I think one thing is
+Nc needs to record whether it spawned Ns or
+not. Because if it did, it should try a lot harder
+to wait for it to become accessible again - but
+right now that waiting is conflated with waiting
+for any other problem with the pocket in the Ns
+direction.
+
+Use a flag or make a new intention?
+[295:
+
+Thu Aug  4 15:59:12 2022 I think it should be a
+new intention.[296:
+
+Thu Aug  4 16:52:40 2022 That seems to work okay.
+
+Have a lead on these, too:
+
+    20220804164527-3164: 11612AEPS [85F33B87]MSG: s[56,18] t[0,0]: COPNUGR17 Nc pending 
+    20220804164527-3165: 11614AEPS [85F33B87]MSG: s[55,19] t[0,0]: COPNUGR17 Nc pending 
+
+which seem to be exactly the result of this:
+
+        //// OK, WE FOUND A NuCorner ON SIDE, in cornersn
+        // XXX SEE IF OURS, die or something if not
+
+        //// RIGHT NOW, FOGGEN ASSUME IT IS OURS
+
+in NuGrow.ulam: We have cases where an Ng sees an
+Nc and doesn't realize that it belongs to a
+different Ng around the corner from it. So we
+could armor that case without too much trouble I
+think.
+
+But time for cocktails.
+[297:
+
+Thu Aug  4 23:54:54 2022 OK, not seeing any more
+
+    COPNUGR17 Nc pending
+
+since now they'll only happen if an Ng somehow
+gets unsuspended while there really is an active
+Nc pointing back at it.
+
+Next Clean Up Question:
+
+ - Can we ditch QNu? How much is it still being
+   used?
+
+[298:
+
+Thu Aug  4 23:57:52 2022 OK, two uses in Nc -
+
+ - In NCIDeployNs, to block if Nc has failed and
+   is waiting to be cleaned up. But we should be
+   intending NCIFailDeploy if that's true?
+
+ - In NCIAwaitNs similarly?
+
+[299:
+
+Fri Aug  5 01:31:18 2022 Well I just commented
+those two sections out.. let's see if that matters
+in any visible way.
+[300:
+
+Fri Aug  5 01:33:41 2022 Well, I see a loose Nc
+with no Ng anywhere nearby. It's intended
+FailDeploy..
+[301:
+
+Fri Aug  5 01:36:02 2022 Putting back just the
+second mResult failed check.. See if that one
+needs to be actually written around not just
+commented out.
+[305:
+
+Fri Aug  5 02:03:22 2022 Seems like it's working
+fine without the NCIDeployNS mResult check. Taking
+out the NCIAwaitNs mResult check again to gain
+confidence in its necessity.[306:
+
+Fri Aug  5 02:16:45 2022 ..so far hasn't screwed
+up, it seems, though. [307:
+
+Fri Aug  5 02:20:41 2022 No, actually it did, and
+far enough back that it's out of the event trace
+buffer so I can't rewatch it. But still, that's
+two for two on the NCIAwaitNs mResult check being
+important. [308:
+
+Fri Aug  5 02:51:15 2022 So, Nc enters NCIAwaitNs
+after deploying Ns.. which seems sensible. When
+does Nc.mResult get changed?[309:
+
+Fri Aug  5 02:54:44 2022 Um never? There's no refs
+and no accessors? WTH?[310:
+
+Fri Aug  5 02:55:36 2022 Wait.. the Nc that's
+floating around at the moment is cRS_PENDING[311:
+
+Fri Aug  5 03:12:32 2022 OK so I put in prints and
+neither 'is FAILED' case seems to occur even
+though I see loose Nc's occasionally. But in at
+least one case, here, the loose Nc got 'mopped up'
+when another Ng happened by, so that was
+interesting..
+
+Leaving this case running.
+
+Second sleep.
+[312:
+
+Fri Aug  5 07:35:41 2022 OK, we've eliminated
+QNu.ulam completely and are seeing no obvious ill
+effects.
+
+:312]
+:311]
+
+:310]
+
+:309]
+
+:308]
+
+:307]
+
+:306]
+
+:305]
+:301]
+
+:300]
+:299]
+
+
+:298]
+
+:297]
+
+:296]
+
+:295]
+
+:294]
+[302:
+
+Fri Aug  5 01:36:43 2022 WE NEED FLASH TRAFFIC TO
+CONFIGURE THE MFMT2 SITE VIEW!
+[303:
+
+Fri Aug  5 01:53:35 2022 BUT WE'RE SCROD BECAUSE
+MFMT2 JUST HAS A DUMB-CIRCLE-DRAWER FOR SITE
+RENDERING!
+
+[304:
+
+Fri Aug  5 02:02:30 2022 We need an analog to
+TileRenderer<EC>::PaintTileAtDit for mfmt2. But
+that's for another NOTES file..
+
+:304]
+
+:303]
+
+:302]
+[313:
+
+Fri Aug  5 07:49:07 2022 Maybe we should call this
+stuff 'PocketChain'.  
+[314:
+
+Fri Aug  5 08:13:06 2022 OK, QChain is now
+PocketChain throughout thank you emacs keyboard
+macros. Could we deal with the 'Nu' business also,
+before we actually push all this stuff?
+[315:
+
+Fri Aug  5 13:40:21 2022 OK past zoom
+meeting. Have to travel shortly but a push first
+would be nice.
+
+Candidates for 'Nu' replacement:
+[316:
+
+Fri Aug  5 14:14:12 2022 Well this is not the time
+to be doing this, I guess. Let's get a better name
+for the whole demo (instead of 'Border12') and
+just push it..
+
+Well, PocketChain10? So be it.
+
+:316]
+
+:315]
+:314]
+:313]
+[317:
+
+Sat Aug  6 03:02:35 2022 OK where are we here.
+
+Well let's build first.
+[318:
+
+Sat Aug  6 03:36:41 2022 Making the 'demo
+provider' lines a bit thicker so hopefully we can
+track it better as it flies among the temps..
+
+:318]
+:317]
