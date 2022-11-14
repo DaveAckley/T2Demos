@@ -1,0 +1,350 @@
+quark MatchPatchCodon + DTU {
+  PatchLinkType mLT;  // Link from upstream
+  ChainType mCT;      // Codon type
+}
+
+quark MatchPatchBinding + DTU {
+  SN mPocketChainSN = SN.maxof;
+  PocketDir mPocket;
+}
+
+quark PatchTypes + DTU {
+  typedef MatchPatchBinding PatchBindings[4];
+
+  typedef MatchPatchCodon PatchPattern[7];
+  //  A  .
+  constant PatchPattern cPATPAT_PC1  = {
+    { .mLT = cPLPAT_N, .mCT = cCPAT_Y }, // n -> A
+    { .mLT = cPLPAT_N },                 //   -> n
+    { .mLT = cPLPAT_E },                 //   .
+  };
+  
+  // o ->   A   ->   B   ->  o    .
+  constant PatchPattern cPATPAT_PC2A  = {
+    { .mLT = cPLPAT_O, .mCT = cCPAT_Y }, // o -> A
+    { .mLT = cPLPAT_I, .mCT = cCPAT_Y }, //   -> B
+    { .mLT = cPLPAT_O, .mCT = cCPAT_N }, //   -> o
+    { .mLT = cPLPAT_E },                 //   .
+  };
+
+  // i ->   A   ->   B   ->  i    .
+  constant PatchPattern cPATPAT_PC2B  = {
+    { .mLT = cPLPAT_I, .mCT = cCPAT_Y }, // i -> A
+    { .mLT = cPLPAT_I, .mCT = cCPAT_Y }, //   -> B
+    { .mLT = cPLPAT_I, .mCT = cCPAT_Y }, //   -> C (+ A == C)
+    { .mLT = cPLPAT_E },                 //   .
+  };
+
+  // o ->   A   ->   B   ->   C   -> o  .
+  constant PatchPattern cPATPAT_PC3  = { 
+    { .mLT = cPLPAT_O, .mCT = cCPAT_Y }, // o -> A
+    { .mLT = cPLPAT_I, .mCT = cCPAT_X }, //   -> B
+    { .mLT = cPLPAT_I, .mCT = cCPAT_Y }, //   -> C
+    { .mLT = cPLPAT_O, .mCT = cCPAT_N }, //   -> o
+    { .mLT = cPLPAT_E },                 //   .
+  };
+
+  // o ->   A   ->   EC1   ->    EC2   ->  B   -> o  .
+  constant PatchPattern cPATPAT_PC4A  = { 
+    { .mLT = cPLPAT_O, .mCT = cCPAT_Y },  // o -> A
+    { .mLT = cPLPAT_I, .mCT = cCPAT_EC }, //   -> EC1
+    { .mLT = cPLPAT_I, .mCT = cCPAT_EC }, //   -> EC2
+    { .mLT = cPLPAT_I, .mCT = cCPAT_Y },  //   -> B
+    { .mLT = cPLPAT_O, .mCT = cCPAT_N }, //    -> o
+    { .mLT = cPLPAT_E },                 //   .
+  };
+
+  // i ->   A   ->   EC1   ->    EC2   ->  B   -> i  .
+  constant PatchPattern cPATPAT_PC4B  = { 
+    { .mLT = cPLPAT_I, .mCT = cCPAT_Y },  //(B) -> A
+    { .mLT = cPLPAT_I, .mCT = cCPAT_EC }, //    -> EC1
+    { .mLT = cPLPAT_I, .mCT = cCPAT_EC }, //    -> EC2
+    { .mLT = cPLPAT_I, .mCT = cCPAT_Y },  //    -> B
+    { .mLT = cPLPAT_I, .mCT = cCPAT_N }, //     -> (A)
+    { .mLT = cPLPAT_E },                 //   .
+  };
+}
+
+transient MatchPatch + PatchTypes + DTU + QDebugUtils + Fail {
+
+  //// MatchPatch API
+  /** \return true if rule applied (and changes were made), false
+   * otherwise. \returns false by default.
+   */
+  virtual Bool tryRule(PatchState & ps) ;
+
+  virtual String ruleName() ;
+
+  //// MatchPatch SERVICES
+
+  /** \returns true and set \c dest to the PocketDir that going \c via
+   * from \c from would reach, if it's in the patch. Otherwise
+   * \returns false and doesn't change \c dest.
+   */
+  Bool adjacentPocketDir(PocketDir from, PocketPtr via, PocketDir & dest) {
+    print("ADJPD10");
+    print(getPocketDirName(from));
+    print(getPocketPtrName(via));
+    which (from) {
+      case cQUAD_NW: {
+        if (via == cPP_SOUTH) { dest = cQUAD_SW; return true; }
+        if (via == cPP_EAST)  { dest = cQUAD_NE; return true; }
+      }
+      case cQUAD_NE: {
+        if (via == cPP_SOUTH) { dest = cQUAD_SE; return true; }
+        if (via == cPP_WEST)  { dest = cQUAD_NW; return true; }
+      }
+      case cQUAD_SE: {
+        if (via == cPP_NORTH) { dest = cQUAD_NE; return true; }
+        if (via == cPP_WEST)  { dest = cQUAD_SW; return true; }
+      }
+      case cQUAD_SW: {
+        if (via == cPP_NORTH) { dest = cQUAD_NW; return true; }
+        if (via == cPP_EAST)  { dest = cQUAD_SE; return true; }
+      }
+    }
+    print("ADJPD11");
+    return false;
+  }
+
+  Bool adjacentNot(PocketDir from, PocketPtr not, PocketDir & dest, PocketPtr & via) {
+    print("ADJNOT10");
+    print(getPocketDirName(from));
+    print(getPocketPtrName(not));
+    which (from) {
+      case cQUAD_NW: {
+        if (not == cPP_SOUTH) { dest = cQUAD_NE; via = cPP_EAST;  return true; }
+        if (not == cPP_EAST)  { dest = cQUAD_SW; via = cPP_SOUTH; return true; }
+      }
+      case cQUAD_NE: {
+        if (not == cPP_SOUTH) { dest = cQUAD_NW; via = cPP_WEST;  return true; }
+        if (not == cPP_WEST)  { dest = cQUAD_SE; via = cPP_SOUTH; return true; }
+      }
+      case cQUAD_SE: {
+        if (not == cPP_NORTH) { dest = cQUAD_SW; via = cPP_WEST;  return true; }
+        if (not == cPP_WEST)  { dest = cQUAD_NE; via = cPP_NORTH; return true; }
+      }
+      case cQUAD_SW: {
+        if (not == cPP_NORTH) { dest = cQUAD_SE; via = cPP_EAST;  return true; }
+        if (not == cPP_EAST)  { dest = cQUAD_NW; via = cPP_NORTH; return true; }
+      }
+    }
+    print("ADJNOT11");
+    return false;
+  }
+
+  Bool matchLink(PocketPtr link, PatchLinkType tomatch, PocketDir pd) {
+    print("MTHLK10");
+    print(getPatchLinkTypeName(tomatch));
+
+    if (tomatch == cPLPAT_E) fail(__FILE__,__LINE__);
+
+    print("MTHLK11");
+    print(tomatch);
+    if (link == cPP_NULL && tomatch == cPLPAT_N) return true;
+
+    print("MTHLK12");
+    Bool isout = isOut(link,pd);
+
+    print("MTHLK13");
+    if (tomatch == cPLPAT_O && isout) return true;
+
+    print("MTHLK14");
+    if (tomatch == cPLPAT_I && !isout) return true;
+
+    print("MTHLK15ISOUTFALSE");
+    return false;
+  }
+
+  Bool isOut(PocketPtr ptr, PocketDir qd) {
+    if (ptr == cPP_NULL) return true; //XX? This how we want it?
+    C2D qdc = cC2D_BY_QUAD[qd];
+    C2D ptrc = cC2D_BY_POCKETPTR[ptr];
+    C2D prod = qdc*ptrc;
+    print("ISOUT10");
+    /*
+    print(ptr);
+    print(qd);
+    print(qdc);
+    print(ptrc);
+    print(prod);
+    */
+    Bool ret = prod.x > 0 || prod.y > 0;
+    print(ret);
+    return ret;
+  }
+
+  virtual Bool match(PatchState & ps,
+                     PatchPattern pat,
+                     PatchBindings & mat) {
+    print("MPMT10");
+    print(ruleName());
+    if (!ps.mValid) return false;
+    if (ps.mPCount == 0u) return false;
+    
+    SN cursn = ps.mPSN;
+    PocketDir curpd = ps.mPSNPocket;
+
+    print("MPMT11");
+
+    Unsigned ip;
+    Unsigned mp = 0u;
+    EventWindow ew;
+    for (ip = 0u; ip < pat.lengthof; ++ip) {
+      MatchPatchCodon mpc = pat[ip];
+      PatchLinkType uplink = mpc.mLT;
+
+      print("MPMT12");
+      print(getPatchLinkTypeName(uplink));
+      print(getChainTypeName(mpc.mCT));
+
+      //// IS THERE ANY MORE PATTERN TO CONSIDER?
+      if (uplink == cPLPAT_E) break; // no
+      //// THERE IS MORE PATTERN TO CONSIDER.
+
+      print("MPMT13");
+      print(cursn);
+      Atom & a = ew[cursn];
+      if (!(a is PocketChain))
+        return false;
+      print("MPMT1311");
+      PocketChain & curc = (PocketChain&) a;
+      //// IS NEXT UP LINK ACCEPTABLE AT THIS POINT?
+      PocketPtr upptr = curc.mPocketPtrs[cBODY_UP];
+      if (!matchLink(upptr, uplink, curpd))
+        return false;
+      print("MPMT14");
+
+      MatchPatchBinding & mpb = mat[mp];
+      mpb.mPocketChainSN = cursn;
+      mpb.mPocket = curpd;
+      print(mpb);
+      print(mp);
+
+      if (uplink == cPLPAT_I || uplink == cPLPAT_O) {
+        print("MPMT15");
+        print(getPocketDirName(curpd));
+        print(getPatchLinkTypeName(uplink));
+        PocketPtr via = ps.mBodyDownPtr[curpd];
+        print(getPocketPtrName(via));
+        if (!adjacentPocketDir(curpd, via, curpd)) 
+          return false;
+        cursn = ps.mSegmentSN[curpd];
+        print("MPMT15CURSN");
+        print(cursn);
+        print(getPocketDirName(curpd));
+        ++mp;
+      } else {
+        print("MPMT15UNRECUPLINK");
+        print(getPocketDirName(curpd));
+        print(getPatchLinkTypeName(uplink));
+        fail(__FILE__,__LINE__);
+      }
+
+    }
+    print("MPMT16 MATCHED");
+    print(ruleName());
+    return true;
+  }
+}
+
+transient MatchPatch_Rules : MatchPatch {
+  //// MatchPatch_Rules API
+  virtual PatchPattern getPatchPattern() ;
+  virtual Bool tryApply(PatchState& ps, PatchBindings & mat) ;
+
+  //// MatchPatch_Rules SERVICES
+  Bool tryRule(PatchState & ps) {
+    takeDebug(ps);
+    print("MPTR_GR10");
+
+    PatchBindings mat;
+    PatchPattern pat = getPatchPattern();
+    if (match(ps, pat, mat)) {
+      setDebugOutputEnabled(true); // XXX
+      print("MPTR_GR11");
+
+      return tryApply(ps, mat);
+    }
+    print("MPTR_GR12TRYRULEFALSE");
+    return false;
+  }
+
+  Bool tryAddTwoECs(PatchState & ps, PatchBindings & mat) {
+    PocketDir apk = mat[0].mPocket;
+    PocketDir bpk = mat[1].mPocket;
+    PocketPtr aalt, balt;
+    PocketDir adja, adjb;
+    if (!adjacentNot(apk,ps.mBodyDownPtr[apk],adja,aalt) ||
+        !adjacentNot(bpk,ps.mBodyUpPtr[bpk],adjb,balt))
+      fail(__FILE__,__LINE__);
+
+    if (ps.mNonEmptyCount[adja] > 0u) return false;
+    if (ps.mNonEmptyCount[adjb] > 0u) return false;
+
+    EventWindow ew;
+    PocketChain & a = (PocketChain&) ew[mat[0].mPocketChainSN];
+    PocketChain & b = (PocketChain&) ew[mat[1].mPocketChainSN];
+    EmptyCodon ec1, ec2;
+    ec1.init(); ec2.init();
+
+    // ptrs between new ecs
+    ec1.mPocketPtrs[cBODY_DOWN] = a.mPocketPtrs[cBODY_DOWN];
+    ec2.mPocketPtrs[cBODY_UP] = b.mPocketPtrs[cBODY_UP];
+
+    // ptrs between new and existing
+    ec1.mPocketPtrs[cBODY_UP] = ec1.reversePocket(aalt);
+    ec2.mPocketPtrs[cBODY_DOWN] = ec2.reversePocket(balt);
+
+    a.mPocketPtrs[cBODY_DOWN] = aalt;
+    b.mPocketPtrs[cBODY_UP] = balt;
+    ew[ps.mEmptySN[adja]] = ec1;
+    ew[ps.mEmptySN[adjb]] = ec2;
+
+    return true;
+  }
+}
+
+transient MatchPatch_GROWA : MatchPatch_Rules {
+
+  //// MatchPatch API
+  virtual String ruleName() { return __CLASS__; }
+
+  //// MatchPatch_Rules API
+  @Override
+  virtual PatchPattern getPatchPattern() { return cPATPAT_PC2A; }
+
+  @Override
+  virtual Bool tryApply(PatchState & ps, PatchBindings & mat) {
+    //// WE HAVE o -> A -> B -> o.
+    //// GO FOR IT IF WE HAVE EMPTIES IN OTHER TWO POCKETS
+    return tryAddTwoECs(ps, mat);
+  }
+}
+
+transient MatchPatch_GROWB : MatchPatch_Rules {
+
+  //// MatchPatch API
+  virtual String ruleName() { return __CLASS__; }
+
+  //// MatchPatch_Rules API
+  @Override
+  virtual PatchPattern getPatchPattern() { return cPATPAT_PC2B; }
+
+  @Override
+  virtual Bool tryApply(PatchState & ps, PatchBindings & mat) {
+    print("GRBTAP10");
+    print(mat[0]);
+    print(mat[1]);
+    print(mat[2]);
+
+    //// WE HAVE i -> A -> B -> ? .
+    //// NEED TO CONFIRM ? == A
+    if (mat[0].mPocket != mat[2].mPocket) return false;
+    //// CONFIRMED
+    
+    //// GO FOR IT IF WE HAVE EMPTIES IN OTHER TWO POCKETS
+    return tryAddTwoECs(ps, mat);
+  }
+}
+

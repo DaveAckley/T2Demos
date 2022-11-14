@@ -1,0 +1,123 @@
+quark Membrane : Pocketable + DEWLine + DTU {
+  typedef ClassUtils.ClassId ClassId;
+
+  PocketDir mOpenDir;
+  Bool mDirBound;
+
+  //// Membrane API
+
+  Unsigned scanOuterQuadrant() {
+    Int ourRank = sourceRank();
+    Unsigned lowerranks = 0u;
+    //// Search outdir quadrant for contacts and warnings
+    resetDCs();
+    Bool isDanger = false;
+    SN sn;
+    C2D c;
+    for (sn = 1u; !isDanger && sn < 41u; ++sn) {
+      c = ew.getCoord(sn);
+      if (!inQuadrant(c,mOpenDir)) continue;
+      if (!ew.isAccessible(sn)) isDanger = true;
+      else {
+        Atom & a = ew[sn];
+        if (a is Empty) continue;
+        if (a as MTip) {
+          if (!a.mAxisBound) continue;
+          if (!mDirBound) continue;
+          PocketDir d1, d2;
+          a.dirsOf(a.mHorizonAxis,d1,d2);
+          if (d1 == mOpenDir || d2 == mOpenDir) {
+             Int theirRank = a.sourceRank();
+            if (theirRank < ourRank) { // Lower rank, pick up their warnings
+              ++lowerranks;
+              mergeDCs(a);
+            }
+            continue;
+          }
+          // ELSE DANGEROUS MTIP
+        }
+        if (a as Membrane) {
+          Int theirRank = a.sourceRank();
+          // Consider Membrane in matching direction,
+          if (a.mOpenDir == mOpenDir) {
+            if (theirRank < ourRank) { // Lower rank, pick up their warnings
+              ++lowerranks;
+              mergeDCs(a);
+            }
+            continue;           // But it's not foreign whatever the rank
+          }
+        }
+        
+        // Foreign membrane or scary strange other!
+        isDanger = true;
+      }
+    }
+    if (isDanger) {
+      DefCon ourdc = signalDC();
+      Bool signalled = false;
+      for (Unsigned i = cDRIX_WEST; i <= cDRIX_EAST; ++i) {
+        DirIdx di = (DirIdx) i;
+        if (onAxis(c, di)) { // On axis signals only on that axis
+          maxDC(di, ourdc);
+          signalled = true;
+          break;
+        }
+      }
+      if (!signalled) { // Otherwise signal on both
+        DirIdx d1, d2;
+        axesOf(mOpenDir, d1, d2);
+        maxDC(d1,ourdc);
+        maxDC(d2,ourdc);
+      }
+    }
+    return lowerranks;
+  }
+
+
+  EventWindow ew;
+  Void die() {
+    ew[0] = Empty.instanceof;
+  }
+
+  Bool inQuadrant(C2D c, PocketDir d) {
+    which (d) {
+    case cQUAD_NW: { return c.x <= 0 && c.y <= 0; }
+    case cQUAD_NE: { return c.x >= 0 && c.y <= 0; }
+    case cQUAD_SE: { return c.x >= 0 && c.y >= 0; }
+    case cQUAD_SW: { return c.x <= 0 && c.y >= 0; }
+    }
+    return false; // Not reached
+  }
+
+  Void axesOf(PocketDir d, DirIdx & d1, DirIdx & d2) {
+    which (d) {
+    case cQUAD_NW: { d1 = cDRIX_WEST; d2 = cDRIX_NRTH; }
+    case cQUAD_NE: { d1 = cDRIX_NRTH; d2 = cDRIX_EAST; }
+    case cQUAD_SE: { d1 = cDRIX_SOTH; d2 = cDRIX_EAST; }
+    case cQUAD_SW: { d1 = cDRIX_WEST; d2 = cDRIX_SOTH; }
+    }
+  }
+
+
+  C2D axisOf(DirIdx di) {
+    which (di) {
+    case cDRIX_WEST: { return C2D.instanceof(-1,0); }
+    case cDRIX_NRTH: { return C2D.instanceof(0,+1); }
+    case cDRIX_SOTH: { return C2D.instanceof(0,-1); }
+    case cDRIX_EAST: { return C2D.instanceof(+1,0); }
+    }
+    return C2D.instanceof; // Not reached
+  }
+
+  
+  Bool onAxis(C2D c, DirIdx di) {
+    which (di) {
+    case cDRIX_WEST: { return c.x < 0 && c.y == 0; }
+    case cDRIX_NRTH: { return c.x == 0 && c.y < 0; }
+    case cDRIX_SOTH: { return c.x == 0 && c.y > 0; }
+    case cDRIX_EAST: { return c.x > 0 && c.y == 0; }
+    }
+    return false; // Not reached
+  }
+
+}

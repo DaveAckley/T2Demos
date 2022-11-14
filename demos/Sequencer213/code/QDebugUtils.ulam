@@ -1,0 +1,115 @@
+quark QDebugUtils {
+  Bool mDebugOutputEnabled = false;
+
+  Bool isDebugOutputEnabled() { return mDebugOutputEnabled; }
+
+  Void setDebugOutputEnabled(Bool enabled) {
+    mDebugOutputEnabled = enabled;
+  }
+
+  Bool takeDebug(QDebugUtils & other) {
+    Bool ret = other.isDebugOutputEnabled();
+    setDebugOutputEnabled(ret);
+    return ret;
+  }
+
+  Void printContext() {
+    if (!mDebugOutputEnabled) return;
+    DebugUtils du;
+    du.printContext();
+  }
+
+  Void printContext(Bits flags) {
+    if (!mDebugOutputEnabled) return;
+    DebugUtils du;
+    du.printContext(flags);
+  }
+
+  Void print(UrSelf & ur) {
+    if (!mDebugOutputEnabled) return;
+    DebugUtils du;
+    du.print(ur);
+  }
+  Void print(String s) {
+    if (!mDebugOutputEnabled) return;
+    DebugUtils du;
+    du.print(s);
+  }
+  Void print(Int s) {
+    if (!mDebugOutputEnabled) return;
+    DebugUtils du;
+    du.print(s);
+  }
+  Void print(Unsigned s) {
+    if (!mDebugOutputEnabled) return;
+    DebugUtils du;
+    du.print(s);
+  }
+  Void print(Bool s) {
+    if (!mDebugOutputEnabled) return;
+    DebugUtils du;
+    du.print(s);
+  }
+  Void print(Bits s) {
+    if (!mDebugOutputEnabled) return;
+    DebugUtils du;
+    du.print((Unsigned) s);
+  }
+  Void print(Atom & s) {
+    if (!mDebugOutputEnabled) return;
+    DebugUtils du;
+    du.print(s);
+  }
+
+  Void print(ByteStreamReader& a, Bool reread) {
+    if (!mDebugOutputEnabled) return;
+    if (reread && a.canReread()) a.reread();
+    print(a);
+  }
+
+  Void print(ByteStreamReader & bs) {
+    DebugUtils du;
+    du.print(bs);
+  }
+}
+
+quark QDebugUtilsEnabler + DTU {
+  Bool setEnablingOnOne(Bool enable) {
+    EventWindow ew;
+    for (SN sn = 0u; sn <= 8u; ++sn) {
+      if (!ew.isAccessible(sn)) continue;
+      Atom & a = ew[sn];
+      if (a as QDebugUtils) {
+        if (a.isDebugOutputEnabled() != enable) {
+          a.setDebugOutputEnabled(enable);
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+}
+
+/** \symbol Do
+    \color #f00
+ */
+element EnableQDebugUtils : QDebugUtilsEnabler {
+  Void behave() {
+    if (setEnablingOnOne(true)) {
+      EventWindow ew;
+      ew[0] = Empty.instanceof;
+    }
+  }
+}
+
+/** \symbol Df
+    \color #00f
+ */
+element DisableQDebugUtils : QDebugUtilsEnabler {
+  Void behave() {
+    if (setEnablingOnOne(false)) {
+      EventWindow ew;
+      ew[0] = Empty.instanceof;
+    }
+  }
+}

@@ -1,0 +1,197 @@
+/** Diamond Sequencer Spike v217; Alife Creation T-2.
+ \author Dave Ackley
+ \copyright Nov 2022 LCF
+ \license GPL-3
+ \symbol S
+ \version 217
+*/
+element S + QDebugUtils {
+  Void behave() {
+    print("zOANZ10");
+    /*
+    PatchRulePatternBinding prp;
+    prp.setDebugOutputEnabled(true);
+    prp.print();
+    */
+    /*
+    for (Unsigned r = 0u; r < 2u; ++r) {
+      for (Unsigned s = 0u; s < 4u; ++s) {
+        prp.mStart = (PatchRulePattern.PocketNum) s;
+        prp.mReverse = r != 0u;
+        prp.print();
+        prp.print("L2P");
+        for (Unsigned d = 0u; d < 4u; ++d) {
+          prp.print(d);
+          prp.print(prp.l2pPatchIndex((DTU.PocketDir) d));
+        }
+        prp.print("P2L");
+        for (Unsigned d = 0u; d < 4u; ++d) {
+          prp.print(d);
+          prp.print(prp.p2lPatchIndex((DTU.PocketDir) d));
+        }
+      }
+    }
+    */
+    print("zOANZ11");
+
+    ClassUtils cu;
+    ByteStreamLogger bsl;
+    // more info? extend ClassUtils or AtomUtils to present metadata?
+    bsl.printf("[[S STARTUP: Max Class Id: %d]]\n",
+               cu.getMaxDefinedClassId());
+
+    /*
+    BaseClassUtils bcu;
+    bcu.setDebugOutputEnabled(true);
+    HardCellG o1;
+    o1.mNgbRels[0] = 3u;
+    o1.mNgbRels[1] = 2u;
+    o1.mNgbRels[2] = 1u;
+    o1.mNgbRels[3] = 3u;
+    o1.mDSHops = 5u;
+    o1.mUpHops = 9u;
+    DiamondSequencer o2,o3;
+    bsl.printf("BEFORE: ");
+    bsl.print(o2);
+    bsl.print("=");
+    bsl.print(bcu.copySharedData(o1,o2));
+    bsl.printf("\nAFTER: ");
+    bsl.print(o2);
+    o2.mUpHops = 8u;
+    o2.mProcUnitMap.mQuadrantPUArray[0] = 3u;
+    o2.mProcUnitMap.mQuadrantPUArray[1] = 0u;
+    o2.mProcUnitMap.mQuadrantPUArray[2] = 2u;
+    o2.mProcUnitMap.mQuadrantPUArray[3] = 0u;
+    bsl.print("DS DS=");
+    bsl.print(bcu.copySharedData(o2,o3));
+    bsl.printf("\nAFTER: ");
+    bsl.print(o3);
+    bsl.printf("\n");
+    */
+
+    EventWindow ew;
+    Random random;
+    ew[0] = SeedSeq.instanceof;
+  }
+}
+
+quark SeedDiamond {
+  virtual HardCell.HopCount getSeedMaxHops() ;
+  Unsigned mEvents = 0u;
+  Void behave() {
+    EventWindow ew;
+    Random random;
+    ++mEvents;
+    if (mEvents == 1u) {
+      // Start the grid
+      HardCell hc;
+      hc.setUpHops(0u); // You are root
+      hc.mMaxHops =  getSeedMaxHops();
+      /*
+      for (Unsigned i = 0u; i < 3u; ++i) { // you have a random color
+        hc.mColor[i] = (HardCell.NChan)
+          random.between(HardCell.NChan.minof,
+                         HardCell.NChan.maxof);
+      }
+      */
+      hc.changeDir(); // and a random dir
+      ew[7] =  hc.atomof;
+    } else if (mEvents == 25u) {
+      // Start worm 1
+      if (ew[10] is Empty) 
+          ew[10] = SeedLoop.instanceof;
+      else
+        --mEvents;
+    } else if (mEvents >= 250u) {
+      PocketHC3 pocket;
+      RectIterator ri;
+      if (pocket.init() == PocketHC3.cSTATUS_OK &&
+          pocket.initIterator(ri)) {
+        Bool foundDemo = false;
+        while (ri.hasNext()) {
+          C2D n = ri.next();
+          if (ew[n] is Demo) {
+            foundDemo = true;
+            break;
+          }
+        }
+        if (!foundDemo)      // decay into worm 2
+          //          ew[0] = SeedLoop.instanceof;
+          ew[0] = Empty.instanceof; // Let's have just one worm
+      } 
+    }
+  }
+}
+
+/** \symbol Ss */
+element SeedSmallDiamond : SeedDiamond {
+  @Override
+  virtual HardCell.HopCount getSeedMaxHops() {
+    Random random;
+    //    return HardCell.cMIN_MAX_HOPS+HardCell.cMAX_MAX_HOPS/3u; // XXX 1J1 DEMO HACK
+    return (HardCell.HopCount) // You want to be this big
+      random.between(HardCell.cMIN_MAX_HOPS,
+                     HardCell.cMIN_MAX_HOPS+HardCell.cMAX_MAX_HOPS/3u);
+  }
+}
+
+/** \symbol Sb */
+element SeedBigDiamond : SeedDiamond {
+  @Override
+  virtual HardCell.HopCount getSeedMaxHops() {
+    Random random;
+    return (HardCell.HopCount) // You want to be this big
+      random.between(HardCell.cMAX_MAX_HOPS-HardCell.cMAX_MAX_HOPS/3u,
+                     HardCell.cMAX_MAX_HOPS);
+  }
+}
+
+/** \symbol Sg */
+element SeedGrowDiamond {
+  Unsigned mEvents = 0u;
+  Void behave() {
+   
+    EventWindow ew;
+    Random random;
+    ++mEvents;
+    if (mEvents == 1u) {
+      // Start the grid
+      HardCellG hc; // GROWABLE HC
+      hc.setUpHops(0u); // You are root
+      hc.mMaxHops =  hc.cMIN_MAX_HOPS;
+      /*
+      for (Unsigned i = 0u; i < 3u; ++i) { // you have a random color
+        hc.mColor[i] = (HardCell.NChan)
+          random.between(HardCell.NChan.minof,
+                         HardCell.NChan.maxof);
+      }
+      */
+      hc.changeDir(); // and a random dir
+      ew[7] =  hc.atomof;
+    } else if (mEvents == 25u) {
+      // Start worm 1
+      if (ew[10] is Empty) 
+          ew[10] = SeedLoop.instanceof;
+      else
+        --mEvents;
+    } else if (mEvents >= 250u) {
+      PocketHC3 pocket;
+      RectIterator ri;
+      if (pocket.init() == PocketHC3.cSTATUS_OK &&
+          pocket.initIterator(ri)) {
+        Bool foundDemo = false;
+        while (ri.hasNext()) {
+          C2D n = ri.next();
+          if (ew[n] is Demo) {
+            foundDemo = true;
+            break;
+          }
+        }
+        if (!foundDemo)      // decay into worm 2
+          //          ew[0] = SeedLoop.instanceof;
+          ew[0] = Empty.instanceof; // Let's have just one worm
+      } 
+    }
+  }
+
+}

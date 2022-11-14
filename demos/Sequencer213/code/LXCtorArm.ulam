@@ -1,0 +1,232 @@
+/** \symbol CA
+    \color #60f
+ */
+element LXCtorArm : LX + SW3Cmdr + Fail {
+  typedef Unsigned(8) ProgramCounter;
+  String mProgram;
+  ProgramCounter mPC = ProgramCounter.maxof;
+  SW3Packet.SeqNo mSeqNo;
+
+  Bool op(ASCII code, SW3Packet & p) {
+    which (code) {
+    case 'n': { p.mCmd = SW3Packet.cSW3C_GROW; p.mArg = (SW3Packet.Arg) (1u<<cPP_NORTH); }
+    case 's': { p.mCmd = SW3Packet.cSW3C_GROW; p.mArg = (SW3Packet.Arg) (1u<<cPP_SOUTH); }
+    case 'e': { p.mCmd = SW3Packet.cSW3C_GROW; p.mArg = (SW3Packet.Arg) (1u<<cPP_EAST); }
+    case 'w': { p.mCmd = SW3Packet.cSW3C_GROW; p.mArg = (SW3Packet.Arg) (1u<<cPP_WEST); }
+    case '-': { p.mCmd = SW3Packet.cSW3C_SHRINK; }
+    case 'W': { p.mCmd = SW3Packet.cSW3C_PLACE; p.mArg = Wall.classidof; }
+    case 'X': { p.mCmd = SW3Packet.cSW3C_DELATM; p.mArg = Wall.classidof; }
+    case 'D': { p.mCmd = SW3Packet.cSW3C_DIEPL; p.mArg = Wall.classidof; }
+    case 'E': { p.mCmd = SW3Packet.cSW3C_BECOME; p.mArg = EmptyCodon.classidof; }
+    case 'S': { p.mCmd = SW3Packet.cSW3C_HC3CTL; p.mArg = (SW3Packet.Arg) (1u<<2u); /* NW corner to _MAKEDS*/ }
+    case 'H': { p.mCmd = SW3Packet.cSW3C_HC3CTL; p.mArg = (SW3Packet.Arg) (0u<<2u); /* NW corner to _MAKEHG*/ }
+    otherwise: { return false; }
+    }
+    return true;
+  }
+
+  Bool inStateRESET(ProcUnitInfo & pui) {
+    return mPC == ProgramCounter.maxof;
+  }
+
+  Bool inStateEXIT(ProcUnitInfo & pui) {
+    return mPC < ProgramCounter.maxof && mPC >= mProgram.lengthof;
+  }
+
+  Bool inStateDISPATCH(SW3Packet & armdown) {
+    return mPC < mProgram.lengthof && mSeqNo.isEqual(armdown.mSeqNo);
+  }
+
+  Bool inStateBLOCK(SW3Packet & armdown) {
+    return mPC < mProgram.lengthof && mSeqNo.isGreater(armdown.mSeqNo);
+  }
+
+  Bool dispatchLocal(DiamondSequencerState & dss, ProcUnitInfo & pui, ASCII b) {
+    EventWindow ew;
+    print("LXCADL10");
+    print(b);
+    which (b) {
+    case '.': { // END OF PROGRAM FLAG
+      print("LXCADL11");
+      mPC = mProgram.lengthof;
+      return true;
+    }
+    case 'E': { // WHOLE ARM TO BECOME ECs
+      print("LXCADL11E10");
+      Int cmdstat = commandStatusInArm(pui);
+      if (cmdstat > 0) // command in progress in arm
+        return false;
+      if (cmdstat < 0) { // Arm is gone. Let's move on
+        ++mPC;
+        return true;
+      }
+      print("LXCADL11E11");
+      Atom & a = ew[pui.mCodonSN];
+      if (a as SwapWormHC3) {
+        print("LXCADL11E12");
+        if (inject(a, mSeqNo, SW3Packet.cSW3C_BECOME, EmptyCodon.classidof))
+          return true;
+      }
+      print("LXCADL11E13");
+      return false;
+    }
+      // ELSE FALL THROUGH
+    }
+    print("LXCADL12");
+    return false;
+  }
+
+  Bool dispatchRemote(SwapWormHC3 & s3, ASCII b) {
+    print("LXCADR10");
+    print(b);
+    SW3Packet p;
+    if (op(b,p)) {
+      print("LXCADR11");
+      print(p);
+      if (inject(s3, mSeqNo, p.mCmd, p.mArg)) 
+        return true;
+    } 
+    print("LXCADR12");
+    return false;
+  }
+
+  /** \returns < 0 if there's no SW3 arm. \returns 0 if there is an
+      arm and the current command is complete. Otherwise \returns > 0
+      if the current command in the arm is still in progress */
+  Int commandStatusInArm(ProcUnitInfo & pui) {
+    EventWindow ew;
+    SN swsn = pui.mCodonSN;
+    print("ICCIA10");
+    print(swsn);
+    print(pui);
+    if (!(ew[swsn] is SwapWormHC3)) return -1;
+    print("ICCIA11");
+    SwapWormHC3 & sw3 = (SwapWormHC3&) ew[swsn];
+    SW3Packet dpkt = (SW3Packet) sw3.mDownSignal;
+    if (mSeqNo.isEqual(dpkt.mSeqNo) &&
+        dpkt.mCmdStatus != SW3Packet.cCMST_TRYING)
+      return 0;
+    print("ICCIA12");
+    return 1;
+  }
+
+  //// LX API
+  @Override
+  virtual Bool perform(DiamondSequencerState & dss) {
+    print("LXCTA10");
+    ProcUnit pu = cPUNIT_REG;
+    ProcUnitInfo & pui = dss.getPUInfo(pu);
+    EventWindow ew;
+    Bool justReset = false;
+
+    if (inStateRESET(pui)) {
+      //// STATE RESET
+
+      if (killPU(pu,dss) && killPU(cPUNIT_INP,dss)) {
+        if (pui.mEmptySN == SN.maxof) return true;
+        SwapWormHC3 h;
+        h.mPocketPtrs[cBODY_UP] = cPP_NULL;
+        h.mPocketPtrs[cBODY_DOWN] = cPP_NULL;
+
+        SW3Packet p3;           
+        p3.mCmd = SW3Packet.cSW3C_NOOP; // Init to a NOOP cmd,
+        p3.mArg = 0u;
+        p3.mSeqNo = mSeqNo;             // matching our sequence,
+        p3.mCmdStatus = SW3Packet.cCMST_DO;
+        h.mUpSignal = p3;
+
+        p3.mCmdStatus = SW3Packet.cCMST_DID; // that was just completed
+        h.mDownSignal = p3;
+
+        ew[pui.mEmptySN] = h.atomof;
+        pui.mCodonSN = pui.mEmptySN; // there's a codon there now
+        pui.mEmptySN = SN.maxof;     // and we just consumed the empty
+        mPC = 0u;
+        justReset = true;
+        print("LXCTA1010JUSTRESET");
+        
+        // FALL THROUGH
+      } else 
+        return false;
+    }
+
+    print("LXCTA1011");
+    if (inStateEXIT(pui)) {
+      //// STATE EXIT
+      mPC = 0u;                 //XX we loop w/o reset if reexecuted?
+      markCurrentInstructionForRotation(dss, 0u);
+      return false;
+    }
+
+    // Check for local op
+    {
+      ASCII b = mProgram[mPC];
+      print("LXCTA1012LOCAL");
+      print(b);
+      if (dispatchLocal(dss, pui, b))
+        return true;
+      print("LXCTA1013LOCNOT");
+    }
+
+    // All other states must have SW3 arm
+
+    print("LXCTA11");
+    SN swsn = pui.mCodonSN;
+    print(swsn);
+    print(pui);
+    if (!ew.isAccessible(swsn)) return false; //??
+    print("LXCTA12");
+    if (!(ew[swsn] is SwapWormHC3)) return false; //??
+    SwapWormHC3 & sw3 = (SwapWormHC3&) ew[swsn];
+    SW3Packet dpkt = (SW3Packet) sw3.mDownSignal;
+
+    print("LXCTA13");
+
+    //// CHECK COMMAND COMPLETION
+    if (mSeqNo.isEqual(dpkt.mSeqNo)) {
+
+      if (dpkt.mCmdStatus == SW3Packet.cCMST_TRYING) // blocking on command completion
+        return false;
+
+      if (dpkt.mCmdStatus != SW3Packet.cCMST_DID) {
+        print("LXCTA13CHECK"); // Just shout it into the void, 'for now'?
+        print(dpkt);
+      }
+      if (!justReset) {
+        print("LXCTA13NOTJUST");
+        mPC++; // HEAD FOR: mPC = next(p[mPC]);
+        print(mPC);
+      }
+      // FALL THROUGH
+    }
+    
+    if (inStateDISPATCH(dpkt)) {
+      //// STATE DISPATCH
+
+      print("LXCTA14");      
+      ASCII b = mProgram[mPC];
+
+      if (dispatchRemote(sw3, b)) return true;
+
+      print("DISPATCH FAILED");
+      print(b);
+      return false;
+    }
+
+    if (inStateBLOCK(dpkt)) { // blocking on command acknowledgment
+      //// STATE BLOCK
+      
+      print("LXCTA15");      
+      return false;
+    }
+
+    print("LXKIDI12");
+    return false;
+  }
+
+  //// CODON API
+  virtual Void init() {
+    super.init();
+    mDSType = cDS_NORM;
+  }
+}

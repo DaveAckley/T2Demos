@@ -1,0 +1,139 @@
+// SAMPLE 'ANCESTOR' CODE
+local constant LXMarker.Mark cMARK_LABEL = 0xDABE;
+local constant LXMarker.Mark cMARK_ILABEL = 0xFFFF^cMARK_LABEL;
+local constant LXMarker cINS10 = { .mDSType = DTU.cDS_NORM, .mLabel = cMARK_LABEL }; 
+local constant LXReset  cINS11 = { .mDSType = DTU.cDS_NORM, .mDestUnit = DTU.cPUNIT_INS };
+local constant Zong     cINS12 = { .mDSType = DTU.cDS_NORM };
+local constant LXCtorArm cINS13 = {
+  .mDSType = DTU.cDS_NORM,
+  //  .mProgram = "nwwwwsssseeennnWWWWWWWWWWWWWW."};
+  //  .mProgram = "nwwwwsssseeennnWWWWWWWWWWWWWW"};
+  //  .mProgram = "nwwwwsssseeennnD"};
+  //  .mProgram = "nwwwwsssseeennnDnX-"};
+  //  .mProgram = "nwwwsssS."};
+  //  .mProgram = "nwwwsssS."};
+  .mProgram = "nwwsswwSE."};
+//local constant LXKillDiamond cINS14 = { .mDSType = DTU.cDS_NORM };
+local constant LXDo cINS15 = { .mDSType = DTU.cDS_NORM, .mStoredPU = DTU.cPUNIT_OUT };
+local constant LXCopy cINS16 = { .mDSType = DTU.cDS_NORM, .mCount = 7u, .mSrcPU = DTU.cPUNIT_OUT, .mDstPU = DTU.cPUNIT_REG };
+local constant LXMarker cINS17 = { .mDSType = DTU.cDS_NORM, .mLabel = cMARK_ILABEL }; 
+local constant Atom cPROGRAM[] = { cINS10, cINS11, cINS12, cINS13, /*cINS14,*/ cINS15, cINS16, cINS17 };
+ 
+
+transient LoaderState : CodonState {
+
+  //// Intention API
+
+  @Override
+  virtual Bool act(Intender & in) {
+    print("LDRST10");
+    if (super.act(in)) return true;
+
+    print("LDRST11");
+    Loader & ld = (Loader&) in;
+    
+    if (ld.mNextInstruction < cPROGRAM.lengthof) {
+      print("LDRST12");
+      /// EC TO BOTH SIDES OF ME?
+      ChainRule_LOADER_LOAD cr;
+      ChainRuleMatcher crm114;
+      cr.takeDebug(self);
+      crm114.takeDebug(self);
+      if (crm114.tryRule(self,cr)) {
+        print("LDRST13");
+        //        ++ld.mNextInstruction;
+        return true;
+      }
+      print("LDRST14");
+    } else {
+      print("LDRST15");
+    }
+    return false;
+  }
+}
+
+/** CHAINRULE: LOADER_LOAD: EC0 -> [X0] -> EC1  ==>  EC0 -> [X0] -> X1 */ 
+transient ChainRule_LOADER_LOAD : ChainRule_GENL_ALONE {
+
+  //// ChainRule_GENL_ALONE API
+  @Override
+  virtual Void whenAloneDo(PocketChainState & ss, ChainMatches & mat) {
+    print("CR_LDRL_WAD10");
+    super.whenAloneDo(ss,mat);
+    EventWindow ew;
+    Loader & ld = (Loader&) ew[mat[1]];
+    print(ld.mNextInstruction);
+    Atom a = cPROGRAM[ld.mNextInstruction];
+    print(a);
+    Codon & down = (Codon&) ew[mat[2]];
+    Codon & newc = (Codon&) a;
+    down.swapPocketPtrs(newc);
+    ew[mat[2]] = newc.atomof;
+    print("ZONGBONG");
+    ++ld.mNextInstruction;
+    print(ld);
+    /*
+    Codon & x  = (Codon&) ew[mat[1]];
+    Codon & ec  = (Codon&) ew[mat[2]];
+    ec.swapPocketPtrs(x);
+    ew.swap(mat[1],mat[2]);
+    */
+  }
+
+}
+
+/** \symbol Ld
+    \color #42e
+ */
+element Loader : LX {
+  typedef Unsigned(8) InstructionCount;
+  InstructionCount mNextInstruction = 0u;
+  
+  //// LX API
+  virtual Bool perform(DiamondSequencerState & dss) {
+    print("LDRPRF10");
+    if (mNextInstruction < cPROGRAM.lengthof)
+      return true;              // nothing to do yet
+      
+    /// Time to check out!
+    // Don't need? Just erase? -- markCurrentInstructionForRotation(dss, 0u);
+
+    print("LDRPRF11");
+    ProcUnitInfo & pui = dss.getPUInfo(cPUNIT_INS); // get IX slot
+    if (!pui.mFound ||
+        pui.mCodonSN == SN.maxof ||
+        pui.mIsEmptyCodon)
+      fail(__FILE__,__LINE__);
+
+    print("LDRPRF12");
+    EventWindow ew;
+    Atom & a = ew[pui.mCodonSN];
+    if (a as Self) {
+      EmptyCodon ec;
+      Random random;
+      ec.copySegAndPChain(a); // pick up ptrs and targeting
+      ec.mDSType = random.oneIn(2u) ? cDS_DOWN : cDS_UP; // flip for dir
+      ew[pui.mCodonSN] = ec.atomof;        // LOADER OUT
+      return true; // WRN: stale self
+    }
+
+    fail(__FILE__,__LINE__);
+    return true; // not reached
+  }
+
+  //// CODON API
+  virtual Void init() {
+    super.init();
+    mDSType = cDS_NORM;
+  }
+
+  //// Intender API 
+  @Override
+  virtual ClassId getIntentionClass() { return LoaderState.classidof; }
+
+  //// LOADER SERVICES (RUNNING ON BEHALF OF DSS)
+
+  Void behave() {
+    pursueIntention();          // passive mode activities
+  }
+}

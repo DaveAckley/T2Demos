@@ -1,0 +1,231 @@
+/** Summarization of the state of an HC3 neighbor. Focus is on
+ * providing useful information for the default case, plus access to
+ * the underlying grid atom, when present, so caller can do whatever
+ * more exotic analysis.
+ */
+transient HC3NgbState + DTU + QDebugUtils {
+  EventWindow ew;
+  Random random;
+  
+  NgbRel summarizeRel() {
+    if (mState == cNGB_CENTER) return cNGBREL_GAP2; 
+
+    if (mState == cNGB_NORTH) {
+
+      if (mNgbCtr == C2D.instanceof(0,-3)) return cNGBREL_GAP3;
+      else if (mNgbCtr == C2D.instanceof(0,3)) return cNGBREL_GAP1;
+
+    } else if (mState == cNGB_SOUTH) {
+
+      if (mNgbCtr == C2D.instanceof(0,-3)) return cNGBREL_GAP1;
+      else if (mNgbCtr == C2D.instanceof(0,3)) return cNGBREL_GAP3;
+
+    } else if (mState == cNGB_WEST) {
+
+      if (mNgbCtr == C2D.instanceof(-3,0)) return cNGBREL_GAP3;
+      else if (mNgbCtr == C2D.instanceof(3,0)) return cNGBREL_GAP1;
+
+    } else if (mState == cNGB_EAST) {
+
+      if (mNgbCtr == C2D.instanceof(-3,0)) return cNGBREL_GAP1;
+      else if (mNgbCtr == C2D.instanceof(3,0)) return cNGBREL_GAP3;
+    }
+    if (false)
+    {
+      ByteStreamLogger bsl;
+      bsl.printf("SNG0 Ctr(%d,%d) mState %d\n",
+                 mNgbCtr.x, mNgbCtr.y, mState);
+    }
+    return cNGBREL_OFFN;
+  }
+
+  NgbState mState = cNGB_INIT;
+  Unsigned mHops = Unsigned.maxof; // If mState <= 4
+  Unsigned mDSHops = Unsigned.maxof; // If mState <= 4
+  OnDSAxes mOnDSAxes;            // If mState <= 4
+  Unsigned mMaxGoalHops = Unsigned.minof; // If mState <= 4
+  C2D mNgbCtr;                  // hc3 'relaxed' on-stride position
+  C2D mFoundAt;                 // ew site where ngb HC3 actuall found
+
+  /// ACCESSORY STATE
+  Bool mFoundInaccessible;       // center doesn't exist
+  Bool mFoundBlockage;           // center blocked but qhc in the ngb
+  Bool mFoundUninit;
+  Bool mFoundUpstream;
+  Bool mFoundDownstream;
+  Bool mFoundFoamWarning;
+  Unsigned mFoamCount;
+
+  Bool foundInaccessible() { return mFoundInaccessible; }
+  Bool foundBlockage() { return mFoundBlockage; }
+  Bool foundUninitialized() { return mFoundUninit; }
+  Bool foundAnyUpstream() { return mFoundUpstream; }
+  Bool foundAnyDownstream() { return mFoundDownstream; }
+  Bool foundFoamWarning() { return mFoundFoamWarning; }
+  Unsigned foamCount() { return mFoamCount; }
+
+  Bool hasValidNeighbor() { return validNeighbor(mState); }
+  Bool validNeighbor(SN sn) { return sn <= cNGB_EAST; }
+  Bool isEmpty() { return mState == cNGB_EMPTY; }
+
+  NgbState ngbState() { return mState; }
+
+  Void assertValidNeighbor(SN sn) {
+    if (!validNeighbor(sn)) {
+      Fail f;
+      f.fail("Invalid neighbor");
+    }
+  }
+
+  Void assertHasNeighbor() { assertValidNeighbor(mState); }
+
+  C2D getNgbCoordFor(SN sn) {
+    assertValidNeighbor(sn);
+    C2D off = ew.getCoord(sn);
+    C2D at = mNgbCtr + off;
+    return at;
+  }
+
+  C2D getNgbCoord() { // Get absolute ew coord of grid ngb or fail
+    return getNgbCoordFor((SN) mState);
+  }
+
+  SN getNgbOffset() { // Get relative SN of grid ngb or fail
+    assertHasNeighbor();
+    return (SN) mState;
+  }
+
+  Unsigned getUpHops() {
+    assertHasNeighbor();
+    return mHops;
+  }
+
+  Unsigned getDSHops() {
+    assertHasNeighbor();
+    return mDSHops;
+  }
+
+  OnDSAxes getOnDSAxesNS() {
+    assertHasNeighbor();
+    print("H3NGONDS10");
+    print(mOnDSAxes[0]);
+    print(mOnDSAxes[1]);
+    return mOnDSAxes;
+  }
+
+  Unsigned getMaxGoalHops() {
+    assertHasNeighbor();
+    return mMaxGoalHops;
+  }
+
+  QHardCell & getNgb() { // Get ref to grid ngb or fail
+    C2D at = getNgbCoord();
+    Atom & a = ew[at];
+    QHardCell & ret = (QHardCell&) a;
+    return ret;
+  }
+
+  Void init(C2D ngbctr, QHardCell & me) {
+    //    setDebugOutputEnabled(true);
+    print("H3NGSINIT10");
+    print(ngbctr);
+    //vvvvXXX     self = Self.instanceof; // Nuke from orbit
+    mState = cNGB_INIT;
+    mHops = Unsigned.maxof; // If mState <= 4
+    mDSHops = Unsigned.maxof; // If mState <= 4
+    OnDSAxes no;
+    mOnDSAxes = no;                // If mState <= 4
+
+    mMaxGoalHops = Unsigned.minof; // If mState <= 4
+    mNgbCtr = C2D.instanceof;
+    mFoundAt = C2D.instanceof;
+
+    mFoundInaccessible = false;       // center doesn't exist
+    mFoundBlockage = false;           // center blocked but qhc in the ngb
+    mFoundUninit = false;
+    mFoundUpstream = false;
+    mFoundDownstream = false;
+    mFoundFoamWarning = false;
+    mFoamCount = 0u;
+    ///^^^^XXX
+
+    mNgbCtr = ngbctr; // This instance customization
+    print("H3NGSINIT11XXX");
+    print(ngbctr);
+    //    print(me);
+    print("H3NGSINIT12");
+
+    Unsigned myhops = me.getUpHops();
+    Unsigned maxhops = me.getMaxHopsGoal();
+
+    Bool foundaxes = false;
+    for (SN sn = 0u; sn <= 4u; ++sn) { // Scan full vonN
+      print("H3NGSINIT12LOOP");
+      C2D at = getNgbCoordFor(sn);
+      print(at);
+
+      if (!foundaxes && ew.isAccessible(at)) {
+        Atom & a = ew[at];
+        if (a as QHardCell) {
+          print("H3NGSINIT12FA");
+          print(at);
+          mOnDSAxes = a.getOnDSAxes();
+          print(mOnDSAxes[0]);
+          print(mOnDSAxes[1]);
+          foundaxes = true;
+        }
+      }
+
+      if (sn == 0u) { // Only assess center for foundinaccessible
+        if (!ew.isAccessible(at)) {
+          mFoundInaccessible = true;
+          continue;
+        }
+
+        Atom & a = ew[at];
+
+        // any 'non-self' except Foam means 'blockage'
+
+        if (!(a is QHardCell || a is Empty ||
+              a is Membrane || a is MTip)) {
+          mFoundBlockage = true;
+          continue;
+        }
+      }
+
+      Atom & a = ew[at];
+      if (a as Membrane) { // Trying membrane as 'Foam' gives us distant early warnings but otherwise is invisible
+        ++mFoamCount;
+        if (a.maxDCs() > 0u)
+          mFoundFoamWarning = true;
+        continue;
+      }
+
+      if (a as QHardCell) {
+        if (!me.inMyGroup(a)) continue;
+
+        Unsigned ahops = a.getUpHops();
+        if (ahops >= maxhops)       mFoundUninit = true;
+        else if (ahops < myhops)    mFoundUpstream = true;
+        else if (ahops > myhops)    mFoundDownstream = true;
+
+        // Found a ngb! Stash alignment
+
+        if (mState <= cNGB_EAST) mState = cNGB_MULTI; // Already had one
+        else if (mState != cNGB_MULTI) { // Record alignment
+          mState = (NgbState) sn;
+          mFoundAt = at;
+          mHops = ahops;
+          Unsigned agoalhops = a.getMaxHopsGoal();
+          if (agoalhops > mMaxGoalHops)
+            mMaxGoalHops = agoalhops;
+
+          mDSHops = a.getDSHops();
+
+        }
+      }
+    }
+    if (mState == cNGB_INIT)    // Found none
+      mState = cNGB_EMPTY;      // Record empty
+  }
+}

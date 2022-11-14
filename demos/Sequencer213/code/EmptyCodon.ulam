@@ -1,0 +1,74 @@
+transient EmptyCodonState : CodonState {
+
+  @Override
+  virtual Bool stabilize(Intender & in) {
+    print("ECSTAB10");
+    if (super.stabilize(in)) return true;
+ 
+    print("ECSTAB11");
+    EmptyCodon & ec = (EmptyCodon&) in;
+    if (!ec.isTemp()) {
+      print("ECSTAB12");
+      ec.mDSType = random.oneIn(2) ? ec.cDS_UP : ec.cDS_DOWN;  // mark as some kind of temp
+    }
+
+    /* LET ECs LIVE!
+    print("ECStab10");
+
+    EmptyCodon & ec = (EmptyCodon&) in;
+
+    if (mDSseqc.length() == 0u) { // If not around DS, decay into std temp
+      Random random;
+      Bool up = random.oneIn(2u); // 50% up or down
+      print("ECStab11");
+      print(up);
+      Demo d;
+      d.copySegAndPChain(ec); // Copy ptrs and targetting
+      d.mDSType = up ? ec.cDS_UP : ec.cDS_DOWN;  // mark as some kind of temp
+      ew[0] = d.atomof; // Replace ourselves
+      return true;
+    }
+    */
+    return false;
+  }
+
+}
+
+
+/**
+   \symbol EC
+   \color #933
+ */
+element EmptyCodon : Codon + DTU {
+  //// Intender API 
+  @Override
+  virtual ClassId getIntentionClass() { return EmptyCodonState.classidof; }
+
+  //// EMPTYCODON SERVICES
+  Void init() {
+    if (mTag == 0u) {
+      Random random;
+      print("ECINIT10");
+      print(mDSType);
+      if (mDSType == cDS_DUMB) {
+        print("ECINIT11");
+        mDSType = random.oneIn(2) ? cDS_UP : cDS_DOWN;
+        print(mDSType);
+      }
+      mTag = (Tag) (random.bits(cTAG_BITS)|0x1);
+    }
+  }
+
+  typedef Unsigned(4) CrowdWeight;
+  CrowdWeight mCrowdWeight = 0u;
+
+  constant Unsigned cTAG_BITS = 20u;
+  typedef Bits(cTAG_BITS) Tag;
+  Tag mTag;
+  
+  Void behave() {
+    init();
+    pursueIntention();
+  }
+}
+

@@ -1,0 +1,287 @@
+/** An 8 bit map from processor unit type to pocket direction relative
+ * to the processor. ProcUnits may appear any number of times in a
+ * map; drawQuadrantForPU selects a matching quadrant at random if any
+ * exist.
+ */
+quark QProcUnitMap + DTU {
+
+  constant Unsigned cPUColors[4] = {
+    0xff0000cc,                 // cPUNIT_REG: Blue
+    0xff00cc00,                 // cPUNIT_INP: Green
+    0xffcc0000,                 // cPUNIT_OUT: Red
+    0xffcccccc,                 // cPUNIT_INS: White
+  };
+
+  typedef ProcUnit QuadrantPUArray[PocketDir.maxof + 1u];
+  QuadrantPUArray mQuadrantPUArray =
+    {                           // Default mapping:
+      cPUNIT_INP,               // cQUAD_NW -> INP
+      cPUNIT_REG,               // cQUAD_NE -> REG
+      cPUNIT_INS,               // cQUAD_SE -> INS
+      cPUNIT_OUT,               // cQUAD_SW -> OUT
+    };
+
+  Void reset() { self = Self.constantof; }
+  
+  ProcUnit procUnitInQuadrant(PocketDir dir) {
+    return mQuadrantPUArray[dir];
+  }
+
+  Void setProcUnitInQuadrant(PocketDir dir, ProcUnit pu) {
+    mQuadrantPUArray[dir] = pu;
+  }
+
+  Bool drawQuadrantForPU(ProcUnit type, PocketDir & pdr) {
+    Random random;
+    PocketDir pd;
+    Unsigned count = 0u;
+    for (Unsigned i = 0u; i < mQuadrantPUArray.lengthof; ++i) {
+      if (mQuadrantPUArray[i] == type &&
+          random.oneIn(++count))
+        pd = (PocketDir) i;
+    }
+    if (count == 0u) return false;
+    pdr = pd;
+    return true;
+  }
+}
+
+
+/* An 8 bit map from quadrant direction to processing status of that
+ * pocket.
+ */
+quark QDirStatusMap + DTU {
+
+  constant Unsigned cPSColors[4] = {
+    0xff000000,                 // cDSTATUS_IDLE: Black
+    0xff00aaaa,                 // cDSTATUS_UPWD: Tealish
+    0xffaaaa00,                 // cDSTATUS_DNWD: Yellowish
+    0xffaaaaaa,                 // cDSTATUS_TEMP: Whitish
+  };
+
+  typedef ProcStatus QuadrantPStatusArray[PocketDir.maxof + 1u];
+  QuadrantPStatusArray mQuadrantPStatusArray =
+    {                           // Default mapping:
+      cDSTATUS_IDLE,            // cQUAD_NW -> IDLE
+      cDSTATUS_IDLE,            // cQUAD_NE -> IDLE
+      cDSTATUS_IDLE,            // cQUAD_SE -> IDLE
+      cDSTATUS_IDLE,            // cQUAD_SW -> IDLE
+    };
+
+  //// QDIRSTATUSMAP SERVICES
+  ProcStatus statusFromQuadrant(PocketDir pd) {
+    return mQuadrantPStatusArray[pd];
+  }
+
+  Void setQuadrantStatus(PocketDir pd, ProcStatus ps) {
+    mQuadrantPStatusArray[pd] = ps;
+  }
+
+  Void reset() { self = Self.constantof; }
+
+  Bool isAllIdle() {
+    for (Unsigned i = 0u; i < mQuadrantPStatusArray.lengthof; ++i)
+      if (mQuadrantPStatusArray[i] != cDSTATUS_IDLE) return false;
+    return true;
+  }
+
+  Void randomizeIdles() {
+    Random random;
+    for (Unsigned i = 0u; i < mQuadrantPStatusArray.lengthof; ++i)
+      if (mQuadrantPStatusArray[i] == cDSTATUS_IDLE) 
+        mQuadrantPStatusArray[i] = (ProcStatus) random.between(cDSTATUS_UPWD, cDSTATUS_TEMP);
+  }
+}
+
+/**
+   \symbol DS
+   \color #aaa
+ */
+element DiamondSequencer : QHardCellG + Fail /* + QDSHops*/ {
+
+  //// INTENDER API
+  @Override
+  virtual ClassId getIntentionClass() { return DiamondSequencerState.classidof; }
+
+  //// QDSHOPS API
+  @Override
+  virtual Unsigned getDSHops() { /*print("DSGETDS");*/ return 0u; }  // But Doctor, I am DiamondSequencer
+  @Override
+  virtual Void setDSHops(Unsigned dshops) { /* ha no */ }
+
+  @Override
+  virtual OnDSAxes getOnDSAxes() {  // I am so aligned
+    print("DSGETONDS");
+    OnDSAxes ret;
+    ret[0] = true;
+    ret[1] = true;
+    print("DXODS10");
+    print(ret[0]);
+    print(ret[1]);
+    return ret;
+  }
+
+  @Override
+  virtual Void setOnDSAxes(OnDSAxes dxdy) { /* ha no */ }
+
+  QProcUnitMap mProcUnitMap;          //< Process function to direction
+  QDirStatusMap mDirStatusMap;        //< Quadrant direction to process status
+
+  //// UrSelf API
+  @Override
+  ARGB getColor(Unsigned selector) {
+    ColorUtils cu;
+    ARGB ret = super.getColor(selector);
+    if (mDirStatusMap.isAllIdle()) 
+      ret = cu.color(0xffffffff); // go white
+    return ret;
+  }
+
+  @Override
+  virtual Void renderGraphics() {
+    renderPUs(300u);
+  }
+
+  @Override
+  virtual Void behave() {
+    pursueIntention();
+  }
+
+
+  //// DIAMONDSEQUENCER SERVICES
+  /** \returns true if execution attempted, false if blocked */
+  Bool tryExecution(DiamondSequencerState & dss) {
+    ClassUtils cu;
+    print("DSTX10");
+    print(cu.getMaxDefinedClassId());
+    /*
+      3 - Determine per quadrant HC3 status, out unless pocket square
+      4 - each PU pocket is 2x2 1x2 or 2x1 or out
+      5 - Search per PU for [opt] single Codon and Empty
+    */
+    if (!dss.areAllQuadrantsGoForIX(self)) return false;
+
+    //// pocket is good, mCodonSN etc set up in PUs
+    //// FIND CHOSEN INSTRUCTION IF ANY
+    print("DSTX11");
+    ProcUnitInfo & ins = dss.mPUInfos.mPUInfoAry[cPUNIT_INS];
+    EventWindow ew;
+    
+    if (ins.mCodonSN == SN.maxof) 
+      return false;             // No codon in pocket
+    print("DSTX12");
+
+    if (ins.mIsEmptyCodon) {
+      print("DSTX1210");
+      if (!ins.mFound) fail(__FILE__,__LINE__);
+      PocketDir insqd = ins.mInQuadrant;
+      mDirStatusMap.setQuadrantStatus(insqd, cDSTATUS_UPWD);
+      return true;
+    }
+    
+    print("DSTX13");
+    
+    Codon & ix = (Codon&) ew[ins.mCodonSN];
+    if (ix as LX) {             // Only LX insns execute for now
+      print("DSTX14");
+      print(ix);
+      Bool result = ix.execute(dss);
+      print(result);
+      return result;
+    }
+
+    print("DSTX15");
+    return false;
+  }
+
+  Bool getQuadrantOfPU(ProcUnit pu, PocketDir & pd) {
+    Unsigned pdcount = 0u;
+    Random random;
+    QProcUnitMap.QuadrantPUArray & ary = mProcUnitMap.mQuadrantPUArray;
+    for (Unsigned i = 0u; i < ary.lengthof; ++i) {
+      if (ary[i] == pu)
+        if (random.oneIn(++pdcount))
+          pd = (PocketDir) i;
+    }
+    return pdcount > 0u;
+  }
+
+  SN findProcUnit(ProcUnit pu) {
+    PocketDir pd;
+    if (!getQuadrantOfPU(pu,pd)) return SN.maxof;
+    return findCodonInQuadrant(pd);
+  }
+
+  SN findCodonInQuadrant(PocketDir pd) {
+    // XXX
+    return SN.maxof;
+  }
+
+  Void renderPU(C2D off, QProcUnitMap.ProcUnit func, Unsigned size) {
+    ColorUtils cu;
+    ARGB col = cu.color(QProcUnitMap.cPUColors[func]);
+    renderSlash(off, col, size);
+  }
+
+  Void renderPS(C2D off, QDirStatusMap.ProcStatus func, Unsigned size) {
+    ColorUtils cu;
+    ARGB col = cu.color(QDirStatusMap.cPSColors[func]);
+    renderSlash(off, col, size);
+  }
+
+  Void renderSlash(C2D off, ARGB col, Unsigned size) {
+    Drawable drawable;
+    if (!drawable.canDraw()) return;
+    C2D ctr = off*(3*Drawable.cUNITS_PER_SITE/8); 
+    C2D start = ctr-(C2D.Coord) (size/2u);
+    /* end was supposed to be 'start+' etc, trying
+       to make a horizontal line. But I like the diagonal
+       diamonds this makes better, at least for now.
+     */
+    C2D end = ctr+C2D.instanceof(0,(C2D.Coord) size/2u);
+    drawable.drawMaskedLine(start, end, col, col, (Bits) 0xffffffff, size);
+  }
+
+  Void renderPUs(Unsigned size) {
+    for (Unsigned i = 0u; i < cC2D_BY_QUAD.lengthof; ++i) {
+      PocketDir pd = (PocketDir) i;
+      Bool active =
+        mDirStatusMap.statusFromQuadrant(pd) != QDirStatusMap.cDSTATUS_IDLE;
+      Unsigned strokesize = 5u*size/4u;
+      Unsigned fillsize = active ? size : strokesize;
+      if (active)
+        renderPS(cC2D_BY_QUAD[pd], // active status bigger and first to be stroke
+                 mDirStatusMap.statusFromQuadrant(pd),
+                 strokesize);
+      renderPU(cC2D_BY_QUAD[pd], // function smaller and last to be fill
+               mProcUnitMap.procUnitInQuadrant(pd),
+               fillsize);
+    }
+  }
+
+}
+
+/** \symbol SD
+ */
+element MakeDS : DTU + Fail {
+  Void behave() {
+    EventWindow ew;
+    Random random;
+    for (SN sn = 1u; sn < 8u; ++sn) {
+      if (!ew.isAccessible(sn)) continue;
+      Atom & a = ew[sn];
+      if (a as QHardCellG) {
+        if (!(a is DiamondSequencer)) {
+          DiamondSequencer ds;
+          { QHardCellG & r = ds; r = a; }
+          { DEWLine & r = ds; r = a; }
+          { QHardCell & r = ds; r = a; }
+          { QDebugUtils & r = ds; r = a; }
+          ew[sn] = ds.atomof;
+          return;
+        }
+      }
+    }
+    ew[0] = Empty.instanceof;
+  }
+}

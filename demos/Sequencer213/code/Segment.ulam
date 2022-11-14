@@ -1,0 +1,124 @@
+transient SegmentState : PocketableState {
+
+  // inaccess data valid after findMate returns UNSURE
+  Unsigned mInaccessibleInMateDir[Segment.cBODY_DOWN+1u]; 
+
+  // mate data valid after findMate returns OK
+  SN mEWSNSegment; //< SN of thing having mates (usu 0 but maybe not)
+  SN mEWSNMate[Segment.cBODY_DOWN+1u];
+  PocketPtr mPocketWithMate[Segment.cBODY_DOWN+1u] = { Segment.cPP_NULL, Segment.cPP_NULL };
+
+  //// Intention API
+  @Override
+  virtual Bool init(Intender & seg) {
+    print("SGST10");
+    if (super.init(seg)) return true;
+    print("SGST11");
+    return false;
+  }
+
+  //// SegmentState SERVICES
+  Segment.MateStatus findMate(Segment & seg, Segment.BodyDir bd) {
+    PocketPtr ngb = seg.mPocketPtrs[bd];
+
+    print("FMTE10");
+    print(ngb);
+    if (ngb == Segment.cPP_NULL)
+      return Segment.cMATE_OK;  // happy on my own
+
+    print("FMTE11");
+    RectIterator ri;
+    if (!mPocket.initIterator(ri, ngb, true))
+      return Segment.cMATE_POCKET; // Can't iterate that
+
+    print("FMTE12");
+    SN matesn;
+    Unsigned matches = 0u;
+    Unsigned inaccess = 0u;
+    while (ri.hasNext() && matches < 2u) {
+      C2D n = ri.next();
+      print("FMTE13");
+      print(n);
+      if (!ew.isAccessible(n)) { ++inaccess; continue; }
+
+      print("FMTE14");
+      Atom & a = ew[n];
+      if (a as Segment) {
+        print("FMTE15");
+        if (seg.inMyGroup(a)) {
+          print("FMTE16");
+          PocketPtr themp = a.mPocketPtrs[1u-bd];
+          Bool bothHere = themp == 0u && ngb == 0u;
+          Bool opposites = themp == 5u-ngb;
+          if (opposites || bothHere) { // are they pointing back at us?
+            print("FMTE17");
+            if (random.oneIn(++matches)) 
+              matesn = ew.getSiteNumber(n);     // good candidate
+          }
+        }
+      }
+    }
+    print("FMTE18");
+    print(inaccess);
+    print(matches);
+    mInaccessibleInMateDir[bd] = inaccess;
+    if (matches == 0u)
+      return (inaccess > 0u) ? Segment.cMATE_UNSURE : Segment.cMATE_MISSING;
+    print("FMTE19");
+
+    if (matches > 1u) return Segment.cMATE_WRONG; // Multi pointing at us?
+
+    print("FMTE210");
+    // Stash findings
+    mEWSNMate[bd] = matesn;
+    mPocketWithMate[bd] = ngb;
+
+    return Segment.cMATE_OK;
+  }
+}
+
+quark Segment : Pocketable {
+
+  typedef PocketPtr PocketPtrs[BodyDir.maxof+1u];
+  PocketPtrs mPocketPtrs  = { Segment.cPP_NULL, Segment.cPP_NULL }; // fwd[0] bck[1] 6 bits total
+
+  //// Segment API
+
+  //// Segment SERVICES
+  virtual Void copySegPtrsOnly(Segment & other) {
+      Segment & sg = self;
+      sg = other;
+  }
+
+  Bool isHead() { return mPocketPtrs[cBODY_UP] == cPP_NULL; }
+  Bool isTail() { return mPocketPtrs[cBODY_DOWN] == cPP_NULL; }
+  Bool isMiddle() { return !isHead() && !isTail(); }
+  Bool isAlone() { return   isHead() &&  isTail(); }
+
+  /** 
+   */
+  MateStatus findMates(SegmentState & ss) {
+    EventWindow ew;
+    DebugUtils du;
+    print("FMTS10");
+    MateStatus ret = cMATE_OK; // optimism
+    ss.mEWSNSegment = ew.getSiteNumber(self);
+    print(ss.mEWSNSegment);
+    for (Unsigned i = 0u; i < 2u; ++i) {
+      BodyDir bdir = (BodyDir) i;
+      PocketPtr ptr = mPocketPtrs[bdir];
+      print("FMTS11");
+      print(i);
+      print(ptr);
+      if (ptr != cPP_NULL) {
+        MateStatus ms = ss.findMate(self, bdir);
+        print("FMTS12");
+        print(ms);
+        if (ms > ret) ret = ms; 
+      }
+    }
+
+    return ret;
+  }
+
+}

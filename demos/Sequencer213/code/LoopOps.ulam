@@ -1,0 +1,356 @@
+
+quark LoopOps + DTU + Fail {
+
+  Result dieResult() {
+    EventWindow ew;
+    ew[0] = Empty.instanceof;
+    return cRESULT_STOP;
+  }
+
+  Result pdiff(C2D empc) {
+    if (empc.length() > 0u) { // perhaps diffuse
+      C2D origin;             // Yes
+      EventWindow ew;
+      ew.swap(origin,empc);
+      return cRESULT_STOP;
+    }
+    return cRESULT_NOGO;        // No
+  }
+
+  /** If loop created successfully, \returns cRESULT_DONE and sets \c
+     centersn to SN of EC created in center pocket. \returns
+     cRESULT_NOGO if loop creation cannot even be attempted now, for
+     example due to crowding or inaccessibility. \returns cRESULT_STOP
+     if ew was changed so (for example) self is now unsafe to access.
+
+     NOTE: On a \c cRESULT_DONE return, the ew has been changed, but
+     ew[0] has not been altered (so self is likely still good). If
+     caller's job is then done it's up to caller to erase itself.
+   */
+  Result attemptMakeECLoop(PocketPtr openptr, PocketDir targetQuadrant, SN & centersn, SN & outsn) {
+    if (openptr < cPP_WEST || openptr > cPP_EAST) fail(__FILE__,__LINE__);
+
+    PocketHC3 p;
+    PocketHC3.Status pstat = p.init();
+    if (pstat == PocketHC3.cSTATUS_EDGE ||
+        pstat == PocketHC3.cSTATUS_OPEN ||
+        pstat == PocketHC3.cSTATUS_BENT) return cRESULT_NOGO; // wait for clarity
+
+    RectIterator ri;
+
+    // First make sure we're alone in here
+    if (!p.initIterator(ri, 0u, true)) return cRESULT_NOGO;
+
+    EventWindow ew;
+    Random random;
+    C2D empc;
+    Unsigned ecount = 0;
+    Bool foundbad = false;
+
+    //// DO WE HAVE A CREATION/DIFFUSION SPOT IN CENTER POCKET?
+    while (ri.hasNext()) {
+      C2D n = ri.next();
+      if (!ew.isAccessible(n)) return cRESULT_NOGO; // in center pocket??
+      if (ew[n] is Empty) {
+        if (random.oneIn(++ecount))
+          empc = n;
+        continue;
+      }
+      if (!(ew[n] is Self))     // whather that is
+        foundbad = true;
+    }
+    if (ecount == 0u) return cRESULT_NOGO; // NO WE DO NOT.
+    
+    //// WE HAVE A CREATION/DIFFUSION SPOT IN CENTER POCKET.
+
+    //// DO WE HAVE ONLY ACCESSIBLE EMPTIES IN THE INDICATED DIRECTION?
+    if (!p.initIterator(ri, openptr, true)) return pdiff(empc);  // diffuse or block
+
+    C2D pickc;
+    Unsigned count;
+    while (ri.hasNext()) {
+      C2D n = ri.next();
+      if (!ew.isAccessible(n) || !(ew[n] is Empty))
+        return pdiff(empc);     // NO WE DO NOT; DIFFUSE
+
+      if (random.oneIn(++count))
+        pickc = n;
+    }
+    if (count == 0u) return pdiff(empc); // NO WE DO NOT; DIFFUSE
+
+    //// WE HAVE ONLY ACCESSIBLE EMPTIES IN THE INDICATED DIRECTION.
+
+    /// We have:
+    /// - An empty-but-us center pocket in empc
+    /// - An all-accessible selected side pocket with an empty in pickc
+    
+    /// Make linked ECs in empc and picks
+
+    EmptyCodon ec1;
+    ec1.init(); // random up or down
+
+    PocketDir tq = targetQuadrant;
+    ec1.mTargetQuadrant = tq;
+    ec1.mSegsDown = 0u;
+    ec1.mTempsDown = 0u;
+
+    EmptyCodon ec2;
+    ec2.init(); // random up or down
+    ec2.mTargetQuadrant = tq;
+    ec2.mSegsDown = 0u;
+    ec2.mTempsDown = 0u;
+
+    ec1.mPocketPtrs[Segment.cBODY_UP] = (PocketPtr) openptr; // Up and down are 
+    ec1.mPocketPtrs[Segment.cBODY_DOWN] = (PocketPtr) openptr; // both thataway
+
+    ec2.mPocketPtrs[Segment.cBODY_UP] = (PocketPtr) (5u-openptr);   // right back
+    ec2.mPocketPtrs[Segment.cBODY_DOWN] = (PocketPtr) (5u-openptr); // atcha
+
+    ew[empc] = ec1.atomof;
+    ew[pickc] = ec2.atomof;
+
+    centersn = ew.getSiteNumber(empc); // Output parm
+    outsn = ew.getSiteNumber(pickc); // Output parm
+    return cRESULT_DONE;
+  }
+
+}
+
+/** An anchored, directed loop seed
+    \symbol L1
+    \color #ff0
+ */
+element SeedLoop11 : NullIntender + LoopOps + Fail {
+  EventWindow ew;
+  Random random;
+  ClassUtils.ClassId mClassId = EmptyCodon.classidof; // default
+
+  PocketPtr mSeedDir = cPP_NULL;
+  PocketDir mTargetQuadrant;
+
+  typedef Unsigned(4) Count;
+  Count mCount;
+  
+  Void die() { ew[0] = Empty.instanceof; }
+
+  Void block() { /* doc only */ }
+
+  Void diffuse() {
+    EventWindow.SiteNum n = (EventWindow.SiteNum) random.between(1,4);
+    if (ew.isEmpty(n))
+      ew.swap(0u,n);
+  }
+
+  Void diffuse(PocketableState & ps) {
+    fail(__FILE__,__LINE__);
+  }
+
+  Void cvtECToClassId(SN sn, ClassUtils.ClassId classid) {
+    EventWindow ew;
+    EmptyCodon & ec = (EmptyCodon&) ew[sn];
+
+    ClassUtils cu;
+    Int etype = cu.getElementType(classid);
+    if (etype < 0) fail(__FILE__,__LINE__);
+    AtomUtils au;
+    Atom a = au.new(etype);
+    PocketChainTQ & atq = (PocketChainTQ&) a;
+
+    atq.copySegAndPChain(ec); // Copy ptrs and targetting
+    atq.mDSType = Demo.cDS_NORM;
+
+    atq.mSegsDown = 0u;
+    atq.mTempsDown = 0u;
+
+    ew[sn] = atq.atomof;
+  }
+
+  typedef XTimer(4u,8u,1u) DecayTimer;
+  DecayTimer mDecayTimer;
+
+  Void behave() {
+    if (mDecayTimer.countAlarm()) 
+      return (Void) dieResult();
+
+    if (++mCount < mCount.maxof) return;
+
+    PocketableState ps;
+    //    ps.setDebugOutputEnabled(true);
+    ps.print("SL11BH10");
+    ps.print(mCount);
+    if (ps.init(self)) return;
+
+    ps.print("SL11BH11");
+    PocketHC3 & p = ps.mPocket;
+
+    ps.print(p);
+    PocketQuadrant & pq = p.mPocketQuadrant;
+    if (pq.mQuadrantKnown) {
+      ps.print("SL11BH12");
+      mSeedDir = (PocketPtr) random.between(cPP_WEST, cPP_EAST);
+      mTargetQuadrant = pq.mQuadrant;
+      ps.print(mSeedDir);
+      ps.print(mTargetQuadrant);
+    }
+    ps.print("SL11BH13");
+    if (mSeedDir == cPP_NULL) return diffuse(ps);
+
+    ps.print("SL11BH14n");
+    SN ctrsn, outsn;
+    Result res = attemptMakeECLoop(mSeedDir,mTargetQuadrant,ctrsn,outsn);
+
+    if (res == cRESULT_DONE) {
+      ps.print("SL11BH15");
+      ps.print(ctrsn);
+      cvtECToClassId(ctrsn,mClassId);
+
+      ps.print("SL11BH1511");
+      ps.print(outsn);
+      //LEAVE AS EC. WAS:      cvtECToClassId(outsn,Sh*peSh*fter.classidof);
+
+      EventWindow ew;
+      ew[0] = Empty.instanceof; // my job is done
+      return;
+    }
+
+    ps.print("SL11BH16");
+    if (res == cRESULT_NOGO)
+      return diffuse(ps);
+    ps.print("SL11BH17");
+
+  }
+}
+
+
+transient LoopKillState : CodonState {
+
+  //// Intention API
+
+  @Override
+  virtual Bool init(Intender & in) {
+    takeDebug(in);
+
+    print("LSKI10");
+    if (super.init(in))
+      return true;
+    print("LSKI11");
+    return false;
+  }
+
+  @Override
+  virtual Bool stabilize(Intender & in) {
+    print("LSKS10");
+
+    LoopKiller & s = (LoopKiller &) in;
+    Unsigned goneCount = 0u;
+    Unsigned spreadCount = 0u;
+    Unsigned firstdir = s.mBiDir ? Segment.cBODY_UP : Segment.cBODY_DOWN;
+    for (Unsigned dir = firstdir; dir <= Segment.cBODY_DOWN; ++dir) {
+      Segment.BodyDir bdir = (Segment.BodyDir) dir;
+      PocketPtr p = s.mPocketPtrs[bdir];
+      print("LSKS11");
+      print((Unsigned) p);
+      if (p == cPP_NULL) ++goneCount;
+      else if (trySpread(in, bdir)) ++spreadCount;
+    }
+    
+    print("LSKS12");
+    if (goneCount == 2u) {
+      EventWindow ew;
+      ew[0] = Empty.instanceof;
+      return true;
+    }
+
+    print("LSKS13");
+    return spreadCount > 0u;
+  }
+
+  //// LOOPKILLSTATE SERVICES
+  Bool trySpread(Intender & in, Segment.BodyDir bdir) {
+    EventWindow ew;
+    print("LKSTS10");
+    SN matesn = mEWSNMate[bdir];
+    print(matesn);
+    if (matesn == 0u) return false;
+    print("LKSTS11");
+    PocketChain & o = (PocketChain&) ew[matesn];  // existing in bdir
+
+    if (!(o is LoopKiller) && o.mDSType == o.cDS_DUMB) {
+      print("LKSTS12"); // can't kill non-LKs while they're dumb
+      return false;
+    }
+
+    print("LKSTS13");
+    Codon & c = (Codon&) in;
+    Atom a = c.atomof; // full copy of 'us'
+    LoopKiller & n = (LoopKiller&) a;
+    n.copySegAndPChain(o);      // copy ptrs from existing
+    n.mDSType = PocketChain.cDS_DUMB; // but it's dumb no matter what o was
+    n.mBiDir = true;                  // All but original like bidir
+
+    print("LKSTS14");
+    c.mPocketPtrs[bdir] = cPP_NULL;   // we don't see them anymore
+    n.mPocketPtrs[1u-bdir] = cPP_NULL; // and they don't see us
+
+    print("LKSTS15");
+    print(n);
+    ew[matesn] = n.atomof; // stash modified us
+    return true;
+  }
+}
+
+/** \symbol LK
+    \color #000
+ */
+element LoopKiller : Codon {
+
+  Bool mBlink;
+  Bool mBiDir;
+
+  //// UrSelf API 
+  @Override
+  ARGB getColor(Unsigned selector) {
+    ColorUtils cu;
+    return cu.color(mBlink ? 0xff000000 : 0xffffffff);
+  }
+
+  //// Intender API 
+  @Override
+  virtual ClassId getIntentionClass() { return LoopKillState.classidof; }
+
+  Void behave() {
+    mBlink = !mBlink;
+    mDSType = cDS_DUMB; // You can't touch this
+    pursueIntention();
+  }
+}
+
+/** \symbol SK
+    \color #f00
+ */
+element SeedLoopKiller + DTU {
+  EventWindow ew;
+  Random random;
+  Void die() { ew[0] = Empty.instanceof; }
+  Void behave() {
+    SN ksn;
+    Unsigned kcount = 0u;
+    for (SN sn = 1u; sn <= 4u; ++sn) {
+      if (!ew.isAccessible(sn)) return die();
+      Atom & a = ew[sn];
+      if (a as Codon) {
+        if (random.oneIn(++kcount))
+          ksn = sn;
+      }
+    }
+    if (kcount != 1u) return die();
+    Codon & c = (Codon&) ew[ksn];
+    LoopKiller lk;
+    lk.copySegAndPChain(c);
+    lk.mDSType = PocketChain.cDS_DUMB;
+    ew[ksn] = lk.atomof;
+    die();
+  }
+}
+
+

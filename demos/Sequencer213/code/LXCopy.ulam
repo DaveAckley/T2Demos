@@ -1,0 +1,114 @@
+/** \symbol Cp
+    \color #a0d
+*/
+element LXCopy : LX + StoredProcUnit + Fail + DTU {
+  ProcUnit mSrcPU = cPUNIT_INP; //< PU to copy from
+  ProcUnit mDstPU = cPUNIT_OUT; //< PU to copy to
+  typedef Unsigned(6) Count;
+  Count mCount;
+  Bool mFlagged;
+
+  Bool copyDone(DiamondSequencerState & dss) {
+    print("LXCPDN10");
+    dss.swapPUs(cPUNIT_INS, mStoredPU);
+    if (isAlone()) {
+      print("LXCPDN11");
+      EventWindow ew;
+      SN mesn = ew.getSiteNumber(self);
+      ew[mesn] = Empty.instanceof;
+      return true;
+    }
+    print("LXCPDN12");
+    markCurrentInstructionForRotation(dss, 0u);
+    return true;
+  }
+
+  //// LX API
+  @Override
+  virtual Bool perform(DiamondSequencerState & dss) {
+    print("LXCOPY10");
+    if (mCount == 0u) return copyDone(dss);
+    if (mFlagged) return performFlagged(dss);
+    return performUnflagged(dss);
+  }
+
+  Bool performUnflagged(DiamondSequencerState & dss) {
+    EventWindow ew;
+    print("CPUF10");
+
+    ProcUnitInfo srcpui = dss.getPUInfo(mSrcPU);
+    if (!srcpui.mFound) return false;
+
+    SN ssn = srcpui.mCodonSN;
+    if (ssn == SN.maxof)
+      return false; // ??
+    Atom & sa = ew[ssn];
+
+    if (sa is EmptyCodon) {
+      markDSPForRotationForward(dss, 0u, mSrcPU);
+      return true;
+    }
+
+    ProcUnitInfo dstpui = dss.getPUInfo(mDstPU);
+    if (!dstpui.mFound) return false;
+
+    SN dsn = dstpui.mCodonSN;
+    if (dsn == SN.maxof)
+      return false; // ??
+    Atom & da = ew[dsn];
+    if (!(da is EmptyCodon)) {
+      markDSPForRotation(dss, 0u, mDstPU, cDSTATUS_TEMP);  // ask dst for empty spot
+      return false;
+    }
+
+    /// OK: WE HAVE NON-EMPTY src AND EMPTY dst
+    Atom sacopy = sa;
+    BaseClassUtils bcu;
+    bcu.copySharedData(da,sacopy);
+    
+    Codon & cac = (Codon&) sacopy;
+    cac.mDSType = cDS_NORM;
+
+    ew[dsn] = sacopy;
+    --mCount;
+    
+    markDSPForRotationForward(dss, 0u, mSrcPU);          // ask src for next item
+    markDSPForRotation(dss, 0u, mDstPU, cDSTATUS_TEMP);  // ask dst for empty spot
+    return true;
+  }
+
+  Bool performFlagged(DiamondSequencerState & dss) {
+    print("CPFL10");
+    //// IF ALONE, TRY TO GROW LOOP (NYI)
+    // XXX if (isAlone()) {    }
+    fail(__FILE__,__LINE__); //IMPLEMENT ME OR DITCH ME
+    //// REPLACE SELF WITH NON-EC HEAD OF dst
+    ProcUnitInfo dstpui = dss.getPUInfo(mDstPU);
+    if (!dstpui.mFound) return false;
+
+    SN dsn = dstpui.mCodonSN;
+    if (dsn == SN.maxof)
+      return false;
+
+    EventWindow ew;
+    Atom & a = ew[dsn];
+    if (a is EmptyCodon) {
+      markDSPForRotationForward(dss, 0u, mDstPU);
+      return false;
+    }
+
+    //// a IS NON-EC
+    SN ssn = ew.getSiteNumber(self);
+    if (ssn == SN.maxof) fail(__FILE__,__LINE__);
+
+    Atom copy = a;
+    markDSPForRotationForward(dss, 0u, mDstPU);
+
+    BaseClassUtils bcu;
+    bcu.copySharedData(self,copy);
+    ew[ssn] = copy;
+
+    return true;
+  }
+
+}

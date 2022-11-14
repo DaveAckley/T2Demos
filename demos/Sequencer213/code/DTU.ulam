@@ -1,0 +1,337 @@
+/** A zero-length collection of typedefs, constants, and utility
+    functions useful for life on a diamond
+ */
+quark DTU {
+
+  //// WIDELY-KNOWN ALIASES
+  typedef EventWindow.SiteNum SN;
+
+  //// DISTANCE GRADIENT FROM DIAMONDSEQUENCER
+  typedef Unsigned(3) DSHops;
+
+  //// AXIS ALIGNMENT WITH NEAREST DIAMONDSEQUENCER
+  typedef Bool OnDSAxes[2]; // [0] dx==0; [1] dy==0
+
+  //// LOGICAL POSITIONS ALONG A POCKETCHAIN RELATIVE TO US
+  typedef Unary(2) MatchCodePosition;
+  constant MatchCodePosition cMCP_PREV = 0u;
+  constant MatchCodePosition cMCP_HERE = 1u;
+  constant MatchCodePosition cMCP_NEXT = 2u;
+
+  String getMatchCodePositionName(MatchCodePosition v) {
+    which (v) {
+      case cMCP_PREV: { return "cMCP_PREV = 0u"; }
+      case cMCP_HERE: { return "cMCP_HERE = 1u"; }
+      case cMCP_NEXT: { return "cMCP_NEXT = 2u"; }
+    }
+    return __FUNC__;
+  }
+
+  //// SEGMENT MATE STATUS CODES
+  typedef Unsigned MateStatus;
+  constant MateStatus cMATE_OK      = 0u; //< All needed mate(s) located consistently
+  constant MateStatus cMATE_POCKET  = 1u; //< Bad pocket can't search
+  constant MateStatus cMATE_UNSURE  = 2u; //< At least one mate missing but some sites inaccessible
+  constant MateStatus cMATE_MISSING = 3u; //< At least one mate is definitely missing
+  constant MateStatus cMATE_WRONG   = 4u; //< At least one mate is inconsistent with us
+
+  String getMateStatusName(MateStatus v) {
+    which (v) {
+      case cMATE_OK     : { return "cMATE_OK      = 0u"; }
+      case cMATE_POCKET : { return "cMATE_POCKET  = 1u"; }
+      case cMATE_UNSURE : { return "cMATE_UNSURE  = 2u"; }
+      case cMATE_MISSING: { return "cMATE_MISSING = 3u"; }
+      case cMATE_WRONG  : { return "cMATE_WRONG   = 4u"; }
+    }
+    return __FUNC__;
+  }
+
+  //// SEGMENT NEIGHBOR INDICES
+  typedef Unsigned(1) BodyDir;
+  constant BodyDir cBODY_UP = 0u;
+  constant BodyDir cBODY_DOWN = 1u;
+
+  String getBodyDirName(BodyDir v) {
+    which (v) {
+      case cBODY_UP: { return "cBODY_UP = 0u"; }
+      case cBODY_DOWN: { return "cBODY_DOWN = 1u"; }
+    }
+    return __FUNC__;
+  }
+
+  //// POCKETCHAIN DRIVABILILITY STATUS CODES
+  typedef Unsigned(2) DriveStatusCode;
+  constant DriveStatusCode cDS_DUMB = 0u; //< Unswappable, No auto move or grow
+  constant DriveStatusCode cDS_NORM = 1u; //< Swappable, auto move and grow
+  constant DriveStatusCode cDS_DOWN = 2u; //< Downbound Temp
+  constant DriveStatusCode cDS_UP =   3u; //< Upbound Temp
+
+  String getDriveStatusCodeName(DriveStatusCode v) {
+    which (v) {
+      case cDS_DUMB: { return "cDS_DUMB = 0u"; }
+      case cDS_NORM: { return "cDS_NORM = 1u"; }
+      case cDS_DOWN: { return "cDS_DOWN = 2u"; }
+      case cDS_UP: { return "cDS_UP =   3u"; }
+    }
+    return __FUNC__;
+  }
+
+  //// DS quadrant processing status codes
+  typedef Unsigned(2) ProcStatus;
+  constant ProcStatus cDSTATUS_IDLE = 0u; //< Ready for new adventure
+  constant ProcStatus cDSTATUS_UPWD = 1u; //< Needs roll toward body up (temp down)
+  constant ProcStatus cDSTATUS_DNWD = 2u; //< Needs roll toward body down (temp up)
+  constant ProcStatus cDSTATUS_TEMP = 3u; //< Needs a temp
+
+  String getProcStatusName(ProcStatus v) {
+    which (v) {
+      case cDSTATUS_IDLE: { return "cDSTATUS_IDLE"; }
+      case cDSTATUS_UPWD: { return "cDSTATUS_UPWD"; }
+      case cDSTATUS_DNWD: { return "cDSTATUS_DNWD"; }
+      case cDSTATUS_TEMP: { return "cDSTATUS_TEMP"; }
+    }
+    return __FUNC__;
+  }
+
+  //// CHAIN PATTERN PRIMITIVES
+  typedef Unsigned(4) ChainType;
+  constant ChainType cCPAT_EC = 0u; //< A swappable EmptyCodon only
+  constant ChainType cCPAT_FC = 1u; //< A EmptyCodon that will not be swapped
+  constant ChainType cCPAT_C  = 2u; //< Any chain except EC
+  constant ChainType cCPAT_X  = 3u; //< Any NORM Codon, but only outside a DSP
+  constant ChainType cCPAT_Y  = 4u; //< Any DUMB or NORM Codon 
+  constant ChainType cCPAT_Z  = 5u; //< Any DUMB Codon 
+  constant ChainType cCPAT_U  = 6u; //< Any UPWD Codon 
+  constant ChainType cCPAT_D  = 7u; //< Any DNWD Codon 
+  constant ChainType cCPAT_T  = 8u; //< Any temp (UPWD or DNWD) Codon 
+  constant ChainType cCPAT_O  = 9u; //< An (inferred) out-of-patch Codon 
+  constant ChainType cCPAT_S  = 10u; //< Any swappable codon: !DSP + NORM, UPWD, OR DNWD
+  constant ChainType cCPAT_N  = ChainType.maxof; //< Nonexistent (nothing to match here)
+
+  String getChainTypeName(ChainType ct) {
+    which (ct) {
+      case cCPAT_EC: { return "cCPAT_EC = 0u"; }
+      case cCPAT_FC: { return "cCPAT_FC = 1u"; }
+      case cCPAT_C : { return "cCPAT_C  = 2u"; }
+      case cCPAT_X : { return "cCPAT_X  = 3u"; }
+      case cCPAT_Y : { return "cCPAT_Y  = 4u"; }
+      case cCPAT_Z : { return "cCPAT_Z  = 5u"; }
+      case cCPAT_U : { return "cCPAT_U  = 6u"; }
+      case cCPAT_D : { return "cCPAT_D  = 7u"; }
+      case cCPAT_T : { return "cCPAT_T  = 8u"; }
+      case cCPAT_O : { return "cCPAT_O  = 9u"; }
+      case cCPAT_S : { return "cCPAT_S  = 10u"; }
+    }
+    return __FUNC__;
+  }
+
+  //// MATCHPATCH LINK PATTERN PRIMITIVES
+
+  typedef Unsigned(2) PatchLinkType;
+  constant PatchLinkType cPLPAT_O  = 0u; //< A link out of the patch
+  constant PatchLinkType cPLPAT_I  = 1u; //< A link to another pocket of the patch
+  constant PatchLinkType cPLPAT_E  = 2u; //< (End of pattern)
+  constant PatchLinkType cPLPAT_N  = 3u; //< A null link
+
+  String getPatchLinkTypeName(PatchLinkType plt) {
+    which (plt) {
+      case cPLPAT_O : { return "cPLPAT_O  = 0u"; }
+      case cPLPAT_I : { return "cPLPAT_I  = 1u"; }
+      case cPLPAT_E : { return "cPLPAT_E  = 2u"; }
+      case cPLPAT_N : { return "cPLPAT_N  = 3u"; }
+    }
+    return __FUNC__;
+  }
+
+  //// PATCHRULE POCKET USES
+
+  typedef Unsigned(2) PocketUse;
+  constant PocketUse cPRPU_EMPTY = 0u; //< Pocket must be empty
+  constant PocketUse cPRPU_CODON = 1u; //< Pocket must contain only one codon
+  constant PocketUse cPRPU_RESRV = 2u;
+  constant PocketUse cPRPU_UNCHK = 3u; //< Pocket content is entirely unchecked
+
+  String getPocketUseName(PocketUse val) {
+    which (val) {
+      case cPRPU_EMPTY: { return "cPRPU_EMPTY = 0u"; }
+      case cPRPU_CODON: { return "cPRPU_CODON = 1u"; }
+      case cPRPU_RESRV: { return "cPRPU_RESRV = 2u"; }
+      case cPRPU_UNCHK: { return "cPRPU_UNCHK = 3u"; }
+    }
+    return __FUNC__;
+  }
+
+  //// PATCHRULE PATCH LINK TYPES
+  typedef Unsigned(2) PLType;        //< PatchLink type
+  constant PLType cPLTYPE_OUT  = 0u; //< Link must head out of patch
+  constant PLType cPLTYPE_CW   = 1u; //< Link must head clockwise around patch
+  constant PLType cPLTYPE_CCW  = 2u; //< Link must head counter-clockwise around patch
+  constant PLType cPLTYPE_NULL = 3u; //< Link must be null
+
+  String getPLTypeName(PLType val) {
+    which (val) {
+      case cPLTYPE_OUT : { return "cPLTYPE_OUT  = 0u"; }
+      case cPLTYPE_CW  : { return "cPLTYPE_CW   = 1u"; }
+      case cPLTYPE_CCW : { return "cPLTYPE_CCW  = 2u"; }
+      case cPLTYPE_NULL: { return "cPLTYPE_NULL = 2u"; }
+    }
+    return __FUNC__;
+  }
+
+  //// 
+  typedef Unary(3) Result;
+  constant Result cRESULT_NOGO = 0u; //< Operation not even startable now
+  constant Result cRESULT_STOP = 1u; //< Operation incomplete but changes were made
+  constant Result cRESULT_DONE = 2u; //< Operation completely successfully
+
+  //// 'SHORT' CLASS ID FOR THE LX INSTRUCTION SET
+  constant Unsigned(5) cLXCLASSID_BITS = 10u;
+  typedef Unsigned(cLXCLASSID_BITS) LXClassId; //< Only first 1K classids can be referenced..
+  typedef Int(cLXCLASSID_BITS) LXInt;
+
+  //// LOGICAL NAMES OF DIAMONDSEQUENCER PROCESSING UNITS
+  typedef Unsigned(2) ProcUnit;
+  constant ProcUnit cPUNIT_REG = 0u; //< 'Registers' - stack, temp, scratch..
+  constant ProcUnit cPUNIT_INP = 1u; //< Input chain
+  constant ProcUnit cPUNIT_OUT = 2u; //< Output chain
+  constant ProcUnit cPUNIT_INS = 3u; //< Instruction chain
+
+  String getProcUnitName(ProcUnit v) {
+    which (v) {
+      case cPUNIT_REG: { return "cPUNIT_REG = 0u"; }
+      case cPUNIT_INP: { return "cPUNIT_INP = 1u"; }
+      case cPUNIT_OUT: { return "cPUNIT_OUT = 2u"; }
+      case cPUNIT_INS: { return "cPUNIT_INS = 3u"; }
+    }
+    return __FUNC__;
+  }
+
+  //// QUADRANT NAMES (FOR BOTH POCKETS WRT AN HC3 AND HC3S WRT A POCKET)
+  typedef Unsigned(2) PocketDir;
+  constant PocketDir cQUAD_NW = 0u; // --
+  constant PocketDir cQUAD_NE = 1u; // +-
+  constant PocketDir cQUAD_SE = 2u; // ++
+  constant PocketDir cQUAD_SW = 3u; // -+
+
+  String getPocketDirName(PocketDir v) {
+    which (v) {
+      case cQUAD_NW: { return "cQUAD_NW = 0u"; }
+      case cQUAD_NE: { return "cQUAD_NE = 1u"; }
+      case cQUAD_SE: { return "cQUAD_SE = 2u"; }
+      case cQUAD_SW: { return "cQUAD_SW = 3u"; }
+    }
+    return __FUNC__;
+  }
+
+  /** Map from the c2d of a pocket corner to the PocketDir of (0,0)
+      RELATIVE TO THAT CORNER. \returns false if either x or y of
+      cornerc is 0 (since we're not in a legitimate pocket then),
+      otherwise \returns true and sets \c pd to (0,0)s quadrant
+      relative to cornerc
+   */
+  Bool pocketDirFromCorner(C2D cornerc, PocketDir & pd) {
+    C2D c = cornerc;
+    if (c.x == 0 || c.y == 0) return false;
+    else if (c.x < 0 && c.y < 0) pd = cQUAD_SE; 
+    else if (c.x > 0 && c.y < 0) pd = cQUAD_SW;
+    else if (c.x > 0 && c.y > 0) pd = cQUAD_NW;
+    else /* c.x < 0 && c.y > 0*/ pd = cQUAD_NE;
+    return true;
+  }
+
+  //// AXIS NAMES (0-BASED == SN-1) (FOR HC3 NGB RELATIVE TO HC3 CTR)
+  typedef Unsigned(2) AxialDir;
+  constant AxialDir cW = 0u;
+  constant AxialDir cN = 1u;
+  constant AxialDir cS = 2u;
+  constant AxialDir cE = 3u;
+
+  String getAxialDirName(AxialDir v) {
+    which (v) {
+      case cW: { return "cW = 0u"; }
+      case cN: { return "cN = 1u"; }
+      case cS: { return "cS = 2u"; }
+      case cE: { return "cE = 3u"; }
+    }
+    return __FUNC__;
+  }
+
+  Void axialDirsBorderingQuad(PocketDir from, AxialDir & had, AxialDir & vad) {
+    which (from) {
+    case cQUAD_NW:  { had = cW; vad = cN; }
+    case cQUAD_NE:  { had = cE; vad = cN; }
+    case cQUAD_SE:  { had = cE; vad = cS; }
+    case cQUAD_SW:  { had = cW; vad = cS; }
+    }
+  }
+
+  //// NOMINAL OFFSETS FOR POCKETDIR QUADRANTS
+  constant C2D cC2D_BY_QUAD_NW = { .x = -1, .y = -1 };
+  constant C2D cC2D_BY_QUAD_NE = { .x =  1, .y = -1 };
+  constant C2D cC2D_BY_QUAD_SE = { .x =  1, .y =  1 };
+  constant C2D cC2D_BY_QUAD_SW = { .x = -1, .y =  1 };
+
+  constant C2D cC2D_BY_QUAD[4] = {
+    cC2D_BY_QUAD_NW,
+    cC2D_BY_QUAD_NE,
+    cC2D_BY_QUAD_SE,
+    cC2D_BY_QUAD_SW,
+  };
+
+  //// STATES OF A POINTER TO A POCKET OR SELF
+  typedef Unsigned(3) PocketPtr;
+  constant PocketPtr cPP_SELF  = 0u;  //< Ptr center
+  constant PocketPtr cPP_WEST  = 1u;  //< Ptr west
+  constant PocketPtr cPP_NORTH = 2u;  //< Ptr north
+  constant PocketPtr cPP_SOUTH = 3u;  //< Ptr south
+  constant PocketPtr cPP_EAST  = 4u;  //< Ptr east
+  constant PocketPtr cPP_POUT  = 5u;  //< Points outside patch
+  constant PocketPtr cPP_RSRV1 = 6u;  //< Don't use
+  constant PocketPtr cPP_NULL  = 7u;  //< Null pointer
+
+  String getPocketPtrName(PocketPtr v) {
+    which (v) {
+      case cPP_SELF : { return "cPP_SELF  = 0u"; }
+      case cPP_WEST : { return "cPP_WEST  = 1u"; }
+      case cPP_NORTH: { return "cPP_NORTH = 2u"; }
+      case cPP_SOUTH: { return "cPP_SOUTH = 3u"; }
+      case cPP_EAST : { return "cPP_EAST  = 4u"; }
+      case cPP_POUT : { return "cPP_POUT  = 5u"; }
+      case cPP_RSRV1: { return "cPP_RSRV1 = 6u"; }
+      case cPP_NULL : { return "cPP_NULL  = 7u"; }
+    }
+    return __FUNC__;
+  }
+  
+  constant C2D cC2D_BY_POCKETPTR[8] = {
+    {.x =  0, .y =  0 }, //cPP_SELF
+    {.x = -1, .y =  0 }, //cPP_WEST
+    {.x =  0, .y = -1 }, //cPP_NORTH
+    {.x =  0, .y =  1 }, //cPP_SOUTH
+    {.x =  1, .y =  0 }, //cPP_EAST
+    {.x = C2D.Coord.maxof, .y =  C2D.Coord.maxof } //Rest..
+  };
+
+  //// RELATIVE ALIGNMENTS OF AN HC3 NEIGHBOR
+  typedef Unsigned(2) NgbRel;
+  constant NgbRel cNGBREL_OFFN = 0u; //< ngb off axis or non-existent
+  constant NgbRel cNGBREL_GAP1 = 1u; //< ngb on axis pocket gap 1
+  constant NgbRel cNGBREL_GAP2 = 2u; //< ngb on axis pocket gap 2
+  constant NgbRel cNGBREL_GAP3 = 3u; //< ngb on axis pocket gap 3
+
+  typedef NgbRel NgbRels[4];
+
+  //// STATES OF AN HC3 NEIGHBOR OF AN HC3
+  typedef Unsigned(4) NgbState; // 0..4 -> align, 5 -> empty, 6 -> conflicted, 14 -> init
+  constant NgbState cNGB_CENTER = 0u; // Found us in SN0/ctr only
+  constant NgbState cNGB_WEST   = 1u; // Found us in SN1/west only
+  constant NgbState cNGB_NORTH  = 2u; // Found us in SN2/north only
+  constant NgbState cNGB_SOUTH  = 3u; // Found us in SN3/south only
+  constant NgbState cNGB_EAST   = 4u; // Found us in SN4/east only
+  constant NgbState cNGB_EMPTY  = 5u; // All SN0..4 were empty
+  constant NgbState cNGB_MULTI  = 6u; // Found more than one us in SN0..4
+  constant NgbState cNGB_BLOCK  = 7u; // Found none of us but something nonempty
+
+  constant NgbState cNGB_INIT   = NgbState.maxof; // Found nothing so far
+
+}

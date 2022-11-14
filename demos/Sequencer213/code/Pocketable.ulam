@@ -1,0 +1,256 @@
+transient PocketableState : Intention + DTU {
+
+  EventWindow ew;
+  Random random;
+  DebugUtils du;
+  PocketHC3 mPocket;
+
+  // availability data valid after findAvailables(..) called
+  SN mEWSNAvailables[Pocketable.cPP_EAST+1u]; // 0..4
+  Bool mPocketIterable[Pocketable.cPP_EAST+1u]; // 0..4
+  Unsigned mPocketSize[Pocketable.cPP_EAST+1u]; // 0..4
+  Unsigned mPocketUsCount[Pocketable.cPP_EAST+1u]; // 0..4
+  Unsigned mPocketFull[Pocketable.cPP_EAST+1u]; // 0..4
+  Unsigned mPocketEmpty[Pocketable.cPP_EAST+1u]; // 0..4
+  Unsigned mPocketInaccessible[Pocketable.cPP_EAST+1u]; // 0..4
+
+  //// Intention API
+  @Override
+  virtual Bool init(Intender & seg) {
+    print("PKBST10");
+    if (super.init(seg)) return true;
+    print("PKBST11");
+    if (mPocket.init() != PocketHC3.cSTATUS_OK) return true; // Distorted pocket
+    print("PKBST12");
+    return false;
+  }
+
+  //// PocketableState SERVICES
+
+  /** false if any bad pockets else true
+      (Note all pockets are checked; caller can
+      iterate over ss.mPocketFull[..] etc even
+      if false is returned here)
+   */
+  Bool findAvailables() {
+
+    Bool sallgood = true;
+    for (PocketPtr ngb = cPP_SELF; ngb <= cPP_EAST; ++ngb) {
+      if (!findAvailable(ngb))
+        sallgood = false;
+    }
+    return sallgood;
+  }
+
+  /** true if pocket good, false if the pocket's unstable.
+   */
+  Bool findAvailable(PocketPtr ptr) {
+    EventWindow ew;
+    Random random;
+    if (ptr > cPP_EAST) { Fail f; f.fail("BAD ARG PTR"); }
+    RectIterator ri;
+    mPocketIterable[ptr] = true; // optimism..
+    if (!mPocket.initIterator(ri, ptr, true))
+      return mPocketIterable[ptr] = false; // ..unjustified
+
+    Atom & ctr = ew[0];
+    SN randemp = SN.maxof;
+    Unsigned pocketsize, empcount, inaccesscount, uscount;
+    while (ri.hasNext()) {
+      ++pocketsize;
+      C2D n = ri.next();
+      if (!ew.isAccessible(n)) { ++inaccesscount; continue; }
+      Atom & a = ew[n];
+      if (a is Empty && random.oneIn(++empcount)) randemp = ew.getSiteNumber(n);
+      else if (ctr as Pocketable) {
+        if (a as Pocketable) {
+          if (ctr.inMyGroup(a)) ++uscount;
+        }
+      }
+    }
+
+    // Stash findings
+    mEWSNAvailables[ptr] = randemp;
+    mPocketUsCount[ptr] = uscount;
+    mPocketSize[ptr] = pocketsize;
+    mPocketFull[ptr] = pocketsize - empcount;
+    mPocketEmpty[ptr] = empcount;
+    mPocketInaccessible[ptr] = inaccesscount;
+    return true;
+  }
+
+}
+
+quark Pocketable : Intender + DTU {
+
+  //// Pocketable API
+
+  /** Determine if a another Pocketable is related to me
+
+      Determines what counts as 'us' in mPocketUsCount
+
+      By default, this returns \c true if and only if self and other are
+      identical concrete classes
+   */
+  virtual Bool inMyGroup(Self & other) {
+    ClassUtils cu;
+    return cu.getClassId(self) == cu.getClassId(other);
+  }
+
+  /** Perform any patch-related activities, when given the chance to
+      do so by a QHardCell. \returns true if (eventwindow structural)
+      modifications were made, otherwise false.
+
+      By default this does no work and returns false.
+   */
+  virtual Bool updatePatch(QHardCellState & hcs, QHardCell & hc) {
+    QDebugUtils qd;
+    qd.takeDebug(hc);
+    print("UPTCH10");
+    PatchState & ps = hcs.getPatchState();
+    if (!ps.mValid) return false;
+    print("UPTCH11");
+    print(ps);
+    print("UPTCH12");
+
+    Random random;
+    if (true) {
+      print("QSUPTC11PATCHRULEPATTERNS10");
+      PatchRule_GROWB pr10;
+      if (pr10.tryRule(ps)) {
+        return true;
+      } else if (random.oneIn(5)) {
+        PatchRule_GROWA pr;
+        if (pr.tryRule(ps))
+          return true;
+      } else if (true/*random.oneIn(2)*/) {
+        Bool dbg = ps.isDebugOutputEnabled();
+        //ps.setDebugOutputEnabled(true);
+        print("SHRINKAGONIC10");
+        PatchRule_SHRINKA pr;
+        pr.takeDebug(ps);
+        Bool ret = pr.tryRule(ps);
+        print("SHRINKAGONIC11");
+        print(ret);
+        ps.setDebugOutputEnabled(dbg);
+        if (ret)
+          return true;
+      } else {
+        Bool dbg = ps.isDebugOutputEnabled();
+        //ps.setDebugOutputEnabled(true);
+        print("SHRINKBGONIC10");
+        PatchRule_SHRINKB pr;
+        pr.takeDebug(ps);
+        Bool ret = pr.tryRule(ps);
+        print("SHRINKBGONIC11");
+        print(ret);
+        ps.setDebugOutputEnabled(dbg);
+        if (ret)
+          return true;
+      }
+
+      print("QSUPTC11PATCHRULEPATTERNS11");
+    }
+
+    /*
+    {
+      MatchPatch_GROWA mp1;
+      mp1.takeDebug(hc);
+      Bool retb = mp1.tryRule(ps);
+      print("UPTCH13");
+      print(retb);
+      if (retb) return true;
+    }
+    {
+      MatchPatch_GROWB mp1;
+      mp1.takeDebug(hc);
+      Bool retb = mp1.tryRule(ps);
+      print("UPTCH13");
+      print(retb);
+      if (retb) return true;
+    }
+    */
+    /*
+    PatchRule pr;
+    pr.takeDebug(hc);
+    print(pr.isOut(cPP_EAST,cQUAD_SW));
+    */
+    return false;
+  }
+
+  //// Pocketable SERVICES
+
+  PocketPtr clockwise(PocketPtr from) {
+    which (from) {
+    case cPP_WEST:  { return cPP_NORTH; }
+    case cPP_NORTH: { return cPP_EAST; }
+    case cPP_EAST:  { return cPP_SOUTH; }
+    case cPP_SOUTH: { return cPP_WEST; }
+    otherwise: { return from; }
+    }
+  }
+
+  PocketPtr counterclockwise(PocketPtr from) {
+    which (from) {
+    case cPP_WEST:  { return cPP_SOUTH; }
+    case cPP_SOUTH: { return cPP_EAST; }
+    case cPP_EAST:  { return cPP_NORTH; }
+    case cPP_NORTH: { return cPP_WEST; }
+    otherwise: { return from; }
+    }
+  }
+
+  PocketPtr reversePocket(PocketPtr ptr) {
+    if (ptr == cPP_NULL || ptr == cPP_SELF) return ptr;
+    if (ptr > cPP_EAST) { Fail f; f.fail("BAD PTR"); }
+    return (PocketPtr) (5u - ptr);
+  }
+
+  /** false if any bad pockets else true
+      (Note all pockets are checked; caller can
+      iterate over ss.mPocketFull[..] etc even
+      if false is returned here)
+   */
+  Bool findAvailables(PocketableState & ss) {
+    Bool sallgood = true;
+    for (PocketPtr ngb = cPP_SELF; ngb <= cPP_EAST; ++ngb) {
+      if (!findAvailable(ss,ngb))
+        sallgood = false;
+    }
+    return sallgood;
+  }
+
+  /** true if pocket good, false if the pocket's unstable.
+   */
+  Bool findAvailable(PocketableState & ss, PocketPtr ptr) {
+    EventWindow ew;
+    Random random;
+    if (ptr > cPP_EAST) { Fail f; f.fail("BAD ARG PTR"); }
+    RectIterator ri;
+    ss.mPocketIterable[ptr] = true; // optimism..
+    if (!ss.mPocket.initIterator(ri, ptr, true))
+      return ss.mPocketIterable[ptr] = false; // ..unjustified
+
+    SN randemp = SN.maxof;
+    Unsigned pocketsize, empcount, inaccesscount, uscount;
+    while (ri.hasNext()) {
+      ++pocketsize;
+      C2D n = ri.next();
+      if (!ew.isAccessible(n)) { ++inaccesscount; continue; }
+      Atom & a = ew[n];
+      if (a is Empty && random.oneIn(++empcount)) randemp = ew.getSiteNumber(n);
+      else if (a as Self) {
+        if (inMyGroup(a)) ++uscount;
+      }
+    }
+
+    // Stash findings
+    ss.mEWSNAvailables[ptr] = randemp;
+    ss.mPocketUsCount[ptr] = uscount;
+    ss.mPocketSize[ptr] = pocketsize;
+    ss.mPocketFull[ptr] = pocketsize - empcount;
+    ss.mPocketEmpty[ptr] = empcount;
+    ss.mPocketInaccessible[ptr] = inaccesscount;
+    return true;
+  }
+}
