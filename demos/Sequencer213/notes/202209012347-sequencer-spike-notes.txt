@@ -1,4 +1,4 @@
-{529}  -*-  mode: text; fill-column: 50;  -*-
+{553}  -*-  mode: text; fill-column: 50;  -*-
 [0:
 
 Thu Sep  1 23:47:45 2022 OK so OK so OK come on.
@@ -8441,5 +8441,486 @@ POP POP POP
 
 Let's clean up a little and commit a WIP, come
 on.
+[529:
+
+Mon Nov 14 04:06:00 2022 OK pushed
+Sequencer213.
+
+Nap time.
+
+Then need to switch over to writing the foreword
+for the book.
+
+:529]
 
 :528]
+[530:
+
+Mon Nov 14 11:35:11 2022 Opps well I feel
+compelled to rewrite the loop killer so that it
+works on open chains as well as loops, while
+preserving its 'the original LK is the last to go'
+property.
+
+[531:
+
+Tue Nov 15 23:27:38 2022 OK well did that, then
+branched off to book stuff. Which I'll have to do
+again in a few hours. But let's try to stay fresh
+by flipping back here for a task or two.
+
+OK how about taking on something in here:
+
+ - A structure for collecting and selecting among
+   the rules. That's all a huge hack right now.
+
+   = Think roulette selection possibly? Or maybe
+     some O(1) stochasto hack instead of the
+     'true' O(n) odds.
+
+ - Respecting targetquadrant (at least in growth
+   rules)
+
+ - Optimizing against some desired mDSHops
+
+ - Replacement for tempsdown/segsdown aimed at
+   specifying desired loop density (and perhaps
+   other properties).
+
+[532:
+
+Wed Nov 16 00:36:29 2022 What if we had a map of
+quadrants and a map (interval? scalar?) of desired
+distances? We also need a desired density? Or we
+do that implicitly by spatial constraints?
+
+How many bits are we talking about maybe?[533:
+
+Wed Nov 16 00:40:19 2022 Without increasing the
+current PocketChain size, we got at least 16 bits
+freed up by ditching m{Segs|Temps}{Up|Down}. 17 if
+we toss the currently unused mArrived.
+
+Suppose:
+
+ - 4 bits for tq map
+ - 4 bits for 'size ranges', like maybe
+    0 0-3
+    1 4-7
+    2 8-11
+    3 12+
+[535: Or
+
+    0 0-1
+    1 2-7
+    2 8-15
+    3 16+
+
+?
+
+  :535]
+
+x 2 for {Up|Down}
+
+and suppose we have some scoring function that
+measures the penalties of a given layout, or more
+operationally, the delta penalty of a given rule
+application.
+[534:
+
+Wed Nov 16 01:18:54 2022 Could we have a return
+path, like a wire-OR, to detect if there's any
+violations of the current mapping? Maybe that's
+what mArrived could be repurposed to.
+
+Anchors set mOoB to false.. We're going to need
+mOoBUp and mOoBDown if we're not guaranteed to
+have a loop.
+
+But it's another contact warning concept. If it's
+cPP_NULL beyond, or a designated anchor, then
+originate mOoB at that point. Otherwise, propagate
+in the specified directions, incorporating your
+own constraint violations if any.
+
+[536:
+
+Wed Nov 16 02:30:33 2022 And then one anchor can
+agree to loop the signal around to one end, if
+they want a single decision point. Or they could,
+if they wanted, control the up and down
+configurations independently, and ask patch rules
+to compute up and down separately, and sum them up
+or something.
+[537:
+
+Thu Nov 17 00:43:47 2022 Let's try to set up
+structure for these signals. Goal is to replace
+
+  | 0	| 4	| mSegsDown	| Unsigned(4)
+  | 4	| 4	| mTempsDown	| Unsigned(4)
+  | 8	| 4	| mSegsUp	| Unsigned(4)
+  | 12	| 4	| mTempsUp	| Unsigned(4)
+..
+  | 18	| 1	| mArrived	| Bool
+
+with like
+
+quark ChainCtl {
+  typedef Bits(4) TQMap; //< Target Quadrant Map
+  TQMap mTQMap; //< currently acceptable target quadrants
+
+  typedef Unsigned(2) SizeRange;
+  constant SizeRange cSZRG_S = 0u; //< small
+  constant SizeRange cSZRG_M = 1u; //< medium
+  constant SizeRange cSZRG_L = 2u; //< large
+  constant SizeRange cSZRG_X = 3u; //< extra large / rest
+
+  typedef Bits(4) ASRMap; //< Allowable Size Range Map
+  ASRMap mSRMap; //< current acceptable size ranges
+  constant ASRMap cASR_S = 1u << cSZRG_S;
+  constant ASRMap cASR_M = 1u << cSZRG_M;
+  constant ASRMap cASR_L = 1u << cSZRG_L;
+  constant ASRMap cASR_X = 1u << cSZRG_X;
+
+  Bool mViolation; //< Map violation return signal
+}
+
+and then in PocketChain, probably:
+
+ ..
+  ChainCtl mChainCtlUp;
+  ChainCtl mChainCtlDn;
+ ..
+
+and in PocketChainState.stabilize(..)
+
+ Bool upc = mChainCtlUp.stabilize(..);
+ Bool dnc = mChainCtlDn.stabilize(..);
+ if (upc || dnc) return true
+
+and some ChainCtl API to get the current local
+violations, which ChainCtl.stabilize(..) will call.
+[538:
+
+Thu Nov 17 10:03:49 2022 OK, well,
+PocketChain.mChainControlUp and Down are in but
+not yet in use, and m{Segs|Temps}{Up|Down} are
+diked out, and stuff still seems to work.
+
+We're going to need some kind of plan to get the
+ChainControl stuff going.
+
+[539: Fri Nov 18 01:50:54 2022 Made a cut
+DONE :539] - Propagation
+   Bool takeFrom(ChainControl & source)
+
+ - Local evaluation
+   Int violations(PocketChainState & pcs, PocketPtr ptr)
+
+ - Root detection
+   Bool isRoot(PocketChainState & pcs) ?
+
+ - Root update ?
+
+[540:
+
+Fri Nov 18 08:42:26 2022 So I guess it's not even
+clear to me at the moment how we know what target
+quadrant we're in, during an HC3/Patch event?
+
+Hmm: What if we repurpose the
+PocketChainTQ.mTargetQuadrant bits to represent
+not the target quadrant, but the quadrant we're
+currently occupying? After all, we have moved the
+actual targeting info to ChainControl.mTQMap, so
+it would be a net zero shift beyond that.
+
+I guess main worry is: But then how do we evaluate
+the target quadrant of empty patch pockets? Try to
+infer it from the non-empty ones? That doesn't
+seem like much fun. Burn more bits in the HC3?
+That undercuts our still-clung-to-tho-unsure-why
+goal of not having 2D coord info explicitly
+represented in the grid.
+
+
+[541:
+
+Fri Nov 18 09:14:31 2022
+
+        0  1  2
+           |
+        7--*--3
+           |
+        6  5  4
+
+Could be three bits, with evens representing
+target quadrant (*2) and odds representing on-axis
+in the four (-y, +x, +y, -x) dirs.
+
+And that's partly redundant with the DSHops info -
+but not completely - and has the advantage that we
+could determine tq out to arbitrary distance.
+
+[542:
+
+Fri Nov 18 09:24:48 2022 Buut I guess it all goes
+to crap if the grid isn't solid? Because once
+we're off-axis we don't know how far off-axis we
+are, so we can never re-infer 'on-axis' once
+lost.
+
+But I guess we're long since committed to that
+anyway. If we have gaps in the grid all kinds of
+stuff becomes untrustworthy?
+
+So maybe it could be okay?
+[543:
+
+Fri Nov 18 09:45:24 2022 So the idea would be:
+
+ - Add 'typedef Unsigned(3) DTU.Heading' or
+   something? 'Zone'? With constant defs
+
+ - Add like Zone QDSHops.getZone() ;
+
+..wait.. DTU/QDSHops already has
+
+  typedef Bool OnDSAxes[2];
+
+is anybody using that?[544:
+
+
+Fri Nov 18 11:25:32 2022 Yes people are using it -
+in particular, PocketHC3.isDSP(PocketPtr) is using
+it to determine if the ptr is pointing across a ds
+axis, which affects the inDSP determination.
+
+So, two questions:
+
+(1) Can OnDSAxes do our HC3 DSQuadrant question?
+(2) Can our 'Zone' concept do the OnDSAxes work?
+[545:
+
+Fri Nov 18 16:29:02 2022 I guess part of the
+answer to (2) is that, since nobody except the DS
+itself can be on two DSAxes at once, the Zone
+concept can do the OnDSAxes work if we build
+support for it into QDShops/QDSHopsStg.
+
+Suggesting maybe try the Zone with a shim to
+provide OnDSAxes?
+
+:545]
+
+:544]
+
+:543]
+:542]
+
+:541]
+
+
+
+:540]
+:538]
+:537]
+
+:536]
+
+:534]
+:533]
+
+:532]
+
+:531]
+
+:530]
+[546:
+
+Sat Nov 19 02:37:39 2022 OK, how exactly do we
+merge ngb's zone into our own?
+
+(1) Ignore them unless their dshops < our dshops
+(2) They are at
+
+   C2D off
+
+wrt us, stylized as off.length()==1, and we also
+have their
+
+  XZone ngbxzone
+
+(3) If ngbxzone is uninit, ignore them
+
+(4) ngbxzone is initted.
+
+(5) map ngbzone to C2D
+    _CT -> (0,0)
+    _NT -> (0,-1)
+    _NE -> (1,-1)
+    etc
+
+(6) if ngbc.length() == 0u (meaning zone root)
+    ourzone = zoneFromC2D(off) [done]
+
+(7) if ngbc.length() == 1u (meaning on an axis)
+
+    0,0 -- 1,0  ngbc     +1,0  -- (2,0)
+            |   +0,1 off
+          (1,1) sum
+
+
+   ourzone = zoneFromC2D(ngbc + off)
+      (where zoneFromC2D takes arb C2D)
+   [done]
+
+(8) ngbzone is fully off-axis (length() == 2)
+
+ (0,0) -- (1,0) -- (1,0)
+            |
+          (1,1)             (   )
+            |                 |   [0,-1]
+          (1,1) -- (1,1) -- (1,1)
+
+..don't see how this case can come up, with a
+solid grid and ignoring if ngbdshops >= ourdshops
+
+so does that imply just ourzone = ngbzone,
+regardless of off, in the remaining cases?
+
+Maybe does?
+
+:546]
+[547:
+
+Sun Nov 20 08:04:43 2022 OK so I got crap to build
+again, but lots of things are torn up. OnDSAxes
+half-still-exists but is certainly broken; 
+Zone and XZone exist in a bunch of places but
+isn't plumbed in.
+[548:
+
+Sun Nov 20 08:08:02 2022 So the still-seeming
+plausible :546: stuff goes in where?
+Somewhere in QHardCell.stabilize I guess? Let's go.
+[549:
+
+Sun Nov 20 08:13:43 2022 And one issue is that
+QHardCell.stabilize mostly just dispatches to
+QHC.update(QHCS&), which is ancient hideous
+ancient ancient code.[550:
+
+Sun Nov 20 08:15:08 2022 The main source of
+elaborated truth in QHardCellState is its
+mHC3State data member, which now has stuff like: 
+
+      // values from the Intender
+ ..
+      Unsigned myDSHops;
+ ..
+      XZone myXZone;
+
+      // reductions from the ngbs
+      Unsigned minDSHops;
+ ..
+      XZone xzone;
+
+with myXZone getting initted via qhc.getXZone(),
+and xzone currently not getting initted at all.
+
+There's an incomplete HC3State.updateZone() method
+we could be trying to flesh out, which nobody
+calls yet.
+
+So,
+
+Q1: Can we do :546:-ish stuff during
+    HC3State.init(..)? Do we have enough
+    information? Well,
+
+Q2: What information does :546: need?
+
+A2: It needs:
+    our dshops vs the ngb's dshops, and to have
+    that be already stable.
+
+Q3: Do we have that? Where is the 'our dshops is
+    good' made?
+
+A3: One place where we determine that we're
+    uninitted, in QHC.update(QHCS&). That's
+    clearly later than QHCS.init(..)
+
+    Another place is later in QHC.update(QHCS&),
+    if myDSHops != minDSHops + 1.
+
+    Only after that point could we say 'our dshops
+    is good'.
+
+[551:
+
+Sun Nov 20 08:45:09 2022 Which might seem like
+progress but later in that same hideous update
+function we go all the way to deciding whether we
+want to move. So it's not like we want to wait
+until QHC.update(..) returns before stabilizing
+the xzone.
+
+Ugh.
+
+Do we dare think about breaking up QHC.update(..)?
+
+Well, do we, punk?
+
+What kind of chunks could we break it up into?
+Certainly get deciding-to-move stuff out of there.
+
+Let's do a little inventory and see how far we
+get.. Let's try to route the pieces to
+
+ init
+ observe
+ stabilize
+ act
+
+(0) QHCS.init done before update starts
+(1) Watchdog reset -> QHC or QHCS init
+(2) HC3State.examineNbgs
+    - does HC3NgbState.init(..)
+    - which allegedly sets up HC3NgbState.mXZone
+    - and sets up minUpHops and the like
+    -> Move this to QHCS.observe(..) ?
+(3) QHC self init -> stabilize ?
+(4) update goal hops / maxhops -> stabilize ?
+(5) QHC self destruction -> stabilize
+(6) update DSHops -> stabilize ?
+(7) update maxhops -> stabilize
+(8) .. refresh settleddownhops -> stabilize
+(9) update contactwarnings -> stabilize
+(10) spawning (grow grid) -> stabilize? act?
+(11) considerations for grid motion -> act ?
+(12) moveEntourage -> act
+
+[552:
+
+Sun Nov 20 09:42:17 2022 Well that's quite the
+list. I'm thinking about pushing on to
+Sequencer214 and trying to tear up QHC.update(..)
+along those lines.
+
+It's November 20th by the way, Dave. Week and a
+half left in 'nanowrimo' just saying.
+
+:552]
+
+:551]
+
+
+:550]
+
+:549]
+:548]
+
+:547]
