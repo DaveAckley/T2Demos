@@ -42,6 +42,7 @@ transient HC3NgbState + DTU + QDebugUtils {
   NgbState mState = cNGB_INIT;
   Unsigned mHops = Unsigned.maxof; // If mState <= 4
   Unsigned mDSHops = Unsigned.maxof; // If mState <= 4
+  XZone mXZone;                      // If mState <= 4
   OnDSAxes mOnDSAxes;            // If mState <= 4
   Unsigned mMaxGoalHops = Unsigned.minof; // If mState <= 4
   C2D mNgbCtr;                  // hc3 'relaxed' on-stride position
@@ -133,6 +134,8 @@ transient HC3NgbState + DTU + QDebugUtils {
     mState = cNGB_INIT;
     mHops = Unsigned.maxof; // If mState <= 4
     mDSHops = Unsigned.maxof; // If mState <= 4
+    mXZone = cXZONE_UN;       // uninitted
+
     OnDSAxes no;
     mOnDSAxes = no;                // If mState <= 4
 
@@ -170,6 +173,8 @@ transient HC3NgbState + DTU + QDebugUtils {
           print("H3NGSINIT12FA");
           print(at);
           mOnDSAxes = a.getOnDSAxes();
+          mXZone = a.getXZone(); // ngb zone
+          print((Unsigned) mXZone);
           print(mOnDSAxes[0]);
           print(mOnDSAxes[1]);
           foundaxes = true;

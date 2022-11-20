@@ -1,0 +1,145 @@
+
+local constant DTU.BodyDir cBODY_UP = DTU.cBODY_UP;
+local constant DTU.BodyDir cBODY_DOWN = DTU.cBODY_DOWN;
+quark ChainControlUp : ChainControl(cBODY_UP) { }
+quark ChainControlDown : ChainControl(cBODY_DOWN) { }
+
+/*BUT NOT WITH THESE TWO: 
+quark ChainControlUp : ChainControl(DTU.cBODY_UP) { }
+quark ChainControlDown : ChainControl(DTU.cBODY_DOWN) { }
+*/
+
+quark ChainControl(DTU.BodyDir cSOURCE_BODY_DIR) + DTU + Fail {
+
+  //// ChainControl SERVICES
+  Void init() { }
+
+  Void init(Self & s) {
+    mTQMap = s.mTQMap;
+    mSRMap = s.mSRMap;
+    mViolation = s.mViolation;
+  }
+
+  Void atEnd(PocketChainState & s) {
+    s.print("CCATEN10");
+  }
+
+  /** Dig the \c bd ngb out of \c pcs and \return the SN of its codon.
+      \return SN.maxof bd link is cPP_NULL or anything else weird, or
+      if there isn't a (single) codon in the given direction.
+
+      Depends on SegmentState.findMates, which is called during
+      PocketChainState.observe, which bails if it fails. So it's valid
+      in stabilize(..) and later.
+   */
+  SN getCCLink(PocketChainState & pcs) {
+    SN sn = pcs.mEWSNMate[cSOURCE_BODY_DIR];
+    return sn; // um that's it?
+  }
+
+  Bool takeFrom(Self source) {
+    Bool ret = false;
+    if (source.mTQMap != mTQMap) {
+      mTQMap = source.mTQMap;
+      ret = true;
+    }
+    if (source.mSRMap != mSRMap) {
+      mSRMap = source.mSRMap;
+      ret = true;
+    }
+    return ret;
+  }
+
+  Bool stabilize(PocketChainState & pcs) {
+    return false;
+  }
+  
+  Int errorInQuad(PatchState & ps, PocketDir quad) {
+    if (ps.mSegmentCount[quad] == 0u) return 0;
+    EventWindow ew;
+    Atom & a = ew[ps.mSegmentSN[quad]];
+    if (!(a is PocketChain)) return 0; // ?
+    PocketChain & pc = (PocketChain&) a;
+    Int erup = pc.mChainControlUp.chainError(ps);
+    Int erdn = pc.mChainControlDown.chainError(ps);
+    return erup + erdn;
+  }
+
+  constant Int cILLEGAL_TQ_ERROR = 100;
+  Int errorFromTQ(PocketDir forpd) {
+    return
+      ((mTQMap & (1u<<forpd)) == 0u) ?
+      cILLEGAL_TQ_ERROR :
+      0;
+  }
+
+  Bool inSR(SizeRange sr, Unsigned dshops) {
+    return
+      (dshops >= cSR_LIMITS[sr]) &&
+      (dshops < cSR_LIMITS[sr+1]);
+  }
+
+  SizeRange getSR(Unsigned dshops) {
+    for (Unsigned i = 0u; i <= SizeRange.maxof; ++i) {
+      SizeRange sr = (SizeRange) i;
+      if (inSR(sr, dshops)) return sr;
+    }
+    fail(__FILE__,__LINE__);
+  }
+
+  Int chainError(PatchState & ps) {
+    Int ret = 0;
+    for (Unsigned i = 0u; i <= PocketDir.maxof; ++i) {
+      PocketDir pd = (PocketDir) i;
+      ret += chainError(ps, pd);
+    }
+    return ret;
+  }
+
+  Int chainError(PatchState & ps, PocketDir pd) {
+    Unsigned dshops = ps.mDSHops[pd];
+    PocketDir dquad = 0; //XXX: ps.getDSQuad(pd);
+
+    Int srerr = errorFromSR(dshops); // size range error
+    Int tqerr = errorFromTQ(dquad);
+    return srerr + tqerr;
+  }
+
+  constant Int cILLEGAL_SR_ERROR = 100;
+  Int errorFromSR(Unsigned dshops) {
+    SizeRange sr = getSR(dshops);
+    return
+      ((mSRMap & (1u<<sr)) == 0u) ?
+      cILLEGAL_SR_ERROR :
+      0;
+  }
+
+  typedef Bits(4) TQMap; //< Target Quadrant Map
+  TQMap mTQMap; //< currently acceptable target quadrants
+
+  typedef Unsigned(2) SizeRange;
+  constant SizeRange cSZRG_S = 0u; //< small
+  constant SizeRange cSZRG_M = 1u; //< medium
+  constant SizeRange cSZRG_L = 2u; //< large
+  constant SizeRange cSZRG_X = 3u; //< extra large / rest
+
+  typedef Unsigned SizeRangeLimits[SizeRange.maxof + 2u];
+  constant SizeRangeLimits cSR_LIMITS = {
+    0u,
+    4u, // >= 0, < 4 -> _S
+    8u, // >= 4, < 8 -> _M
+    14u, // >= 8, < 14 -> _L
+    Int.maxof // >= 14 -> The Professor And Mary Ann
+  };
+
+  typedef Bits(4) ASRMap; //< Allowable Size Range Map
+  ASRMap mSRMap; //< current acceptable size ranges
+  constant ASRMap cASR_S = 1u << cSZRG_S;
+  constant ASRMap cASR_M = 1u << cSZRG_M;
+  constant ASRMap cASR_L = 1u << cSZRG_L;
+  constant ASRMap cASR_X = 1u << cSZRG_X;
+
+  Bool mViolation; //< Map violation return signal
+}
+
+

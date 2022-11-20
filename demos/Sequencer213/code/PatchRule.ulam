@@ -46,8 +46,8 @@ quark PRPocket + DTU + QDebugUtils + Fail {
     case cCPAT_X:  { return isX(ss,p,c); }
     case cCPAT_Y:  { return pc.mDSType == c.cDS_DUMB || pc.mDSType == c.cDS_NORM; }
     case cCPAT_Z:  { return pc.mDSType == c.cDS_DUMB; }
-    case cCPAT_U:  { return pc.mDSType == c.cDS_UP; }      
-    case cCPAT_D:  { return pc.mDSType == c.cDS_DOWN; }      
+    case cCPAT_U:  { return pc.mDSType == c.cDS_UP; }
+    case cCPAT_D:  { return pc.mDSType == c.cDS_DOWN; }
     case cCPAT_T:  { return pc.mDSType == c.cDS_UP || pc.mDSType == c.cDS_DOWN; }
     case cCPAT_C:  { return !(c is EmptyCodon); }
     case cCPAT_S:  { return !ss.isInDSP(p) && pc.mDSType != c.cDS_DUMB; } /* anything swappable */
@@ -329,8 +329,10 @@ transient PatchRule + DTU + QDebugUtils + Fail {
     print(prpb);
     if (!prpb.match(ps,self)) return false;
 
+    /*
     if (self is PatchRule_SHRINKA || self is PatchRule_SHRINKB)
       setDebugOutputEnabled(true);
+    */
     print(getPatchRuleName());
     print("PARUTR12");
     //    print(prpb);
@@ -345,7 +347,7 @@ transient PatchRule + DTU + QDebugUtils + Fail {
 
 /** Implement:
     <pre>
-    
+
      ->A ->  B->        ->A  |  B->
           |       ==\     |  |  ^
       ----*----   ==/    -|--*--|-
@@ -372,12 +374,35 @@ transient PatchRule_GROWA : PatchRule {
     print(ps);
     Codon & a = prpb.l2pGetCodon(ps, cQUAD_NW);
     Codon & b = prpb.l2pGetCodon(ps, cQUAD_NE);
+    Unsigned eccount = 0u;      // total ECs
+    Unsigned neccount = 0u;     // ECs > NORM (real temps)
+    DriveStatusCode type;
+    Random random;
+    if (a as EmptyCodon) {
+      ++eccount;
+      if (a.mDSType > cDS_NORM && random.oneIn(++neccount))
+        type = a.mDSType;
+    }
+    if (b as EmptyCodon) {
+      ++eccount;
+      if (b.mDSType > cDS_NORM && random.oneIn(++neccount))
+        type = b.mDSType;
+    }
+    // Let's not pile ECs on ECs
+    if (eccount > 1u) return false;
     PocketPtr a2eca = prpb.l2pGetPocketPtr(ps, cQUAD_NW, cPLTYPE_CCW);
     PocketPtr eca2ecb = prpb.l2pGetPocketPtr(ps, cQUAD_SW, cPLTYPE_CCW);
     PocketPtr ecb2b = prpb.l2pGetPocketPtr(ps, cQUAD_SE, cPLTYPE_CCW);
 
-    EmptyCodon eca, ecb;
-    eca.init(); ecb.init();
+    EmptyCodon eca;
+    eca.init();
+    EmptyCodon ecb;
+    ecb.init();
+    if (neccount > 0u) {
+      eca.mDSType = type; // amplify temp dirs if available
+      ecb.mDSType = type;
+    }
+
     BaseClassUtils bcu;
     bcu.copySharedData(a.atomof, eca.atomof);
     bcu.copySharedData(b.atomof, ecb.atomof);
@@ -445,7 +470,7 @@ transient PatchRule_GROWB : PatchRule {
     PocketPtr a2eca = prpb.l2pGetPocketPtr(ps, cQUAD_NW, cPLTYPE_CCW);
     PocketPtr eca2ecb = prpb.l2pGetPocketPtr(ps, cQUAD_SW, cPLTYPE_CCW);
     PocketPtr ecb2b = prpb.l2pGetPocketPtr(ps, cQUAD_SE, cPLTYPE_CCW);
-    
+
     a.mPocketPtrs[cBODY_UP] = a2eca;
     // a_DOWN remains -> B
 
@@ -475,12 +500,70 @@ transient PatchRule_GROWB : PatchRule {
 
 /** Implement:
     <pre>
-    
-     ->A  |  B->        ->A ->  B->  
-       |  |  ^    ==\        |       
-      -|--*--|-   ==/    ----*----   
-       v  |  |               |       
-      EC ->  EC           .  |  .    
+
+     ->A ->  B          ->A  |  .
+          |  |    ==\     |  |
+      ----*--|-   ==/    -|--*----
+          |  v            v  |
+       .  |  C->          B ->  C->
+
+    </pre>
+ */
+transient PatchRule_RECORNER : PatchRule {
+
+  //// PATCHRULE API
+  @Override
+  virtual String getPatchRuleName() { return __CLASS__; }
+
+  @Override
+  virtual PatchRulePatternBinding getPRPB() { return PatchRules.cPCHRUL_RECORNER; }
+
+  @Override
+  virtual Bool apply(PatchState & ps, PatchRulePatternBinding & prpb) {
+    print("PATRU_RC_APL10");
+    printContext();
+    print(self);
+    print(prpb);
+    print(ps);
+    Codon & a = prpb.l2pGetCodon(ps, cQUAD_NW);
+    Codon & b = prpb.l2pGetCodon(ps, cQUAD_NE);
+    Codon & c = prpb.l2pGetCodon(ps, cQUAD_SE);
+
+    PocketPtr a2ec = prpb.l2pGetPocketPtr(ps, cQUAD_NW, cPLTYPE_CCW);
+    PocketPtr ec2c = prpb.l2pGetPocketPtr(ps, cQUAD_SW, cPLTYPE_CCW);
+
+    a.mPocketPtrs[cBODY_DOWN] = a2ec;
+    b.mPocketPtrs[cBODY_UP] = b.reversePocket(a2ec);
+
+    b.mPocketPtrs[cBODY_DOWN] = ec2c;
+    c.mPocketPtrs[cBODY_UP] = c.reversePocket(ec2c);
+
+    PocketDir pdec = prpb.l2pPatchIndex(cQUAD_SW);
+    if (ps.mEmptyCount[pdec] == 0u)
+      fail(__FILE__,__LINE__);
+    SN ecsn = ps.mEmptySN[pdec];
+
+    PocketDir pdob = prpb.l2pPatchIndex(cQUAD_NE);
+    if (ps.mSegmentCount[pdob] == 0u)
+      fail(__FILE__,__LINE__);
+    SN obsn = ps.mSegmentSN[pdob];
+
+    EventWindow ew;
+    ew[ecsn] = b.atomof;
+    ew[obsn] = Empty.instanceof;
+
+    return true;
+  }
+}
+
+/** Implement:
+    <pre>
+
+     ->A  |  B->        ->A ->  B->
+       |  |  ^    ==\        |
+      -|--*--|-   ==/    ----*----
+       v  |  |               |
+      EC ->  EC           .  |  .
 
     </pre>
  */
@@ -507,7 +590,7 @@ transient PatchRule_SHRINKA : PatchRule {
     SN ec2sn = prpb.l2pGetCodonSN(ps, cQUAD_SE);
     PocketPtr a2b = prpb.l2pGetPocketPtr(ps, cQUAD_NW, cPLTYPE_CW);
 
-    a.mPocketPtrs[cBODY_DOWN] = a2b;    
+    a.mPocketPtrs[cBODY_DOWN] = a2b;
     b.mPocketPtrs[cBODY_UP] = b.reversePocket(a2b);
 
     EventWindow ew;
@@ -520,22 +603,22 @@ transient PatchRule_SHRINKA : PatchRule {
 
 /** Implement:
     <pre>
-    
-     <-A  |  B<-        <-A <-  B<-  
-       ^  |  |    ==\        |       
-      -|--*--|-   ==/    ----*----   
-       |  |  v               |       
-      EC <-  EC           .  |  .    
-                                   
-    </pre>                         
- */                                
+
+     <-A  |  B<-        <-A <-  B<-
+       ^  |  |    ==\        |
+      -|--*--|-   ==/    ----*----
+       |  |  v               |
+      EC <-  EC           .  |  .
+
+    </pre>
+ */
 transient PatchRule_SHRINKB : PatchRule {
-                                   
-  //// PATCHRULE API               
-  @Override                        
+
+  //// PATCHRULE API
+  @Override
   virtual String getPatchRuleName() { return __CLASS__; }
-                                   
-  @Override                        
+
+  @Override
   virtual PatchRulePatternBinding getPRPB() { return PatchRules.cPCHRUL_SHRINKB; }
 
   @Override
@@ -600,6 +683,27 @@ quark PatchRules + DTU {
     }
   };
 
+  constant PatchRulePatternBinding cPCHRUL_RECORNER = { .mPRPockets = {
+      { .mPocketUse = cPRPU_CODON, /*NW*/
+        .mCodonType = cCPAT_S, // use swappable as a decent catchall anchor?
+        .mUpPLT = cPLTYPE_OUT,
+        .mDownPLT = cPLTYPE_CW
+      },
+      { .mPocketUse = cPRPU_CODON, /*NE*/
+        .mCodonType = cCPAT_S, // anything swappable here
+        .mUpPLT = cPLTYPE_CCW,
+        .mDownPLT = cPLTYPE_CW
+      },
+      { .mPocketUse = cPRPU_CODON, /*SE*/
+        .mCodonType = cCPAT_S, // ditto?
+        .mUpPLT = cPLTYPE_CCW,
+        .mDownPLT = cPLTYPE_OUT
+      },
+      { .mPocketUse = cPRPU_EMPTY /*SW*/
+      },
+    }
+  };
+
   constant PatchRulePatternBinding cPCHRUL_SHRINKA = { .mPRPockets = {
       { .mPocketUse = cPRPU_CODON, /*NW*/
         .mCodonType = cCPAT_S,
@@ -647,4 +751,3 @@ quark PatchRules + DTU {
     }
     };
 }
-

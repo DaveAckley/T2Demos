@@ -9,11 +9,13 @@ transient HC3State + DTU + QDebugUtils {
   Unsigned myUpHopsGoal; // IN EFFECT myUpHopsGoal
   Unsigned myDSHops;
   OnDSAxes myOnDSAxes;
+  XZone myXZone;
 
   // reductions from the ngbs
   Unsigned minDSHops;
   Unsigned minUpHops;
   Unsigned maxUpHopsGoal;
+  XZone xzone;
   OnDSAxes onDSAxes;
 
   HC3NgbState mHC3NgbStates[AxialDir.maxof+1u];
@@ -58,16 +60,39 @@ transient HC3State + DTU + QDebugUtils {
   Void init(QHardCell & q) {
     //    setDebugOutputEnabled(true);
     print("H3SINMIN10");
-    init(q.getUpHops(), q.getMaxHopsGoal(), q.getDSHops(), q.getOnDSAxes());
+    init(q.getUpHops(), q.getMaxHopsGoal(), q.getDSHops(), q.getXZone());
   }
 
-  Void init(Unsigned uphops, Unsigned maxhopsgoal, Unsigned dshops, OnDSAxes onds) {
+  Void init(Unsigned uphops, Unsigned maxhopsgoal, Unsigned dshops, XZone xzone) {
     //    setDebugOutputEnabled(true);
     print("H3SINIT10");
     myUpHops = uphops;
     myUpHopsGoal = maxhopsgoal;
     myDSHops = dshops;
-    myOnDSAxes = onds;
+    myXZone = xzone;
+  }
+
+  Void updateZone(Zone & zone, C2D off, Zone zngb) {
+    print("UPZN10");
+    print(zngb);
+    print(off);
+    print(zngb);
+    AxialDir ad;
+    if (zone2AxialDir(zngb, ad)) {
+      if ((off.x == 0 && (ad == cN || ad == cS)) ||
+          (off.y == 0 && (ad == cE || ad == cW)))
+        zone = zngb;
+      else {
+      }
+    }
+    { Fail f; f.fail(__FILE__,__LINE__); }
+    /* WRITE ME
+      
+    if (off.x == 0 && ngb[0]) ds[0] = true;
+    if (off.y == 0 && ngb[1]) ds[1] = true;
+    print(ds[0]);
+    print(ds[1]);
+                                         */
   }
 
   Void updateOnDSAxes(OnDSAxes & ds, C2D off, OnDSAxes ngb) {
@@ -89,6 +114,7 @@ transient HC3State + DTU + QDebugUtils {
     minUpHops = Unsigned.maxof;
     minDSHops = Unsigned.maxof;
     maxUpHopsGoal = Unsigned.minof;
+    xzone = cXZONE_UN;
 
     OnDSAxes dxdy; // false, false
     onDSAxes = dxdy;
@@ -97,7 +123,7 @@ transient HC3State + DTU + QDebugUtils {
     for (Unsigned i = 0u; i < mHC3NgbStates.lengthof; ++i) {
       HC3NgbState & n = mHC3NgbStates[i];
       C2D nbgoff = mNgbOffs[i];
-      n.init(nbgoff, qhc);
+      n.init(nbgoff, qhc); // sets up n.mXZone among other things
       print("H3SEXNG11");
       print(i);
       print(n);

@@ -1,8 +1,9 @@
+{{1F1}} -n -a 0
+{{1F1}} -n -a 0 -e 0 -p 30 --accelerate 60 --surge 120
+{{1G1}} -n -a 0
 {{1J1}} -n -a 0
 {{1J1}} -n -a 0 -e 0 -p 15 --accelerate 180
-{{1G1}} -n -a 0
 {{1G1}} -n -a 0 -e 0 -p 30 --accelerate 60 --surge 120
-{{1F1}} -n -a 0
 {{1G1}} -n -a 0 -e 10 -p 30 --accelerate 300 --surge 300
 {{5H5}} -n -a 0 -e 0 -p 30 --accelerate 30 --surge 30
 {{1F1}} -n -a 0 -e 0 -p 30 --accelerate 60 --surge 120

@@ -4,6 +4,40 @@ transient PatchState + DTU + QDebugUtils + Fail {
 
   Unsigned mDSHops[5u]; // 0..3 pocketdir dshops; 4 ctr dshops
   Bool mInDSP[PocketDir.maxof + 1u]; // true if pocket in DSP
+  /* MOD THIS TO SET UP mDSQuads[0..3]
+    Unsigned nw = p.mCornerDSHops[cQUAD_NW];
+    Unsigned ne = p.mCornerDSHops[cQUAD_NE];
+    Unsigned se = p.mCornerDSHops[cQUAD_SE];
+    Unsigned sw = p.mCornerDSHops[cQUAD_SW];
+    Int h1 = (Int) nw - (Int) se;
+    Int h2 = (Int) ne - (Int) sw;
+
+    if (false) { }
+    else if (h1 == 0 && h2 == 2) {
+
+      mQuadrant = cQUAD_NE;
+      mDSHopContour = nw;
+
+    } else if (h1 == 0 && h2 == -2) {
+
+      mQuadrant = cQUAD_SW;
+      mDSHopContour = nw;
+
+    } else if (h2 == 0 && h1 == 2)  {
+
+      mQuadrant = cQUAD_NW;
+      mDSHopContour = ne;
+
+    } else if (h2 == 0 && h1 == -2) {
+
+      mQuadrant = cQUAD_SE;
+      mDSHopContour = ne;
+
+    } else { // Unsettled or at edge of or out of range
+
+      mDSHopContour = mDSHopContour.maxof; // call it infty
+    }
+  */
 
   SN mEmptySN[PocketDir.maxof + 1u]; // or SN.maxof if none
   Unsigned mEmptyCount[PocketDir.maxof + 1u]; 
@@ -69,6 +103,7 @@ transient PatchState + DTU + QDebugUtils + Fail {
         if (ones > 1u) indsp = true;
       }
       mInDSP[i] = indsp;
+      
     }
     //// WE HAVE RECORDED INDSP STATS
 

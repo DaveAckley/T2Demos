@@ -117,7 +117,10 @@ quark Pocketable : Intender + DTU {
     if (true) {
       print("QSUPTC11PATCHRULEPATTERNS10");
       PatchRule_GROWB pr10;
+      PatchRule_RECORNER pr11;
       if (pr10.tryRule(ps)) {
+        return true;
+      } else if (pr11.tryRule(ps)) {
         return true;
       } else if (random.oneIn(5)) {
         PatchRule_GROWA pr;
@@ -136,17 +139,19 @@ quark Pocketable : Intender + DTU {
         if (ret)
           return true;
       } else {
-        Bool dbg = ps.isDebugOutputEnabled();
-        //ps.setDebugOutputEnabled(true);
-        print("SHRINKBGONIC10");
-        PatchRule_SHRINKB pr;
-        pr.takeDebug(ps);
-        Bool ret = pr.tryRule(ps);
-        print("SHRINKBGONIC11");
-        print(ret);
-        ps.setDebugOutputEnabled(dbg);
-        if (ret)
-          return true;
+        if (false) {
+          Bool dbg = ps.isDebugOutputEnabled();
+          //ps.setDebugOutputEnabled(true);
+          print("SHRINKBGONIC10");
+          PatchRule_SHRINKB pr;
+          pr.takeDebug(ps);
+          Bool ret = pr.tryRule(ps);
+          print("SHRINKBGONIC11");
+          print(ret);
+          ps.setDebugOutputEnabled(dbg);
+          if (ret)
+            return true;
+        }
       }
 
       print("QSUPTC11PATCHRULEPATTERNS11");

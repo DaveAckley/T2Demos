@@ -16,8 +16,9 @@ transient PocketHC3 + DTU + QDebugUtils + Fail {
   Unsigned mCornerHops[PocketDir.maxof+1]; // 0 --, 1 +-, 2 ++, 3 -+
   Unsigned mCornerMaxHopsGoal[PocketDir.maxof+1]; // 0 --, 1 +-, 2 ++, 3 -+
 
-  Unsigned mCornerDSHops[PocketDir.maxof+1]; // 0 --, 1 +-, 2 ++, 3 -+
-  QDSHopsStg mCornerOnDSAxes[PocketDir.maxof+1]; // 0 W, 1 N, 2 E, 3 S
+  //  Unsigned mCornerDSHops[PocketDir.maxof+1]; // 0 --, 1 +-, 2 ++, 3 -+
+  Bool mCornerZoneValid[PocketDir.maxof+1]; // 0 W, 1 N, 2 E, 3 S
+  QDSHopsStg mCornerQDSHopsStg[PocketDir.maxof+1]; // 0 W, 1 N, 2 E, 3 S
   
   PocketQuadrant mPocketQuadrant;
 
@@ -73,25 +74,25 @@ transient PocketHC3 + DTU + QDebugUtils + Fail {
     /// AND WE'RE NOT POINTING ACROSS A DSAXIS
     print("ISDSP14X10");
     print(self);
-    //    QDSHopsStg onds = mCornerOnDSAxes[ptr-1u];
+    //    QDSHopsStg onds = mCornerQDSHopsStg[ptr-1u];
     //    print(onds);
     //    print(onds[0]);
     //    print(onds[1]);
 
     if (ptr == cPP_WEST && (q == cQUAD_NE || q == cQUAD_SE))
-      return !mCornerOnDSAxes[cQUAD_NW].mOnDSAxes[0]; // cQUAD_NW meaning W here
+      return !mCornerQDSHopsStg[cQUAD_NW].getOnDSAxes()[0]; // cQUAD_NW meaning W here
     
     print("ISDSP15");
     if (ptr == cPP_NORTH && (q == cQUAD_SW || q == cQUAD_SE))
-      return !mCornerOnDSAxes[cQUAD_NE].mOnDSAxes[1]; // cQUAD_NE meaning N here
+      return !mCornerQDSHopsStg[cQUAD_NE].getOnDSAxes()[1]; // cQUAD_NE meaning N here
 
     print("ISDSP16");
     if (ptr == cPP_SOUTH && (q == cQUAD_NW || q == cQUAD_NE))
-      return !mCornerOnDSAxes[cQUAD_SW].mOnDSAxes[1]; // cQUAD_SW meaning S here
+      return !mCornerQDSHopsStg[cQUAD_SW].getOnDSAxes()[1]; // cQUAD_SW meaning S here
 
     print("ISDSP17");
     if (ptr == cPP_EAST && (q == cQUAD_NW || q == cQUAD_SW))
-      return !mCornerOnDSAxes[cQUAD_SE].mOnDSAxes[0]; // cQUAD_SE meaning E here
+      return !mCornerQDSHopsStg[cQUAD_SE].getOnDSAxes()[0]; // cQUAD_SE meaning E here
 
     print("ISDSP18");
 
@@ -184,6 +185,7 @@ transient PocketHC3 + DTU + QDebugUtils + Fail {
         Unsigned maxhops = a.getMaxHopsGoal();
         Unsigned dshops = a.getDSHops();
         OnDSAxes ondsaxes = a.getOnDSAxes();
+        XZone xzone = a.getXZone();
 
         /// DISGUSTING SPECIAL CASE HACK FOR FOLKS TO AVOID DSPs!
         if (a is DiamondSequencer)
@@ -194,10 +196,10 @@ transient PocketHC3 + DTU + QDebugUtils + Fail {
         print("PKHC1010");
         print(c);
         if (c.x == 0 || c.y == 0) return mStatus = cSTATUS_EDGE;
-        else if (c.x < 0 && c.y < 0) update_(cQUAD_NW,c,ci,uphops,maxhops,dshops,ondsaxes);
-        else if (c.x > 0 && c.y < 0) update_(cQUAD_NE,c,ci,uphops,maxhops,dshops,ondsaxes);
-        else if (c.x > 0 && c.y > 0) update_(cQUAD_SE,c,ci,uphops,maxhops,dshops,ondsaxes);
-        else /* c.x < 0 && c.y > 0*/ update_(cQUAD_SW,c,ci,uphops,maxhops,dshops,ondsaxes);
+        else if (c.x < 0 && c.y < 0) update_(cQUAD_NW,c,ci,uphops,maxhops,dshops,xzone);
+        else if (c.x > 0 && c.y < 0) update_(cQUAD_NE,c,ci,uphops,maxhops,dshops,xzone);
+        else if (c.x > 0 && c.y > 0) update_(cQUAD_SE,c,ci,uphops,maxhops,dshops,xzone);
+        else /* c.x < 0 && c.y > 0*/ update_(cQUAD_SW,c,ci,uphops,maxhops,dshops,xzone);
       }
       if (mCoordCount >= 4u) break;
     }
@@ -230,15 +232,20 @@ transient PocketHC3 + DTU + QDebugUtils + Fail {
   // internal
   Void update_(Unsigned(2) idx, C2D coord, PocketHC3_CornerInfo ci,
                Unsigned uphops, Unsigned maxhopsgoal, Unsigned dshops,
-               OnDSAxes ondsaxes) {
+               XZone xzone) {
     if (mCoords[idx].length() == 0u) {
       ++mCoordCount;
       mCoords[idx] = coord;
       mCornerInfo[idx] = ci;
       mCornerHops[idx] = uphops;
       mCornerMaxHopsGoal[idx] = maxhopsgoal;
-      mCornerDSHops[idx] = dshops;
-      mCornerOnDSAxes[idx].setOnDSAxes(ondsaxes);
+      mCornerQDSHopsStg[idx].setDSHops(dshops);
+      if (xzone < cXZONE_CT) {
+        mCornerZoneValid[idx] = true;
+        mCornerQDSHopsStg[idx].setZone((Zone) xzone);
+      } else {
+        mCornerZoneValid[idx] = false;
+      }
     }
   }
 

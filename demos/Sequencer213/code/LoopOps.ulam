@@ -91,14 +91,14 @@ quark LoopOps + DTU + Fail {
 
     PocketDir tq = targetQuadrant;
     ec1.mTargetQuadrant = tq;
-    ec1.mSegsDown = 0u;
-    ec1.mTempsDown = 0u;
+    ec1.mChainControlUp.init();
+    ec1.mChainControlDown.init();
 
     EmptyCodon ec2;
     ec2.init(); // random up or down
     ec2.mTargetQuadrant = tq;
-    ec2.mSegsDown = 0u;
-    ec2.mTempsDown = 0u;
+    ec2.mChainControlUp.init();
+    ec2.mChainControlDown.init();
 
     ec1.mPocketPtrs[Segment.cBODY_UP] = (PocketPtr) openptr; // Up and down are 
     ec1.mPocketPtrs[Segment.cBODY_DOWN] = (PocketPtr) openptr; // both thataway
@@ -159,8 +159,8 @@ element SeedLoop11 : NullIntender + LoopOps + Fail {
     atq.copySegAndPChain(ec); // Copy ptrs and targetting
     atq.mDSType = Demo.cDS_NORM;
 
-    atq.mSegsDown = 0u;
-    atq.mTempsDown = 0u;
+    atq.mChainControlUp.init();
+    atq.mChainControlDown.init();
 
     ew[sn] = atq.atomof;
   }
@@ -222,135 +222,6 @@ element SeedLoop11 : NullIntender + LoopOps + Fail {
 }
 
 
-transient LoopKillState : CodonState {
 
-  //// Intention API
-
-  @Override
-  virtual Bool init(Intender & in) {
-    takeDebug(in);
-
-    print("LSKI10");
-    if (super.init(in))
-      return true;
-    print("LSKI11");
-    return false;
-  }
-
-  @Override
-  virtual Bool stabilize(Intender & in) {
-    print("LSKS10");
-
-    LoopKiller & s = (LoopKiller &) in;
-    Unsigned goneCount = 0u;
-    Unsigned spreadCount = 0u;
-    Unsigned firstdir = s.mBiDir ? Segment.cBODY_UP : Segment.cBODY_DOWN;
-    for (Unsigned dir = firstdir; dir <= Segment.cBODY_DOWN; ++dir) {
-      Segment.BodyDir bdir = (Segment.BodyDir) dir;
-      PocketPtr p = s.mPocketPtrs[bdir];
-      print("LSKS11");
-      print((Unsigned) p);
-      if (p == cPP_NULL) ++goneCount;
-      else if (trySpread(in, bdir)) ++spreadCount;
-    }
-    
-    print("LSKS12");
-    if (goneCount == 2u) {
-      EventWindow ew;
-      ew[0] = Empty.instanceof;
-      return true;
-    }
-
-    print("LSKS13");
-    return spreadCount > 0u;
-  }
-
-  //// LOOPKILLSTATE SERVICES
-  Bool trySpread(Intender & in, Segment.BodyDir bdir) {
-    EventWindow ew;
-    print("LKSTS10");
-    SN matesn = mEWSNMate[bdir];
-    print(matesn);
-    if (matesn == 0u) return false;
-    print("LKSTS11");
-    PocketChain & o = (PocketChain&) ew[matesn];  // existing in bdir
-
-    if (!(o is LoopKiller) && o.mDSType == o.cDS_DUMB) {
-      print("LKSTS12"); // can't kill non-LKs while they're dumb
-      return false;
-    }
-
-    print("LKSTS13");
-    Codon & c = (Codon&) in;
-    Atom a = c.atomof; // full copy of 'us'
-    LoopKiller & n = (LoopKiller&) a;
-    n.copySegAndPChain(o);      // copy ptrs from existing
-    n.mDSType = PocketChain.cDS_DUMB; // but it's dumb no matter what o was
-    n.mBiDir = true;                  // All but original like bidir
-
-    print("LKSTS14");
-    c.mPocketPtrs[bdir] = cPP_NULL;   // we don't see them anymore
-    n.mPocketPtrs[1u-bdir] = cPP_NULL; // and they don't see us
-
-    print("LKSTS15");
-    print(n);
-    ew[matesn] = n.atomof; // stash modified us
-    return true;
-  }
-}
-
-/** \symbol LK
-    \color #000
- */
-element LoopKiller : Codon {
-
-  Bool mBlink;
-  Bool mBiDir;
-
-  //// UrSelf API 
-  @Override
-  ARGB getColor(Unsigned selector) {
-    ColorUtils cu;
-    return cu.color(mBlink ? 0xff000000 : 0xffffffff);
-  }
-
-  //// Intender API 
-  @Override
-  virtual ClassId getIntentionClass() { return LoopKillState.classidof; }
-
-  Void behave() {
-    mBlink = !mBlink;
-    mDSType = cDS_DUMB; // You can't touch this
-    pursueIntention();
-  }
-}
-
-/** \symbol SK
-    \color #f00
- */
-element SeedLoopKiller + DTU {
-  EventWindow ew;
-  Random random;
-  Void die() { ew[0] = Empty.instanceof; }
-  Void behave() {
-    SN ksn;
-    Unsigned kcount = 0u;
-    for (SN sn = 1u; sn <= 4u; ++sn) {
-      if (!ew.isAccessible(sn)) return die();
-      Atom & a = ew[sn];
-      if (a as Codon) {
-        if (random.oneIn(++kcount))
-          ksn = sn;
-      }
-    }
-    if (kcount != 1u) return die();
-    Codon & c = (Codon&) ew[ksn];
-    LoopKiller lk;
-    lk.copySegAndPChain(c);
-    lk.mDSType = PocketChain.cDS_DUMB;
-    ew[ksn] = lk.atomof;
-    die();
-  }
-}
 
 

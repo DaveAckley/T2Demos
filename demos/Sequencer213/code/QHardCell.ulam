@@ -179,6 +179,7 @@ quark QHardCell : Intender
       if (hc3.minUpHops >= hc3.myUpHopsGoal) return die(); // NO
       setUpHops(hc3.minUpHops + 1u);
       setDSHops(hc3.minDSHops + 1u);
+      //XXX ?      setZone()
       setOnDSAxes(hc3.myOnDSAxes);
 
       return hcs.block();

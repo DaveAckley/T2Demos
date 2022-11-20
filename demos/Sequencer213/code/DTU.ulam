@@ -12,6 +12,80 @@ quark DTU {
   //// AXIS ALIGNMENT WITH NEAREST DIAMONDSEQUENCER
   typedef Bool OnDSAxes[2]; // [0] dx==0; [1] dy==0
 
+  //// 'ZONE' MAP OF HC3 POSITIONS RELATIVE TO (DS) ROOT
+  typedef Unsigned(3) Zone;
+  constant Zone cZONE_NW = 0u;
+  constant Zone cZONE_NT = 1u;
+  constant Zone cZONE_NE = 2u;
+  constant Zone cZONE_ET = 3u;
+  constant Zone cZONE_SE = 4u;
+  constant Zone cZONE_ST = 5u;
+  constant Zone cZONE_SW = 6u;
+  constant Zone cZONE_WT = 7u;
+
+  String getZoneName(Zone v) {
+    which (v) {
+      case cZONE_NW: { return "cZONE_NW = 0u"; }
+      case cZONE_NT: { return "cZONE_NT = 1u"; }
+      case cZONE_NE: { return "cZONE_NE = 2u"; }
+      case cZONE_ET: { return "cZONE_ET = 3u"; }
+      case cZONE_SE: { return "cZONE_SE = 4u"; }
+      case cZONE_ST: { return "cZONE_ST = 5u"; }
+      case cZONE_SW: { return "cZONE_SW = 6u"; }
+      case cZONE_WT: { return "cZONE_WT = 7u"; }
+    }
+    return __FUNC__;
+  }
+
+  typedef Unary(9) XZone; //< Extended Zone
+  constant XZone cXZONE_CT = 8u; //< Center (Only zone root)
+  constant XZone cXZONE_UN = 9u; //< Unknown
+
+  String getXZoneName(XZone v) {
+    if (v <= Zone.maxof)
+      return getZoneName((Zone) v);
+    which (v) {
+      case cXZONE_CT: { return "cXZONE_CT = 8u"; }
+      case cXZONE_UN: { return "cXZONE_UN = 9u"; }
+    }
+    return __FUNC__;
+  }
+
+  Bool zone2PocketDir(Zone v, PocketDir & pd) {
+    if (v%2u != 0u) return false;
+    pd = (PocketDir) (v/2u);
+    return true;
+  }
+
+  Bool zone2AxialDir(Zone v, AxialDir & ad) {
+    which (v) {
+      case cZONE_NT:  { ad = cN; return true; }
+      case cZONE_ET:  { ad = cE; return true; }
+      case cZONE_ST:  { ad = cS; return true; }
+      case cZONE_WT:  { ad = cW; return true; }
+    }
+    return false;
+  }
+
+  OnDSAxes xzone2OnDSAxes(XZone val) {
+    OnDSAxes r;
+    r[0] = false;
+    r[1] = false; // defaults
+    which (val) {
+      case cXZONE_UN: { Fail f; f.fail(__FILE__,__LINE__); }
+      case cXZONE_CT: { r[0] = true; r[1] = true; }
+      case cZONE_NT:  { r[0] = true; }
+      case cZONE_ET:  { r[1] = true; }
+      case cZONE_ST:  { r[0] = true; }
+      case cZONE_WT:  { r[1] = true; }
+    }
+    return r;
+  }
+
+  Zone pocketDir2Zone(PocketDir pd) {
+    return (Zone) (pd*2u);
+  }
+
   //// LOGICAL POSITIONS ALONG A POCKETCHAIN RELATIVE TO US
   typedef Unary(2) MatchCodePosition;
   constant MatchCodePosition cMCP_PREV = 0u;

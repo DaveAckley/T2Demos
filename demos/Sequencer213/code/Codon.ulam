@@ -178,7 +178,7 @@ transient CodonState : SequenceableState + Fail + DTU {
           Bool norm = d.isRealMobile();
           Bool temp = d.isTemp();
           Random random;
-          if (norm || (temp && random.oneIn(3))) {  // and if downstream is X (i.e., mobile nontemp)
+          if (norm || (temp && random.oneIn(10))) {  // and if downstream is X (i.e., mobile nontemp)
             print("CdnStab12101110"); // let's mix it up
             if (norm)                 // If down is norm, mission accomplished
               ds.mDirStatusMap.       // So set our quadrant idle

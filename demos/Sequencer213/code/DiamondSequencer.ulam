@@ -110,19 +110,13 @@ element DiamondSequencer : QHardCellG + Fail /* + QDSHops*/ {
   virtual Void setDSHops(Unsigned dshops) { /* ha no */ }
 
   @Override
-  virtual OnDSAxes getOnDSAxes() {  // I am so aligned
-    print("DSGETONDS");
-    OnDSAxes ret;
-    ret[0] = true;
-    ret[1] = true;
-    print("DXODS10");
-    print(ret[0]);
-    print(ret[1]);
-    return ret;
+  virtual XZone getXZone() {  // I am the center of the universe
+    print("DSGETXZ");
+    return cXZONE_CT;
   }
 
   @Override
-  virtual Void setOnDSAxes(OnDSAxes dxdy) { /* ha no */ }
+  virtual Void setZone(Zone zone) { /* ha no */ }
 
   QProcUnitMap mProcUnitMap;          //< Process function to direction
   QDirStatusMap mDirStatusMap;        //< Quadrant direction to process status

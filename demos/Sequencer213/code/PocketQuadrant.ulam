@@ -13,10 +13,10 @@ transient PocketQuadrant + QDebugUtils + DTU + Fail {
     print("PKQD10");
     if (p.mStatus != PocketHC3.cSTATUS_OK) return true;
     print("PKQD11");
-    Unsigned nw = p.mCornerDSHops[cQUAD_NW];
-    Unsigned ne = p.mCornerDSHops[cQUAD_NE];
-    Unsigned se = p.mCornerDSHops[cQUAD_SE];
-    Unsigned sw = p.mCornerDSHops[cQUAD_SW];
+    Unsigned nw = p.mCornerQDSHopsStg[cQUAD_NW].getDSHops();
+    Unsigned ne = p.mCornerQDSHopsStg[cQUAD_NE].getDSHops();
+    Unsigned se = p.mCornerQDSHopsStg[cQUAD_SE].getDSHops();
+    Unsigned sw = p.mCornerQDSHopsStg[cQUAD_SW].getDSHops();
     Int h1 = (Int) nw - (Int) se;
     Int h2 = (Int) ne - (Int) sw;
 

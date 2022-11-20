@@ -60,6 +60,7 @@ quark LX : Codon + DTU + QDebugUtils + Fail {
     LoopKiller lk;
     lk.copySegAndPChain(c);
     lk.mDSType = PocketChain.cDS_DUMB;
+    lk.mKillFunc = lk.cKLFN_ROOT;            // We are anchor; last to go
     ew[pui.mCodonSN] = lk.atomof;
 
     return false;

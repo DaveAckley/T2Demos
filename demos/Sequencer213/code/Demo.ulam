@@ -137,8 +137,8 @@ element SeedDemo : XTimer(3u,6u,2u) + DTU {
     if (pstat == PocketHC3.cSTATUS_BENT) return;           // wait for clarity
 
     Demo d;
-    d.mSegsDown = 0u;
-    d.mTempsDown = 0u;
+    d.mChainControlUp.init();
+    d.mChainControlDown.init();
     d.mDSType = Demo.cDS_NORM;
     d.mTargetQuadrant =  (PocketDir) random.between(0,3);
     d.mPocketPtrs[Segment.cBODY_UP] = Segment.cPP_NULL; // you're the head
