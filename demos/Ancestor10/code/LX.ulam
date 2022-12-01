@@ -1,0 +1,312 @@
+/** Loop eXecutables
+ */
+quark LX : Codon + DTU + QDebugUtils + Fail {
+
+  //// LX API
+  /** \returns true if changes; false if blocked
+   */
+  virtual Bool perform(DiamondSequencerState & dss) ;
+
+  //// UrSelf API
+  @Override
+  ARGB getColor(Unsigned selector) {
+    ARGB ret = super.getColor(selector);
+    if (selector == 2u) {    // If Atom #2, go mostly static color
+      ARGB elt = super.getColor(0u);
+      ColorUtils cu;
+      ret = cu.between(elt,ret,80u); // Mostly elt color
+    }
+    return ret;
+  }
+
+  //// LS SERVICES
+
+    //// LXReset SERVICES (RUNNING ON BEHALF OF DSS)
+
+  /** \returns true if pu has an empty site and no extra occupants */
+  Bool hasEmpPU(ProcUnit pu, DiamondSequencerState & dss) {
+    EventWindow ew;
+    ProcUnitInfo & pui = dss.getPUInfo(pu);
+    if (pui.mOccupiedSites > 0u) return false;
+    return (pui.mEmptySN != SN.maxof);
+  }
+
+  Void initPU(ProcUnit pu, DiamondSequencerState & dss) {
+    EventWindow ew;
+    ProcUnitInfo & pui = dss.getPUInfo(pu);
+    if (pui.mEmptySN == SN.maxof) fail(__FILE__,__LINE__);
+    SeedLoop sl; // making demo loops after reset!
+    sl.mNoDiffuse = true;       // no fucking around okay
+    ew[pui.mEmptySN] = sl.atomof;
+  }
+
+  /** \returns true if pu has no codon, false if killing is in
+   * progress
+   */
+  Bool killPU(ProcUnit pu, DiamondSequencerState & dss) {
+    EventWindow ew;
+    ProcUnitInfo & pui = dss.getPUInfo(pu);
+    print("KLPU10");
+    print(pui);
+    if (pui.mCodonSN == SN.maxof) return true;
+    if (pui.mCodonSN == 0u) fail(__FILE__,__LINE__);
+    print("KLPU11");
+    if (ew[pui.mCodonSN] is LoopKiller) // we're blocking..
+      return false;
+    print("KLPU12");
+
+    /// We have a codon that's not a killer: Kill it
+    Codon & c = (Codon &) ew[pui.mCodonSN];
+    LoopKiller lk;
+    lk.copySegAndPChain(c);
+    lk.mDSType = PocketChain.cDS_DUMB;
+    lk.mKillFunc = lk.cKLFN_ROOT;            // We are anchor; last to go
+    ew[pui.mCodonSN] = lk.atomof;
+
+    return false;
+  }
+
+  Bool execute(DiamondSequencerState & dss) {
+    return perform(dss);
+  }
+
+  Void markCurrentInstructionForRotation(DiamondSequencerState & dss, SN dssn) {
+    markDSPForRotationForward(dss, dssn, cPUNIT_XEQ);
+  }
+  
+  Void markDSPForRotationForward(DiamondSequencerState & dss, SN dssn, ProcUnit pu) {
+    markDSPForRotation(dss, dssn, pu, cDSTATUS_UPWD);
+  }
+  
+  Void markDSPForRotation(DiamondSequencerState & dss, SN dssn, ProcUnit pu, ProcStatus stat) {
+    ProcUnitInfo & pui = dss.getPUInfo(pu);
+    if (!pui.mFound) fail(__FILE__,__LINE__);
+    print("LXRESET1111 ");
+    PocketDir insquad = pui.mInQuadrant; 
+    EventWindow ew;
+    Atom & a = ew[dssn];
+    if (a as DiamondSequencer) {
+      a.mDirStatusMap.setQuadrantStatus(insquad, stat);
+      return;
+    }
+    fail(__FILE__,__LINE__);
+  }
+}
+
+union LXSourceU + DTU {
+  ProcUnit mLXUProcUnit;
+  LXClassId mLXUClassid;
+  LXInt mLXUInt;
+}
+
+quark LXSource {
+  typedef Unary(2) LXSourceType;
+  constant LXSourceType cLXST_PUNIT = 0u; //< ProcUnit
+  constant LXSourceType cLXST_CLSID = 1u; //< LXClassId
+  constant LXSourceType cLXST_INTIM = 2u; //< LXInt
+  LXSourceType mType;
+  LXSourceU mSources;
+}
+
+/*
+transient LXState : CodonState {
+  @Override
+  virtual Bool act(Intender & in) {
+    print("LXST10");
+    if (super.act(in)) return true;
+
+    print("LXST11");
+    if (mExecutionContext != cEXCT_ACTV)
+      return false;
+    
+    print("LXST1p2");
+    LX & lx = (LX &) in;
+    return lx.execute(self);
+  }
+
+  //// LXSTATE SERVICES
+  SN findProcUnit(ProcUnit pu) { //< SN of req pu or SN.maxof if inaccessible
+    SN ret = SN.maxof; // Assume no go
+    if (!hasDS()) return ret;
+    DiamondSequencer & ds = getDS();
+    
+    
+  }
+  }*/
+
+/** \symbol MK
+    \color #e24
+ */
+element LXMarker : LX {
+  typedef Bits(16) Mark;
+  Mark mLabel = 0xf00f; //nonzero
+  typedef Bits(4) ControlMap;
+  ControlMap mUpMap;            //< which pui up maps to set
+  ControlMap mDownMap;          //< which pui down maps to set
+  ChainControlData mChainControlData; //< value to set them all to
+  Bool mHalt;
+
+  //// LX API
+  @Override
+  virtual Bool perform(DiamondSequencerState & dss) {
+    print("LXMK10");
+    //// PUSH A NON-DEBUG MESSAGE TO THE LOG
+    ByteStreamLogger bsl;
+    bsl.printf("%s<%x>\n",__CLASS__,mLabel);
+
+    //// POSSIBLY UPDATE CHAINCONTROLS
+    for (Unsigned i = cPUNIT_REG; i <= cPUNIT_XEQ; ++i) {
+      ProcUnit pu = (ProcUnit) i;
+      ProcUnitInfo & pui = dss.mPUInfos.mPUInfoAry[pu];
+      ControlMap cm = (ControlMap) (1u<<pu);
+      
+      if ((mUpMap & cm) != 0u) {
+        Bool ret = pui.setChainControlData(mChainControlData, true);
+        bsl.printf("setCCD(%s,%x%x) up=%d\n",
+                   getProcUnitName(pu),
+                   mChainControlData.mTQMap,
+                   mChainControlData.mSRMap,
+                   ret);
+      }
+      if ((mDownMap & cm) != 0u) {
+        Bool ret = pui.setChainControlData(mChainControlData, false);
+        bsl.printf("setCCD(%s,%x%x) down=%d\n",
+                   getProcUnitName(pu),
+                   mChainControlData.mTQMap,
+                   mChainControlData.mSRMap,
+                   ret);
+      }
+    }
+
+    /// AND MARK SELF TO BE ROTATED OUT (unless we're 'halting')
+    if (!mHalt) markCurrentInstructionForRotation(dss, 0u);
+    return true;
+  }
+
+  //// CODON API
+  virtual Void init() {
+    super.init();
+    mDSType = cDS_NORM;
+  }
+
+
+  //// LXMark SERVICES (RUNNING ON BEHALF OF DSS)
+
+  Mark getLabel() { return mLabel; }
+  Void setLabel(Mark mark) { mLabel = mark; }
+}
+
+/** \symbol RS
+    \color #e42
+ */
+element LXReset : LX {
+  //// LX API
+  @Override
+  virtual Bool perform(DiamondSequencerState & dss) {
+    print("LXRESET10");
+    /// KILL REG & OUTPUT LOOPS
+    Bool killreg = killPU(cPUNIT_REG, dss);
+    Bool killout = killPU(cPUNIT_OUT, dss);
+    if (killreg && killout) {
+      /// LOOPS ARE KILLED CAN WE INIT?
+      print("LXRESET11");
+      Bool empreg = hasEmpPU(cPUNIT_REG, dss);
+      Bool empout = hasEmpPU(cPUNIT_OUT, dss);
+      if (empreg && empout) {
+        print("LXRESET1110");
+        /// WE CAN INIT
+        //XX LEAVING EMPTY!        initPU(cPUNIT_REG, dss);
+        //XX LEAVING EMPTY!        initPU(cPUNIT_OUT, dss);
+        /// MARK SELF TO BE ROTATED OUT
+        markCurrentInstructionForRotation(dss, 0u);
+      }
+    }
+    print("LXRESET12");
+    return true;
+  }
+
+  //// CODON API
+  virtual Void init() {
+    super.init();
+    mDSType = cDS_NORM;
+  }
+
+  ProcUnit mDestUnit;
+  LXSource mSeedClassId;
+  LXSource mRetryCount;
+}
+
+/** \symbol Ir
+ */
+element I_LXReset : CodonInserter + Fail {
+  AtomUtils au;
+  @Override
+  virtual ElementType getCodonTypeToInsert() {
+    return (ElementType) au.getType(LXReset.instanceof);
+  }
+}
+
+/** \symbol KD
+    \color #f60
+ */
+element LXKillDiamond : LX {
+  //// LX API
+  @Override
+  virtual Bool perform(DiamondSequencerState & dss) {
+    print("LXKIDI10");
+    EventWindow ew;
+    
+    Unsigned roots = 0u;
+    for (SN sn = 0u; sn < 41u; ++sn) {
+      if (!ew.isAccessible(sn)) continue;
+      Atom & a = ew[sn];
+      if (a as QHardCell) {
+        if (a.getUpHops() == 0u) {
+          print("LXKIDI11");
+          print(sn);
+          a.setUpHops(1u);      // no longer root babayee
+          ++roots;
+        }
+      }
+    }
+    if (roots == 0u) return false;
+
+    markCurrentInstructionForRotation(dss, 0u);
+    print("LXKIDI12");
+    return true;
+  }
+
+  //// CODON API
+  virtual Void init() {
+    super.init();
+    mDSType = cDS_NORM;
+  }
+}
+
+/** \symbol CD
+    \color #ace
+ */
+element LXCommandDS : LX + SW3Cmdr + DTU + Fail {
+  SW3Packet mPacket;
+  //// LX API
+  @Override
+  virtual Bool perform(DiamondSequencerState & dss) {
+    print("LXCMDS10");
+    EventWindow ew;
+    
+    return false;
+
+    /*
+    markCurrentInstructionForRotation(dss, 0u);
+    print("LXCMDS10");
+    return true;
+    */
+  }
+
+  //// CODON API
+  virtual Void init() {
+    super.init();
+    mDSType = cDS_NORM;
+  }
+}
+

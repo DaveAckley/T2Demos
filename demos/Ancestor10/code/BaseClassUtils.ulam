@@ -1,0 +1,85 @@
+transient BaseClassUtils
+  + ClassUtils
+  + QDebugUtils
+  + Fail
+{
+
+  Unsigned getElementClassDataSizeWorkaround_(ClassId eltid) {
+    Int etype = getElementType(eltid);
+    if (etype < 0) fail(__FILE__,__LINE__);
+
+    ClassId superid = getBaseClassId(eltid, 1u); 
+    Int pos = getClassDataPosition(superid, etype);
+    if (pos < 0) fail(__FILE__,__LINE__);
+
+    return (Unsigned) pos; // elt dm size == where super begins
+  }
+
+  Int copyClassDataMembers(ClassId bci, Atom & fromelt, Atom & toelt) {
+
+    UrSelf & from = (UrSelf&) fromelt;
+
+    if (!isBase(from, bci)) return -1;
+
+    UrSelf & to = (UrSelf&) toelt;
+    if (!isBase(to, bci)) return -1;
+
+    Unsigned bits = getClassDataSize(bci);
+
+    if (bits == 0u)
+      return 0;              // done..
+
+    if (bits > 32u) fail("BITS > 32 NOT YET SUPPORTED");
+
+    Int etypeto = getElementType(getClassId(toelt));
+    Int posto = getClassDataPosition(bci, etypeto);
+    print("ELTHACK12 POSTO");
+    print(posto);
+    if (posto < 0) return -1;
+
+    Int etypefrom = getElementType(getClassId(fromelt));
+    Int posfrom = getClassDataPosition(bci, etypefrom);
+    print("ELTHACK13 POSFROM");
+    print(posfrom);
+    if (posfrom < 0) return -1;
+    
+    /*
+    ByteStreamArray1K bsa;
+    bsa.printf("%s %d@%d -> @%d",
+               getClassName(bci, true, true),
+               bits, posfrom,
+               posto);
+    print(bsa,true);
+    */
+
+    AtomUtils au;
+    constant Unsigned cFIRST_STATE_BIT = 25u;
+    
+    Bits val = au.read(fromelt, cFIRST_STATE_BIT + (Unsigned) posfrom, bits);
+    Atom new = au.writeCopy(toelt, val, cFIRST_STATE_BIT + (Unsigned) posto, bits);
+    toelt = new;
+
+    return (Int) bits;
+  }
+
+  Int copySharedData(Atom & fromelt, Atom & toelt) {
+    //    setDebugOutputEnabled(true);
+    Int etype = getElementType(getClassId(toelt));
+    if (etype < 0) {
+      print("NOT ELT");
+      return -1;
+    }
+    UrSelf & to = (UrSelf&) toelt;
+    UrSelf & from = (UrSelf&) fromelt;
+    Int bitscopied = 0;
+    for (ClassBaseIterator citr(from); citr.hasNext(); ) {
+      ClassId ci = citr.next();
+      if (!isBase(to, ci)) continue;
+      Int bits = copyClassDataMembers(ci, fromelt, toelt);
+      if (bits < 0) return -1;
+      bitscopied += bits;
+    }
+    return bitscopied;
+  }
+}
+

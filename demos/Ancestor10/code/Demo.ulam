@@ -1,0 +1,149 @@
+transient DemoState : CodonState /*SequenceableState*/ {
+
+  //// Intention API
+
+  @Override
+  virtual Bool act(Intender & in) {
+    print("DMSA10");
+
+    //// Catch live status for getColor
+    print("DMSA11");
+    Demo & d = (Demo &) in;
+
+    d.mWasLive = mExecutionContext == cEXCT_ACTV;
+    print("DMSA12");
+    print(d.mWasLive);
+
+    if (super.act(in)) return true;
+
+    //// ARE WE A PROVIDER?
+    if (!d.mDemoProvider) return d.diffuse(self);
+    //// WE ARE A PROVIDER.
+    
+    print("DMSTPROV");
+    EventWindow ew;
+    Random random;
+    PocketHC3 & p = self.mPocket;
+
+    /*
+    //// DEMO: REGRIP THE PROCESSOR!
+    C2D seqc = d.chooseSequencer(mPocket);
+    if (seqc.length() > 0u) {      // Found a processor!
+      DiamondSequencer & ds = (DiamondSequencer&) ew[seqc];
+      QProcUnitMap & pum = ds.mProcUnitMap;
+      // ROTATE THE POD BAY DOORS HAL
+      QProcUnitMap.ProcUnit last = pum.procUnitInQuadrant(cQUAD_SW);
+      for (Unsigned i = 0u; i < 4u; ++i) {
+        PocketDir pd = (PocketDir) i;
+        QProcUnitMap.ProcUnit next = pum.procUnitInQuadrant(pd);
+        pum.setProcUnitInQuadrant(pd,last);
+        last = next;
+      }
+    }
+    */
+
+    //// IS DOWNSTREAM A TEMP?
+    SN downsn = self.mEWSNMate[Segment.cBODY_DOWN];
+    if (downsn == 0u) return d.diffuse(self); // No mate??
+
+    Atom & a = ew[downsn];
+    if (a as PocketChain) {
+      if (a.mDSType != d.cDS_DOWN &&
+          a.mDSType != d.cDS_UP) return false; // mate not temp
+    } else return d.diffuse(self);             // mate not qchain??
+    //// DOWNSTREAM IS A TEMP.
+
+    PocketChain & qd = (PocketChain&) a;
+    if (false /*ONLY GROW BY PATCH! random.oneIn(15u)*/) {
+      /// GO FOR GROW!
+      EmptyCodon g; // XXX was Sf
+      g.mTargetQuadrant = d.mTargetQuadrant;
+      PocketChain & qg = g;
+      qg = qd;             // Copy qd's qchain info
+      Segment & sg = g;
+      sg = qd;             // and their Segment info
+
+      // SET BY adopt(..) NOW:      g.mDSType = Demo.cDS_NORM;
+
+      // if (true /*random.oneIn(2u)*/ ) { // XXX ALL GROW FOR NOW
+      //   ShSfISide1 it;
+      //   it.adopt(g);
+      // } else {
+      //   ShSfIWormHead it;
+      //   //        g.mAction = true;  // You are H*
+      //   it.adopt(g);
+      // }
+
+      ew[downsn] = g.atomof;
+      return d.diffuse(self);
+    }
+
+    return false;
+  }
+}
+
+element Demo : Codon {
+  Bool mDemoProvider; //< Do I make the loop grow?
+
+  Bool mWasLive; //< Trailing indicator FOR DISPLAY ONLY
+
+  //// UrSelf API
+  @Override
+  ARGB getColor(Unsigned selector) {
+    ColorUtils cu;
+    if (mWasLive) return cu.getColor(0xffffffff);
+    if (mDemoProvider) return cu.color(0xffff0000);
+    return super.getColor(selector);
+  }
+
+  @Override
+  virtual Void renderGraphics() {
+    
+    if (mDemoProvider) renderLinks(600u);
+    else super.renderGraphics();
+    
+  }
+
+  //// Intender API 
+  @Override
+  virtual ClassId getIntentionClass() { return DemoState.classidof; }
+
+  //// PocketChain API 
+  @Override
+  virtual Void preswapActions(PocketChainState & ds) { mWasLive = false; }
+
+  Void behave() {
+    mWasLive = false;           // not showing as live unless I determine so in this event
+    pursueIntention();
+  }
+}
+
+element SeedDemo : XTimer(3u,6u,2u) + DTU {
+  EventWindow ew;
+  Random random;
+  Void die() { ew[0] = Empty.instanceof; }
+  Void diffuse() {
+    EventWindow.SiteNum n = (EventWindow.SiteNum) random.between(1,4);
+    if (ew.isEmpty(n))
+      ew.swap(0u,n);
+  }
+  Void behave() {
+    if (countAlarm()) return die(); // one shot lives to shoot
+    
+    PocketHC3 p;
+    PocketHC3.Status pstat = p.init();
+    if (pstat == PocketHC3.cSTATUS_EDGE) return diffuse(); // seek greener pastures
+    if (pstat == PocketHC3.cSTATUS_OPEN) return die();     // give up
+    if (pstat == PocketHC3.cSTATUS_BENT) return;           // wait for clarity
+
+    Demo d;
+    d.mChainControlUp.init();
+    d.mChainControlDown.init();
+    d.mDSType = Demo.cDS_NORM;
+    d.mTargetQuadrant =  (PocketDir) random.between(0,3);
+    d.mPocketPtrs[Segment.cBODY_UP] = Segment.cPP_NULL; // you're the head
+    d.mPocketPtrs[Segment.cBODY_DOWN] = Segment.cPP_NULL; // you're also the tail (for now)
+    ew[0] = d.atomof;
+    return;
+  }
+}

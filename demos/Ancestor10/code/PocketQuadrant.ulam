@@ -1,0 +1,87 @@
+transient PocketQuadrant + QDebugUtils + DTU + Fail {
+
+  Bool mQuadrantKnown;
+  Bool mOutOfQuadrantRange;
+  PocketDir mQuadrant;
+  Unsigned mDSHopContour;
+
+  Bool init(PocketHC3 & p) {
+    takeDebug(p);
+
+    mQuadrantKnown = false;        // First assume bad
+    mOutOfQuadrantRange = false;
+    print("PKQD10");
+    if (p.mStatus != PocketHC3.cSTATUS_OK) return true;
+    print("PKQD11");
+    Unsigned nw = p.mCornerQDSHopsStg[cQUAD_NW].getDSHops();
+    Unsigned ne = p.mCornerQDSHopsStg[cQUAD_NE].getDSHops();
+    Unsigned se = p.mCornerQDSHopsStg[cQUAD_SE].getDSHops();
+    Unsigned sw = p.mCornerQDSHopsStg[cQUAD_SW].getDSHops();
+    Int h1 = (Int) nw - (Int) se;
+    Int h2 = (Int) ne - (Int) sw;
+
+    if (false) { }
+    else if (h1 == 0 && h2 == 2) {
+
+      mQuadrant = cQUAD_NE;
+      mDSHopContour = nw;
+
+    } else if (h1 == 0 && h2 == -2) {
+
+      mQuadrant = cQUAD_SW;
+      mDSHopContour = nw;
+
+    } else if (h2 == 0 && h1 == 2)  {
+
+      mQuadrant = cQUAD_NW;
+      mDSHopContour = ne;
+
+    } else if (h2 == 0 && h1 == -2) {
+
+      mQuadrant = cQUAD_SE;
+      mDSHopContour = ne;
+
+    } else { // Unsettled or at edge of or out of range
+
+      mDSHopContour = mDSHopContour.maxof; // call it infty
+    }
+
+    print("PKQD12");
+
+    if (mDSHopContour > 6u)
+      mOutOfQuadrantRange = true;
+
+    mQuadrantKnown = true; // We're good
+    
+    return false;
+  }
+
+  Unsigned dsHopContourInDir(PocketPtr pd) {
+    if (!mQuadrantKnown) fail(__FILE__,__LINE__); 
+    Bool less = false, more = false;
+    which (pd) {
+    case cPP_SELF: { }
+    case cPP_WEST: {
+      less = (mQuadrant == cQUAD_NE || mQuadrant == cQUAD_SE);
+      more = (mQuadrant == cQUAD_NW || mQuadrant == cQUAD_SW);
+    }
+    case cPP_NORTH: {
+      less = (mQuadrant == cQUAD_SE || mQuadrant == cQUAD_SW);
+      more = (mQuadrant == cQUAD_NE || mQuadrant == cQUAD_NW);
+    }
+    case cPP_SOUTH: {
+      less = (mQuadrant == cQUAD_NE || mQuadrant == cQUAD_NW);
+      more = (mQuadrant == cQUAD_SE || mQuadrant == cQUAD_SW);
+    }
+    case cPP_EAST: {
+      less = (mQuadrant == cQUAD_NW || mQuadrant == cQUAD_SW);
+      more = (mQuadrant == cQUAD_NE || mQuadrant == cQUAD_SE);
+    }
+    otherwise: { fail(__FILE__,__LINE__); }
+    }
+    Unsigned ret = mDSHopContour;
+    if (more) ++ret;
+    if (less) --ret;
+    return ret;
+  }
+}

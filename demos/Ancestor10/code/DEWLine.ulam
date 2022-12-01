@@ -1,0 +1,157 @@
+
+/** Diamond matrix API for signaling non-self detections
+ */
+quark DEWLine {
+  typedef EventWindow.SiteNum SN;
+  typedef Unsigned(2) DefCon;
+  constant DefCon cDC_OPEN = 0u;  //< no visible threats (MTip?)
+  constant DefCon cDC_SGHT = 1u;  //< sighting (MSensor)
+  constant DefCon cDC_CONT = 2u;  //< contact (MBase, HC3 tail)
+  constant DefCon cDC_DAMG = 3u;  //< damage (HC3 non-tail)
+
+  typedef Unsigned(2) DirIdx;
+  constant DirIdx cDRIX_WEST = 0u; 
+  constant DirIdx cDRIX_NRTH = 1u;
+  constant DirIdx cDRIX_SOTH = 2u;
+  constant DirIdx cDRIX_EAST = 3u;
+
+  typedef DefCon DefCons[4]; // 0:W 1:N 2:S 3:E
+
+  DefCons mDefCons;
+
+  //// UrSelf API
+  @Override
+  virtual Void renderGraphics() {
+    ARGB bcol = getColor(2u);
+    renderDCs(mDefCons,C2D.instanceof(0,0),bcol);
+  }
+
+  //// DEWLine API
+  virtual DefCon signalDC() ; //< level that we signal at
+  virtual Int sourceRank() {  //< our source ranking (lower flows to higher)
+    return (Int) signalDC();  // By default our rank is our DC signal level
+  }
+
+  //// DEWLine SERVICES
+  Void resetDCs() {
+    for (Unsigned i = 0u; i < 4u; ++i) 
+      mDefCons[i] = cDC_OPEN;
+  }
+
+  Void copyDEWLine(Self & other) {
+    mDefCons = other.mDefCons;
+  }
+
+  /* considered harmful?
+  Void operator=(Self & other) {
+    mDefCons = other.mDefCons;
+  }
+  */
+
+  Bool operator==(Self & other) {
+    for (Unsigned i = 0u; i < 4u; ++i) 
+      if (mDefCons[i] != other.mDefCons[i])
+        return false;
+    return true;
+  }
+
+  Unsigned maxDCs() {
+    Unsigned max = 0u;
+    for (Unsigned i = 0u; i < 4u; ++i) 
+      if (mDefCons[i] > max)
+        max = mDefCons[i];
+    return max;
+  }
+
+  Bool mergeDCs(constant DEWLine & other) {
+    Bool ret = false;
+    for (Unsigned i = 0u; i < 4u; ++i) {
+      if (mDefCons[i] < other.mDefCons[i]) {
+        mDefCons[i] = other.mDefCons[i];
+        ret = true;
+      }
+    }
+    return ret;
+  }
+
+  Bool maxDC(DirIdx di, DefCon val) {
+    Bool ret = val > mDefCons[di];
+    if (ret) mDefCons[di] = val;
+    return ret;
+  }
+
+  Void renderDCs(DefCons dc, C2D at, ARGB basecol) {
+    Drawable drawable;
+    if (!drawable.canDraw()) return;
+    for (SN i = 0u; i < 4u; ++i) {
+      if (dc[i] == cDC_OPEN) continue;
+      SN dir = (SN) (i+1u);
+      drawDEWLine_(at,dir,dc[i],true);
+    }
+    /** Maybe just the DEWLines are enough, in the embiggening picture
+    Unsigned max = maxDCs();
+    if (max > 0u) drawBox_(at,max,true,basecol);
+    */
+  }
+
+  Void drawBox_(C2D at, Unsigned size, Bool dewColor, ARGB basecol) {
+    Drawable drawable;
+    if (!drawable.canDraw()) return;
+    MDist md; // No ew when rendering!  Can't use ew.getCoordRaw()!
+
+    C2D.Coord ssize = (C2D.Coord) (((Int) size+3)*Drawable.cUNITS_PER_SITE/8);
+    C2D atd = at*Drawable.cUNITS_PER_SITE-C2D.instanceof(ssize/2,0);
+    C2D start = atd;
+    C2D end = atd + C2D.instanceof(ssize,0);
+
+    ARGB oncol;
+    Unsigned width = (Unsigned) ssize;
+    ColorUtils cu;
+    if (!dewColor) oncol = getColor(0xff000000);
+    else {
+      which (size) {
+      case cDC_SGHT: { oncol = cu.color(0xffffff00); }
+      case cDC_CONT: { oncol = cu.color(0xffffa500); }
+      case cDC_DAMG: { oncol = cu.color(0xffff0000); }
+      }
+      // XXX      oncol = cu.between(oncol, basecol, 50u);
+    }
+    drawable.drawMaskedLine(start, end, oncol, oncol, (Bits) 0xffffffff, width);
+    return;
+  }
+
+  Void drawDEWLine_(C2D at, SN towardsn, DefCon dc, Bool dewColor) {
+    Drawable drawable;
+    if (!drawable.canDraw()) return;
+    MDist md; // No ew when rendering!  Can't use ew.getCoordRaw()!
+
+    C2D sc = md.getSiteCoord(towardsn);
+    C2D atd = at*Drawable.cUNITS_PER_SITE;
+    C2D start = atd + sc*(3*Drawable.cUNITS_PER_SITE/8); // Try to avoid atom label
+    C2D end = atd + sc*(C2D.Coord) ((dc+4)*Drawable.cUNITS_PER_SITE/8);
+
+    ARGB oncol;
+    Unsigned width = 100u*dc;
+    ColorUtils cu;
+    if (!dewColor) oncol = getColor(0xff000000);
+    else which (dc) {
+      case cDC_SGHT: { oncol = cu.color(0xffffff00); }
+      case cDC_CONT: { oncol = cu.color(0xffffa500); }
+      case cDC_DAMG: { oncol = cu.color(0xffff0000); }
+      }
+    drawable.drawMaskedLine(start, end, oncol, oncol, (Bits) 0xffffffff, width);
+    return;
+  }
+
+}
+
+quark DEWLineC : DEWLine { //< A concrete DEWLine for passive storage
+  //// DEWLine API
+  @Override
+  virtual DefCon signalDC() {
+    Fail f;
+    f.fail("DEWLineC unable to signalDC you are bugging");
+    return cDC_DAMG; // Not reached
+  }
+
+}

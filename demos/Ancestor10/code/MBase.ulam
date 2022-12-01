@@ -1,0 +1,123 @@
+transient MembraneState : PocketableState {
+}
+
+transient MembraneBaseState : MembraneState {
+
+  //// Intention API
+  @Override
+  virtual Bool init(Intender & seg) {
+    print("MMBST10");
+    if (super.init(seg)) { // Let's have membrane be pretty fragile 
+      print("MMBST11");    // so they don't clog things up too ofteno
+      print(mPocket.mStatus);
+      Membrane & mb = (Membrane&) seg;
+      //      mb.die();
+      return true;
+    }
+    print("MMBST12");
+    return false;
+  }
+}
+
+/**
+   \symbol MB
+   \color #00f
+ */
+element MBase : Membrane + Random {
+  
+  virtual ClassId getIntentionClass() {
+    return MembraneBaseState.classidof;
+  }
+
+  //// UrSelf API
+  @Override
+  virtual ARGB getColor(Unsigned selector) {
+    ARGB ret = super.getColor(selector);
+    if (maxDCs() == 0u) {
+      ColorUtils cu;
+      ret = cu.dimmer(ret);
+    }
+    return ret;
+  }    
+
+  //// DEWLine API
+  @Override
+  virtual DefCon signalDC() {
+    return cDC_CONT; // MBase signals 'contact'
+  }
+
+  //// Membrane API
+
+  typedef XTimer(4u,8u,1u) DecayTimer;
+  DecayTimer mDecayTimer;
+  
+  Void behave() {
+    DebugUtils du;
+    MembraneBaseState mbs;
+    PocketHC3 & p = mbs.mPocket;
+    if (mbs.init(self)) {
+      if (p.mStatus == PocketHC3.cSTATUS_BENT) {
+        if (mDecayTimer.countAlarm()) return die();
+        return; //block
+      }
+      if (p.mStatus == PocketHC3.cSTATUS_EDGE) {
+        if (mDecayTimer.countAlarm()) return die();
+        return; //block
+      }
+      if (p.mStatus != PocketHC3.cSTATUS_OPEN) {
+        return die();
+      }
+    }
+    // Pocket can see just 2 HC3 during movement
+    if (p.mCoordCount == 2u) return; //block
+    if (p.mCoordCount != 3u)
+      if (oneIn(20u)) return die();
+      else return; // block
+
+    /// Find open dir
+    Unsigned opendir = Unsigned.maxof;
+    for (Unsigned i = 0u; i < 4u; ++i) {
+      if (p.mCoords[i].length() == 0u) { // uninitted
+        opendir = i;
+        break;
+      }
+    }
+    /// Lock or check open dir
+    if (mDirBound) {
+      if (opendir != mOpenDir) return die();
+    } else {
+      mOpenDir = (PocketDir) opendir;
+      mDirBound = true;
+    }
+    /// We are bound and good
+
+    mDecayTimer.reset();
+    Unsigned sensorcount = scanOuterQuadrant();
+
+    // Slow and ungainly sensor seeding
+    if (sensorcount == 0u) {
+      // Signal contact if we can't see any sensors!
+      DirIdx d1, d2;
+      axesOf(mOpenDir,d1,d2);
+      DefCon dc = signalDC();
+      maxDC(d1,dc);
+      maxDC(d2,dc);
+
+      if (oneIn(10u)) { 
+        SN maybe = (SN) between(5u,24u/*12u*/);
+        if (ew.isAccessible(maybe)) {
+          if (ew[maybe] is Empty) {
+            C2D mc = ew.getCoord(maybe);
+            if (inQuadrant(mc,mOpenDir)) {
+              MSensor seed;
+              seed.mOpenDir = mOpenDir;
+              seed.mDirBound = true;
+              ew[maybe] = seed.atomof;
+            }
+          }
+        }
+      }
+    }
+  }
+}
+

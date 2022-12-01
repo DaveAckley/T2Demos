@@ -1,0 +1,17 @@
+/** Parameters for ALife Challenge Physics.  Default parameter values
+    need to be best for T2 tile use (since they can't be changed
+    there), but may be modified during mfms use for development
+    and debugging.
+
+    \symbol AP
+    \color #0f0
+ */
+element Parms {
+  /** Render PocketChain boxes
+   */
+  parameter Bool cRENDER_POCKETCHAIN_BOXES = true;
+
+  /** Fast-start larger min maxhops
+   */
+  parameter Bool cSEED_HG_LARGE_MIN_MAXHOPS = false;
+}

@@ -1,0 +1,94 @@
+quark StoredProcUnit + DTU {
+  ProcUnit mStoredPU;
+}
+
+/** \symbol Do
+    \color #ad0
+*/
+element LXDo : LX + StoredProcUnit + Fail {
+  //  ProcUnit mStoredPU = cPUNIT_OUT; //< PU to swap INS with
+  Bool mFlagged = false;
+
+  //// LX API
+  @Override
+  virtual Bool perform(DiamondSequencerState & dss) {
+    print("LXDO10");
+    if (mFlagged) return performFlagged(dss);
+    return performUnflagged(dss);
+  }
+
+  Bool performUnflagged(DiamondSequencerState & dss) {
+    EventWindow ew;
+    print("DOUF10");
+
+    ProcUnitInfo inspui = dss.getPUInfo(cPUNIT_XEQ);
+    if (!inspui.mFound) return false;
+    print("DOUF11");
+
+    ProcUnitInfo dstpui = dss.getPUInfo(mStoredPU);
+    if (!dstpui.mFound) return false;
+    print("DOUF12");
+
+    // We'll accept either no codon or an emptycodon at dst
+    SN dsn = dstpui.mCodonSN;
+    if (dsn == SN.maxof) {
+      SN esn = dstpui.mEmptySN;
+      if (esn == SN.maxof) return false;
+      EmptyCodon ec;
+      ew[esn] = ec.atomof;
+      dsn = esn; // standardize on EC
+    }
+    Atom & a = ew[dsn];
+    if (!(a is EmptyCodon)) return false;
+
+    /// - Copy me from PA=<SRCDSP> to PB=<DSTDSP>, and
+    /// - Flag the copy, and
+    BaseClassUtils bcu;
+    Self mecopy = self;
+    mecopy.mFlagged = true;
+    bcu.copySharedData(a,mecopy);
+    ew[dsn] = mecopy.atomof;
+
+    /// - Mark <PA> to roll forward
+    markCurrentInstructionForRotation(dss, 0u);
+
+    /// - Regrip to swap <SA> and <SB> (leaving
+    ///   pocket status alone.)
+    return dss.swapPUs(cPUNIT_XEQ, mStoredPU);
+  }
+
+  Bool performFlagged(DiamondSequencerState & dss) {
+    print("DOFL10");
+    //// IF ALONE, TRY TO GROW LOOP (NYI)
+    // XXX if (isAlone()) {    }
+
+    //// REPLACE SELF WITH NON-EC HEAD OF dst
+    ProcUnitInfo dstpui = dss.getPUInfo(mStoredPU);
+    if (!dstpui.mFound) return false;
+
+    SN dsn = dstpui.mCodonSN;
+    if (dsn == SN.maxof)
+      return false;
+
+    EventWindow ew;
+    Atom & a = ew[dsn];
+    if (a is EmptyCodon) {
+      markDSPForRotationForward(dss, 0u, mStoredPU);
+      return false;
+    }
+
+    //// a IS NON-EC
+    SN ssn = ew.getSiteNumber(self);
+    if (ssn == SN.maxof) fail(__FILE__,__LINE__);
+
+    Atom copy = a;
+    markDSPForRotationForward(dss, 0u, mStoredPU);
+
+    BaseClassUtils bcu;
+    bcu.copySharedData(self,copy);
+    ew[ssn] = copy;
+
+    return true;
+  }
+
+}
