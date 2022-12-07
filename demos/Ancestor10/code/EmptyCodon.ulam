@@ -52,7 +52,7 @@ element EmptyCodon : Codon + QDebugUtils + DTU {
       Random random;
       print("ECINIT10");
       print(mDSType);
-      if (mDSType == cDS_DUMB) {
+      if (mDSType <= cDS_NORM) { // non temp values
         print("ECINIT11");
         mDSType = random.oneIn(2) ? cDS_UP : cDS_DOWN;
         print(mDSType);

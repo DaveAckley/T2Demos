@@ -28,31 +28,13 @@ quark SW3CmdInfo + DTU {
 }
 
 quark SW3Packet + DTU + Fail {
-  typedef Unsigned(2) CmdStatus;
-  constant CmdStatus cCMST_DO =     0u;
-  constant CmdStatus cCMST_DID =    1u;
-  constant CmdStatus cCMST_TRYING = 2u;
-  constant CmdStatus cCMST_CANT =   3u;
 
-  CmdStatus mCmdStatus;
+  SW3CmdStatus mCmdStatus;
 
   typedef UMod(4,1) SeqNo;
   SeqNo mSeqNo;
 
-  typedef Unsigned(4) Cmd;
-  constant Cmd cSW3C_NOOP =   0u; //< successfully do nothing
-  constant Cmd cSW3C_SHRINK = 1u; //< delete current head
-  constant Cmd cSW3C_GROW =   2u; //< try to extend in arg dir map
-  constant Cmd cSW3C_BECOME = 3u; //< change into Segment & arg.instanceof 
-  constant Cmd cSW3C_PLACE =  4u; //< shrink + leave element arg.instanceof
-  constant Cmd cSW3C_DIE =    5u; //< delete whole SW from the head
-  constant Cmd cSW3C_DIEPL =  6u; //< die + leave stream of arg.instanceof
-  constant Cmd cSW3C_DELATM = 7u; //< try to delete arg.instanceof atom in our pocket
-  constant Cmd cSW3C_DELNCD = 8u; //< try to delete any non-Codon in arg dir map
-  constant Cmd cSW3C_HC3CTL = 9u; //< change mArg 0:1 HC3 corner according to mArg 2:7
-  constant Cmd cSW3C_GRIPDS =10u; //< change grip on any ngb DS to mArg
-  constant Cmd cSW3C_MAX =   15u;
-  Cmd mCmd;
+  SW3Cmd mCmd;
 
   constant SW3CmdInfo mCmdInfo[] = {
     { .mExVal = SW3CmdInfo.cCNCOD_NONE}, // cSW3C_NOOP 
@@ -66,14 +48,15 @@ quark SW3Packet + DTU + Fail {
     { .mExVal = SW3CmdInfo.cCNCOD_NONE}, // cSW3C_DELNCD 
     { .mExVal = SW3CmdInfo.cCNCOD_NONE}, // cSW3C_HC3CTL 
     { .mExVal = SW3CmdInfo.cCNCOD_NONE}, // cSW3C_GRIPDS 
+    { .mExVal = SW3CmdInfo.cCNCOD_NONE}, // cSW3C_HC3WDS
   };
 
-  typedef Unsigned(8) Arg;
-  Arg mArg;
+  SW3Arg mArg;
 
   typedef Unsigned(5) HC3Code;
   constant HC3Code cHC3C_MAKEHG = 0u; //< change to HG
   constant HC3Code cHC3C_MAKEDS = 1u; //< change to DS with default procunit and dirstatus
+  constant HC3Code cHC3C_MAKCDS = 2u; //< change to custom DS with supplied procunit map
 
   Bool matchCore(SW3Packet other) {
     return
@@ -83,7 +66,7 @@ quark SW3Packet + DTU + Fail {
   }
 
   //// SW3Packet SERVICES
-  Bool tryHC3Ctl(SwapWormHC3State & s3s, SwapWormHC3 & s3, Arg arg) {
+  Bool tryHC3Ctl(SwapWormHC3State & s3s, SwapWormHC3 & s3, SW3Arg arg) {
     QDebugUtils qd;
     qd.takeDebug(s3s);
     PocketDir pd = (PocketDir) (((Bits) arg) & 0x3);
@@ -96,7 +79,7 @@ quark SW3Packet + DTU + Fail {
 
     PocketHC3 & p = s3s.mPocket;
 
-    dpkt.mCmdStatus = dpkt.cCMST_CANT; // Assume there'll be a problem
+    dpkt.mCmdStatus = cSW3CMST_CANT; // Assume there'll be a problem
 
     if (p.mStatus != p.cSTATUS_OK)
       return false;
@@ -114,7 +97,7 @@ quark SW3Packet + DTU + Fail {
           qd.print("THC3C13MAKEHG");
           ew[hc3c] = hg.atomof;
         }
-        dpkt.mCmdStatus = dpkt.cCMST_DID; // whaddayano
+        dpkt.mCmdStatus = cSW3CMST_DID; // whaddayano
         return true;
       }
       case cHC3C_MAKEDS: {
@@ -130,13 +113,55 @@ quark SW3Packet + DTU + Fail {
           qd.print("THC3C13MAKEDS");
           ew[hc3c] = ds.atomof;
         }
-        dpkt.mCmdStatus = dpkt.cCMST_DID; // whaddayano
+        dpkt.mCmdStatus = cSW3CMST_DID; // whaddayano
         return true;
       }
       otherwise: {
-        qd.print("THC3C12NYI");
+        qd.print("THC3C13MAKCDS13");
       }
     }
+    return false;
+  }
+
+  /** Create a 'daughter' DS to the SW, gripped as specified
+   */
+  Bool tryDaughterDS(SwapWormHC3State & s3s, SwapWormHC3 & s3, SW3Arg arg) {
+    QDebugUtils qd;
+    qd.takeDebug(s3s);
+    PocketDir pd = cQUAD_SW;
+    SW3Packet & dpkt = (SW3Packet&) s3.mDownSignal;
+    qd.print("MAKEDSDTR10");
+    qd.print(pd);
+    qd.print("MAKEDSDTR11");
+    qd.print(arg);
+
+    PocketHC3 & p = s3s.mPocket;
+
+    dpkt.mCmdStatus = cSW3CMST_CANT; // Assume there'll be a problem
+
+    if (p.mStatus != p.cSTATUS_OK)
+      return false;
+    C2D hc3c = p.mCoords[pd];
+    EventWindow ew;
+    if (!ew.isAccessible(hc3c)) return false;
+    Atom & a = ew[hc3c];
+    { // CUSTOM DS FOR DAUGHTER
+      qd.print("MAKEDSDTR12");
+      if (!(a is DiamondSequencer)) {
+        DiamondSequencer ds;
+        BaseClassUtils bcu;
+        Int bits = bcu.copySharedData(a,ds.atomof);
+        if (bits < 0) return false;
+        /// SET CUSTOM GRIP
+        ds.mProcUnitMap.setProcUnitMap((Bits(8)) arg);
+        qd.print("MAKEDSDTR13");
+        ew[hc3c] = ds.atomof;
+      }
+      dpkt.mCmdStatus = cSW3CMST_DID; // whaddayano
+      qd.print("MAKEDSDTR14");
+      return true;
+    }
+    qd.print("MAKEDSDTR15");
     return false;
   }
 
@@ -191,7 +216,7 @@ quark SW3Packet + DTU + Fail {
     pkt = (SW3Packet) newhd.mDownSignal;
     qd.print("3PKTGS14");
     qd.print(pkt);
-    pkt.mCmdStatus = pkt.cCMST_DID;
+    pkt.mCmdStatus = cSW3CMST_DID;
     qd.print(pkt);
     newhd.mDownSignal = (SwapWormHC3.Signal) pkt;
 
@@ -245,7 +270,7 @@ quark SW3Packet + DTU + Fail {
     pkt = (SW3Packet) newhd.mDownSignal;
     qd.print("3PTDA14");
     qd.print(pkt);
-    pkt.mCmdStatus = pkt.cCMST_DID;
+    pkt.mCmdStatus = cSW3CMST_DID;
     qd.print(pkt);
     newhd.mDownSignal = (SwapWormHC3.Signal) pkt;
 
@@ -258,12 +283,12 @@ quark SW3Packet + DTU + Fail {
     qd.takeDebug(s3s);
     qd.print("S3PEX10");
 
-    if (mCmdStatus != cCMST_TRYING) return false;
+    if (mCmdStatus != cSW3CMST_TRYING) return false;
     which (mCmd) {
       case cSW3C_NOOP: {
         qd.print("S3PEX11NOOP");
         if (atHead) {
-          mCmdStatus = cCMST_DID; // You're welcome
+          mCmdStatus = cSW3CMST_DID; // You're welcome
           return true;
         }
         return false;
@@ -272,7 +297,7 @@ quark SW3Packet + DTU + Fail {
         qd.print("S3PEX11SHRINK");
         if (atHead) {
           // Killing (our) seg now finishes the shrink task
-          mCmdStatus = cCMST_DID;
+          mCmdStatus = cSW3CMST_DID;
           return killSeg(s3s,s3,true);
         }
         qd.print("S3PEX12SHRINK");
@@ -294,9 +319,9 @@ quark SW3Packet + DTU + Fail {
       case cSW3C_DELATM: {
         if (atHead) {
           if (s3.tryDelAtom(s3s, (ClassUtils.ClassId) mArg, cPP_SELF)) 
-            mCmdStatus = cCMST_DID;
+            mCmdStatus = cSW3CMST_DID;
           else
-            mCmdStatus = cCMST_CANT; //?
+            mCmdStatus = cSW3CMST_CANT; //?
           return true;
         }
         return false;
@@ -319,14 +344,14 @@ quark SW3Packet + DTU + Fail {
           Int etype = cu.getElementType(mArg);
           if (etype < 0) {
             qd.print("S3PEX11PLACE11");
-            mCmdStatus = cCMST_CANT; // WTF?
+            mCmdStatus = cSW3CMST_CANT; // WTF?
             return false;
           }
           AtomUtils au;
           Atom a = au.new(etype);
 
           // Killing (our) seg now (almost) finishes the place task
-          mCmdStatus = cCMST_DID; 
+          mCmdStatus = cSW3CMST_DID; 
           if (s3.mPocketPtrs[cBODY_DOWN] != cPP_NULL) { // Leave last single seg 
             Bool ks = killSeg(s3s,s3,mCmd != cSW3C_DIEPL);
             if (ks) {
@@ -356,6 +381,13 @@ quark SW3Packet + DTU + Fail {
         */
         return false;
       }
+      case cSW3C_HCSWDS: {
+        qd.print("S3PEX11HCSWDS");
+        if (atHead)
+          return tryDaughterDS(s3s,s3,mArg);
+        return false;
+      }
+
       otherwise: {
         ByteStreamLogger bsl;
         bsl.printf("S3PX: %d(0x%x)\n",mCmd,mArg);

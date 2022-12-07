@@ -31,6 +31,21 @@ quark QProcUnitMap + DTU {
     mQuadrantPUArray[dir] = pu;
   }
 
+  Bits(8) getProcUnitMap() {
+    Bits(8) ret;
+    for (Unsigned i = 0u; i < mQuadrantPUArray.lengthof; ++i) {
+      Unsigned dist = (3u-i)*2u;
+      ret |= (Bits(8)) (((Bits(2)) mQuadrantPUArray[i]) << dist);
+    }
+    return ret;
+  }
+
+  Void setProcUnitMap(Bits(8) map) {
+    for (Unsigned i = 0u; i < mQuadrantPUArray.lengthof; ++i) {
+      Unsigned dist = (3u-i)*2u;
+      mQuadrantPUArray[i] = (Unsigned(2)) ((map>>dist)&0x3);
+    }
+  }
   /*
   Bool drawQuadrantForPU(ProcUnit type, PocketDir & pdr) {
     Random random;

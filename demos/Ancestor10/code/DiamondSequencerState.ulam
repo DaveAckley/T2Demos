@@ -184,9 +184,18 @@ transient ProcUnitInfo + DTU + QDebugUtils {
     AxialDir xad, yad;
     dss.axialDirsBorderingQuad(q, xad, yad);
 
+    print("IQG4IX11ADS");
+    print(xad);
+    print(yad);
+
     HC3State & hc3 = dss.mHC3State;
     HC3NgbState & xns = hc3.mHC3NgbStates[xad];
     HC3NgbState & yns = hc3.mHC3NgbStates[yad];
+
+    print("IQG4IX11NSS");
+    print(xns);
+    print(yns);
+
     if (xns.mState > cNGB_EAST || yns.mState > cNGB_EAST)
       return false;
 
@@ -196,6 +205,13 @@ transient ProcUnitInfo + DTU + QDebugUtils {
 
     QHCAxialNgb & xngb = angbs.mAxialNgbs[xad];
     QHCAxialNgb & yngb = angbs.mAxialNgbs[yad];
+
+    //// INSIST ALL RELS ARE 2 EXACTLY
+    for (Unsigned i = 0u; i < xngb.mNgbRels.lengthof; ++i) {
+      if (xngb.mNgbRels[i] != 2u) return false;
+      if (yngb.mNgbRels[i] != 2u) return false;
+    }
+
     Bool isSquareQuad = xngb.mNgbRels[yad] == yngb.mNgbRels[xad];
     if (!isSquareQuad)
       return false;
@@ -277,8 +293,14 @@ transient ProcUnitInfos + DTU + QDebugUtils {
     return false;
   }
 
-  Bool areAllQuadrantsGoForIX(DiamondSequencerState & dss) {
+  Bool areAllQuadrantsGoForIX(DiamondSequencerState & dss, QHardCell & ctr) {
     print("AAQG10");
+
+    /// IS CENTER RELAXED?
+    for (Unsigned i = 0u; i < 4u; ++i)
+      if (ctr.mNgbRels[i] != 2u) return false; // NO
+    /// CENTER IS RELAXED.
+
     for (Unsigned i = 0u; i < mPUInfoAry.lengthof; ++i) {
       print(i);
       if (!mPUInfoAry[i].isQuadrantGoForIX(dss)) return false;
@@ -349,7 +371,7 @@ transient DiamondSequencerState : QHardCellState + Fail {
 
   //// DSS SERVICES
   Bool areAllQuadrantsGoForIX(DiamondSequencer & ds) {
-    return mPUInfos.areAllQuadrantsGoForIX(self);
+    return mPUInfos.areAllQuadrantsGoForIX(self, ds);
   }
 
   ProcUnitInfo & getPUInfo(ProcUnit pu) {

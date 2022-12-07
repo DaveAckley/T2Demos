@@ -1,23 +1,5 @@
 transient SequenceableState : PocketChainState {
 
-  /*
-  @Override
-  virtual Bool init(Intender & in) {
-    // XXXX
-
-    print("SQBST10");
-    if (super.init(in)) // If true we might be dead (from PocketChain)
-      return true;        
-    print("SQBST11");
-    Sequenceable & s = (Sequenceable&) in;
-    print("SQBST12");
-
-    // Successfully initted
-    print(self);
-    return false;
-  }
-  */
-
 }
 
 quark Sequenceable : PocketChainTQ {

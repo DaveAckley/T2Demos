@@ -28,7 +28,7 @@ element HardCell : QHardCell
   constant HopCount cMIN_MAX_HOPS = 6u;
   HopCount mMaxHops;
 
-  constant Unsigned cDIFFUSE_ODDS = 1u;
+  constant Unsigned cDIFFUSE_ODDS = 100u; // Let's be super random. Control comes later
 
   HopCount mUpHops = HopCount.maxof;//cMAX_HOPS;
 
@@ -85,9 +85,11 @@ element HardCell : QHardCell
     Random random;
     Unsigned totw = diffuseOdds;
     SN curPick = (SN) random.between(1u,4u);
+    /* BE TOTALLY BROWNIAN
     for (Unsigned i = 0u; i < mDirs.lengthof; ++i) {
       curPick = updatePick(curPick, (SN) (i+1u), totw, mDirs[i]);
     }
+    */
     return curPick;
   }
 

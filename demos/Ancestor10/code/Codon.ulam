@@ -320,17 +320,24 @@ transient CodonState : SequenceableState + Fail + DTU {
         print("CdnStab215");
 
         EmptyCodon ec;
-        ec.init();              // Random up or down
         ec.copySegAndPChain(c);
+        ec.init();               // Random tag and up or down
         ds.mDirStatusMap.        // Set our quadrant idle
           setQuadrantStatus(mQuadrant, QDirStatusMap.cDSTATUS_IDLE);
         ew[0] = ec.atomof;       // Make the change
         return true;             // we changed
       }
 
+      /* DON'T WANT THIS
       // (3) if reachable layout is   [X] -> U
       //     switch to                [F] -> X
       //     and set _IDLE
+      */
+
+      // WANT THIS INSTEAD: (SEND TEMPS DOWN AROUND LOOP)
+      // (3) if reachable layout is   [X] -> U
+      //     switch to                [X] -> D
+      //     and stay in TEMP
 
       if (c.isRealMobile()) { // if [X] (mobile nontemp)
         print("CdnStab216");
@@ -340,22 +347,9 @@ transient CodonState : SequenceableState + Fail + DTU {
           Atom & d = ew[dnsn];
           if (d as PocketChain) {
             if (d.mDSType == d.cDS_UP) {    // and if downstream is U
-              EmptyCodon ec;
-              ec.init();
-              ec.copySegAndPChain(d);
-              ew[dnsn] = ec.atomof; // WARNING: d is now a stale ref!
-              PocketChain & d2 = (PocketChain&) ew[dnsn];
-              ds.mDirStatusMap.        // Set our quadrant idle
-                setQuadrantStatus(mQuadrant, QDirStatusMap.cDSTATUS_IDLE);
-
-/*              c.swapPocketPtrs(d2);    // Exchange ptrs
-              c.doSwap(self,dnsn);     // and make the swap
-*/
-            c.doDSPSwapOut(self, d2, dnsn);
+              d.mDSType = d.cDS_DOWN;       // change downstream to D
               return true;
             }
-            // XXX dnsn is not up - anything else?
-            // FALL THROUGH
           } else {
             print("dnsn not PocketChain?");
             print(d);
@@ -364,6 +358,7 @@ transient CodonState : SequenceableState + Fail + DTU {
         }
       }
 
+      // ONLY HERE DO WE GET A TEMP FROM THE PROPER SIDE
       // (4) if reachable layout is    D -> [X]
       //     switch to                 X -> [F]
       //     and set _IDLE
@@ -377,16 +372,12 @@ transient CodonState : SequenceableState + Fail + DTU {
           if (u as PocketChain) {
             if (u.mDSType == u.cDS_DOWN) {  // and if upstream is D
               EmptyCodon ec;
-              ec.init();
               ec.copySegAndPChain(u);
+              ec.init();
               ew[upsn] = ec.atomof; // WARNING: u is now a stale ref!
               PocketChain & u2 = (PocketChain&) ew[upsn];
               ds.mDirStatusMap.        // Set our quadrant idle
                 setQuadrantStatus(mQuadrant, QDirStatusMap.cDSTATUS_IDLE);
-
-/*              c.swapPocketPtrs(u2);    // Exchange ptrs
-              c.doSwap(self,upsn);     // and make the swap
-*/
               c.doDSPSwapOut(self, u2, upsn);
               return true;
             }

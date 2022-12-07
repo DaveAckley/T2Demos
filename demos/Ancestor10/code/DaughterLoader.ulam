@@ -1,0 +1,255 @@
+/** \symbol dL
+    \color #e24
+ */
+element DaughterLoader : LX + QLabelMark {
+  // HARDCODED FOR NOW  ProcUnit mSrcUnit; //< Where instructions come from
+  QLabelMark mLastInsnMark; //< How to tell when loading is done
+  Bool mConsumeOriginal;    //< Delete self on deployment if true
+  Bool mDeployed;           //< True once loading has started
+
+  //// LX API
+  @Override
+  virtual Bool perform(DiamondSequencerState & dss) {
+    print("DLPERF10");
+    if (mDeployed) return performDeployed(dss);
+    return performUndeployed(dss);
+  }
+  
+  Bool performUndeployed(DiamondSequencerState & dss) {
+    print("DLPUND10");
+
+    Fail f;
+    Bool killreg = killPU(cPUNIT_INP, dss);
+    if (!killreg) return true;  // Block til INP killed
+
+    print("DLPUND11");
+    ProcUnitInfo & puireg = dss.getPUInfo(cPUNIT_REG);
+    EventWindow ew;
+    BaseClassUtils bcu;
+
+    print("DLPUND12");
+    if (puireg.mOccupiedSites == 0u && 
+        puireg.mEmptySN != SN.maxof) {  // Init REG if empty
+      print("DLPUND12LUP");      
+      print(puireg.mEmptySN);
+      Looper looper;
+      bcu.copySharedData(self,looper);
+      looper.init(); // init over shared data
+      ew[puireg.mEmptySN] = looper.atomof;
+      //      return true;
+      // FALL THROUGH
+    }
+
+    print("DLPUND13");
+
+    /* LET'S DEPLOY NOW PICK UP PIECES LATER
+    /// REG IS OCCUPIED (BETTER BE A CODON)
+    if (puireg.mCodonSN == SN.maxof) // No codon?
+      return false; // Urgh might be oh say.. MB grr.
+    */
+
+    print("DLPUND14");
+    /// TIME TO DEPLOY?
+    if (true) {
+      SN selfsn = ew.getSiteNumber(self); // We are not in ew[0]!
+      if (!ew.isAccessible(selfsn)) f.fail(__FILE__,__LINE__);
+      
+      ProcUnitInfo & puiinp = dss.getPUInfo(cPUNIT_INP); // Just killed!
+      SN empinpsn = puiinp.mEmptySN;
+      if (empinpsn == 0u ||
+          !ew.isAccessible(empinpsn)) f.fail(__FILE__,__LINE__);
+
+      print("DLPUND15");
+
+      Atom copy = self.atomof;
+      DaughterLoader & dlcopy = (DaughterLoader&) copy;
+
+      dlcopy.unilaterallyDetachSegment(); // We stand alone
+      dlcopy.mDeployed = true;
+
+      // DEPLOY!
+      ew[empinpsn] = copy; 
+
+      // REGRIP!
+      if (!dss.swapPUs(cPUNIT_XEQ,cPUNIT_INP)) f.fail(__FILE__,__LINE__);
+      if (!dss.swapPUs(cPUNIT_OUT,cPUNIT_REG)) f.fail(__FILE__,__LINE__);
+
+      // FINALLY, OPTIONAL CONSUME
+      if (mConsumeOriginal) {
+        EmptyCodon ec;
+        bcu.copySharedData(self,ec);
+        ec.init();
+        ew[selfsn] = ec.atomof;     // self IS NOW STALE
+      }
+      return true;
+    }
+    
+    return false;
+  }
+
+  Bool performDeployed(DiamondSequencerState & dss) {
+    Fail f;
+    EventWindow ew;
+    print("DLPDEP10");
+
+    //// DO WE HAVE A NON-EC INPUT CODON?
+    ProcUnitInfo & inppui = dss.getPUInfo(cPUNIT_INP);
+    if (!inppui.mFound) f.fail(__FILE__,__LINE__);
+
+    SN inpsn = inppui.mCodonSN;
+    if (inpsn == SN.maxof)
+      return false; // ??
+
+    print("DLPDEP11");
+    Atom & ain = ew[inpsn];
+
+    if (ain is EmptyCodon) {
+      markDSPForRotationForward(dss, 0u, cPUNIT_INP);
+      return true;
+    }
+    Codon & cin = (Codon&) ain;
+
+    //// WE DO HAVE A NON-EC INPUT CODON.
+    
+    print("DLPDEP12");
+
+    //// DO WE HAVE AN EC OUTPUT CODON?
+    ProcUnitInfo & outpui = dss.getPUInfo(cPUNIT_OUT);
+    if (!outpui.mFound) f.fail(__FILE__,__LINE__);
+    
+    SN outsn = outpui.mCodonSN;
+    if (outsn == SN.maxof)
+      return false; // ??
+
+    print("DLPDEP13");
+    Atom & aout = ew[outsn];
+    print(aout);
+    
+    if (!(aout is EmptyCodon)) {
+      markDSPForRotation(dss, 0u, cPUNIT_OUT, cDSTATUS_TEMP);
+      return true;
+    }
+    Codon & cout = (Codon&) aout;
+
+    //// WE DO HAVE AN EC OUTPUT CODON.
+
+    //// COPY IN -> OUT
+    Atom icopy = ain;
+    Codon & icodon = (Codon&) icopy;
+
+    icodon.copySegAndPChain(cout); // Pick up dest ptrs
+    BaseClassUtils bcu;
+    //    bcu.copySharedData(aout,icopy);
+    icodon.mDSType = cDS_NORM; // Reestablish normie since that's all we copy
+
+    ew[outsn] = icopy; // aout IS NOW STALE
+    markDSPForRotation(dss, 0u, cPUNIT_OUT, cDSTATUS_TEMP); // roll _OUT
+
+    //// ERASE IN
+    EmptyCodon ec;
+    bcu.copySharedData(ain,ec);
+    ec.init();
+    ew[inpsn] = ec.atomof; // ain IS NOW STALE
+    markDSPForRotationForward(dss, 0u, cPUNIT_INP); // roll _INP
+    
+    //// DID WE JUST COPY TERMINATING CODON?
+    Bool done = false;
+    if (icopy as QLabelMark) {
+      done = inverseLabelMatch(icopy); 
+    }
+    if (!done) return true;
+    //// WE DID JUST COPY TERMINATING CODON.
+
+    //// ACQUIRE SELF
+    ProcUnitInfo & xeqpui = dss.getPUInfo(cPUNIT_XEQ);
+    if (!xeqpui.mFound) f.fail(__FILE__,__LINE__);
+    
+    SN xeqsn = xeqpui.mCodonSN;
+
+    //// REGRIP BACK!
+    if (!dss.swapPUs(cPUNIT_XEQ,cPUNIT_INP)) f.fail(__FILE__,__LINE__);
+    if (!dss.swapPUs(cPUNIT_OUT,cPUNIT_REG)) f.fail(__FILE__,__LINE__);
+
+    //// ERASE SELF
+    ew[xeqsn] = Empty.instanceof; // self IS NOW STALE
+    return true;
+  }
+
+  Bool programComplete(DiamondSequencerState & dss) {
+    // We're done when the last instruction we loaded was an inverse match to us
+    return inverseLabelMatch(mLastInsnMark);
+  }
+
+  Bool nextInstructionAvailable(DiamondSequencerState & dss) {
+    Fail f;
+    ProcUnitInfo & pui = dss.getPUInfo(cPUNIT_INP); // get source slot
+    if (!pui.mFound ||
+        pui.mCodonSN == SN.maxof ||
+        pui.mIsEmptyCodon)
+      return false;
+
+    return true;
+  }
+
+  Atom consumeNextInstruction(DiamondSequencerState & dss) {
+    Fail f;
+    ProcUnitInfo & pui = dss.getPUInfo(cPUNIT_INP); // get source slot
+    if (!pui.mFound ||
+        pui.mCodonSN == SN.maxof ||
+        pui.mIsEmptyCodon)
+      f.fail(__FILE__,__LINE__);
+
+    EventWindow ew;
+    Atom a = ew[pui.mCodonSN];
+    if (a as Codon) {
+      EmptyCodon ec;
+      ec.copySegAndPChain(a); // pick up ptrs and targeting
+      ec.mDSType = cDS_DOWN;  // flip for dir
+      ew[pui.mCodonSN] = ec.atomof;        // CONSUME INS
+    }
+
+    return a;
+  }
+
+  /*
+  Bool performDone(DiamondSequencerState & dss) {
+    /// Time to check out!
+    print("DLRPRF11");
+    ProcUnitInfo & pui = dss.getPUInfo(cPUNIT_XEQ); // get X slot
+    if (!pui.mFound ||
+        pui.mCodonSN == SN.maxof ||
+        pui.mIsEmptyCodon)
+      fail(__FILE__,__LINE__);
+
+    print("DLRPRF12");
+    EventWindow ew;
+    Atom & a = ew[pui.mCodonSN];
+    if (a as Self) {
+      EmptyCodon ec;
+      Random random;
+      ec.copySegAndPChain(a); // pick up ptrs and targeting
+      ec.mDSType = random.oneIn(2u) ? cDS_DOWN : cDS_UP; // flip for dir
+      ew[pui.mCodonSN] = ec.atomof;        // LOADER OUT
+      return true; // WRN: stale self
+    }
+
+    fail(__FILE__,__LINE__);
+    return true; // not reached
+    }*/
+
+  //// CODON API
+  virtual Void init() {
+    super.init();
+    mDSType = cDS_NORM;
+  }
+
+  /*
+  //// Intender API 
+  @Override
+  virtual ClassId getIntentionClass() { return DaughterLoaderState.classidof; }
+
+  Void behave() {
+    pursueIntention();          // passive mode activities: just be a codon
+  }
+  */
+}

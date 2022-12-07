@@ -48,5 +48,5 @@ ishtar:
 	@cd ..;tar cvzf $(ISHNAME).tgz $(THIS_DIR) --transform s/^$(THIS_DIR)/$(ISHNAME)/
 	@echo Made ../$(ISHNAME).tgz
 
-.PHONY:	FORCE all code mfz clean realclean tar ishtar
+.PHONY:	FORCE all code mfz clean realclean tar ishtar run
 

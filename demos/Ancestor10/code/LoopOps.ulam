@@ -31,7 +31,7 @@ quark LoopOps + DTU + Fail {
     if (openptr < cPP_WEST || openptr > cPP_EAST) fail(__FILE__,__LINE__);
 
     PocketHC3 p;
-    PocketHC3.Status pstat = p.init();
+    PocketHC3.Status pstat = p.init(self);
     if (pstat == PocketHC3.cSTATUS_EDGE ||
         pstat == PocketHC3.cSTATUS_OPEN ||
         pstat == PocketHC3.cSTATUS_BENT) return cRESULT_NOGO; // wait for clarity
@@ -142,8 +142,11 @@ element SeedLoop11 : NullIntender + LoopOps + Fail {
   }
 
   Void diffuse(PocketableState & ps) {
+    return;
+    /* ah, uhmm, what?
     Fail f;
     f.fail(__FILE__,__LINE__);
+    */
   }
 
   Void cvtECToClassId(SN sn, ClassUtils.ClassId classid) {

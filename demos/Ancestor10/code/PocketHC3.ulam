@@ -172,7 +172,9 @@ transient PocketHC3 + DTU + QDebugUtils + Fail {
       A fully-bounded pocket has four HC3 atoms, one in each ew
       quadrant and none directly on an axis.
    */
-  Status init() {
+  Status init(UrSelf & qdu) {
+    if (qdu as QDebugUtils)
+      takeDebug(qdu);
     EventWindow ew;
     Unsigned boundCount = 0u;
     print("PKHC10");

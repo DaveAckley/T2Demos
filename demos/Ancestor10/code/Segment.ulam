@@ -90,6 +90,11 @@ quark Segment : Pocketable {
       sg = other;
   }
 
+  Void unilaterallyDetachSegment() {
+    mPocketPtrs[cBODY_UP] = cPP_NULL;
+    mPocketPtrs[cBODY_DOWN] = cPP_NULL;
+  }
+
   Bool isHead() { return mPocketPtrs[cBODY_UP] == cPP_NULL; }
   Bool isTail() { return mPocketPtrs[cBODY_DOWN] == cPP_NULL; }
   Bool isMiddle() { return !isHead() && !isTail(); }

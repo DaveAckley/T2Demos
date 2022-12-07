@@ -52,7 +52,7 @@ quark SeedDiamond {
     } else if (mEvents >= 250u) {
       PocketHC3 pocket;
       RectIterator ri;
-      if (pocket.init() == PocketHC3.cSTATUS_OK &&
+      if (pocket.init(self) == PocketHC3.cSTATUS_OK &&
           pocket.initIterator(ri)) {
         Bool foundDemo = false;
         while (ri.hasNext()) {
@@ -124,7 +124,7 @@ element SeedGrowDiamond {
     } else if (mEvents >= 250u) {
       PocketHC3 pocket;
       RectIterator ri;
-      if (pocket.init() == PocketHC3.cSTATUS_OK &&
+      if (pocket.init(self) == PocketHC3.cSTATUS_OK &&
           pocket.initIterator(ri)) {
         Bool foundDemo = false;
         while (ri.hasNext()) {

@@ -21,7 +21,7 @@ element SeedLoop : XTimer(3u,6u,4u) + DTU {
     if (countAlarm()) return die(); // one shot lives to shoot
 
     PocketHC3 p;
-    PocketHC3.Status pstat = p.init();
+    PocketHC3.Status pstat = p.init(self);
     if (pstat == PocketHC3.cSTATUS_EDGE ||
         pstat == PocketHC3.cSTATUS_OPEN)
       return diffuse(); // seek greener pastures

@@ -365,7 +365,12 @@ transient PatchRule + DTU + QDebugUtils + Fail {
 
     Random random;
     if (dp > 0 && !random.oneIn(100u)) return false;
-
+    if (dp > 0) {
+      ByteStreamLogger bsl;
+      bsl.print(getPatchRuleName());
+      bsl.printf(": APPLYING WITH PENALTY INCREASE %d\n",
+                 dp);
+    }
     //    print(prpb);
     print("PARUTR13APPLY");
     printContext();
@@ -766,6 +771,140 @@ transient PatchRule_SHRINKB : PatchRule {
   }
 }
 
+/** Implement:
+    <pre>
+
+     ->1  |  4->        ->X ->  Y->
+       |  |  ^    ==\        |
+      -|--*--|-   ==/    ----*----
+       v  |  |               |
+       2 ->  3            .  |  .
+
+    </pre>
+
+    where x = (1,2,3), and Y = (2,3,4)
+    such that X < Y and all unused are ECs
+ */
+transient PatchRule_SHRINKC : PatchRule {
+
+  //// PATCHRULE API
+  @Override
+  virtual String getPatchRuleName() { return __CLASS__; }
+
+  @Override
+  virtual PatchRulePatternBinding getPRPB() { return PatchRules.cPCHRUL_SHRINKC; }
+
+  @Override
+  virtual Int evaluate(PatchState & ps, PatchRulePatternBinding & prpb) {
+    print("PATRU_SC_EVAL10");
+    /// Evaluation: Cost of two ECs in l2 and l3
+    Codon & ec1 = prpb.l2pGetCodon(ps, cQUAD_SW);
+    Codon & ec2 = prpb.l2pGetCodon(ps, cQUAD_SE); 
+
+    PocketDir pd1 = prpb.l2pPatchIndex(cQUAD_SW);
+    PocketDir pd2 = prpb.l2pPatchIndex(cQUAD_SE);
+
+    Int penalty = 0u;
+    penalty -= ps.errorOfPocketChainInQuad(pd1, ec1); // SW goes empty
+    penalty -= ps.errorOfPocketChainInQuad(pd2, ec2); // SE goes empty
+
+    print(penalty);
+    return penalty;
+  }
+
+  @Override
+  virtual Bool apply(PatchState & ps, PatchRulePatternBinding & prpb) {
+    Bool forcedbg = false;
+
+    QDebugUtils qdebugutils;
+    qdebugutils.setDebugOutputEnabled(true); // force output
+    QDebugUtils & qd = forcedbg ? (QDebugUtils&) qdebugutils : (QDebugUtils&) ps;
+
+    qd.print("PATRU_SC_APL10");
+    qd.printContext();
+
+    Unsigned noneccount = 0u;
+    Unsigned eccount = 0u;
+    PocketDir pds[4];
+
+    //// DO WE HAVE MORE THAN 2 NON-ECS?
+    constant PocketDir cWINDING_ORDER[4] = { // To preserve chain order
+      cQUAD_NW, cQUAD_SW, cQUAD_SE, cQUAD_NE // when we collapse out ECs
+    };
+    for (Unsigned i = 0u; i <= 3u; ++i) {
+      PocketDir pd = cWINDING_ORDER[i];
+      Codon & c = prpb.l2pGetCodon(ps, pd);
+      qd.print("PATRU_SC_APL11");
+      qd.print(c);
+      if (c is EmptyCodon) pds[4u - ++eccount] = pd; // ECs at end
+      else pds[noneccount++] = pd; // nonECs at front
+      qd.print(eccount);
+      qd.print(noneccount);
+    }
+    if (noneccount > 2u) return false;
+    //// WE HAVE NO MORE THAN 2 NON-ECS
+
+    qd.print("PATRU_SC_APL12");
+
+    Codon xcopy = prpb.l2pGetCodon(ps, cQUAD_NW);
+    Codon ycopy = prpb.l2pGetCodon(ps, cQUAD_NE);
+
+    SN xsn = prpb.l2pGetCodonSN(ps, cQUAD_NW);
+    SN ysn = prpb.l2pGetCodonSN(ps, cQUAD_NE);
+    qd.print(xsn);
+    qd.print(ysn);
+    
+    qd.print("PATRU_SC_APL12PDS");
+    qd.print(pds[0]);
+    qd.print(pds[1]);
+    qd.print(pds[2]);
+    qd.print(pds[3]);
+
+    //// COPY NON-ECS (PLUS MAYBE ECS)
+    EventWindow ew;
+    Codon & nec0 = prpb.l2pGetCodon(ps, pds[0u]);
+    Codon & nec1 = prpb.l2pGetCodon(ps, pds[1u]);
+    qd.print("PATRU_SC_APL12NEC0");
+    qd.print(nec0);
+    qd.print("PATRU_SC_APL12NEC1");
+    qd.print(nec1);
+    ew[xsn] = nec0.atomof;
+    ew[ysn] = nec1.atomof;
+    qd.print("PATRU_SC_APL13");
+
+    //// FIXUP RESULTING PTRS
+
+    Codon & xnew = (Codon&) ew[xsn];
+    Codon & ynew = (Codon&) ew[ysn];
+    qd.print(xnew);
+    qd.print(ynew);
+    
+    PocketPtr x2y = prpb.l2pGetPocketPtr(ps, cQUAD_NW, cPLTYPE_CW);
+
+    xnew.mPocketPtrs[cBODY_UP] = xcopy.mPocketPtrs[cBODY_UP];
+    xnew.mPocketPtrs[cBODY_DOWN] = x2y;
+    ynew.mPocketPtrs[cBODY_UP] = ynew.reversePocket(x2y);
+    ynew.mPocketPtrs[cBODY_DOWN] = ycopy.mPocketPtrs[cBODY_DOWN];
+
+    qd.print("PATRU_SC_APL14");
+    qd.print(xnew);
+    qd.print(ynew);
+
+    //// ERASE LEFTOVER ECS
+
+    qd.print("PATRU_SC_APL15");
+    SN swsn = prpb.l2pGetCodonSN(ps, cQUAD_SW);
+    SN sesn = prpb.l2pGetCodonSN(ps, cQUAD_SE);
+    qd.print(swsn);
+    qd.print(sesn);
+    ew[swsn] = Empty.instanceof;
+    ew[sesn] = Empty.instanceof;
+
+    qd.print("PATRU_SC_APL16");
+    return true;
+  }
+}
+
 transient PatchRules + DTU + QDebugUtils + Fail {
   constant PatchRulePatternBinding cPCHRUL_GROWA = { .mPRPockets = {
       { .mPocketUse = cPRPU_CODON, /*NW*/
@@ -870,21 +1009,46 @@ transient PatchRules + DTU + QDebugUtils + Fail {
       },
     }
   };
+  constant PatchRulePatternBinding cPCHRUL_SHRINKC = { .mPRPockets = {
+      { .mPocketUse = cPRPU_CODON, /*NW*/
+        .mCodonType = cCPAT_S,
+        .mUpPLT = cPLTYPE_OUT,
+        .mDownPLT = cPLTYPE_CCW
+      },
+      { .mPocketUse = cPRPU_CODON, /*NE*/
+        .mCodonType = cCPAT_S,
+        .mUpPLT = cPLTYPE_CW,
+        .mDownPLT = cPLTYPE_OUT
+      },
+      { .mPocketUse = cPRPU_CODON, /*SE*/
+        .mCodonType = cCPAT_S,
+        .mUpPLT = cPLTYPE_CW,
+        .mDownPLT = cPLTYPE_CCW
+      },
+      { .mPocketUse = cPRPU_CODON, /*SW*/
+        .mCodonType = cCPAT_S,
+        .mUpPLT = cPLTYPE_CW,
+        .mDownPLT = cPLTYPE_CCW
+      },
+    }
+  };
 
   PatchRule_GROWA mPR10;
   PatchRule_GROWB mPR11;
   PatchRule_RECORNER mPR12;
   PatchRule_SHRINKA mPR13;
   PatchRule_SHRINKB mPR14;
+  PatchRule_SHRINKC mPR15;
 
   PatchRule & chooseRule() {
     Random random;
-    which (random.between(0,4)) {
+    which (random.between(0,5)) {
       case 0: { return mPR10; }
       case 1: { return mPR11; }
       case 2: { return mPR12; }
       case 3: { return mPR13; }
       case 4: { return mPR14; }
+      case 5: { return mPR15; }
     }
     fail(__FILE__,__LINE__);
     return mPR10; // NOT REACHED

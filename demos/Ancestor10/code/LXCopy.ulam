@@ -38,35 +38,46 @@ element LXCopy : LX + StoredProcUnit + Fail + DTU {
 
     ProcUnitInfo srcpui = dss.getPUInfo(mSrcPU);
     if (!srcpui.mFound) return false;
+    print("CPUF11");
 
     SN ssn = srcpui.mCodonSN;
     if (ssn == SN.maxof)
       return false; // ??
     Atom & sa = ew[ssn];
+    print("CPUF12");
 
     if (sa is EmptyCodon) {
       markDSPForRotationForward(dss, 0u, mSrcPU);
       return true;
     }
+    print("CPUF13");
+    Codon & sac = (Codon&) sa;
 
     ProcUnitInfo dstpui = dss.getPUInfo(mDstPU);
     if (!dstpui.mFound) return false;
+    print("CPUF14");
 
     SN dsn = dstpui.mCodonSN;
     if (dsn == SN.maxof)
       return false; // ??
+
+    print("CPUF15");
     Atom & da = ew[dsn];
     if (!(da is EmptyCodon)) {
       markDSPForRotation(dss, 0u, mDstPU, cDSTATUS_TEMP);  // ask dst for empty spot
       return false;
     }
+    Codon & dac = (Codon&) da;
 
+    print("CPUF16");
     /// OK: WE HAVE NON-EMPTY src AND EMPTY dst
     Atom sacopy = sa;
-    BaseClassUtils bcu;
-    bcu.copySharedData(da,sacopy);
-    
     Codon & cac = (Codon&) sacopy;
+
+    //    BaseClassUtils bcu;
+    //    bcu.copySharedData(da,sacopy);
+    
+    cac.copySegAndPChain(dac);
     cac.mDSType = cDS_NORM;
 
     ew[dsn] = sacopy;

@@ -150,20 +150,20 @@ element SwapWormHC3 : Codon {
 
     SW3Packet upkt = (SW3Packet) mUpSignal;
     print(upkt);
-    if (upkt.mCmdStatus != SW3Packet.cCMST_DO) return false;
+    if (upkt.mCmdStatus != cSW3CMST_DO) return false;
     
     SW3Packet dpkt = (SW3Packet) mDownSignal;
     if (!dpkt.matchCore(upkt)) {
       print("aUSW12");
       dpkt = upkt;
-      dpkt.mCmdStatus = SW3Packet.cCMST_TRYING;
+      dpkt.mCmdStatus = cSW3CMST_TRYING;
       mDownSignal = (Signal) dpkt;
       print(self);
     }
     print("aUSW13");
     print(dpkt);
     /// DPKT.MATCHCORE(UPKT) IS TRUE
-    if (dpkt.mCmdStatus == SW3Packet.cCMST_TRYING) {
+    if (dpkt.mCmdStatus == cSW3CMST_TRYING) {
       print("aUSW14");
       if (mDownSignal.execute(s3s, self, true)) return true;
     }
@@ -222,7 +222,7 @@ element S3CmdDIE : SW3Cmdr {
   Void behave() {
     //    setDebugOutputEnabled(true);
     EventWindow ew;
-    if (inject(SW3Packet.cSW3C_DIE))
+    if (inject(cSW3C_DIE))
       ew[0] = Empty.instanceof;
   }
 }
@@ -234,7 +234,7 @@ element S3CmdSHRINK : SW3Cmdr {
   Void behave() {
     //    setDebugOutputEnabled(true);
     EventWindow ew;
-    if (inject(SW3Packet.cSW3C_SHRINK))
+    if (inject(cSW3C_SHRINK))
       ew[0] = Empty.instanceof;
   }
 }
@@ -246,7 +246,7 @@ element S3CmdGrow : SW3Cmdr {
   Void behave() {
     //    setDebugOutputEnabled(true);
     EventWindow ew;
-    if (inject(SW3Packet.cSW3C_GROW,0x1f))
+    if (inject(cSW3C_GROW,0x1f))
       ew[0] = Empty.instanceof;
   }
 }
@@ -258,7 +258,7 @@ element S3CmdPlace : SW3Cmdr {
   Void behave() {
     //    setDebugOutputEnabled(true);
     EventWindow ew;
-    if (inject(SW3Packet.cSW3C_PLACE,Wall.classidof))
+    if (inject(cSW3C_PLACE,Wall.classidof))
       ew[0] = Empty.instanceof;
   }
 }
@@ -270,7 +270,7 @@ element S3CmdDiepl : SW3Cmdr {
   Void behave() {
     //    setDebugOutputEnabled(true);
     EventWindow ew;
-    if (inject(SW3Packet.cSW3C_DIEPL,Wall.classidof))
+    if (inject(cSW3C_DIEPL,Wall.classidof))
       ew[0] = Empty.instanceof;
   }
 }

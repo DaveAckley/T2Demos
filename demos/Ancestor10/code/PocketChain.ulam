@@ -164,8 +164,8 @@ quark PocketChain : Segment + Fail {
 
     C2D.Coord size;
     which (mDSType) {
-    case cDS_DUMB: { size = 700; }
-    case cDS_NORM: { size = 450; }
+    case cDS_DUMB: { size = 800; }
+    case cDS_NORM: { size = 600; }
     otherwise: { size = 350; }
     }
     ARGB col = getColor(2u);

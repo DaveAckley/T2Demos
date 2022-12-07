@@ -19,9 +19,7 @@ quark LX : Codon + DTU + QDebugUtils + Fail {
     return ret;
   }
 
-  //// LS SERVICES
-
-    //// LXReset SERVICES (RUNNING ON BEHALF OF DSS)
+  //// LX SERVICES (RUNNING ON BEHALF OF DSS)
 
   /** \returns true if pu has an empty site and no extra occupants */
   Bool hasEmpPU(ProcUnit pu, DiamondSequencerState & dss) {
@@ -59,7 +57,7 @@ quark LX : Codon + DTU + QDebugUtils + Fail {
     Codon & c = (Codon &) ew[pui.mCodonSN];
     LoopKiller lk;
     lk.copySegAndPChain(c);
-    lk.mDSType = PocketChain.cDS_DUMB;
+    lk.mDSType = cDS_DUMB;
     lk.mKillFunc = lk.cKLFN_ROOT;            // We are anchor; last to go
     ew[pui.mCodonSN] = lk.atomof;
 
@@ -81,7 +79,7 @@ quark LX : Codon + DTU + QDebugUtils + Fail {
   Void markDSPForRotation(DiamondSequencerState & dss, SN dssn, ProcUnit pu, ProcStatus stat) {
     ProcUnitInfo & pui = dss.getPUInfo(pu);
     if (!pui.mFound) fail(__FILE__,__LINE__);
-    print("LXRESET1111 ");
+    print("MKDSPROT10");
     PocketDir insquad = pui.mInQuadrant; 
     EventWindow ew;
     Atom & a = ew[dssn];
@@ -108,38 +106,20 @@ quark LXSource {
   LXSourceU mSources;
 }
 
-/*
-transient LXState : CodonState {
-  @Override
-  virtual Bool act(Intender & in) {
-    print("LXST10");
-    if (super.act(in)) return true;
+quark QLabelMark {
+  typedef Bits(16) Mark;
+  constant Mark cALL_ONES_LABEL = (Mark) Unsigned(Mark.sizeof).maxof;
+  Mark mLabel = 0xf00f; //nonzero
 
-    print("LXST11");
-    if (mExecutionContext != cEXCT_ACTV)
-      return false;
-    
-    print("LXST1p2");
-    LX & lx = (LX &) in;
-    return lx.execute(self);
+  Bool inverseLabelMatch(QLabelMark other) {
+    return mLabel == (cALL_ONES_LABEL ^ other.mLabel);
   }
-
-  //// LXSTATE SERVICES
-  SN findProcUnit(ProcUnit pu) { //< SN of req pu or SN.maxof if inaccessible
-    SN ret = SN.maxof; // Assume no go
-    if (!hasDS()) return ret;
-    DiamondSequencer & ds = getDS();
-    
-    
-  }
-  }*/
+}
 
 /** \symbol MK
     \color #e24
  */
-element LXMarker : LX {
-  typedef Bits(16) Mark;
-  Mark mLabel = 0xf00f; //nonzero
+element LXMarker : LX + QLabelMark {
   typedef Bits(4) ControlMap;
   ControlMap mUpMap;            //< which pui up maps to set
   ControlMap mDownMap;          //< which pui down maps to set

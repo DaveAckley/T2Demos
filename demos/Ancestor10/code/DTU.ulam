@@ -476,4 +476,45 @@ quark DTU {
   constant ASRMap cASR_M = 1u << cSZRG_M;
   constant ASRMap cASR_L = 1u << cSZRG_L;
   constant ASRMap cASR_X = 1u << cSZRG_X;
+
+  //// "BIO-OP CODES" FOR LXBIOCTORARM
+  typedef Unsigned(4) BOpCode;
+  constant BOpCode cBOC_AGWT = 0u; //< arm go west
+  constant BOpCode cBOC_AGNT = 1u; //< arm go north
+  constant BOpCode cBOC_AGET = 2u; //< arm go east
+  constant BOpCode cBOC_AGST = 3u; //< arm go south
+  constant BOpCode cBOC_ADDS = 4u; //< arm deploy daughter DS
+  // 5..10 available
+  constant BOpCode cBOC_LRST = 11u; //< local Reset and init arm
+  constant BOpCode cBOC_LSYN = 12u; //< local Sync with existing arm
+  constant BOpCode cBOC_LEOP = 13u; //< local End Of Program
+  constant BOpCode cBOC_LAEC = 14u; //< local All ECs
+  constant BOpCode cBOC_RSVE = 15u; //< reserved, end
+
+  //// SW3Packet commands
+  typedef Unsigned(4) SW3Cmd;
+  constant SW3Cmd cSW3C_NOOP =   0u; //< successfully do nothing
+  constant SW3Cmd cSW3C_SHRINK = 1u; //< delete current head
+  constant SW3Cmd cSW3C_GROW =   2u; //< try to extend in arg dir map
+  constant SW3Cmd cSW3C_BECOME = 3u; //< change into Segment & arg.instanceof 
+  constant SW3Cmd cSW3C_PLACE =  4u; //< shrink + leave element arg.instanceof
+  constant SW3Cmd cSW3C_DIE =    5u; //< delete whole SW from the head
+  constant SW3Cmd cSW3C_DIEPL =  6u; //< die + leave stream of arg.instanceof
+  constant SW3Cmd cSW3C_DELATM = 7u; //< try to delete arg.instanceof atom in our pocket
+  constant SW3Cmd cSW3C_DELNCD = 8u; //< try to delete any non-Codon in arg dir map
+  constant SW3Cmd cSW3C_HC3CTL = 9u; //< change mArg 0:1 HC3 corner according to mArg 2:7
+  constant SW3Cmd cSW3C_GRIPDS =10u; //< change grip on any ngb DS to mArg
+  constant SW3Cmd cSW3C_HCSWDS =11u; //< change SW HC3 corner to DS with grip mArg 0:7
+  constant SW3Cmd cSW3C_MAX =   15u;
+  
+  //// SW3Packet argument type
+  typedef Unsigned(8) SW3Arg;
+
+  //// SW3Packet Command Status
+  typedef Unsigned(2) SW3CmdStatus;
+  constant SW3CmdStatus cSW3CMST_DO =     0u;
+  constant SW3CmdStatus cSW3CMST_DID =    1u;
+  constant SW3CmdStatus cSW3CMST_TRYING = 2u;
+  constant SW3CmdStatus cSW3CMST_CANT =   3u;
+
 }

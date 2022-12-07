@@ -20,7 +20,7 @@ transient PocketableState : Intention + DTU {
     print("PKBST10");
     if (super.init(seg)) return true;
     print("PKBST11");
-    if (mPocket.init() != PocketHC3.cSTATUS_OK) return true; // Distorted pocket
+    if (mPocket.init(seg) != PocketHC3.cSTATUS_OK) return true; // Distorted pocket
     print("PKBST12");
     return false;
   }
@@ -104,8 +104,6 @@ quark Pocketable : Intender + DTU {
       By default this does no work and returns false.
    */
   virtual Bool updatePatch(QHardCellState & hcs, QHardCell & hc) {
-    QDebugUtils qd;
-    qd.takeDebug(hc);
     print("UPTCH10");
     PatchState & ps = hcs.getPatchState();
     if (!ps.mValid) return false;
@@ -114,6 +112,7 @@ quark Pocketable : Intender + DTU {
     print("UPTCH12");
 
     PatchRules pr;
+    pr.takeDebug(hc);
     return pr.tryRandomRule(ps);
 
     /*    Random random;

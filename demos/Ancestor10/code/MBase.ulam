@@ -11,6 +11,8 @@ transient MembraneBaseState : MembraneState {
       print("MMBST11");    // so they don't clog things up too ofteno
       print(mPocket.mStatus);
       Membrane & mb = (Membrane&) seg;
+      // If we can't init, let's not signal. Does that work for you?
+      mb.resetDCs();
       //      mb.die();
       return true;
     }
