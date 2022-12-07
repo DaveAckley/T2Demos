@@ -1,4 +1,4 @@
-{621}  -*-  mode: text; fill-column: 50;  -*-
+{649}  -*-  mode: text; fill-column: 50;  -*-
 [0:
 
 Thu Sep  1 23:47:45 2022 OK so OK so OK come on.
@@ -8797,7 +8797,7 @@ Maybe does?
 
 Sun Nov 20 08:04:43 2022 OK so I got crap to build
 again, but lots of things are torn up. OnDSAxes
-half-still-exists but is certainly broken; 
+half-still-exists but is certainly broken;
 Zone and XZone exist in a bunch of places but
 isn't plumbed in.
 [548:
@@ -8814,7 +8814,7 @@ ancient ancient code.[550:
 
 Sun Nov 20 08:15:08 2022 The main source of
 elaborated truth in QHardCellState is its
-mHC3State data member, which now has stuff like: 
+mHC3State data member, which now has stuff like:
 
       // values from the Intender
  ..
@@ -8941,7 +8941,7 @@ do, but they're taking their sweet time about it.
 Sun Nov 20 16:19:26 2022 OK, I see MBase's getting
 created in (our shiny new)
 
-  Bool stabilizeSpawning(QHardCell & qc) 
+  Bool stabilizeSpawning(QHardCell & qc)
 
 in QHCS. It's under
 
@@ -9090,7 +9090,7 @@ because we only look updshops to find zone info,
 and dshops poops out at 7u, the zone info seems to
 go wacky at the periphery.. I mean, I know that's
 what we signed up for and all, but..
-:586] 
+:586]
 
 :585]
 [587:
@@ -9350,7 +9350,7 @@ set them:
         .mTQMap = 0x6, // set target quad NE (1<<1) + SE (1<<2)
         .mSRMap = 0x3, // set size ranges _S (1<<0) + _M (1<<1)
       },
-    }; 
+    };
 
 and got that to apparently work.
 
@@ -9407,7 +9407,7 @@ and the rule is like:
 
 Fri Nov 25 01:39:45 2022 OK, made
 
-  PocketDir xzoneAndPatchDir2TargetQuadrant(XZone xz, PocketDir patchdir) 
+  PocketDir xzoneAndPatchDir2TargetQuadrant(XZone xz, PocketDir patchdir)
 
 in DTU; seems plausible if aggravating that it
 exists after all the other conversion methods
@@ -9577,7 +9577,7 @@ I inserted an LXDo meant for the daughter DS,
 followed by an LXCopy. The intention is to set up
 a 'catcher' in the daughter, that receives the
 incoming codons and recreates the program in the
-daughter. 
+daughter.
 
 The LXDo successfully regripped the daughter and
 set the (was X now) I stream to advance. But the I
@@ -9620,8 +9620,498 @@ PUIs aren't found, though. May have to bail.
 [620:
 
 Thu Dec  1 13:46:54 2022 OK, refactored to pull
-QCtorArm out of LXCtorArm, ahead of going for 
+QCtorArm out of LXCtorArm, ahead of going for
 'biological' ctor arm code. Now apparently working
-as before. Committing WIP.
+as before. Committing WIP.[621:
+
+Thu Dec  1 13:57:29 2022 OK committed. Let's go
+for 'biocode' and see how we do.
+[622:
+
+Thu Dec  1 15:41:19 2022 Well getting there. We've
+made 'LXBioCtorArm', with the symbol BC, which can
+hold up to seven 'BOpCode' bio-operation
+codes. And we've converted the ancestor to use two
+BCs instead of one CA (which has been renamed 'SC'
+for 'String Constructor'.)
+
+And we've observed the first BC get to XEQ and
+start building the arm, but then the second BC
+destroyed it as part of its built-in reset/init
+operations. So we changed the loader so that the
+second BC started with mPC 0u instead of 255u.
+
+And starting at 0 did successfully bypass the ctor
+reset operation. But now we're just blocking
+because the second BC's .mSeqNo isn't synced to
+the existing arm's seqno.
+
+We need, I think, to do the following:
+ - Create a local op to do the reset and arm
+   creation, on demand
+
+ - Create a local op to sync up with an existing
+   arm
+
+ - When mPC is 255, do the second if an arm exists
+   and the first if it does not.
+
+Not sure what happens in the first two cases if
+there is or isn't an existing arm, respectively.
+
+[623:
+
+Fri Dec  2 08:06:19 2022 Now it's not clear to me
+how we'll do the 255 split dynamics, there,
+because reset/init is not atomic. Sync-ing with an
+existing arm could be dynamic, though, but is that
+enough for both?[624:
+
+Fri Dec  2 08:27:36 2022 At the moment we've got 8
+full bits for the program counter, but the biggest
+program we've written is like 20 instructions or
+so. I think we could steal a few more values at
+the top, say 251-255 anyway, without a lot of
+pain. That way we could have some hardcoded
+sequencing during program startup.
+
+255 startup, arm detect: 0 -> 254, 1 -> sync -> 0
+254 killing PUs -> 253
+253 empty -> init SW3 -> 0
+252 rsrv
+251 rsrv
+
+[625:
+
+Fri Dec  2 08:44:55 2022 Well that seems almost
+plausible. Aaand could we take like 251 as meaning
+exit?
+
+I guess cLOP_RST couldn't use this 'address
+semantics' since it's in the programmable
+sequence, so we'd need access to the killpus+empty
+init such some other way as well.
+
+(Right now the killPUs + the empty/init both
+complete in a single event, so it's not completely
+clear 254 and 253 have to be distinguished.)
+
+[626:
+
+Fri Dec  2 09:08:39 2022 Well let's try this. It's
+our third go (at least) through LXCtorArm startup;
+I'd like to get it solid for once.
+
+To review (hopefully), how do we distinguish
+between entering an instruction and waiting for
+instruction completion? We have to initiate the
+instruction's action on the same event the mPC
+changes? So starting up with a given mPC value
+always means we're waiting for getOp(mPC) to
+complete?
+
+It would be nicer if we had an mWaiting toggle or
+something, so changing mPC would mean
+
+gotoPC(address) {
+ mPC = address; mWaiting = false;
+}
+
+and then we could quit. On the next event, we
+discover we're 'initiating' (since !mWaiting) and
+we do whatever it is. If it completes atomically,
+like for a localop, we then do gotoPC(nextaddr)
+and we're done; if not, we set mWaiting and then
+take a separate path next time.
+[627:
+
+Fri Dec  2 10:02:35 2022 Well, we added an
+mWaiting flag, and now LCBioCtorArm has precisely
+0 bits remaining. Let's try to activate all some
+of this new stuff..
+[628:
+
+Fri Dec  2 10:05:27 2022 Ah so, we did have an
+mWaiting-ish mechanism already, doh, without
+taking up a bit: If our seqno matches the
+arm(down) seqno, we're dispatching a new insn,
+otherwise we're blocking until the instruction is
+complete.
+
+That works as long as all local ops complete
+atomically, so we never need to block. Is that
+true? Well, we've now manifested cLOP_LRST, which
+would clearly not be atomic..
+[629:
+
+Sat Dec  3 03:54:07 2022 OK, QCTorArm execution is
+starting to seem plausible, and we have a pair of
+(in principle evolvable) LXBioCtorArm atoms in the
+loader now successfully doing what the single
+(String-based therefore 'physics') LXCtorArm used
+to be doing.
+
+Pop pop big fun pop.
+[630:
+
+Sat Dec  3 03:58:49 2022 Next up after second
+sleep:
+
+ - LXCommandDS: Loader is doing one but it's not
+   implemented. Not 100% clear right now what it's
+   supposed to do. Figure that out.
+
+ - PatchRules: We need a shrink rule that accepts
+   two ECs in any of the four positions and
+   collapses it down to just the non-ECs in
+   sequence. Shrinking is currently too hard.
+
+[631:
+
+Sat Dec  3 09:17:45 2022 OK so we're once again at
+initting the daughter copy inbound process, and we
+need new physics for it. We are getting the first
+instruction executed in the daughter, but the
+problem is: Since that insn isn't part of a loop,
+we have no mechanics to rotate it out of the XEQ
+DSP. So 'the obvious' thing to do is deploy
+something other than the LXDo that we just
+deployed - something that does all the setup at
+once:
+
+ - inits a 'daughter loader loop' in, say, REG
+
+ - regrips the daughter DS to REG <-> XEQ
+
+ - 'consumes' itself on the inbound line by
+   changing it to a downbound temp.
+[632:
+
+Sat Dec  3 10:55:56 2022 OK, need to break for
+other stuff this aft, so, current status:
+
+ - Making DaughterLoader.ulam patterned on Loader
+
+ - Was thinking I could 'do it all' in
+   LX.perform(dss), but I can't, because a DS ew
+   can't confirm DaughterLoader has two ECs on
+   either side.
+
+ - So need to rewrite. Thinking:
+
+   = perform sets flag when next instruction
+     available
+
+   = behave sees flag and searches mSrc pocket to
+     consume instruction, clears flag, finishes,
+     etc.
+
+[633:
+
+Sun Dec  4 01:15:05 2022 Well, have been
+implementing this, but kind of not seeing the
+point of 'instruction available' flag. If the
+DaughterLoader is in XEQ..
+
+Wait I think I see that basic issues:
+(1) DaughterLoader is different from Loader
+    because DL loads insns from the ew, while Ld
+    plucks insns out of thin air - out of the
+    physics. So DL, as currently construed, needs
+    to see the source pocket PLUS both its up and
+    downstream.. and that's not possible in
+    general.
+
+(2) BUT: The reason Ld insisted on seeing two ECs
+    was to guarantee there'd be at least one EC
+    after loading, to have room to spawn a
+    ShapeShifter to grow the loop.
+
+BUT: WE DON'T USE Sf ANYMORE. We don't have to
+g'tee an EC for the loop to be growable.
+
+[634:
+
+Sun Dec  4 01:24:25 2022 So we should rethink
+DaughterLoader yet again (a third time? fourth?).
+
+We should go back to viewing DL as a version of
+LXCopy rather than Loader.
+
+Init DL: When executing an 'unflagged' DL:
+(1) Reset REG if necessary
+(2) Init loop on OUT if necessary
+(3) Copy DL to REG and flag the copy
+   (3a) Optionally consume original DL?
+(4) Regrip XEQ->INP, REG->XEQ, INP->REG
+
+Run DL: When executing a 'flagged' DL:
+(1) Find non EC on INP, rolling if needed
+(2) Find EC on OUT, rolling if needed
+(3) Copy INP -> OUT, EC -> INP
+(4) If terminating marker..
+
+[635:
+
+Sun Dec  4 01:42:52 2022 Opps, if we don't do Ld
+style hog-the-DSP, how do we ensure only an EC
+rolls into OUT? We can't allow non-EC to pass
+through the DSP or we blow the sequence.
+
+Does OUT maintenance already do that somehow?
+Accepts ECs from either direction, but only ECs? I
+feel like we had a function that was supposed to
+do that, but I don't immediately remember ever
+implementing that.[636:
+
+Sun Dec  4 01:48:04 2022 Yeah what does
+cDSTATUS_TEMP actually do?[637:
+
+Sun Dec  4 01:49:02 2022 Well, we see:
+
+LXCopy.ulam:66:      markDSPForRotation(dss, 0u, mDstPU, cDSTATUS_TEMP);  // ask dst for empty spot
+
+and we have LXCopy deployed so something must kind
+of exist..
+
+Also
+
+    markDSPForRotation(dss, 0u, mDstPU, cDSTATUS_TEMP);  // ask dst for empty spot
+
+at LXCopy.ulam:83
+
+[638:
+
+Sun Dec  4 01:50:37 2022 Ah okay: At
+Codon.ulam:302-402 we appear to implement
+cDSTATUS_TEMP, with cases like:
+
+(1) If OUT has EC, go IDLE
+(2) If OUT is any temp (mDSType == cDS_DOWN or cDS_UP)
+    replace it with EC and go IDLE
+(3) If OUT is mDSType_NORM (mobile nontemp)
+    and down is some mDSType == cDS_UP,
+    then replace down with an EC,
+    then swap OUT with down,
+    then go IDLE
+(4) If OUT is mDSType_NORM (mobile nontemp)
+    and up is some mDSType == cDS_DOWN,
+    then replace up with an EC
+    then swap OUT with up,
+    then go IDLE
+
+And it seems clear that's buggy. That we can't
+allow both (3) and (4), right? Because that
+implies a real codon might exit upstream or
+downstream, depending on circumstances, producing
+a shuffled sequence.
+
+The only reason the existing deployment works is
+because it's storing into an open chain, not a
+loop.
+
+[639:
+
+Sun Dec  4 02:05:58 2022
+
+I think we have to
+
+(1) pick an injection direction,
+(2) that is compatible with the existing open
+    chain use, and
+(3) deimplement whichever (3) or (4) of :638: goes
+    in the wrong direction, and
+(4) Add a 'convert cDS_UP to cDS_DOWN' (or vv,
+    whichever is right) instead of the
+    deimplemented operation.
+
+THEN rewrite DaughterLoader yet again.
+
+But nap now.
+[640:
+
+Sun Dec  4 07:20:48 2022 OK, it appears that
+getting rid of this case in Codon.stabilize(..):
+
+      // (3) if reachable layout is   [X] -> U
+      //     switch to                [F] -> X
+      //     and set _IDLE
+
+doesn't kill the open-chain LXCopy deployment. So
+maybe I think we want, instead, something like:
+
+      // (3) if reachable layout is   [X] -> U
+      //     switch to                [X] -> D
+      //     and stay in TEMP
+
+to help send temps around the loop to where we
+need them.
+[641:
+
+Sun Dec  4 07:36:34 2022 OK well that's roughed-in
+at least. In a bigger redesign I wonder if we want
+the 'get temp' rules to vary systematically across
+the ProcUnits. Like:
+
+    Get temp on OUT: Do what we just made
+    Get temp on INP: Do reverse of what we just made
+    Get temp on REG: Do either one opportunistically
+    Get temp on XEQ: (? Act like INP? )
+
+But I'm for sure not going there now. (If we ever
+get to fixing the currently-broken the
+multi-pockets-same-func stuff, we might think
+about adding this then.)
+
+:641]
+:640]
+:639]
+:638]
+
+:637]
+
+:636]
+
+:635]
+
+:634]
+
+:633]
+
+:632]
+:631]
+
+:630]
+:629]
+
+:628]
+:627]
+:626]
+:625]
+:624]
+
+:623]
+:622]
+
+:621]
 
 :620]
+[642:
+
+Sun Dec  4 07:57:26 2022 OK, I think we're up to
+rewriting DaughterLoader again as sketched in
+:634: above.
+
+[643:
+
+Sun Dec  4 13:25:02 2022 OK we're getting closer
+to seeing DaughterLoader out in the world. I made
+this 'Looper' element to pop out a mated pair of
+ECs, and was thinking of using it to initialize
+the code-receiving loop in the daughter - but
+Looper doesn't check (at the moment anyway) for
+pockets being DSP, so I was afraid it might pop
+out and bridge two DSPs (like L1 does sometimes
+way at the beginning) and cause troubles.
+
+But just now I had the idea that I could hack
+around that by placing the daughter Loader in the
+pocket that Looper might otherwise be tempted to
+pop into.
+
+So, right now, the initial daugther DS ends up
+gripped like this:
+
+    OUT    XEQ
+       dDS
+    INP    REG
+
+with codons from the mother arriving in the
+NE. Suppose we got it to end up like this:
+
+    REG    INP
+       dDS
+    XEQ    OUT
+
+by swapping XEQ<->INP and OUT<->REG.
+
+The Looper would be deployed in OUT, but would
+have to deploy E or S, since N and W are
+occupied. So the (sigh atomic) result of dL's
+first execution in the daughter would be
+
+  empty    inbound codons
+    REG    INP
+       dDS
+    XEQ    OUT
+    dL      LP
+ deployed
+
+[644:
+
+Sun Dec  4 14:52:29 2022 Well a small fly in that
+ointment is that we were deploying the LP and then
+waiting for it to become ECs before completing
+deployment of the DL. So the idea of blocking out
+the DSP won't work in that case.
+
+So what about completing deployment atomically,
+but then having the deployed DL wait for an EC?
+
+Let's give it a shot.[645:
+
+Sun Dec  4 15:45:30 2022 OK, we've finally got as
+far as DL.performDeployed(dss), where we blow up
+because it's unimplemented.
+[646:
+
+Mon Dec  5 01:24:10 2022 Aaand now we've actually
+copied a bunch of code from the mother to the
+daughter! (See 20221204202408.mp4 in
+3133-20221206!)
+
+[647:
+
+Mon Dec  5 01:30:14 2022 Adding two more w ahead
+of daughter DS deployment. Will see how it looks.
+
+But we are very close to needing more ancestor
+behavior.
+
+And 'all' my worries are looking ahead to diamond
+cutting..  
+
+:647]
+
+:646]
+
+:645]
+
+:644]
+:643]
+:642]
+[648:
+
+Wed Dec  7 00:53:29 2022 OK it's all about diamond
+cutting. For the last couple days I've been
+thinking about a new 'partition' element just to
+help with the cutting: Something that would
+replace certain sections of HG, on command, with a
+non-HG thing that would
+
+(1) Be seen as an obstacle to move away from, and
+(2) Prevent HG from confusing each other from
+    across the partition
+
+Deployment of a partition would need to be done
+'simultaneously' with deploying a new root on
+whichever side lacks one.
+
+My main worry about all that is getting HG not to
+deadlock while backing away from something that
+deep within it. But I have an idea maybe for
+dealing with that.
+
+Maybe. Maybe maybe.
+
+:648]
