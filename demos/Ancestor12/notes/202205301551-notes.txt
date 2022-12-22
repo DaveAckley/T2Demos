@@ -1,0 +1,1269 @@
+{76}  -*-  mode: text; fill-column: 50;  -*-
+[48:
+
+Mon Jun 13 02:33:33 2022
+
+ - Pocket content should typically diffuse within
+   the pocket, to reduce deadlock in general, and
+   to proactively erase the spatial information
+   within the pocket, preventing dependence on it.
+
+:48]
+[46:
+
+Sun Jun 12 23:51:55 2022 Working towards adding
+the 'settled down distance', and noting that while
+I think it's nice and I can't not try it, it's not
+the same as the recursive bool allSettledDown,
+because it can't distinguish a transient settled
+down distance < maxhops from a persistent one, for
+example due to environmental inaccessibility. We'd
+need also a min max hops, or an all settled bool,
+or whatever.
+
+[47:
+
+Mon Jun 13 00:15:37 2022 Let's add a min maxhops
+as well. That will give us a 'distributed body
+shape representation' within the grid, as well as
+the "undamaged and complete" signal at the root.
+
+:47]
+
+:46]
+[31:
+
+Thu Jun  9 23:46:07 2022 OK, post t2sup, let's try
+to clean this up a bit and then think about adding
+something..
+[32:
+
+Thu Jun  9 23:48:05 2022 OK first question: What
+do we really want to know about each ngb?
+
+State:
+
+ - alignment  0..4
+ - empty      5
+ - conflicted 6
+ - uninit     7
+
+Maybe 'possible alignments'? Bits indicating which
+of 0..4 sites are empty? Might be a way to detect
+blocking. (Which we think we're going to use as a
+stigmergic way for grid occupants to partially
+control grid movement.)
+
+Hopcount.
+
+:32]
+:31]
+[0:
+
+Mon May 30 15:51:31 2022 OK, into another spike
+trying a self-stabilizing periodic grid. Falls
+toward distance 2 spacing (or distance 3
+possibly?) to nearest up-hop neighbor. Goal is we
+should be able to drive the whole thing around by
+oogying the root by single sites and letting the
+rest of the grid relax to it.
+[1:
+
+Mon May 30 16:19:13 2022 I'm currently tracking
+the nearest upstream and downstream members,
+manhattan distance, regardless of the specific
+difference in the hop count. That way we can see
+an even smaller hopcount on the diagonal, but we
+won't be thrown off by it.
+
+Not sure what we want to be doing if we're
+uninitted. I guess everybody will look upstream at
+that point and we'll find the nearest, which kind
+of seems okay.
+
+Now, what do we do when we find we're not properly
+aligned with our chosen upstream? How do we decide
+where we want to be? We check the dist2 ngbs of
+the upstream (the ones we can reach) and pick the
+one that's empty and nearest to us, and go there.
+
+:1]
+:0]
+[2:
+
+Tue May 31 08:03:21 2022 OK so we're still
+screwing around with what stats to collect and
+what to do when we're somehow unaligned. If we
+always opt for death when anything looks weird
+we're kind of back to 'vegetative motion' rather
+than 'locomotion'. So we do want to try to move
+ourselves to better align with upstream, instead
+of dying, at least sometimes.
+
+Right now we're bucketing all upstream guys, but
+maybe we should focus just on one-hop upstreams.
+
+:2]
+[3:
+
+Tue May 31 13:22:23 2022 OK, about time to move
+the flag, but, progress. Things to be thinking
+about next:
+
+ - We can't align to upstream until our downstream
+   aligns with us. That's how we get upstream
+   backpressure to slow down as needed.
+
+ - Having raggedy random shapes, rather than
+   necessarily self-stabilizing to maxhops, looks
+   kind of fun and interesting. They're what I've
+   been hand-drawing so far, for in-progress
+   demos. Could have a minHops instead, that will
+   be maintained endogenously, but which stuff
+   could grow beyond opportunistically.
+
+:3]
+[4:
+
+Wed Jun  1 01:00:30 2022 Flag moved. So I'm
+wondering if we have a problem with when
+downstream misalignment blocks us: If we're at
+hops==h, what if something at h+1 has already
+moved, based on seeing some other HC at h? Then
+the h+1 looks misaligned relative to us, but it
+shouldn't block us, because it's already aligned
+to where we'll be once we align.
+
+So how do we tell when downstream should block us?
+
+Say letters as hops:
+
+   .B A B    .B  AB   . B AB   B AB  . B AB
+
+    C B C     C B C    C B C  C  BC   C  BC
+
+      C         C        C      C        C
+
+
+ . B AB    . B A B    . B A B
+
+  C  B C    C  B C      C B C
+
+     C         C          C
+
+[5:
+
+Wed Jun  1 08:55:28 2022 OK so the upshot from
+last night is we're going to try focusing on the
+four von Neumann neighborhoods adjacent to us:
+
+          .
+         .2.
+        .104.
+       .2.3.2.
+      .104*104.
+       .3.2.3.
+        .104.
+         .3.
+          .
+
+and record state for each one:
+
+ - 0..4 next up alignment, 5 if none, 6 if multiple ups
+ - 0..4 next down alignment, 5 if none, 6 if multiple downs
+
+[6:
+
+Wed Jun  1 09:04:03 2022 Which seems to suggest we
+could do stride 3 if we wanted:
+
+          2
+         104
+        ..3..
+       2.....2
+      104.*.104
+       3.....3
+        ..2..
+         104
+          3
+
+which is interesting, at least because it (reduces
+density and thus) increases the space multiplier
+significantly.
+[7:
+
+Wed Jun  1 10:21:24 2022 OK, saved to
+HardCell.ulam-hold and trying stride 3. Let's redo
+doStats..
+[8:
+
+Thu Jun  2 01:15:49 2022 Gah lost a lot of time with
+screwed-up meeting times and what not. Now trying
+again..
+
+:8]
+:7]
+:6]
+
+:5]
+
+:4]
+[9:
+
+Thu Jun  2 01:17:03 2022 So, repeat:
+
+          2
+         104
+        ..3..
+       2.....2
+      104.*.104
+       3.....3
+        ..2..
+         104
+          3
+
+quark NgbState {
+  typedef Unsigned(3) State; // 0..4 -> alignment, 5 -> empty, 6 -> conflicted
+  Bool mIsUp; // direction if mState <= 4;
+  Unsigned XXX CONTINUE HERE
+  State mState;
+
+}
+
+
+:9]
+[10:
+
+Thu Jun  2 03:33:37 2022 OK, have a first cut at
+'transient NgbState'. Need to declare some and
+call it..
+[11:
+
+Thu Jun  2 05:03:52 2022 wut I'm getting g++
+compiler errors?[12:
+
+Thu Jun  2 05:39:45 2022 Sent ishtar..
+
+:12]
+
+:11]
+
+:10]
+[13:
+
+Thu Jun  2 05:39:58 2022 OK, so I tested
+NgbState.doStats(..) in one case and it now looks
+vaguely plausible. [14:
+
+Thu Jun  2 05:53:58 2022 Actually had several bugs
+:) but now is looking vaguely plausible.
+
+:14]
+
+:13]
+[15:
+
+Thu Jun  2 10:16:54 2022 OK let's think about some
+cases.
+
+ - Unaligned downstream:
+   = Wait for them to align with us[17: Fri Jun  3
+   02:04:33 2022 Apparently done  :17]
+
+ - Unaligned upstream:
+   = If no unaligned downstream, try to align
+     - Or do we have to check for 'no differently
+       unaligned downstream'?[18: Now doing 'block
+       if downstream unaligned with us and with
+       upstream, but not confident in it   :18]
+
+ - Empty ngb
+   = Think about spawning[19: Up now..  :19]
+
+ - Root with no unaligned downstream
+   = Think about moving
+
+:15]
+[16:
+
+Thu Jun  2 10:25:31 2022 So, do we have/want to
+think about 'no differently unaligned downstream'?
+On the one hand, the claim is: No we don't,
+because we're going to do consensus anyway -- The
+downstream can't have aligned with some other
+upstream. Buut we didn't check for that, did we?
+Need something like:
+
+ - Unaligned upstream:
+   = If conflicting upstream misalignments, die shot?
+   = Now we have just one 'unalignment direction'
+     (though perhaps from multiple upstreams)
+   = If no unaligned downstream, try to align
+     - Or do we have to check for 'no differently
+       unaligned downstream'?
+
+:16]
+[20:
+
+Fri Jun  3 11:09:52 2022 OK, so current status:
+
+ - Root can move in four directions, but it has to
+   move slowly, because making a second move
+   before the first has settled can (still) lead
+   to (essentially) deadlock
+
+ - Not sure if that's because of a bug or a
+   thinko. Smart money thinks 'both'.
+
+ - Inside track on thinko is the diagonal corners:
+   When upstream sees downstream as all aligned,
+   that doesn't mean downstream's downstream is
+   all aligned, so it's possible that diagonal
+   corners end up within a Moore ngb and that
+   seems to deadlock.
+
+ - We also have issues with 'incorrect spawning'
+   in the middle of a grid -- like once we had a
+   double-move as above, causing stacked pairs
+   (two HC within a von N ngb) which are never
+   supposed to happen according to the intended
+   path.
+
+ - Right now we have background evaporation of
+   certain deadlocked cases (like stacked pairs),
+   but that's slow and (since it's random) not
+   certain to solve the problem without creating
+   others.
+
+The overall picture, just staring at it, is that
+we don't have a clear and unique chain of
+command from the root -- perhaps/seemingly because
+of the 2D nature of the layout vs the 1D nature of
+the hopcount.
+
+We've been wondering whether a concept of 'settled
+downstream' -- sort of like a Markov blanket (in
+the non-BS sense) -- could provide enough spatial
+buffering to avoid these problems. It would be
+that each HC has a 'mSettledDownstream' bit, which
+would be true only if:
+
+ - No uninitted HC are visible, and
+
+ - All HC downstream are aligned
+
+and false otherwise.
+
+But in particular we are not including
+
+ - All HC downstream are settled
+
+as a condition, so mSettledDownstream is not
+recursive and only goes one level.
+
+[21:
+
+Fri Jun  3 12:52:01 2022 One could imagine a
+mSettledUpstream bit, as well, that might gate
+actions like spawning (?).
+[22:
+
+Fri Jun  3 14:33:31 2022 Well let's spike a
+recursive mSettledDownstream, just to see if we
+can get this going here.
+
+Idea:
+
+ - Clone to HardCell1011
+
+ - Keep hacking here, see if we like anything
+
+:22]
+:21]
+
+:20]
+[23:
+
+Sat Jun  4 00:53:57 2022 OK, HardCell1011 split
+off.
+
+Now hack.
+
+:23]
+[24:
+
+Sat Jun  4 00:57:25 2022 OK, added QHardCell API
+methods and HardCell.mSettledDownstream. Now,
+where does it get used?
+[25:
+
+Sat Jun  4 00:58:49 2022 Can we make an
+NgbState.mSettled? Does that help? Conditions:
+
+:25]
+:24]
+[26:
+
+Sat Jun  4 01:41:07 2022 OK, now have
+NgbState.mSettledDown being set up during
+ngbStats(..). Untested. Need a caller.
+
+:26]
+[27:
+
+Sat Jun  4 03:11:58 2022 OK so it's kind of
+running -- and it's doing better than it was --
+but there's still issues. It's still possible for
+our downstream to move before we do, with the
+result that our downstream looks unsettled to us,
+but that's our misperception because we haven't
+aligned upwards but it has.
+
+Right now, that deadlocks until a blockOrDie hits
+die, and the (eventual) respawning (often, at
+least) gets things going again.[28:
+
+Sat Jun  4 03:54:29 2022 Well, I'm going to let
+this simulation run awhile, see how the quadratic
+time animation looks.
+
+When hardcells run into each other, we can get
+very long deadlocks, at least. And right now,
+there's no pressure for HCs to move apart.
+
+:28]
+
+:27]
+[29:
+
+Thu Jun  9 12:26:32 2022 OK, so trying to clean up
+the 'standard demo build process' a bit so we can
+move directories between mfmt2 and mfms builds
+without having to edit (much of) anything.
+
+Have added ../Make-dispatch.sh to check uname info
+and decide what to do; have added separate
+Makefile-t2.mk's and Makefile-mfms.mk's to code/
+
+Sort of seems to be working.[30:
+
+Thu Jun  9 12:53:06 2022 OK, trying to commit this
+to T2Demos..
+
+:30]
+
+:29]
+[33:
+
+Sat Jun 11 00:30:21 2022 OK just starting a new
+HardCell.ulam from scratch using existing
+learnings and we'll see how much cleaning we
+manage to do.
+[34:
+
+Sat Jun 11 00:31:11 2022 Methods for NgbState:
+
+ - ngbStats: compute stats for offset
+ - Bool
+
+actually let's ask about methods for QHardCell
+first..
+
+ - Well what about 'settled downstream'? If we're
+   cleaning up, that would be something to be
+   examining.
+
+Originally we wanted to be able to take additional
+moves before a first compression wave had
+necessarily reached the periphery. But we ran into
+unhandled cases when our grandkids showed up in
+unexpected places due to double-moves on our part.
+
+So we thought that if we had a signal from our
+kids saying that their kids were aligned with
+them, we could step again.
+
+And we're still not sure that isn't true. But for
+t2sup3122 we made the downstream alignment check
+be recursive, so only a single shock wave will be
+propagating in an HC3 grid at a given time.
+
+And it does seem like we want to be able to know
+that, which possibly argues for multiple flags,
+one recursive and one not.
+[35:
+
+Sat Jun 11 00:48:58 2022 Suppose the spatial
+invariant is another hopCount -- a more dynamic
+one: Downstream Hops All Aligned With Me.
+
+[36:
+
+Sat Jun 11 00:59:42 2022 Try again.
+
+Call it mAlignedDownRadius
+
+Unsigned downAlignCounts[5]; // # downs on each alignment
+Unsigned totalDown = 0;      // sum up downAlignCounts
+Unsigned minDownRadius = Unsigned.maxof;
+
+for each ngb n:
+  if n not down continue // empty, up, etc
+  ++totalDown
+  align = getAlign(nposition)
+  ++downAlignCounts[align]
+
+
+[37:
+
+Sat Jun 11 02:20:09 2022 Ah what if we compute
+'min radius compatible with me being at X'? With
+mAlignedDownRadius then being just a shorthand for
+'mDownRadiusAtAlignment[0]'?
+
+Would that allow us to deal with both the 'root
+motion decision' (using mDownRadiusAtAlignment[0])
+and the 'middleman motion decision' (using both
+mDownRadiusAtAlignment[0] and
+mDownRadiusAtAlignment[proposedUsAlign])?
+
+The idea is we could integrate downstream ngb d's
+mDownRadiusAtAlignment[0] into our
+mDownRadiusAtAlignment[d.align]
+
+Maybe?
+
+It's just aggravating to be thinking about
+downstream being aligned all the time, but then
+having to include "OR aligned with our
+destination" in that one case.
+
+:37]
+
+
+:36]
+Maybe call it mAlignedDownstreamHops.
+
+(1) When scanning, notice all downstream ngbs d,
+    and if d is aligned, do
+      minaligndown = min(d.mAlignedDownstreamMops)
+      downAlign++
+    but if d is unaligned do
+      downUnalign++
+
+(2) If downCount == 0 || downUnalign > 0
+      self.mAlignedDownstreamMops = 0
+    else
+      self.mAlignedDownstreamMops = minaligndown+1
+
+(3) When I move, set my mAlignedDownstreamHops = 0
+
+:35]
+
+:34]
+:33]
+
+[38:
+
+Sun Jun 12 00:53:15 2022 OK, ugh, importing a
+bunch of notes from a 'fresh' directory.
+
+[
+-----------------
+[:
+
+Sun Jun 12 00:10:47 2022 Going to try to make HC3
+move the pocket contents, or block if it's more
+than half full. Let's see how it looks.
+
+[:
+
+Sun Jun 12 00:11:59 2022 But first, argh, refresh
+the grid motion rules. We have to clean this up!
+
+:]
+:]
+[:
+
+Sat Jun 11 15:44:00 2022 OK so could we have a
+loop worm that lives two atoms per HC3 pocket,
+like this:
+
+     H..H..H..H
+     .1 .3 .5 .
+     . 2. 4. 6.
+     H..H..H..H
+     .b .9 .7 .
+     . c. a. 8.
+     H..H..H..H
+
+and the HC3 squish the pocket contents when
+a compression wave comes through -- that's
+why there's no more than two atoms per
+pocket.
+
+ H..H..H..H  H..H..H..H  H...H.H..H  H...H.H..H
+ .1 .3 .5 .  .1 .3 .5 .  .1  .3.5 .  .1  .3.5 .
+ . 2. 4. 6.  . 2 .4. 6.  . 2 .4. 6.  . 2 .4. 6.
+ H..*..H..H  H...*.H..H  H...*.H..H  H...*.H..H
+ .b .9 .7 .  .b  .9.7 .  .b  .9.7 .  .b  .9.7 .
+ . c. a. 8.  . c. a. 8.  . c. a. 8.  . c .a. 8.
+ H..H..H..H  H..H..H..H  H..H..H..H  H...H.H..H
+
+ H...H..H.H  H...H..H.H  H...H..H.H
+ .1  .3 .5.  .1  .3 .5.  .1  .3 .5.
+ . 2 .4. 6.  . 2 .4. 6.  . 2 .4. 6.
+ H...*.H..H  H...*..H.H  H...*..H.H
+ .b  .9.7 .  .b  .9 .7.  .b  .9 .7.
+ . c .a. 8.  . c .a. 8.  . c .a .8.
+ H...H.H..H  H...H.H..H  H...H..H.H
+
+[:
+
+Sat Jun 11 16:09:43 2022 OK could we say that each
+HC3 'owns' the Moore neighborhood around it, which
+includes four 'pocket' sites plus four 'grid'
+sites? With the idea that it will carry the four
+pocket sites with it when it moves?
+
+Then the challenge becomes: When an HC3 and its
+Moore ngb moves, it will now be overlapping the
+Moore ngb of the HC3 it's moving towards (until
+that HC3, in turn, moves.) If any of the to-be
+overlapped pocket sites are both occupied, what
+happens?
+
+If we declare that the pockets have no relative
+spatial structure, then we could always rearrange
+things so long as the pocket was no more than half
+full. If a pocket destination site was occupied,
+push its content elsewhere in the pocket to make
+room. As long as the pocket's only half full there
+will be room to do it.
+
+Of course this totally violates the "doesn't even
+look at the pockets" claim that I was crowing
+about in t2sup3122. But it's kind of interesting
+in positing a local non-determinism for relative
+positions within a pocket. So if a couple atoms
+cared about their relative positions -- like a
+SingleQuotedAtom, for example -- they wouldn't
+work as is in this environment. They could find
+their other half by some combination of tags and
+understanding the HC3 pocket structure, but they'd
+have to do something.
+
+I could see PocketAtom being a form of single
+quote designed to live in an HC3 pocket, and
+have PocketAtomFront/PocketAtomBack subclasses to
+split the load. And they would not GAF where
+within a given pocket they were.
+
+Now, could they really handle 'worming' duties in
+such a condition? The 'outer corner' of a pocket
+(say at (2,-1)) cannot see all the way across a
+neighboring pocket (say to (-2,0)). So a
+PocketAtomBack in one pocket might not be able to
+reach the PocketAtomFront in an adjacent pocket at
+all.
+
+:]
+
+:]
+[:
+
+Sat Jun 11 10:35:39 2022 So there's a recurring
+pressure I encounter whenever I try to do an
+instruction set for a passive programming thing:
+On the one hand I start out trying to define
+bit-pattern opcodes, which I imagine packing into
+'codons' or 'instruction words' or something.. but
+then I flop over onto the other hand and say why
+not have an 'instruction' just be a completed atom
+that inherits from Instruction and provides an
+'execute(..)' method, and no explicit opcode is
+needed.
+
+And saying it aloud like that, I guess the answer
+is that the ulam type numbers are supposed to be
+internal somehow? So if we were broadcasting code
+somehow .. but how and where would we do that? We
+can still copy code within the MFM by copying
+atoms, and "that's all we need".
+
+[:
+
+Sat Jun 11 10:46:47 2022 So we're saying an
+interpreter is kind just a rendezvous point and a
+magic finger saying "do your thing now, at this
+place and time and with respect to this temporary
+storage.
+
+:]
+
+:][:
+
+Sat Jun 11 10:09:03 2022
+
+quark Instruction {
+  typedef Interpreter.InstructionStatus IS;
+  virtual IS execute(Interpreter & int) ;
+}
+
+quark Interpreter {
+  typedef Unsigned(2) Status;
+  constant Status cFETCH = 0u;
+  // Interpreter API
+  virtual Atom & instruction() ;
+  virtual Atom & input() ;
+  virtual Atom & output() ;
+
+  // Interpreter SERVICES
+  Status update() {
+    Atom & ains = instruction();
+    if (! (ains as Instruction) ) return cFETCH;
+    Instruction & i = (Instruction&) ains;
+    return i.execute(self);
+  }
+}
+
+[:
+
+Sat Jun 11 11:36:15 2022 So I guess one story is
+that the normal instruction fetch + data read +
+execute + data write + status out loop is partly
+based on RAM being relatively remote. We're
+thinking that we've already pulled everything we
+need close so we can execute atomically?
+
+Also I'm thinking what about AtomDeque? That seems
+like a nice controlled spatial layout for a
+circular data structure. Maybe we should think
+about a free-space AtomQueue? Or a HC3 tailored
+one? How about that? Take a pair of pocket sites
+for an SQ, and a third for an atomdeque manager to
+do the pushing and popping.
+
+Can we have each (say) SW corner HC3 'own' all
+four of the pocket sites in its 3x3? And always
+automatically move them when it moves?
+
+:]
+
+:][:
+
+Sat Jun 11 04:21:29 2022
+
+TWO-TAPE MACHINE INSTRUCTIONS
+
+PUSH
+
+what if you have registers
+in the diago ngbs
+
+what is the
+
+PROMPT: For the interpreter
+
+- Single atom for instruction sequencing
+  and r0
+
+- the interpreter atom dispatches to (and thus
+  momentarily 'dequotes') the instruction; the
+  instruction is quoted by default.
+
+ - the interpreter may provide resources like
+   additional more-or-less temporary storage,
+   sense roots, and build platforms.
+
+ - separate the problem of where to lock on and
+   start executing from the problem of what
+   exactly gets executed while the interpreter is
+   locked on.
+
+Interpreter (64 bits):
+ 'address' of current instruction in ew (nearest)
+ tag 00 op 000
+ r0
+
+sequenceop (2 bits)
+ advance 00
+ retreat 01
+ block   10
+ fail    11
+
+[:
+
+Sat Jun 11 05:20:55 2022 How do we implement
+advance? Do we advance the instruction loop, or
+move the interpreter, or both or either
+opportunistically?
+
+[:
+
+Sat Jun 11 05:33:01 2022 In the modern era we'd
+like to see which of those things is possible,
+based on the current layout, and then choose.
+
+If we intend to let atoms move themselves, so we
+need to be able to take an action showing they
+should move, and to be able to then block until
+they do.
+
+interpreter state loop
+ - fetch current
+ - execute current
+ - advance
+
+interpreter behavior
+ - self test
+ - update state loop
+
+[:
+
+Sat Jun 11 05:47:07 2022 use cases:
+
+COPY PROGRAM
+
+instructions need a 'quoted' bit. Or instruction
+blocks or something.
+
+but no they are quoted by default, and an
+external interpreter is required to cause them to
+perform their described actions.
+
+(Option 1) The interpreter executes 'advance' by
+finding a 'back' worm segment upstream, and
+swapping that with the current instruction worm
+segment, and then waiting for an actual
+instruction to pop up.
+
+(Option 2) The interpreter executes 'advance'
+attempting to move toward the downstream direction
+from the current head, if it's possible to do so
+given the interpreter's layout constraints, until
+it can see the next downstream segment, at which
+point it switches and makes that downstream
+segment be 'current'.
+
+[:
+
+Sat Jun 11 06:50:47 2022 Could have a 'check
+tenant settled' portion of the 'settled
+downstream' computation. So grid motion actually
+would interlock on non-grid material. scary
+
+nap time
+
+:]
+
+:]
+
+:]
+
+:]
+
+instruction flags
+ success action : advance, retreat, block, fail
+ blocked action : block or fail
+ failed  action :
+
+
+quark OpCode
+  union Op3 {
+    typedef Unsigned(3) Major;
+    Major mMajor;
+    constant Major c
+  typedef Unsigned(8) OpCode;
+
+}
+
+
+:]
+-----------------
+]
+
+:38]
+[39:
+
+Sun Jun 12 00:57:05 2022 OK, so, one of the
+upshots of all the copied stuff is "HC3
+reorganizes pocket contents while it moves". And
+now I'm facing the question: Who really "owns"
+which pocket sites?
+
+And I think the answer "has" to be it's like
+partially shared ownership, and for a single
+moving HC3, it focuses on moving its Moore ngb
+pocket sites (the diagonals).
+
+    25 15 10 17 27
+    13  5  2  7 19
+     9  1  0  4 12
+    14  6  3  8 20
+    26 16 11 18 28
+
+When HC3@0 moves, it also moves 5,6,7, and 8.
+
+If HC3@0 moves east, say, 5 and 6 will be moving
+into what was previously "moving aisles" which
+we've been presuming will be empty. It's only 7
+and 8 that are moving to "new space" in a given
+pocket, which might legitimately be blocked.
+
+But if we have the rule that pockets are at most
+half full, then when non-empty 7 is moved, if 19
+isn't empty than 27 must be. And non-empty 8 sees
+that if 20 isn't empty than 28 must be.
+
+And for now, if a pocket is more than half full,
+or a moving aisle is occupied, we just block on
+the watchdog timer.
+
+[40:
+
+Sun Jun 12 01:28:18 2022 So, okay.. Have we
+resolved the question that brought us here?
+
+(1) We're going to move the Moore ngb with us
+(2) The "trailing pocket" sites advance with us
+(3) The "leading pocket" sites either advance with
+    us or advance diagonally away from us
+
+If the destination in (2), or both destinations in
+(3), are blocked, then we block.
+
+[41:
+
+Sun Jun 12 03:30:10 2022 Let's go step by step.
+
+ - NgbStats for four ngbs
+ - If needed, spawn in empties, done
+ - Determine upstream consensus, root, or punt
+ - We now have a move direction
+ - Pocket analysis: Determine destinations or punt
+ - Execute self and pocket moves
+ - Done
+[43:
+
+Sun Jun 12 13:00:53 2022 OK we're 'cleaning up' --
+or at least working through -- HC3NgbStats, and we
+have arrived at the recursive mAllDownSettled
+business. That we were thinking seriously about
+rewriting in terms of a count of downsettledness.
+
+How would that go again?
+
+decl:
+
+  HopCount mSettledDownHops = 0u; // settled == 'all aligned with me'
+
+base case:
+
+  if (no downstream ngbs) mSettledDownHops = 0u;
+
+recursion:
+
+  minsettled = infty
+  for (down ngbs d) {
+    if d unaligned with me
+      minsettled = infty // forget previous if any
+      break
+    if d.mSettledDownHops < minsettled
+      minsettled = d.mSettledDownHops
+  }
+  if minsettled == infty
+    mSettledDownHops = 0u
+  else
+    mSettledDownHops = minsettled + 1u
+  return
+
+[44:
+
+Sun Jun 12 13:39:03 2022 Well that seems
+plausible.
+[45:
+
+Sun Jun 12 16:55:56 2022 Then I really really
+wonder if requiring mSettledDownHops >= 2u would
+be enough (recursively) to avoid running into
+confusions. 
+[49:
+
+Wed Jun 15 16:30:24 2022 Worrying now that settled
+down won't work for gating motion because it
+requires strict alignment with me and doesn't
+accept the 'or aligned with my destination'
+exception.
+
+We'll see, if we ever foggen get to running this.
+[50:
+
+Wed Jun 15 23:07:13 2022 OK, well, it ran. Grows a
+flawed diamond. Debugging begins now.[51:
+
+Wed Jun 15 23:18:53 2022 First problem seems to be
+the root moves out of its vonN ngb.. (0,0) to
+(-1,-2) in one event.[52:
+
+Wed Jun 15 23:23:31 2022 OK, it's moving (-1,-2)
+because that's SN 15 which is
+HC3NgbState.State.maxof: QHardCell.update() didn't
+notice that 'upstate' was still cNGB_INIT, and it
+tried to move there.[53:
+
+Thu Jun 16 00:13:53 2022 OK so we fixed that. Now
+it's moving better, but -- indeed, as worried --
+it still seems to be jamming up with
+cMIN_DOWN_SETTLED == 3u. Trying 4u, but expecting
+it will be about invalidating settlement
+data..[54:
+
+Thu Jun 16 00:17:53 2022 cMIN_DOWN_SETTLED 4u
+lasted quite a bit longer -- dozens? of moves --
+but still locked up eventually. Are we
+invalidating our settlements whenever we move? We
+should do at least that, right?[55:
+
+Thu Jun 16 07:47:08 2022 Now 4u seems to be
+working pretty well? Did I change something I've
+forgotten already?
+
+---FROM OTHER NOTES FILE---
+[:
+Thu Jun 16 00:28:28 2022 Going again. Current
+status: Min settled down == 4u, so far, seems to
+be keeping HC3 from jamming up on itself.. We
+shall see.
+:]
+
+:55]
+
+:54]
+
+:53]
+
+:52]
+
+:51]
+
+:50]
+:49]
+:45]
+
+:44]
+
+:43]
+[42:
+
+Sun Jun 12 03:35:24 2022 We should offer a
+transient that will scan the ew for HC3
+boundaries, and then provide a pocket iterator for
+non-HC3 pocket contents to use to find
+components.
+
+:42]
+
+:41]
+
+:40]
+
+:39]
+[56:
+
+Thu Jun 16 14:38:50 2022 OK so we're (once again)
+trying to figure a path for signaling obstructions
+back to the root. Was once again trying to imagine
+distinct signalling atoms. Now once again thinking
+internal channels: How about four Bools set by
+leaves and reduced by OR? And when rootBehave is
+going to move, it considers its current Bools when
+picking a dir. And getColor does some 'brighter's
+if any Bools are set. And leaves do not do a full
+scan, they just consider the ngb stats.
+
+[57:
+
+Thu Jun 16 14:51:40 2022 Let's try it.. Questions:
+
+ - Q: How do we know if we're a leaf
+   A: We have no downstreams (but can't spawn?)
+
+ - Q: What about minDownHops? Unused so far yes?
+   A: But that's non-directional. Root would have
+      to check the ngbs. And it would only detect
+      damage, not just impending obstacles. (Could
+      we add an extra hopcount for signaling ngb
+      obstruction before damage?
+
+ - Q: How can we detect impending diamond
+      collisions though? Ngbs will be HC3 then.
+   A: What if we maintain an 'inside' direction
+      pointing to the 8 dir toward the root?
+
+ - Q: How would we compute and maintain that?
+   A: Could the 'inMyGroup' API do it?
+
+ - Q: How?
+   A: Maybe like count compatible upstream dirs?
+      And if we see an upstream dir that's
+      incompatible with significant standing
+      counts, we say it's not in group?
+      
+[58:
+
+Thu Jun 16 16:26:04 2022 So maybe we keep like
+Unsigned(2) mUpCounts[4]; and count up to 3 on
+upstreams and down to 0 on non-upstreams, and if
+we see an upstream on a 0 dir that's incompatible
+with a 2 or 3 dir, we declare it not in my group.
+[59:
+
+Fri Jun 17 03:16:18 2022 Well I'm trying to
+implement that but it's pretty scary. Need to
+default to saying 'yes' to the question 'is this a
+plausible upstream direction' or else I'm worried
+we won't even be able to get off the dime.
+
+Right now we have
+
+  Void observeStreamDirection(SN dir, Bool isup)
+  Bool isPlausibleUpStreamDirection(SN dir) 
+
+in HardCell.ulam. But I'm not really sure when to
+call them.[60:
+
+Sat Jun 18 01:12:18 2022 Well, not using that
+stuff for now because we couldn't get it to
+work. So the current status is we have
+edge-of-universe detection but no other-grid
+detection. So be it.
+
+Also had issues with the revised Makefile-t2.mk
+scheme missing stuff. So at the moment we're
+rebuilding, again, on the keymaster.
+
+[61:
+
+Sat Jun 18 01:15:06 2022 The 'final' tweak that
+got things not-deadlocking was another version of
+the 'nuke from orbit' take when moving:
+
+    //// I AM GOING TO FOGGEN MOVE. I WILL NOT REMAIN SETTLED.
+    for (Unsigned i = 0u; i < hcs.mHC3NgbStates.lengthof; ++i) {
+      HC3NgbState & n = hcs.mHC3NgbStates[i];
+      if (n.hasValidNeighbor()) {
+        Self & qc = n.getNgb();
+        qc.setSettledDownHops(0u); // NUKE all down hops (including US)
+      }
+    }
+    ew.swap(0u,upstate);
+    //// I MOVED.
+
+Which I suspect is more radical than necessary --
+why are we nuking the settled down hops of
+UPSTREAM neighbors, given that, if anything, we're
+INCREASING the upstream alignment by moving?
+
+But so be it for now. There's a bunch of vestigial
+data members in there too.
+
+[66:
+
+Sat Jun 18 12:58:47 2022 OK so I failed at getting
+the transfer tile ready to infect the grid, before
+running out of gas and needing to sleep. Problem
+is the recent attempt to 'improve' the makefiles
+for 'seamless' interoperation between builds for
+mfms and mfmt2. Current hack doesn't work, at
+least, during 'make install' when unpacking a
+cdmss mfz delivered by the cdm.
+
+[67:
+
+Sat Jun 18 13:26:16 2022 Let's try to clean it up.
+Plan, such as it is:
+
+[68: Sat Jun 18 13:48:02 2022 at first cut anyway
+DONE :68] - For the T2s, have Make-dispatch.sh stay at .
+   for 'install' as well as 'cdmd' (instead of
+   dishing to code/ for 'install' the way it does
+   now.
+
+[69: Sat Jun 18 14:39:11 2022 Matched up to
+   physics/ad, seems okay (only changes to use
+   code/Makefile-t2, so perhaps
+DONE :69] - Redo ./Makefile-t2.mk based on functioning
+   existing demos
+
+[72: Sat Jun 18 15:29:17 2022 sort of
+DONE :72] - Perhaps try to simplify ./code/Makefile-t2.mk
+   based on knowing cdmd and install aren't there?
+
+[73: Sat Jun 18 15:29:30 2022 Ditto
+DONE :73] - Apply all this in mfms land, get it working
+   there.
+
+[74: Sat Jun 18 15:50:09 2022 Possibly, with one change,
+DONE :74] - Push it all to the keymaster, get it working
+   there.
+
+[75: Sat Jun 18 15:50:28 2022 Also apparently
+DONE :75] - Release a new cdmss-af, let cdm distribute it
+   to the transfer tile, see it working there, or
+   not. If not, take lessons learned and go to
+   step .-2, gah.
+
+:67]
+:66]
+
+:61]
+
+:60]
+
+:59]
+:58]
+
+:57]
+
+:56]
+[62:
+
+Sat Jun 18 03:28:31 2022 Now ULAM rebuilding on
+the keymaster. MFM already built. Not making the
+MFM mfz until
+
+[63:
+
+Sat Jun 18 05:31:10 2022 OK ULAM finally finished
+rebuild.mk. Now make MFM mfz?
+
+[64:
+
+Sat Jun 18 05:33:04 2022 Well, chicken: Remaking
+MFM before make cdmd..[65:
+
+Sat Jun 18 05:52:53 2022 New MFM cdmd 70%
+delivered to the transfer tile.
+
+:65]
+
+:64]
+
+:63]
+
+:62]
+[70:
+
+Sat Jun 18 14:40:47 2022 So wait. If we peel off
+t2-cdmd and t2-install at top-level, could we
+ditch code/Makefile-t2.mk entirely? That would be
+nice right?
+[71:
+
+Sat Jun 18 14:44:25 2022 Except, at least, for the
+fact that ULAM_BIN_DIR and MFM_BIN_DIR are
+different in the two cases..
+
+:71]
+:70]

@@ -1,0 +1,90 @@
+
+/** Wait as long as condition is true
+
+   \symbol WT
+   \color #da0
+*/
+element LXWait : LX + QLabelMark + Fail {
+  typedef Unsigned(4) Test;
+  constant Test cTST_ZERO =     0u; // wait while operand is zero
+  constant Test cTST_NONZERO =  1u; // wait while operand is non-zero
+  constant Test cTST_EMPTY  =   2u; // wait while pocket is empty
+  constant Test cTST_NONEMPTY = 3u; // wait while pocket is non-empty
+  constant Test cTST_ROLBLU =   4u; // roll blue until looking at op
+  constant Test cTST_ROLGRN =   5u; // roll green until looking at op
+  constant Test cTST_ROLRED =   6u; // roll red until looking at op
+  constant Test cTST_HOPLSS =   7u; // wait while mMaxGoalHops < than op
+  constant Test cTST_HOPGTR =   8u; // wait while mMaxGoalHops > than op
+  Test mTest;
+
+  typedef Unsigned(4) Operand;
+  constant Operand cOPN_PU_REG = 0u; // operand is REG pocket
+  constant Operand cOPN_PU_INP = 1u; // operand is INP pocket
+  constant Operand cOPN_PU_OUT = 2u; // operand is OUT pocket
+  constant Operand cOPN_PU_XEQ = 3u; // operand is XEQ pocket
+  Operand mOperand;
+
+  //// LX API
+  @Override
+  virtual Bool perform(DiamondSequencerState & dss) {
+    print("LXWAIT10");
+    if (!performTest(dss)) // if test is false
+      markCurrentInstructionForRotation(dss, 0u); // move on
+    return true;           // otherwise block
+  }
+
+  Bool performTest(DiamondSequencerState & dss) {
+    EventWindow ew;
+    print("WTPT10");
+
+    if (mTest == cTST_EMPTY ||
+        mTest == cTST_NONEMPTY) {
+
+      if (mOperand <= cOPN_PU_XEQ) {
+        ProcUnitInfo & pui = dss.getPUInfo((ProcUnit) mOperand); // get info
+        if (mTest == cTST_EMPTY) return pui.mOccupiedSites == 0u;
+        return pui.mOccupiedSites != 0u;
+      }
+    }
+
+    if (mTest >= cTST_ROLBLU && mTest <= cTST_ROLRED) {
+      ProcUnit pu;
+      which (mTest) {
+        case cTST_ROLBLU: { pu = cPUNIT_REG; }
+        case cTST_ROLGRN: { pu = cPUNIT_INP; }
+        case cTST_ROLRED: { pu = cPUNIT_OUT; }
+      }
+      ProcUnitInfo & pui = dss.getPUInfo(pu); // get info
+      SN codonsn = pui.mCodonSN;
+      if (ew.isAccessible(codonsn)) {
+        Atom & a = ew[codonsn];
+        if (a as QLabelMark) {
+          if (a.getLabel() == mOperand)
+            return false;       // Found our target
+        }
+      }
+      markDSPForRotationForward(dss, 0u, pu); // otherwise keep looking
+      return true;                            // and don't quit
+    }
+
+    if (mTest == cTST_HOPLSS) {
+      QHardCell & qhc = (QHardCell&) ew[0]; // Really DiamondSequencer
+      return qhc.getMaxHopsGoal() < mOperand; // wait if less
+    }
+
+    if (mTest == cTST_HOPGTR) {
+      QHardCell & qhc = (QHardCell&) ew[0]; // Really DiamondSequencer
+      return qhc.getMaxHopsGoal() > mOperand; // wait if more
+    }
+
+    // All unimplemented tests return false
+    {
+      ByteStreamLogger bsl;
+      bsl.printf("\n%s:%d: Unimplemented test %d on op %d\n",
+                 __FILE__, __LINE__,
+                 mTest, mOperand);
+      return false;
+    }
+  }
+
+}

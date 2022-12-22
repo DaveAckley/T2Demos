@@ -1,0 +1,66 @@
+transient LooperState : CodonState {
+  @Override
+  virtual Bool act(Intender & in) {
+    print("LUPSTACT10");
+    if (super.act(in)) return true;
+    Looper & looper = (Looper&) in;
+
+    looper.findAvailables(self); // See what we have
+      
+    SN empsn;
+    PocketPtr empptr;
+    Unsigned empcount = 0u;
+    Random random;
+    for (PocketPtr pp = cPP_WEST; pp <= cPP_EAST; ++pp) {
+      if (!mPocketIterable[pp] ||
+          mPocketInaccessible[pp] > 0u ||
+          mPocketFull[pp] > 0u ||
+          mEWSNAvailables[pp] == SN.maxof)
+        continue;
+      if (random.oneIn(++empcount)) {
+        empptr = pp;
+        empsn = mEWSNAvailables[pp];
+      }
+    }
+    if (empcount == 0u) {
+      SN dsn = mEWSNAvailables[cPP_SELF];
+      if (dsn != SN.maxof) { // If available empty
+        ew.swap(0u, dsn);    // diffuse
+        return true;
+      }
+      return false;
+    }
+    EmptyCodon ec0, ec1;
+    BaseClassUtils bcu;
+    bcu.copySharedData(looper,ec0);
+    bcu.copySharedData(looper,ec1);
+    ec0.mPocketPtrs[cBODY_DOWN] = empptr;
+    ec0.mPocketPtrs[cBODY_UP] = empptr;
+    ec1.mPocketPtrs[cBODY_DOWN] = looper.reversePocket(empptr);
+    ec1.mPocketPtrs[cBODY_UP] = looper.reversePocket(empptr);
+    ew[empsn] = ec1.atomof;
+    ew[0u] = ec0.atomof;
+    return true;
+  }
+}
+
+/** An element that pops out into EC <-> EC
+    \symbol LP
+    \color #828
+ */
+element Looper : Codon + DTU {
+
+    //// Intender API
+  @Override
+  virtual ClassId getIntentionClass() { return LooperState.classidof; }
+
+  Void init() {
+    mPocketPtrs[cBODY_DOWN] = cPP_NULL;
+    mPocketPtrs[cBODY_UP] = cPP_NULL;
+    mDSType = cDS_DUMB;
+  }
+
+  Void behave() {
+    pursueIntention();
+  }
+}

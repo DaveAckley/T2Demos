@@ -1,0 +1,345 @@
+transient DaughterLoaderState : CodonState + QDebugUtils {
+
+  @Override
+  virtual Bool act(Intender & in) {
+    print("DLSTACT10");
+    if (super.act(in)) return true;
+    DaughterLoader & dl = (DaughterLoader&) in;
+    if (!dl.needHeadLoop()) return false;
+
+    dl.findAvailables(self); // See what we have
+      
+    SN empsn;
+    PocketPtr empptr;
+    Unsigned empcount = 0u;
+    Random random;
+    for (PocketPtr pp = cPP_WEST; pp <= cPP_EAST; ++pp) {
+      if (!mPocketIterable[pp] ||
+          mPocketInaccessible[pp] > 0u ||
+          mPocketFull[pp] > 0u ||
+          mEWSNAvailables[pp] == SN.maxof)
+        continue;
+      if (random.oneIn(++empcount)) {
+        empptr = pp;
+        empsn = mEWSNAvailables[pp];
+      }
+    }
+    if (empcount == 0u) return false;
+    EmptyCodon ec;
+    BaseClassUtils bcu;
+    bcu.copySharedData(dl,ec);
+    dl.mPocketPtrs[cBODY_DOWN] = empptr;
+    dl.mPocketPtrs[cBODY_UP] = empptr;
+    ec.mPocketPtrs[cBODY_DOWN] = dl.reversePocket(empptr);
+    ec.mPocketPtrs[cBODY_UP] = dl.reversePocket(empptr);
+    ew[empsn] = ec.atomof;
+    return true;
+  }
+
+}
+
+/** \symbol dL
+    \color #e24
+ */
+element DaughterLoader : LX + QLabelMark {
+  // HARDCODED FOR NOW  ProcUnit mSrcUnit; //< Where instructions come from
+  QLabelMark mLastInsnMark; //< How to tell when loading is done
+  Bool mConsumeOriginal;    //< Delete self on deployment if true
+  Bool mDeployed;           //< True once loading has started
+
+  typedef Unsigned(4) HeadCount;
+  HeadCount mHeadCount;     //< How many head insns follow the DL
+
+  //// LX API
+  @Override
+  virtual Bool perform(DiamondSequencerState & dss) {
+    print("DLPERF10");
+    if (mDeployed) return performDeployed(dss);
+    return performUndeployed(dss);
+  }
+  
+  Bool performUndeployed(DiamondSequencerState & dss) {
+    print("DLPUND10");
+
+    Fail f;
+    Bool killreg = killPU(cPUNIT_INP, dss);
+    if (!killreg) return true;  // Block til INP killed
+
+    print("DLPUND11");
+    ProcUnitInfo & puireg = dss.getPUInfo(cPUNIT_REG);
+    EventWindow ew;
+    BaseClassUtils bcu;
+
+    print("DLPUND12");
+    if (puireg.mOccupiedSites == 0u && 
+        puireg.mEmptySN != SN.maxof) {  // Init REG if empty
+      print("DLPUND12LUP");      
+      print(puireg.mEmptySN);
+      Looper looper;
+      bcu.copySharedData(self,looper);
+      looper.init(); // init over shared data
+      ew[puireg.mEmptySN] = looper.atomof;
+      //      return true;
+      // FALL THROUGH
+    }
+
+    print("DLPUND13");
+
+    /* LET'S DEPLOY NOW PICK UP PIECES LATER
+    /// REG IS OCCUPIED (BETTER BE A CODON)
+    if (puireg.mCodonSN == SN.maxof) // No codon?
+      return false; // Urgh might be oh say.. MB grr.
+    */
+
+    print("DLPUND14");
+    /// TIME TO DEPLOY?
+    if (true) {
+      SN selfsn = ew.getSiteNumber(self); // We are not in ew[0]!
+      if (!ew.isAccessible(selfsn)) f.fail(__FILE__,__LINE__);
+      
+      ProcUnitInfo & puiinp = dss.getPUInfo(cPUNIT_INP); // Just killed!
+      SN empinpsn = puiinp.mEmptySN;
+      if (empinpsn == 0u ||
+          !ew.isAccessible(empinpsn)) f.fail(__FILE__,__LINE__);
+
+      print("DLPUND15");
+
+      Atom copy = self.atomof;
+      DaughterLoader & dlcopy = (DaughterLoader&) copy;
+
+      dlcopy.unilaterallyDetachSegment(); // We stand alone
+      dlcopy.mDeployed = true;
+
+      // DEPLOY!
+      ew[empinpsn] = copy; 
+
+      // REGRIP!
+      if (!dss.swapPUs(cPUNIT_XEQ,cPUNIT_INP)) f.fail(__FILE__,__LINE__);
+      if (!dss.swapPUs(cPUNIT_OUT,cPUNIT_REG)) f.fail(__FILE__,__LINE__);
+
+      // FINALLY, OPTIONAL CONSUME
+      if (mConsumeOriginal) {
+        EmptyCodon ec;
+        bcu.copySharedData(self,ec);
+        ec.init();
+        ew[selfsn] = ec.atomof;     // self IS NOW STALE
+      }
+      return true;
+    }
+    
+    return false;
+  }
+
+  Bool needHeadLoop() {
+    return mHeadCount > 0u && isAlone();
+  }
+
+  Bool performDeployed(DiamondSequencerState & dss) {
+    Fail f;
+    EventWindow ew;
+    print("DLPDEP10");
+
+    //// DO WE NEED A HEAD LOOP BUT DON'T HAVE ONE?
+    if (needHeadLoop()) 
+      return false;             // Don't block out: Time for individual performance
+
+    //// DO WE HAVE A NON-EC INPUT CODON?
+    ProcUnitInfo & inppui = dss.getPUInfo(cPUNIT_INP);
+    if (!inppui.mFound) f.fail(__FILE__,__LINE__);
+
+    SN inpsn = inppui.mCodonSN;
+    if (inpsn == SN.maxof)
+      return false; // ??
+
+    print("DLPDEP11");
+    Atom & ain = ew[inpsn];
+
+    if (ain is EmptyCodon) {
+      markDSPForRotationForward(dss, 0u, cPUNIT_INP);
+      return true;
+    }
+    Codon & cin = (Codon&) ain;
+
+    //// WE DO HAVE A NON-EC INPUT CODON.
+    
+    print("DLPDEP12");
+
+    //// DO WE HAVE AN EC OUTPUT CODON?
+    ProcUnitInfo & outpui = dss.getPUInfo(cPUNIT_OUT);
+    if (!outpui.mFound) f.fail(__FILE__,__LINE__);
+    
+    SN outsn = outpui.mCodonSN;
+    if (outsn == SN.maxof)
+      return false; // ??
+
+    print("DLPDEP13");
+    Atom & aout = ew[outsn];
+    print(aout);
+    
+    if (!(aout is EmptyCodon)) {
+      markDSPForRotation(dss, 0u, cPUNIT_OUT, cDSTATUS_TEMP);
+      return true;
+    }
+    Codon & cout = (Codon&) aout;
+
+    //// WE DO HAVE AN EC OUTPUT CODON.
+
+    //// DO WE ALSO NEED A HEAD EC RIGHT NOW?
+    if (mHeadCount > 0u) {
+      //// WE DO ALSO NEED A HEAD EC RIGHT NOW.
+
+      //// DO WE HAVE AN EC HEAD CODON DOWNSTREAM?
+      f.fail(__FILE__,__LINE__);
+      /* UNFINISHED/OBSOLETED?
+
+      SN matesn = dss.mEWSNMate[cBODY_DOWN];
+      if (matesn == SN.maxof) f.fail(__FILE__,__LINE__);
+
+      Codon & hec = (Codon&) ew[matesn]; // or fail
+      if (!(hec is EmptyCodon))
+        return true;            // Need to wait for developments
+
+      //// WE DO HAVE AN EC HEAD CODON DOWNSTREAM.
+
+      //// HAVE WE COPIED AIN TO EC HEAD CODON DOWNSTREAM?
+      Atom icopy = ain;
+      Codon & icodon = (Codon&) icopy;
+
+      icodon.copySegAndPChain(hec); // Pick up dest ptrs
+
+      icodon.mDSType = cDS_NORM; // Reestablish normie since that's all we copy
+
+      ew[matesn] = icopy;       // hec IS NOW STALE
+
+      mHeadCount--;             // One less, head to copy..
+      //// WE HAVE COPIED AIN TO EC HEAD CODON DOWNSTREAM
+      */
+    }
+    //// WE DON'T NEED OR JUST GOT A HEAD EC RIGHT NOW
+
+    //// COPY IN -> OUT
+    Atom icopy = ain;
+    Codon & icodon = (Codon&) icopy;
+
+    icodon.copySegAndPChain(cout); // Pick up dest ptrs
+    BaseClassUtils bcu;
+    //    bcu.copySharedData(aout,icopy);
+    icodon.mDSType = cDS_NORM; // Reestablish normie since that's all we copy
+
+    ew[outsn] = icopy; // aout IS NOW STALE
+    markDSPForRotation(dss, 0u, cPUNIT_OUT, cDSTATUS_TEMP); // roll _OUT
+
+    //// ERASE IN
+    EmptyCodon ec;
+    bcu.copySharedData(ain,ec);
+    ec.init();
+    ew[inpsn] = ec.atomof; // ain IS NOW STALE
+    markDSPForRotationForward(dss, 0u, cPUNIT_INP); // roll _INP
+    
+    //// DID WE JUST COPY TERMINATING CODON?
+    Bool done = false;
+    if (icopy as QLabelMark) {
+      done = labelMatch(icopy); 
+    }
+    if (!done) return true;
+    //// WE DID JUST COPY TERMINATING CODON.
+
+    //// ACQUIRE SELF
+    ProcUnitInfo & xeqpui = dss.getPUInfo(cPUNIT_XEQ);
+    if (!xeqpui.mFound) f.fail(__FILE__,__LINE__);
+    
+    SN xeqsn = xeqpui.mCodonSN;
+
+    //// REGRIP BACK!
+    if (!dss.swapPUs(cPUNIT_XEQ,cPUNIT_INP)) f.fail(__FILE__,__LINE__);
+    if (!dss.swapPUs(cPUNIT_OUT,cPUNIT_REG)) f.fail(__FILE__,__LINE__);
+
+    //// ERASE SELF
+    ew[xeqsn] = Empty.instanceof; // self IS NOW STALE
+    return true;
+  }
+
+  Bool programComplete(DiamondSequencerState & dss) {
+    // We're done when the last instruction we loaded matched us
+    return labelMatch(mLastInsnMark);
+  }
+
+  Bool nextInstructionAvailable(DiamondSequencerState & dss) {
+    Fail f;
+    ProcUnitInfo & pui = dss.getPUInfo(cPUNIT_INP); // get source slot
+    if (!pui.mFound ||
+        pui.mCodonSN == SN.maxof ||
+        pui.mIsEmptyCodon)
+      return false;
+
+    return true;
+  }
+
+  Atom consumeNextInstruction(DiamondSequencerState & dss) {
+    Fail f;
+    ProcUnitInfo & pui = dss.getPUInfo(cPUNIT_INP); // get source slot
+    if (!pui.mFound ||
+        pui.mCodonSN == SN.maxof ||
+        pui.mIsEmptyCodon)
+      f.fail(__FILE__,__LINE__);
+
+    EventWindow ew;
+    Atom a = ew[pui.mCodonSN];
+    if (a as Codon) {
+      EmptyCodon ec;
+      ec.copySegAndPChain(a); // pick up ptrs and targeting
+      ec.mDSType = cDS_DOWN;  // flip for dir
+      ew[pui.mCodonSN] = ec.atomof;        // CONSUME INS
+    }
+
+    return a;
+  }
+
+  /*
+  Bool performDone(DiamondSequencerState & dss) {
+    /// Time to check out!
+    print("DLRPRF11");
+    ProcUnitInfo & pui = dss.getPUInfo(cPUNIT_XEQ); // get X slot
+    if (!pui.mFound ||
+        pui.mCodonSN == SN.maxof ||
+        pui.mIsEmptyCodon)
+      fail(__FILE__,__LINE__);
+
+    print("DLRPRF12");
+    EventWindow ew;
+    Atom & a = ew[pui.mCodonSN];
+    if (a as Self) {
+      EmptyCodon ec;
+      Random random;
+      ec.copySegAndPChain(a); // pick up ptrs and targeting
+      ec.mDSType = random.oneIn(2u) ? cDS_DOWN : cDS_UP; // flip for dir
+      ew[pui.mCodonSN] = ec.atomof;        // LOADER OUT
+      return true; // WRN: stale self
+    }
+
+    fail(__FILE__,__LINE__);
+    return true; // not reached
+    }*/
+
+  //// CODON API
+  virtual Void init() {
+    super.init();
+    mDSType = cDS_NORM;
+  }
+
+  //// Intender API 
+  @Override
+  virtual ClassId getIntentionClass() { return DaughterLoaderState.classidof; }
+
+  Void behave() {
+    /*
+    //// SPECIAL DL CASE
+    if (needHeadLoop()) {
+      tryInitHeadLoop();
+      return;
+    }
+    */
+    pursueIntention();          // passive mode activities: just be a codon
+  }
+
+}

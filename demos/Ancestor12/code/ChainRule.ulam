@@ -1,0 +1,851 @@
+quark ChainTypes + DTU + Fail {
+
+  typedef ChainType ChainPattern[3]; //< 0: body up, 1: us, 2: body down
+  typedef SN ChainMatches[3]; //< 0: body up, 1: us, 2: body down
+
+  Bool isEC(PocketChainState & pcs, Codon & c, MatchCodePosition mcp, Bool swappable) {
+    pcs.print("ISEC10");
+    if (!(c is EmptyCodon)) return false;
+    pcs.print("ISEC11");
+    Bool inDSP = pcs.isInDSP(mcp);
+    if (swappable && inDSP) return false;
+    pcs.print("ISEC12");
+    return true;
+  }
+
+  Bool isX(PocketChainState & pcs, Codon & c, MatchCodePosition mcp) {
+    pcs.print("ISX10");
+    Bool isNorm = c.mDSType == cDS_NORM;
+    Bool isntDSP = !pcs.isInDSP(mcp);
+    pcs.print((Unsigned) mcp);
+    pcs.print(isNorm);
+    pcs.print(isntDSP);
+    pcs.print(c);
+    pcs.print(pcs);
+    return isNorm && isntDSP;
+  }
+
+  Bool isCodeAt(PocketChainState & ss, PocketChain & p, ChainType code, MatchCodePosition mcp) {
+    ss.print("ISCDAT10");
+    if (code == cCPAT_N) return true;
+    if (!(p is Codon)) return false;
+    ss.print("ISCDAT11");
+    ss.print(code);
+    Codon & c = (Codon&) p;
+    which (code) {
+    case cCPAT_EC: { return isEC(ss,c,mcp,true); } /* EC to be swapped elsewhere */
+    case cCPAT_FC: { return isEC(ss,c,mcp,false); } /* EC to leave fixed*/
+    case cCPAT_X:  { return isX(ss,c,mcp); }
+    case cCPAT_Y:  { return p.mDSType == c.cDS_DUMB || p.mDSType == c.cDS_NORM; }
+    case cCPAT_Z:  { return p.mDSType == c.cDS_DUMB; }
+    case cCPAT_U:  { return p.mDSType == c.cDS_UP; }      
+    case cCPAT_D:  { return p.mDSType == c.cDS_DOWN; }      
+    case cCPAT_T:  { return p.mDSType == c.cDS_UP || p.mDSType == c.cDS_DOWN; }
+    case cCPAT_C:  { return !(c is EmptyCodon); }
+    case cCPAT_S:  { return !ss.isInDSP(mcp) && p.mDSType != c.cDS_DUMB; } /* anything swappable */
+    otherwise: { fail(__FILE__,__LINE__); }
+    }
+    // NOT REACHED
+    return false;
+  }
+
+  /** \returns SN.maxof if unreachable
+      \returns SN.maxof-1 if reachable but no match
+      \returns <41 as SN of successful match
+   */
+  SN codeAt(PocketChainState & ss, ChainType code, MatchCodePosition mcp) {
+    ss.print("CRMCDAT10");
+    ss.print(code);
+    ss.print((Unsigned) mcp);
+    PocketHC3 & p = ss.mPocket;
+    SN ret = SN.maxof;          // assume problem is reachability
+    if (p.mStatus != p.cSTATUS_OK) return ret;
+    SN sn;
+    which(mcp) {
+    case cMCP_PREV: {
+      ss.print("CRMCDAT11");
+      sn = ss.mEWSNMate[Segment.cBODY_DOWN];
+    }
+    case cMCP_HERE: {
+      ss.print("CRMCDAT12");
+      sn = ss.mEWSNSegment; // WON'T BE 0 ON INDIRECT ACTION
+      if (sn != 0u) fail(__FILE__,__LINE__); // CHECK THAT ^^ COMMENT
+    }
+    case cMCP_NEXT: {
+      ss.print("CRMCDAT13");
+      sn = ss.mEWSNMate[Segment.cBODY_UP];
+    }
+    otherwise: { fail(__FILE__,__LINE__); }
+    }
+    ss.print(sn);
+    EventWindow ew;
+    Atom & a = ew[sn];
+    if (a as PocketChain) {
+      ss.print("CRMCDAT14");
+      ss.print(code);
+      return isCodeAt(ss,a,code,mcp) ? sn : (SN) (SN.maxof-1u);
+    } else
+      fail(__FILE__,__LINE__); 
+    ss.print("CRMCDAT15");
+    ss.print(a);  
+    return SN.maxof;
+  }
+
+}
+
+transient ChainRule + ChainTypes + QDebugUtils + Fail {
+  EventWindow ew;
+
+  //// CHAINRULE API
+  /** \return true and set up \c pat with the (or a) pattern for this
+   * rule, or \return false if pattern cannot be constructed or
+   * doesn't apply or something
+   */
+  virtual Bool pattern(PocketChainState & ss, ChainPattern & pat) ;
+
+  virtual String ruleName() ;
+
+  /** Attempt to match \c pat, storing results in \c mat \return true if pattern matched */
+  virtual Bool matches(PocketChainState & ss, ChainPattern pat, ChainMatches & m) {
+    print("CRM114_10");
+    Bool ret = true;
+    for (Unsigned i = 0u; i <= MatchCodePosition.maxof; ++i) {
+      MatchCodePosition mcp = (MatchCodePosition) i;
+      print("CRM114_11");
+      print(i);
+      print(pat[i]);
+      m[i] = codeAt(ss, pat[i], mcp);
+      print("CRM114_1110");
+      print(i);
+      print(m[i]);
+      if (m[i] >= SN.maxof-1u) ret = false;
+    }
+    print("CRM114_12");
+    print(ret);
+    return ret;
+  }
+
+  /** Apply this rule's transformation, given that \c pat matched producing \c mat */
+  virtual Void apply(PocketChainState & ss, ChainPattern pat, ChainMatches mat) ; 
+
+
+
+  //// CHAINRULE SERVICES
+
+  Bool performPCS(PocketChainState & ss) {
+    ChainPattern pat;
+    if (!pattern(ss,pat)) return false;
+    ChainMatches mat;
+    if (!matches(ss, pat, mat)) return false;
+    apply(ss, pat, mat);
+    return true;
+  }
+
+  /*
+  typedef Unary(2) MatchCodeResult;
+  constant MatchCodeResult cMCR_UNREACHABLE = 0u;
+  constant MatchCodeResult cMCR_NOMATCH = 1u;
+  constant MatchCodeResult cMCR_MATCH = 2u;
+  */
+
+}
+
+transient ChainRule_INSERT : ChainRule {
+  Atom mCodonToInsert;
+  
+  @Override virtual String ruleName() { return __CLASS__; }
+
+  @Override
+  virtual Bool pattern(PocketChainState & ss, ChainPattern & pat) {
+    ChainPattern p = { cCPAT_N, cCPAT_EC, cCPAT_N };
+    pat = p;
+    return true;
+  }
+
+  @Override
+  virtual Void apply(PocketChainState & ss, ChainPattern pat, ChainMatches mat) {
+    print("CR_IN10");
+    print(mat[0]);
+    print(mat[1]);
+    print(mat[2]);
+    Codon & ec = (Codon&) ew[mat[1]];
+    Atom atmp = mCodonToInsert;
+    if (atmp as Codon) {
+      print("CR_IN13");
+      print(atmp);
+      atmp.copySegPtrsOnly(ec);
+      atmp.mTargetQuadrant = ec.mTargetQuadrant;
+      print("CR_IN14");
+      print(atmp);
+      //BUGGY      ew[mat[1]] = mCodonToInsert.atomof;
+      ew[mat[1]] = atmp.atomof;
+      return; 
+    } else fail(__FILE__,__LINE__);
+  }
+
+  //// ChainRule_INSERT SERVICES
+  Bool try(PocketChainState & p, Codon & codon) {
+    print("CR_INTTI10");
+    mCodonToInsert = codon.atomof;
+    return performPCS(p);
+  }
+}
+
+element InsertZONG : XTimer(3u,6u,4u) + DTU + QDebugUtils + Fail {
+
+  /*
+  @Override
+  Unsigned getIntentionClass() { Fail f; f. fail(__FILE__,__LINE__); return 0u; }
+  */
+
+  EventWindow ew;
+  Random random;
+  DebugUtils du;
+
+  Void die() { ew[0] = Empty.instanceof; }
+  Void diffuse() {
+    SN n = (SN) random.between(1,4);
+    if (ew.isEmpty(n))
+      ew.swap(0u,n);
+  }
+
+  Void behave() {
+    print("IZOG10");
+    //    if (random.oneIn(4u)) return diffuse(); // Mix up pocket position
+    if (countAlarm()) return die(); // one shot lives to shoot
+
+    print("IZOG11");
+
+    PocketChainState ss;
+    EmptyCodon tmp;
+    if (ss.init(tmp)) {        // Bad pocket
+      PocketHC3 & p = ss.mPocket;
+      PocketHC3.Status pstat = p.mStatus;
+      if (pstat == PocketHC3.cSTATUS_EDGE ||
+          pstat == PocketHC3.cSTATUS_OPEN)
+        return diffuse(); // seek greener pastures
+      if (pstat == PocketHC3.cSTATUS_BENT) return;           // wait for clarity
+      fail(__FILE__,__LINE__); 
+    }
+    print("IZOG12");
+
+    //// FOUND GOOD POCKET
+    PocketHC3 & p = ss.mPocket;
+    //// IS THERE A CODON IN THERE OTHER THAN ME?
+
+    RectIterator ri;
+    if (!p.initIterator(ri, 0u, true)) 
+      fail(__FILE__,__LINE__); 
+
+    SN csn = SN.maxof;
+    Unsigned ccnt = 0u;
+    while (ri.hasNext()) {
+      C2D n = ri.next();
+      SN sn = ew.getSiteNumber(n);
+      if (sn == 0u) continue; // not me
+      if (!ew.isAccessible(sn)) continue; // sure
+      Atom & a = ew[sn];
+      if (a is Codon) {
+        if (random.oneIn(++ccnt))
+          csn = sn;
+      }
+    }
+
+    print("IZOG13");
+
+    if (ccnt == 0u)
+      return;
+
+    //// FOUND NON-ME CODON AT CSN
+    //// DOES NON-ME CODON HAVE FINDABLE MATES?
+    
+    Codon & c = (Codon&) ew[csn];
+    Segment.MateStatus ms = c.findMates(ss);
+    print("IZOG14");
+    print(ms);
+
+    if (ms != Segment.cMATE_OK) return;
+    print("IZOG15");
+
+    /// FOUND A CODON, TRY TO INSERT SOMETHING
+    ChainRule_INSERT rule;
+    //    rule.setDebugOutputEnabled(true);
+    Zong zonger;
+    zonger.mDSType = zonger.cDS_NORM;
+    print("IZOG16");
+    if (rule.try(ss, zonger)) {
+      print("YAZONG");
+      ew[0] = Empty.instanceof;
+      return;
+    }
+
+    print("NOT ZONGDAY");
+    return;
+  }
+}
+
+
+/** \symbol Zn
+    \color #4f6
+ */
+element Zong : LX {
+
+  //// Intender API 
+  @Override
+  virtual ClassId getIntentionClass() { return CodonState.classidof; }
+
+  //// LX API
+  virtual Bool perform(DiamondSequencerState & dss) {
+    print("ZONGBONGPERFORM");
+    markCurrentInstructionForRotation(dss, 0u);
+    return true;
+  }
+  
+  Void behave() {
+    print("ZZNG10");
+    if (pursueIntention()) {
+      DebugUtils du;
+      //      du.print("ZZNG1010");
+      return; // self might be stale!
+    }
+    print("ZZNG11");
+  }
+}
+
+transient ChainRule_DELETE : ChainRule {
+  
+  @Override virtual String ruleName() { return __CLASS__; }
+
+  @Override
+  virtual Bool pattern(PocketChainState & ss, ChainPattern & pat) {
+    ChainPattern p = { cCPAT_N, cCPAT_Y, cCPAT_N };
+    pat = p;
+    return true;
+  }
+  
+  @Override
+  virtual Void apply(PocketChainState & ss, ChainPattern pat, ChainMatches mat) {
+    print("CR_DL10");
+    Codon & y  = (Codon&) ew[mat[1]];
+    EmptyCodon ec;
+    Random random;
+    ec.mDSType = random.oneIn(2) ? cDS_DOWN : cDS_UP; // Go someway
+    ec.copySegPtrsOnly(y);
+    ec.mTargetQuadrant = y.mTargetQuadrant;
+    print("CR_DL14");
+    ew[mat[1]] = ec.atomof;
+    return; 
+  }
+
+  //// ChainRule_DELETE SERVICES
+  Bool try(PocketChainState & p) {
+    print("CR_DLTTI10");
+    return performPCS(p);
+  }
+}
+
+/** \symbol DC
+    \color #dc0
+*/
+element DeleteCodon : XTimer(3u,6u,4u) + DTU + QDebugUtils + Fail {
+
+  EventWindow ew;
+  Random random;
+  DebugUtils du;
+
+  Void die() { ew[0] = Empty.instanceof; }
+  Void diffuse() {
+    SN n = (SN) random.between(1,4);
+    if (ew.isEmpty(n))
+      ew.swap(0u,n);
+  }
+
+  Void behave() {
+    print("DLCD10");
+
+    if (countAlarm()) return die(); // one shot lives to shoot
+
+    print("DLCD11");
+
+    PocketChainState ss;
+    EmptyCodon tmp;
+    if (ss.init(tmp)) {        // Bad pocket
+      PocketHC3 & p = ss.mPocket;
+      PocketHC3.Status pstat = p.mStatus;
+      if (pstat == PocketHC3.cSTATUS_EDGE ||
+          pstat == PocketHC3.cSTATUS_OPEN)
+        return diffuse(); // seek greener pastures
+      if (pstat == PocketHC3.cSTATUS_BENT) return;           // wait for clarity
+      fail(__FILE__,__LINE__); 
+    }
+    print("DLCD12");
+
+    //// FOUND GOOD POCKET
+    PocketHC3 & p = ss.mPocket;
+    //// IS THERE A CODON IN THERE OTHER THAN ME?
+
+    RectIterator ri;
+    if (!p.initIterator(ri, 0u, true)) 
+      fail(__FILE__,__LINE__); 
+
+    SN csn = SN.maxof;
+    Unsigned ccnt = 0u;
+    while (ri.hasNext()) {
+      C2D n = ri.next();
+      SN sn = ew.getSiteNumber(n);
+      if (sn == 0u) continue; // not me
+      if (!ew.isAccessible(sn)) continue; // sure
+      Atom & a = ew[sn];
+      if (a is Codon) {
+        if (random.oneIn(++ccnt))
+          csn = sn;
+      }
+    }
+
+    print("DLCD13");
+
+    if (ccnt == 0u)
+      return;
+
+    //// FOUND NON-ME CODON AT CSN
+    //// DOES NON-ME CODON HAVE FINDABLE MATES?
+    
+    Codon & c = (Codon&) ew[csn];
+    Segment.MateStatus ms = c.findMates(ss);
+    print("DLCD14");
+    print(ms);
+
+    if (ms != Segment.cMATE_OK) return;
+    print("DLCD15");
+
+    /// FOUND A CODON, TRY TO DELETE IT
+    ChainRule_DELETE rule;
+    //    rule.setDebugOutputEnabled(true);
+    print("DLCD16");
+    if (rule.try(ss)) {
+      print("BABEYE");
+      ew[0] = Empty.instanceof;
+      return;
+    }
+
+    print("DLCD17");
+    return;
+  }
+}
+
+/** CHAINRULE: PREV: EC -> [X] -> N  ==>  X -> [EC] -> N */ 
+transient ChainRule_NEXT : ChainRule {
+  
+  @Override virtual String ruleName() { return __CLASS__; }
+
+  @Override
+  virtual Bool pattern(PocketChainState & ss, ChainPattern & pat) {
+    ChainPattern p = { cCPAT_EC, cCPAT_X, cCPAT_N };
+    pat = p;
+    return true;
+  }
+
+  @Override
+  virtual Void apply(PocketChainState & ss, ChainPattern pat, ChainMatches mat) {
+    print("CR_NX10");
+    Codon & ec  = (Codon&) ew[mat[0]];
+    Codon & x  = (Codon&) ew[mat[1]];
+    ec.swapPocketPtrs(x);
+    ew.swap(mat[0],mat[1]);
+    return; 
+  }
+
+  //// ChainRule_NEXT SERVICES
+  Bool try(PocketChainState & p) {
+    print("CR_NXTTI10");
+    return performPCS(p);
+  }
+}
+
+/** CHAINRULE: PREV: N -> [X] -> EC  ==>  N -> [EC] -> X */ 
+transient ChainRule_PREV : ChainRule {
+  
+  @Override virtual String ruleName() { return __CLASS__; }
+
+  @Override
+  virtual Bool pattern(PocketChainState & ss, ChainPattern & pat) {
+    ChainPattern p = { cCPAT_N, cCPAT_X, cCPAT_EC };
+    return true;
+  }
+
+  @Override
+  virtual Void apply(PocketChainState & ss, ChainPattern pat, ChainMatches mat) {
+    print("CR_PV10");
+    Codon & x  = (Codon&) ew[mat[1]];
+    Codon & ec  = (Codon&) ew[mat[2]];
+    ec.swapPocketPtrs(x);
+    ew.swap(mat[1],mat[2]);
+    return; 
+  }
+
+  //// ChainRule_PREV SERVICES
+  Bool try(PocketChainState & p) {
+    print("CR_PVTTI10");
+    return performPCS(p);
+  }
+}
+
+/** CHAINRULE: GENL_ALONE: EC0 -> [Y] -> EC1  ==>  EC0 -> [Y*] -> EC1 */ 
+transient ChainRule_GENL_ALONE : ChainRule {
+
+  //// ChainRule_GENL_ALONE API
+  virtual Void whenAloneDo(PocketChainState & ss, ChainMatches & mat) {
+    print("CR_GAL_WAD10");
+  }
+
+  @Override virtual String ruleName() { return __CLASS__; }
+
+  @Override
+  virtual Bool pattern(PocketChainState & ss, ChainPattern & pat) {
+    ChainPattern p = { cCPAT_EC, cCPAT_Y, cCPAT_EC };
+    pat = p;
+    return true;
+  }
+
+  /** Attempt to match \c pat, storing results in \c mat \return true if pattern matched */
+  @Override
+  virtual Bool matches(PocketChainState & ss, ChainPattern pat, ChainMatches & m) {
+    if (!super.matches(ss,pat,m)) return false;
+    /// we have provisional match, but let's make we sure we have two DISTINCT ngbs:
+    return m[0] != m[2];
+  }
+
+  @Override
+  virtual Void apply(PocketChainState & ss, ChainPattern pat, ChainMatches mat) {
+    print("CR_GAL_APP10");
+    print(ruleName());
+    whenAloneDo(ss,mat);
+    return; 
+  }
+
+  //// ChainRule_GENL_ALONE SERVICES
+  Bool try(PocketChainState & p) {
+    print("CR_GAL_TRY10");
+    return performPCS(p);
+  }
+}
+
+/** CHAINRULE: SPREAD10: Y -> [X] -> EC  ==>  Y -> [EC] -> X */ 
+transient ChainRule_SPREAD10 : ChainRule {
+  
+  @Override virtual String ruleName() { return __CLASS__; }
+
+  @Override
+  virtual Bool pattern(PocketChainState & ss, ChainPattern & pat) {
+    ChainPattern p = { cCPAT_Y, cCPAT_X, cCPAT_EC };
+    pat = p;
+    return true;
+  }
+
+  /** Attempt to match \c pat, storing results in \c mat \return true if pattern matched */
+  @Override
+  virtual Bool matches(PocketChainState & ss, ChainPattern pat, ChainMatches & m) {
+    if (!super.matches(ss,pat,m)) return false;
+    /// we have provisional match, but let's only move DOWN shifting ECs UP?
+    EmptyCodon & ec = (EmptyCodon&) ew[m[2]];
+    return true; //UNCLEAR. ec.mDSType == cDS_DOWN;
+  }
+
+  @Override
+  virtual Void apply(PocketChainState & ss, ChainPattern pat, ChainMatches mat) {
+    print("CR_SP1010");
+    Codon & y  = (Codon&) ew[mat[0]];
+    Codon & x  = (Codon&) ew[mat[1]];
+    EmptyCodon & ec = (EmptyCodon&) ew[mat[2]];
+    // if (x is Sh*peSh*fter)
+    //   ec.mCrowdWeight /= 2u;
+    // else
+      ec.mCrowdWeight++;
+    ec.swapPocketPtrs(x);
+    ew.swap(mat[1],mat[2]);
+    return; 
+  }
+
+  //// ChainRule_SPREAD10 SERVICES
+  Bool try(PocketChainState & p) {
+    print("CR_SPTT10I10");
+    return performPCS(p);
+  }
+}
+
+/** CHAINRULE: SPREAD11: EC -> [X] -> Y  ==>  X -> [EC] -> Y */ 
+transient ChainRule_SPREAD11 : ChainRule {
+  
+  @Override virtual String ruleName() { return __CLASS__; }
+
+  @Override
+  virtual Bool pattern(PocketChainState & ss, ChainPattern & pat) {
+    ChainPattern p = { cCPAT_EC, cCPAT_X, cCPAT_Y };
+    pat = p;
+    return true;
+  }
+
+  /** Attempt to match \c pat, storing results in \c mat \return true if pattern matched */
+  @Override
+  virtual Bool matches(PocketChainState & ss, ChainPattern pat, ChainMatches & m) {
+    if (!super.matches(ss,pat,m)) return false;
+    /// we have provisional match, but let's only move UP-shifting ECs DOWN?
+    EmptyCodon & ec = (EmptyCodon&) ew[m[0]];
+    return true; // UNCLEAR.. ec.mDSType == cDS_UP;
+  }
+
+  @Override
+  virtual Void apply(PocketChainState & ss, ChainPattern pat, ChainMatches mat) {
+    print("CR_SP1110");
+    print(mat[0]);
+    print(mat[1]);
+    print(mat[2]);
+    EmptyCodon & ec = (EmptyCodon&) ew[mat[0]];
+    Codon & x  = (Codon&) ew[mat[1]];
+    // if (x is Sh*peSh*fter)
+    //   ec.mCrowdWeight /= 2u;
+    // else
+      ec.mCrowdWeight++;
+    ec.swapPocketPtrs(x);
+    ew.swap(mat[0],mat[1]);
+  }
+
+  //// ChainRule_SPREAD11 SERVICES
+  Bool try(PocketChainState & p) {
+    print("CR_SPTT10I10");
+    return performPCS(p);
+  }
+}
+
+/** CHAINRULE: COMPACT10: X -> [EC0] -> EC1  ==>  EC0 -> [X] -> EC1 */ 
+transient ChainRule_COMPACT10 : ChainRule {
+  
+  @Override virtual String ruleName() { return __CLASS__; }
+
+  @Override
+  virtual Bool pattern(PocketChainState & ss, ChainPattern & pat) {
+    ChainPattern p = { cCPAT_X, cCPAT_EC, cCPAT_FC };
+    pat = p;
+    return true;
+  }
+
+  @Override
+  virtual Void apply(PocketChainState & ss, ChainPattern pat, ChainMatches mat) {
+    print("CR_CM1010");
+    Codon & x   = (Codon&) ew[mat[0]];
+    EmptyCodon & ec1 = (EmptyCodon&) ew[mat[1]];
+    ec1.mCrowdWeight /= 2u;
+    ec1.swapPocketPtrs(x);
+    ew.swap(mat[0],mat[1]);
+  }
+
+  //// ChainRule_COMPACT10 SERVICES
+  Bool try(PocketChainState & p) {
+    print("CR_CM10TI10");
+    return performPCS(p);
+  }
+}
+
+/** CHAINRULE: COMPACT11: EC0 -> [EC1] -> X  ==>  EC0 -> [X] -> EC1 */ 
+transient ChainRule_COMPACT11 : ChainRule {
+  
+  @Override virtual String ruleName() { return __CLASS__; }
+
+  @Override
+  virtual Bool pattern(PocketChainState & ss, ChainPattern & pat) {
+    ChainPattern p = { cCPAT_FC, cCPAT_EC, cCPAT_X };
+    pat = p;
+    return true;
+  }
+
+  @Override
+  virtual Void apply(PocketChainState & ss, ChainPattern pat, ChainMatches mat) {
+    print("CR_CM1110");
+    EmptyCodon & ec = (EmptyCodon&) ew[mat[1]];
+    Codon & x   = (Codon&) ew[mat[2]];
+    ec.mCrowdWeight--;
+    ec.swapPocketPtrs(x);
+    ew.swap(mat[1],mat[2]);
+  }
+
+  //// ChainRule_SPREAD SERVICES
+  Bool try(PocketChainState & p) {
+    print("CR_CM11TI10");
+    return performPCS(p);
+  }
+}
+
+/** CHAINRULE: RELAXEMPTY: [U] -> [D] ==>  [D] -> [U] */ 
+transient ChainRule_RELAXEMPTY : ChainRule {
+  
+  @Override virtual String ruleName() { return __CLASS__; }
+
+  @Override
+  virtual Bool pattern(PocketChainState & ss, ChainPattern & pat) {
+    ChainPattern p = { cCPAT_U, cCPAT_D, cCPAT_N };
+    pat = p;
+    return true;
+  }
+
+  @Override
+  virtual Void apply(PocketChainState & ss, ChainPattern pat, ChainMatches mat) {
+    print("CR_RXEMAP10");
+    EmptyCodon & ecu = (EmptyCodon&) ew[mat[0]];
+    EmptyCodon & ecd = (EmptyCodon&) ew[mat[1]];
+    ecd.swapPocketPtrs(ecu);
+    ew.swap(mat[0],mat[1]);
+  }
+
+  //// ChainRule_RELAXEMPTY SERVICES
+  Bool try(PocketChainState & p) {
+    print("CR_RXETRY10");
+    return performPCS(p);
+  }
+}
+
+/** CHAINRULE: ALLEMPTY: EC0 -> [EC1] -> EC2  ==>  EC0 -> [EC1.cw-=3] -> EC2 */ 
+transient ChainRule_ALLEMPTY : ChainRule {
+  
+  @Override virtual String ruleName() { return __CLASS__; }
+
+  @Override
+  virtual Bool pattern(PocketChainState & ss, ChainPattern & pat) {
+    ChainPattern p = { cCPAT_FC, cCPAT_EC, cCPAT_FC };
+    pat = p;
+    return true;
+  }
+
+  @Override
+  virtual Void apply(PocketChainState & ss, ChainPattern pat, ChainMatches mat) {
+    print("CR_CM1110AE");
+    EmptyCodon & ec = (EmptyCodon&) ew[mat[1]];
+    ec.mCrowdWeight -= 3;
+  }
+
+  //// ChainRule_ALLEMPTY SERVICES
+  Bool try(PocketChainState & p) {
+    print("CR_CM11TI10AE");
+    return performPCS(p);
+  }
+}
+
+/** CHAINRULE: LONEEMPTY: Y1 -> [EC] -> Y2  ==>  Y1 -> [EC.cw++] -> Y2 */ 
+transient ChainRule_LONEEMPTY : ChainRule {
+  
+  @Override virtual String ruleName() { return __CLASS__; }
+
+  @Override
+  virtual Bool pattern(PocketChainState & ss, ChainPattern & pat) {
+    ChainPattern p = { cCPAT_Y, cCPAT_EC, cCPAT_Y };
+    pat = p;
+    return true;
+  }
+
+  // Custom matching to add crowd weight incrementing
+  virtual Bool matches(PocketChainState & ss, ChainPattern pat, ChainMatches & mat) {
+    if (!super.matches(ss, pat, mat)) return false;
+    EmptyCodon & ec = (EmptyCodon&) ew[mat[1]];
+    ec.mCrowdWeight++;
+    return true;
+  }
+
+  @Override
+  virtual Void apply(PocketChainState & ss, ChainPattern pat, ChainMatches mat) {
+    EmptyCodon & ec = (EmptyCodon&) ew[mat[1]];
+    if (ec.mCrowdWeight == ec.mCrowdWeight.maxof) {
+      Random random;
+      if (random.oneIn(2)) {
+        /// SWITCH DIRECTIONS FOR MIXING
+        ec.mDSType = (DriveStatusCode) (5u - ec.mDSType); // cDS_DOWN <> cDS_UP
+        ec.mCrowdWeight /= 2u;
+      } /* else {
+        Sh*peSh*fter sf;
+        sf.copySegAndPChain(ec);
+
+        ShSfISide1 it;
+        it.adopt(sf);
+        ew[mat[1]] = sf.atomof;
+        } */
+    }
+  }
+
+  //// ChainRule_LONEEMPTY SERVICES
+  Bool try(PocketChainState & p) {
+    print("CR_LNEC10");
+    return performPCS(p);
+  }
+}
+
+/** CHAINRULE: CROWDGROW: N -> [EC.cw^] -> N  ==>  N -> [Sf] -> N */ 
+transient ChainRule_CROWDGROW : ChainRule {
+  
+  @Override virtual String ruleName() { return __CLASS__; }
+
+  @Override
+  virtual Bool pattern(PocketChainState & ss, ChainPattern & pat) {
+    ChainPattern p = { cCPAT_N, cCPAT_EC, cCPAT_N };
+    pat = p;
+    return true;
+  }
+
+  // Custom matching to add crowd weight checking
+  virtual Bool matches(PocketChainState & ss, ChainPattern pat, ChainMatches & mat) {
+    if (!super.matches(ss, pat, mat)) return false;
+    return false; // ONLY GROW BY PATCHES
+    //    EmptyCodon & ec = (EmptyCodon&) ew[mat[1]];
+    //    return ec.mCrowdWeight == ec.mCrowdWeight.maxof;
+  }
+
+  @Override
+  virtual Void apply(PocketChainState & ss, ChainPattern pat, ChainMatches mat) {
+    /*
+    EmptyCodon & ec = (EmptyCodon&) ew[mat[1]];
+    Sh*peSh*fter sf;
+    sf.copySegAndPChain(ec);
+
+    ShSfISide1 it;
+    it.adopt(sf);
+    ew[mat[1]] = sf.atomof;
+    */
+  }
+
+  //// ChainRule_CROWDGROW SERVICES
+  Bool try(PocketChainState & p) {
+    print("CR_CM11TI10");
+    return performPCS(p);
+  }
+}
+
+transient ChainRuleMatcher + Fail + ChainTypes + QDebugUtils {
+  ChainPattern mPattern;
+  ChainMatches mMatches;
+  Bool mMatched;
+  /** \return true if rule matched, false if pattern or match failed */
+  Bool match(PocketChainState & ss, ChainRule& cr) {
+    print("CRMTR10");
+    print(cr.ruleName());
+    mMatched = cr.pattern(ss,mPattern);
+    if (!mMatched) return false;
+    print("CRMTR11");
+    mMatched = cr.matches(ss, mPattern, mMatches);
+    print(mMatched);
+    return mMatched;
+  }
+
+  Void apply(PocketChainState & ss, ChainRule& cr) {
+    if (!mMatched) fail(__FILE__,__LINE__);
+    cr.apply(ss, mPattern, mMatches);
+  }
+
+  Bool tryRule(PocketChainState & ss, ChainRule& cr) {
+    takeDebug(ss);
+    
+    print("CRMMTC10");
+    print(cr.ruleName());
+    if (!match(ss,cr)) return false;
+    print("CRMMTC11");
+    apply(ss,cr);
+    print("CRMMTC12");
+    return true;
+  }
+}

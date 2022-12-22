@@ -1,0 +1,61 @@
+element SeedSeq : XTimer(3u,6u,4u) + DTU + QDebugUtils {
+  EventWindow ew;
+  Bool mPhase2 = false;
+  typedef Unsigned(5) Count;
+  Count mCount = Count.maxof;
+
+  Void die() { ew[0] = Empty.instanceof; }
+  Void makeSL(C2D at, SN dir, PocketDir targq) {
+    SeedLoop11 sl;
+    sl.mClassId = LXMarker.classidof;
+    sl.mSeedDir = (PocketPtr) dir;
+    sl.mTargetQuadrant = targq;
+    ew[at] = sl.atomof;
+    
+    print("makeSL");
+    print(at);
+    print(dir);
+  }
+
+  Void behave() {
+    EventWindow ew;
+    //setDebugOutputEnabled(true);
+    for (SN sn = 1u; sn < 41u; ++sn) {
+      if (!ew.isAccessible(sn)) return die();
+      if (!(ew[sn] is Empty)) return die();
+    }
+    // all available and empty
+
+    C2D rootc(0,3);
+    { // Make and place root
+      HardCellG g;
+      g.makeRoot();
+      ew[rootc] = g.atomof;
+    }
+
+    { // Make and place the L1
+      { // Do SE/INS by hand
+        C2D at(1,1);
+        SeedLoop11 sl;
+        sl.mClassId = Loader.classidof;
+        sl.mSeedDir = (PocketPtr) cPP_EAST;
+        sl.mTargetQuadrant = cQUAD_SE;
+        ew[at] = sl.atomof;
+      }
+
+      makeSL(C2D.instanceof(1,-1), cPP_EAST, cQUAD_NE);
+      makeSL(C2D.instanceof(-1,1), cPP_WEST, cQUAD_SW);
+      makeSL(C2D.instanceof(-1,-1), cPP_WEST, cQUAD_NW);
+    }
+
+    { // Replace self with the DS
+      QHardCellG & root = (QHardCellG&) ew[rootc];
+      DiamondSequencer ds;
+      QHardCellG & rds = ds;
+      rds = root; // pick up all QHardCellG fields
+      ds.mUpHops = 1u; // we're down one hop
+      ew[0] = ds.atomof;
+      return;
+    }
+  }
+}

@@ -1,0 +1,190 @@
+// SAMPLE 'ANCESTOR' CODE
+local constant LXMarker.Mark cMAX_MARK = (LXMarker.Mark) Unsigned(LXMarker.Mark.sizeof).maxof;
+
+local constant LXMarker.Mark cMARK_RESET =    0x1; // mother entry point
+local constant LXMarker.Mark cMARK_XFER_MOM = 0x2; // first transfer endpoint
+local constant LXMarker.Mark cMARK_DL1      = 0x3; // first DL
+local constant LXMarker.Mark cMARK_DL2      = 0x4; // second DL
+
+
+local constant LXMarker.Mark cRESHAPE_LABEL = 0xFA;
+local constant LXMarker.Mark cRESHAPE_ILABEL = cMAX_MARK^cRESHAPE_LABEL;
+
+/*
+local constant LXMarker
+  cINS_FIRST_MARK = {
+  .mDSType = DTU.cDS_NORM,
+  .mLabel = cMARK_LABEL,
+
+  .mUpMap = 0x8, // set up chain on INS
+  .mDownMap = 0x8, // set down chain on INS
+  .mChainControlData = {
+    .mTQMap = (DTU.TQMap) (DTU.cTQ_NE | DTU.cTQ_SE), // set target quad NE + SE
+    .mSRMap = (DTU.ASRMap) (DTU.cASR_L | DTU.cASR_X), // set allowable edge clearance
+  },
+}; 
+*/
+
+local constant LXReset
+  cINS_ANCESTOR_RESET = {
+  .mDSType = DTU.cDS_NORM,
+  .mDestUnit = DTU.cPUNIT_XEQ,
+  .mLabel = cMARK_RESET,
+};
+
+local constant LXBioCtorArm
+  cINS_MOVE_MOTHER10 = {
+  .mProgram = {
+    DTU.cBOC_LRST, // 0: reset new arm
+    DTU.cBOC_AGNT, // 1: go n
+    DTU.cBOC_AGWT, // 2: go w -1
+    DTU.cBOC_AGWT, // 3: go w -2
+    DTU.cBOC_AGST, // 4: go s
+    DTU.cBOC_AGWT, // 5: go w -3
+    DTU.cBOC_AGWT, // 6: go w -4
+  },
+  .mDSType = DTU.cDS_NORM,
+};
+
+local constant LXBioCtorArm
+  cINS_MOVE_MOTHER11 = {
+  .mProgram = {
+    DTU.cBOC_AGWT, // 0: go w -5
+    DTU.cBOC_AGWT, // 1: go w -6
+    DTU.cBOC_AGWT, // 2: go w -7
+    DTU.cBOC_AGWT, // 3: go w -8
+    DTU.cBOC_ADDS, // 4: deploy new mother DS
+    DTU.cBOC_LAEC, // 5: E-become all ECs
+    DTU.cBOC_LEOP, // 6: end of program
+  },
+  .mDSType = DTU.cDS_NORM,
+};
+
+local constant LXBioCtorArm
+  cINS_SEED_DAUGHTER10 = {
+  .mProgram = {
+    DTU.cBOC_LRST, // 0: reset new arm
+    DTU.cBOC_AGNT, // 1: go n
+    DTU.cBOC_AGWT, // 2: go w -1
+    DTU.cBOC_AGWT, // 3: go w -2
+    DTU.cBOC_AGST, // 4: go s
+    DTU.cBOC_AGWT, // 5: go w -3
+    DTU.cBOC_AGWT, // 6: go w -4
+  },
+  .mDSType = DTU.cDS_NORM,
+};
+
+local constant LXBioCtorArm
+  cINS_SEED_DAUGHTER11 = {
+  .mProgram = {
+    DTU.cBOC_AGWT, // 0: go w -5
+    DTU.cBOC_AGWT, // 1: go w -6
+    DTU.cBOC_AGWT, // 2: go w -7
+    DTU.cBOC_AGWT, // 3: go w -8
+    DTU.cBOC_AGWT, // 4: go w -9
+    DTU.cBOC_AGWT, // 5: go w -10
+    DTU.cBOC_AGWT, // 6: go w -11
+  },
+  .mDSType = DTU.cDS_NORM,
+};
+
+local constant LXBioCtorArm
+  cINS_SEED_DAUGHTER12 = {
+  .mProgram = {
+    DTU.cBOC_AGWT, // 0: go w -12
+    DTU.cBOC_AGWT, // 1: go w -13
+    DTU.cBOC_AGWT, // 2: go w -14
+    DTU.cBOC_AGWT, // 3: go w -15
+    DTU.cBOC_AGWT, // 4: go w -16
+    DTU.cBOC_ADDS, // 5: deploy daughter DS
+    DTU.cBOC_LAEC, // 6: E-become all ECs
+  },
+  .mDSType = DTU.cDS_NORM,
+};
+
+local constant LXCommandDS cINS_REGRIP_MOTHER = {
+  .mDSType = DTU.cDS_NORM, .mPacket = { .mCmd = DTU.cSW3C_GRIPDS, .mArg = 0xDA }
+};
+
+local constant LXDo
+  cINS_INIT_OUTBOUND_COPY = {
+  .mDSType = DTU.cDS_NORM,
+  .mStoredPU = DTU.cPUNIT_OUT
+};
+
+local constant LXCopy
+  cINS_COPY_OUTBOUND = {
+  .mDSType = DTU.cDS_NORM,
+  .mLabel = 8u, // XXX
+  .mSrcPU = DTU.cPUNIT_OUT,
+  .mDstPU = DTU.cPUNIT_REG
+};
+
+
+local constant LXCopy
+  cINS_XFER_OUTBOUND = {
+  .mDSType = DTU.cDS_NORM,
+  .mLabel = cMARK_XFER_MOM,
+  .mConsume = true,
+  .mSrcPU = DTU.cPUNIT_OUT,
+  .mDstPU = DTU.cPUNIT_REG
+};
+
+local constant DaughterLoader
+  cINS_INIT_DAUGHTER_INBOUND10 = {
+  .mDSType = DTU.cDS_NORM,
+  .mLabel = cMARK_DL1,
+  .mHeadCount = 1u,             // XXX NEED AN ARGUMENT FOR THAT
+  .mConsumeOriginal = false,
+};
+
+local constant DaughterLoader
+  cINS_INIT_DAUGHTER_INBOUND11 = {
+  .mDSType = DTU.cDS_NORM,
+  .mLabel = cMARK_DL2,
+  .mConsumeOriginal = true,
+};
+
+local constant LXCopy
+  cINS_COPY_INBOUND = {
+  .mDSType = DTU.cDS_NORM,
+  .mLabel = 0u, // XXX
+  .mSrcPU = DTU.cPUNIT_OUT,
+  .mDstPU = DTU.cPUNIT_REG
+};
+
+/*
+local constant LXMarker
+  cINS_LAST_MARK = {
+  .mDSType = DTU.cDS_NORM,
+  .mLabel = cMARK_ILABEL,
+  .mUpMap = 0x8, // set up chain on INS
+  .mDownMap = 0x8, // set down chain on INS
+  .mHalt = true,  // hang on this LX indefinitely
+  .mChainControlData = {
+    .mTQMap = 0x6, // expand to allow target quad NE (1<<1) (+ SE (1<<2))
+    .mSRMap = 0xc, // tighten allowable edge clearance (only _L and _XL)
+  },
+}; 
+*/
+transient Ancestor {
+
+  constant Atom cPROGRAM[] = {
+    cINS_ANCESTOR_RESET,          // RS, MARK 1
+    cINS_MOVE_MOTHER10,           // BC
+    cINS_MOVE_MOTHER11,           // BC
+    cINS_INIT_OUTBOUND_COPY,      // DO
+    cINS_XFER_OUTBOUND,           // CP
+    cINS_INIT_DAUGHTER_INBOUND10, // DL
+    cINS_SEED_DAUGHTER10,         // BC
+    cINS_SEED_DAUGHTER11,         // BC
+    cINS_SEED_DAUGHTER12,         // BC
+    cINS_INIT_OUTBOUND_COPY,      // DO
+    cINS_COPY_OUTBOUND,           // CP
+    cINS_INIT_DAUGHTER_INBOUND11, // DL
+    cINS_COPY_INBOUND,            // CP
+  };
+}
+
+ 
+

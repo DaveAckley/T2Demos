@@ -1,0 +1,47 @@
+
+
+  T tr;
+  Atom & atref = tr.mAtom;
+  if (atref as GeneralSeed) {
+    Unsigned i = atref.mCodonMember.positionof; // fine
+  }
+
+  T tr;
+  Atom & atref = tr.mAtom;
+  if (atref as Codon) {
+    Unsigned i = atref.mGeneralSeedMember.positionof; // no go
+  }
+
+
+quark QB2 {
+  Int(8) mInt;
+}
+quark QBase : QB2 {
+  Bool(3) mQB;
+}
+transient T : QBase {
+  Bool(5) mBool;
+  Atom mAtom;
+}
+
+transient T2 {
+  Bool(7) mBt2;
+  T mT;
+}
+
+  T2 t2;
+  t2.mT.QBase.positionof; // 108u
+  t2.mT.mInt.positionof; // 111u?
+  t2.mT.QBase.mInt.positionof; // 3u
+  t2.mT.QB2.mInt.positionof; // 0u
+
+  T tr;
+  tr.QBase.positionof; // abs of QBase == 101u
+
+  tr.QBase.mInt.positionof; // mInt rel to QBase == 3u
+  tr.QB2.mInt.positionof; // mInt rel to QB2 == 0u
+
+  tr.mInt.positionof;      // mInt rel to stg? == 104u
+
+  tr.QBase.positionof + tr.QBase.mInt.positionof == tr.mInt.positionof
+

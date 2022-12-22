@@ -1,0 +1,446 @@
+transient DiamondCutterBase : PocketableState + QDebugUtils {
+
+  @Override
+  virtual Bool init(Intender & in) {
+    if (super.init(in)) return true;
+    DiamondCutter & dc = (DiamondCutter &) in;
+    takeDebug(dc);
+    return false;
+  }
+
+  @Override
+  virtual Bool observe(Intender & in) {
+    if (super.init(in)) return true;
+    findAvailables();
+    return false;
+  }
+
+  Bool die() {
+    print("DCYING");
+    EventWindow ew;
+    ew[0] = Empty.instanceof;
+    return true;
+  }
+
+  Void renderSlash(C2D off, ARGB col, Unsigned size) {
+    Drawable drawable;
+    if (!drawable.canDraw()) return;
+    C2D ctr = off*(3*Drawable.cUNITS_PER_SITE/8); 
+    C2D start = ctr-(C2D.Coord) (size/2u);
+    /* end was supposed to be 'start+' etc, trying
+       to make a horizontal line. But I like the diagonal
+       diamonds this makes better, at least for now.
+     */
+    C2D end = ctr+C2D.instanceof(0,(C2D.Coord) size/2u);
+    drawable.drawMaskedLine(start, end, col, col, (Bits) 0xffffffff, size);
+  }
+
+  /** \returns non-zero C2D of empty site in uncrowded adjacent pocket
+      ad, or (0,0) if cannot find such a site
+   */
+  C2D couldMoveAD(AxialDir ad) {
+    C2D origin; // (0,0) means can't move ad
+
+    RectIterator ri;
+    mPocket.takeDebug(self);
+    if (!mPocket.initIterator(ri, (SN) (ad + 1u), true)) return origin;
+    print("DCTMAD11");
+    Unsigned emptycount, fullcount;
+    C2D emptyc;
+    Random random;
+    while (ri.hasNext()) {
+      C2D c = ri.next();
+      if (!ew.isAccessible(c)) continue;
+      Atom & a = ew[c];
+      if (a is Empty && random.oneIn(++emptycount))
+        emptyc = c;
+      else ++fullcount;
+    }
+    print("DCTMAD12");
+    print(fullcount);
+    print(emptycount);
+    if (fullcount > 1u || emptycount == 0u) return origin;
+    print("DCTMAD13");
+    return emptyc;
+  }
+
+  Bool tryMoveAD(DiamondCutter & dc, AxialDir ad) {
+    print("DCTMAD10");
+    C2D destc = couldMoveAD(ad);
+    if (destc.length() == 0u) return false;
+    print("DCTMAD11");
+    ew.swap(C2D.instanceof, destc);
+    return true;
+  }
+
+  Bool rootAdjacent(PocketDir & dirquad) {
+    PocketHC3 & p = mPocket;
+    Unsigned mincorneridx;
+    Unsigned mincornerhops = Unsigned.maxof;
+    Unsigned mincornercount = 0u;
+    SN mincornerSN;
+    Random random;
+    for (Unsigned i = 0u; i < p.mCornerHops.lengthof; i++) {
+      if (p.mCornerHops[i] < mincornerhops) {
+        mincorneridx = i;
+        mincornerhops = p.mCornerHops[i];
+        mincornercount = 1u;
+      } else if (p.mCornerHops[i] == mincornerhops) {
+        if (i/2u > mincorneridx/2u || // Favor downward dirs to get below target
+            random.oneIn(++mincornercount)) {
+          mincorneridx = i;
+        }
+      }
+    }
+
+    print("DCFOR11");
+    if (mincornercount == 0u) return die(); // wth?
+    dirquad = (PocketDir) mincorneridx; // best dir we found
+    return (mincornerhops == 0u);
+  }
+
+  /** \returns pocketdir of dsroot if found else unsigned maxof, also
+     sets nextad in any case
+   */
+  Unsigned diamondSequencerAdjacent(AxialDir & nextad, AxialDir lastad) {
+    print("DCDSA10");
+    PocketHC3 & p = mPocket;
+    Unsigned mincorneridx;
+    Unsigned mincornerdshops = Unsigned.maxof;
+    Unsigned mincornercount = 0u;
+    SN mincornerSN;
+    Random random;
+    for (Unsigned i = 0u; i < p.mCornerHops.lengthof; i++) {
+      if (p.mCoords[i].length() == 0u) continue; // XXX?
+      QDSHopsStg qdsh = p.mCornerQDSHopsStg[i];
+      Unsigned dshops = qdsh.getDSHops();
+      if (dshops < mincornerdshops) {
+        print("DCDSA10BEAT");
+        mincorneridx = i;
+        mincornerdshops = dshops;
+        mincornercount = 1u;
+        print(mincorneridx);
+        print(mincornerdshops);
+      } else if (dshops == mincornerdshops) {
+        if (i/2u > mincorneridx/2u || // break ties southward
+            random.oneIn(++mincornercount)) {
+          print("DCDSA10TIE");
+          mincorneridx = i;
+          print(mincorneridx);
+        }
+      }
+    }
+
+    print("DCDSA11");
+    if (mincornercount == 0u) die(); // wth?
+
+    nextad = lastad;            // assume keep tracking
+    if (mincornerdshops == 0u) 
+      return mincorneridx;      // ds root found
+
+    print("DCDSA12");
+
+    constant Unsigned cDSHOPS_GRADIENT_THRESHOLD = 5u;
+    if (mincornerdshops < cDSHOPS_GRADIENT_THRESHOLD) {
+      print("DCDSA13");
+      print(mincornerdshops);
+      
+      AxialDir ad1, ad2;
+      axialDirsBorderingQuad((PocketDir) mincorneridx, ad1, ad2);
+      nextad = random.oneIn(2) ? ad1 : ad2;
+    }
+
+    print("DCDSA14");
+    return Unsigned.maxof;    // nextad set or defaulted
+    
+  }
+}
+
+/**  - DC intention 0:
+       = Find root
+       = Derive config info from it
+       = Release DC intention 1s toward new roots
+       = adopt intention 2
+ */
+transient DiamondCutterFindOldRoot : DiamondCutterBase {
+  @Override
+  virtual Bool act(Intender & in) {
+    PocketHC3 & p = mPocket;
+    DiamondCutter & dc = (DiamondCutter &) in;
+
+    print(__FILE__,__LINE__);
+    print(self);
+    print(dc);
+
+    //// ARE WE ROOT ADJACENT?
+    print("DCFOR10");
+    PocketDir towardroot;
+    Bool rootadjacent = rootAdjacent(towardroot);
+
+    if (!rootadjacent) {
+
+      //// WE ARE NOT ROOT ADJACENT BUT IT'S THATAWAY
+      AxialDir ad1, ad2;
+      axialDirsBorderingQuad(towardroot, ad1, ad2);
+      print("DCFOR12");
+      return tryMoveAD(dc, random.oneIn(2u) ? ad1 : ad2);
+    }
+
+    //// WE ARE ROOT ADJACENT.
+    print("DCFOR13");
+
+    return deployRootSeeds(dc, p.mCoords[towardroot]);
+  }
+
+  Bool deployRootSeeds(DiamondCutter & dc, C2D rootc) {
+    Fail f;
+    print("DCFORDRS11");
+    //// GET ACCESS TO THE ROOT
+    EventWindow ew;
+    if (!ew.isAccessible(rootc)) f.fail(__FILE__,__LINE__);
+    Atom & a = ew[rootc];
+    QHardCell & qhc = (QHardCell&) ew[rootc]; // or fail
+    if (qhc.getUpHops() != 0u) f.fail(__FILE__,__LINE__);
+    //// GOT ACCESS TO THE ROOT
+
+    //// FOR NOW AT LEAST, INSIST THE ROOT IS HARDCELLG
+    HardCellG & rootg = (HardCellG &) qhc; // or fail
+
+    //// TAKE IT OVER
+    rootg.mCmdPhase = HardCellG.cCMD_WAIT;
+
+    //// IS THE GRID ALL SETTLED?
+    if (!rootg.stableToEdge()) return true; // no, block
+    //// THE GRID IS ALL SETTLED
+
+    //// CONFIGURE PARAMETERS
+    Unsigned oldmaxgoal = qhc.getMaxHopsGoal();
+    dc.mNewMaxGoalHops = (HardCellG.HopCount) (oldmaxgoal/2u-0u); // we shall see
+
+    DiamondCutter.AxialDirMap adm = dc.getNewRootDirs(self);
+    //// CAN WE DEPLOY IN ALL NEEDED DIRS
+    C2D dests[4];
+    for (Unsigned i = cW; i <= cE; ++i) {
+      AxialDir ad = (AxialDir) i;
+      if ((adm & (1u<<ad)) != 0u) {
+        //// CAN WE DEPLOY TOWARD ad
+        dests[i] = couldMoveAD(ad);
+        if (dests[i].length() == 0u) return false; // NO
+        //// WE COULD DEPLOY TOWARD ad
+      }
+    }
+    //// WE CAN DEPLOY IN ALL NEEDED DIRS
+
+    //// HAVE WE FULLY DEPLOYED
+    for (Unsigned i = cW; i <= cE; ++i) {
+      AxialDir ad = (AxialDir) i;
+      if ((adm & (1u<<ad)) != 0u) {
+        Atom copy = dc.atomof;  // newmaxgoal already configured
+        DiamondCutter & dcnew = (DiamondCutter&) copy;
+        dcnew.mStateIdx = DiamondCutter.cDCS_SEED_NEW_ROOT;
+        dcnew.mOriginalAxialDir = ad;
+        dcnew.mEventCounter = dcnew.mEventCounter.maxof; // Last ditch
+        ew[dests[i]] = dcnew.atomof; // THE BIRD IS AWAY
+      }
+    }
+    //// WE HAVE FULLY DEPLOYED;
+    dc.mStateIdx = dc.cDCS_DELETE_OLD_ROOT; // Adopt a new intention
+    dc.mEventCounter = (DiamondCutter.EventCounter) (5u*oldmaxgoal/2u); // set timer
+
+    return true;
+  }
+  
+}
+
+/**  - DC intention 1:
+       = Climb dshops gradient.
+       = If no gradient, continue in same direction
+       = when can see DS and HG south of DS, convert
+         HG south of DS to a configured root and erase 
+         self
+ */
+transient DiamondCutterSeedNewRoot : DiamondCutterBase {
+  @Override
+  virtual Bool act(Intender & in) {
+    DiamondCutter & dc = (DiamondCutter &) in;
+    EventWindow ew;
+
+    //// DO WE HAVE MORE TIME?
+    if (dc.mEventCounter-- == 0u) {
+      ew[0] = Empty.instanceof;
+      return true;
+    }
+    //// WE DO HAVE MORE TIME
+
+    //// ARE WE DS ADJACENT?
+    print("DCSNR10");
+    PocketDir towardds;
+    AxialDir nextad;
+    Unsigned dspd = diamondSequencerAdjacent(nextad, dc.mOriginalAxialDir);
+    if (dspd == Unsigned.maxof) {
+      //// WE ARE NOT DS ADJACENT
+      print("DCSNR11");
+      return tryMoveAD(dc, nextad);
+    }
+
+    //// WE ARE DS ADJACENT.
+    print("DCSNR12");
+    Unsigned newrootpd;
+    if (dspd == cQUAD_NW) newrootpd = cQUAD_SW;
+    else if (dspd == cQUAD_NE) newrootpd = cQUAD_SE;
+    else return tryMoveAD(dc,cS);  // BUT NOT BELOW DS: TRY GOING S
+
+    print("DCSNR13");
+    PocketHC3 & p = mPocket;
+
+    Atom & a = ew[p.mCoords[newrootpd]];
+    QHardCell & newroot = (QHardCell&) a; // or fail
+
+    if (newroot as HardCellG)
+      newroot.mCmdPhase = newroot.cCMD_STOP; // START OUT STOPPED
+
+    newroot.setUpHops(0u);                      // YOU ARE ROOT
+    newroot.setMaxHopsGoal(dc.mNewMaxGoalHops); // OVER ALL THIS LAND
+    newroot.setSettledDownHops(0u);             // WHICH DOES NEED A MOMENT
+    ew[0] = Empty.instanceof;                   // BUT MY JOB IS DONE
+
+    return true;
+  }
+}
+
+/**  - DC intention 2:
+       = Count newmaxhopsgoal events
+       = Destroy local root by setting its mHops = 1u
+       = Erase self
+*/
+transient DiamondCutterDeleteOldRoot : DiamondCutterBase {
+  @Override
+  virtual Bool act(Intender & in) {
+    Fail f;
+    PocketHC3 & p = mPocket;
+
+    DiamondCutter & dc = (DiamondCutter &) in;
+    Random random;              // stochastic double count
+    if (random.oneIn(2u) && dc.mEventCounter-- == 0u) {
+
+      //// TIME TO NUKE THE ROOT
+      PocketDir rootpd;
+      Bool atroot =  rootAdjacent(rootpd);
+      if (!atroot) f.fail(__FILE__,__LINE__);
+      C2D rootc = p.mCoords[rootpd];
+      EventWindow ew;
+      Atom & a = ew[rootc];
+      if (!(a is QHardCell)) f.fail(__FILE__,__LINE__);
+      {
+        Xplit s;
+        s.mRoot = true;
+        s.mPosition = 1u;
+        ew[rootc] = s.atomof;   // THE ROOT IS NUKED
+      }
+      ew[0] = Empty.instanceof;
+      //// AS ARE WE
+      return true;
+    }
+
+    print(__FILE__,__LINE__);
+    print(dc.mNewMaxGoalHops);
+    return false;
+  }
+}
+
+quark DiamondCutter : Pocketable + DTU {
+  //// DiamondCutter API
+  typedef Bits(AxialDir.maxof + 1u) AxialDirMap;
+
+  /** Which directions to deploy new roots. 
+   */
+  virtual AxialDirMap getNewRootDirs(DiamondCutterBase & dcb) ;
+
+  typedef Unary(3) StateIdx;
+  constant StateIdx cDCS_FIND_OLD_ROOT = 0u;
+  constant StateIdx cDCS_SEED_NEW_ROOT = 1u;
+  constant StateIdx cDCS_DELETE_OLD_ROOT = 2u;
+
+  StateIdx mStateIdx = cDCS_FIND_OLD_ROOT;
+
+  AxialDir mOriginalAxialDir; // which way did we start out
+  HardCellG.HopCount mNewMaxGoalHops; // also event counter in DC#3?
+  typedef Unsigned(HardCellG.HopCount.sizeof + 4u) EventCounter; // Four bits bigger than HopCount..
+  EventCounter mEventCounter;
+
+  //// INTENDER API
+  @Override
+  virtual ClassId getIntentionClass() {
+    which (mStateIdx) {
+      case cDCS_FIND_OLD_ROOT:  { return DiamondCutterFindOldRoot.classidof; }
+      case cDCS_SEED_NEW_ROOT:  { return DiamondCutterSeedNewRoot.classidof; }
+    }
+    /* cDCS_DELETE_OLD_ROOT: */ { return DiamondCutterDeleteOldRoot.classidof; }
+  }
+  
+}
+
+/** XCutDiamond
+    \symbol XD
+    \color #aaf
+ */
+element XCutDiamond : DiamondCutter {
+  @Override
+  virtual Void renderGraphics() {
+    C2D offset; // (0,0)
+    ColorUtils cu;
+    ARGB col = cu.color(0xffaaaaff);
+    renderSlash(offset,col,700u);
+  }
+
+  Void renderSlash(C2D off, ARGB col, Unsigned size) {
+    Drawable drawable;
+    if (!drawable.canDraw()) return;
+    C2D ctr = off*(3*Drawable.cUNITS_PER_SITE/8); 
+    C2D start = ctr-(C2D.Coord) (size/2u);
+    /* end was supposed to be 'start+' etc, trying
+       to make a horizontal line. But I like the diagonal
+       diamonds this makes better, at least for now.
+     */
+    C2D end = ctr+C2D.instanceof(0,(C2D.Coord) size/2u);
+    drawable.drawMaskedLine(start, end, col, col, (Bits) 0xffffffff, size);
+  }
+  @Override
+  virtual AxialDirMap getNewRootDirs(DiamondCutterBase & dcb) {
+    return (AxialDirMap) ((1u<<cW)|(1<<cE));
+  }
+
+  Void behave() {
+    pursueIntention();
+  }
+}
+
+/** LXReleaseDiamondCutter
+    \symbol DX
+    \color #ccf
+ */
+element LXReleaseDiamondCutter : LX {
+  //// LX API
+  @Override
+  virtual Bool perform(DiamondSequencerState & dss) {
+    print("LXRDX10");
+    Random random;
+    SN empsn = SN.maxof;
+    Unsigned empcount = 0u;
+    for (Unsigned i = cPUNIT_REG; i <= cPUNIT_XEQ; ++i) {
+      ProcUnit pu = (ProcUnit) i;
+      ProcUnitInfo & pui = dss.getPUInfo(pu);
+      if (pui.mEmptySN != SN.maxof &&
+          random.oneIn(++empcount))
+        empsn = pui.mEmptySN;
+    }
+    if (empcount > 0u) {
+      EventWindow ew;
+      XCutDiamond cdv;
+      ew[empsn] = cdv.atomof;
+      markDSPForRotationForward(dss, 0u, cPUNIT_XEQ); // we're done
+      return true;
+    }
+    return false;
+  }
+}

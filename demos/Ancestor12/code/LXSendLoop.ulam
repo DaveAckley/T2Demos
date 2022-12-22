@@ -1,0 +1,247 @@
+/** Set up to transmit the program loop entire, with programmable
+    post-transmission cleanup.
+
+    DS PU assignments
+    Initial REG: outbound arm
+    Initial INP: control point
+    Initial OUT: head buffer
+    Initial XEQ: src codons
+
+    \symbol SL
+    \color #a2e
+ */
+element LXSendLoop : LX + QLabelMark {
+  typedef Unsigned(3) HeadCount;
+  HeadCount mHeadCount;         //< #insns in post-processing prefix
+
+  /*
+  ProcUnit mCtrlPU = cPUNIT_INP;    //< NW Green: Pocket for us while running
+  ProcUnit mHeadPU = cPUNIT_OUT;    //< SW Red: Pocket for head code
+  ProcUnit mCodePU = cPUNIT_XEQ;    //< SE White: Pocket for code loop to copy
+  ProcUnit mXferPU = cPUNIT_REG;    //< NE Blue: Pocket for outbound transfer
+  */
+
+  /*
+  Void swapPUs(DiamondSequencerState & dss, ProcUnit & pu1, ProcUnit & pu2) {
+    dss.swapPUs(pu1,pu2);
+    ProcUnit tmp = pu1;
+    pu1 = pu2;
+    pu2 = tmp;
+  }
+  */
+
+  typedef Unary(2) SendPhase;
+  constant SendPhase cSP_INIT = 0u; //< kill ctrl and head, init and regrip
+  constant SendPhase cSP_HEAD = 1u; //< load mHeadCount + KX R to head
+  constant SendPhase cSP_COPY = 2u; //< ship loop, regrip W<->B, kill self
+
+  SendPhase mSendPhase = cSP_INIT;
+  Bool mLabelAcquired = false; //< have we picked up first shipped label?
+
+  //// LX API
+  @Override
+  virtual Bool perform(DiamondSequencerState & dss) {
+    EventWindow ew;
+    BaseClassUtils bcu;
+    Fail f;
+
+    print("LXINITSEND10");
+    //// HAVE WE INITTED THINGS ALREADY?
+    if (mSendPhase == cSP_INIT) {
+      //// WE HAVE NOT ALREADY INITIALIZED THINGS
+
+      Bool kctrl = killPU(cPUNIT_INP, dss); // kill ctrl
+      Bool khead = killPU(cPUNIT_OUT, dss); // kill head
+      if (!kctrl || !khead) return true; // dying in progress
+
+      {
+        ProcUnitInfo & puihead = dss.getPUInfo(cPUNIT_OUT); // get head info
+
+        print("DLPUND12");
+        if (puihead.mOccupiedSites != 0u || puihead.mEmptySN == SN.maxof)
+          f.fail(__FILE__,__LINE__); // wtf we just killed it
+
+        Looper looper;
+        bcu.copySharedData(self,looper);
+        looper.init(); // init over shared data
+        ew[puihead.mEmptySN] = looper.atomof;
+        // Head is initted
+      }
+
+      {
+        ProcUnitInfo & puictrl = dss.getPUInfo(cPUNIT_INP); // get ctrl info
+
+        print("DLPUND12");
+        if (puictrl.mOccupiedSites != 0u || puictrl.mEmptySN == SN.maxof)
+          f.fail(__FILE__,__LINE__); // wtf we just killed it
+
+        // We must keep this self (which on the germline) pristine
+        // (e.g., in cSP_INIT). Do mods only on the copy
+        Atom copy = self.atomof;
+        Self & scopy = (Self&) copy; // Point at copy
+        scopy.mSendPhase = cSP_HEAD; // Copy moves on to next phase
+        scopy.mPocketPtrs[cBODY_UP] = cPP_NULL; // Copy is unconnected
+        scopy.mPocketPtrs[cBODY_DOWN] = cPP_NULL; // "
+        ew[puictrl.mEmptySN] = copy;  // Deploy self copy
+
+        markDSPForRotationForward(dss, 0u, cPUNIT_XEQ); // roll the germline IS
+        dss.swapPUs(cPUNIT_INP,cPUNIT_XEQ); // _INP is now src codons
+      }
+      return true; // Oh yeah we did stuff
+    }
+    //// WE HAVE ALREADY INITTED THINGS.
+
+    //// IS HEAD SETUP COMPLETE?
+    if (mSendPhase == cSP_HEAD) {
+      //// HEAD SETUP IS NOT COMPLETE.
+      
+      //// DO WE HAVE AN EC IN mHeadPU?
+    
+      ProcUnitInfo & puihead = dss.getPUInfo(cPUNIT_OUT); // get head buffer info
+
+      if (puihead.mCodonSN == SN.maxof) 
+        f.fail(__FILE__,__LINE__); // wtf we just initted it
+
+      Codon & hcodon = (Codon&) ew[puihead.mCodonSN];
+      if (!(hcodon is EmptyCodon)) // mark for temp?
+        return true;            // Block 
+      //// WE HAVE AN EC IN mHEADPU
+
+      //// DO WE HAVE MORE HEAD INSNS TO LOAD?
+      if (mHeadCount > 0u) {
+        //// WE DO HAVE MORE HEAD INSNS TO LOAD.
+
+        //// DO WE HAVE A NON-EMPTY CODON TO LOAD IN mCodePU?
+        ProcUnitInfo & puicode = dss.getPUInfo(cPUNIT_INP); // get src code info
+
+        if (puicode.mCodonSN == SN.maxof) 
+          f.fail(__FILE__,__LINE__); // wtf
+
+        Codon & ccodon = (Codon&) ew[puicode.mCodonSN];
+        if (ccodon is EmptyCodon) {
+          markDSPForRotationForward(dss, 0u, cPUNIT_INP); // bump it ahead
+          return true;
+        }
+          
+        //// WE DO HAVE A NON-EMPTY CODON TO LOAD IN _INP
+        //// COPY IT TO HEAD
+        Atom acopy = ccodon.atomof; // get a copy
+        Codon & cacopy = (Codon&) acopy;
+        bcu.copySharedData(hcodon.atomof, acopy); 
+        cacopy.mDSType = cDS_NORM; // need this?
+        ew[puihead.mCodonSN] = cacopy.atomof; // overwrite head EC
+        //// WE HAVE COPIED IT TO HEAD
+
+        markDSPForRotationForward(dss, 0u, cPUNIT_INP);          // ask code for next item
+        markDSPForRotation(dss, 0u, cPUNIT_OUT, cDSTATUS_TEMP);  // ask head for empty spot
+        --mHeadCount;
+        return true;            // did work
+      }
+
+      //// WE DO NOT HAVE MORE HEAD INSNS TO LOAD
+
+      //// PUSH FREE CLEANUP AT END
+      LXKill kl;
+      kl.mPocketsToKill[cPUNIT_XEQ] = true; // Kill white (will be us), and
+      kl.mRegripXToPU = cPUNIT_INP;         // Switch to green
+      bcu.copySharedData(hcodon.atomof, kl.atomof); 
+      kl.mDSType = cDS_NORM; // need this?
+      ew[puihead.mCodonSN] = kl.atomof; // overwrite head EC
+      //// WE PUSHED FREE CLEANUP AT END
+      
+      mSendPhase = cSP_COPY;    // start copying
+      return true;
+    }
+    //// HEAD SETUP IS COMPLETE
+
+    //// IS WHOLE LOOP COPYING DONE?
+    if (mSendPhase == cSP_COPY) {
+      //// WHOLE LOOP COPYING IS NOT DONE.
+
+      //// HAVE WE GOT A CODE CODON TO COPY
+      ProcUnitInfo & puicode = dss.getPUInfo(cPUNIT_INP); // get code info
+
+      if (puicode.mCodonSN == SN.maxof) 
+        f.fail(__FILE__,__LINE__); // wtf
+
+      Codon & ccodon = (Codon&) ew[puicode.mCodonSN];
+      if (ccodon is EmptyCodon) {
+        /// WE DO NOT HAVE A CODE CODON
+        markDSPForRotationForward(dss, 0u, cPUNIT_INP); // bump it ahead
+        return true;
+      }
+      //// WE HAVE GOT A CODE CODON TO COPY
+
+      //// HAVE WE GOT AN XFER EC TO COPY IT TO?
+      ProcUnitInfo puixfer = dss.getPUInfo(cPUNIT_REG);
+      if (!puixfer.mFound) return false;
+      print("CPUF14");
+
+      SN xsn = puixfer.mCodonSN;
+      if (xsn == SN.maxof)
+        return false; // ??
+
+      print("CPUF15");
+      Atom & xa = ew[xsn];
+      if (!(xa is EmptyCodon)) {
+        markDSPForRotation(dss, 0u, cPUNIT_REG, cDSTATUS_TEMP);  // ask xfer for empty spot
+        return false;
+      }
+      //// WE HAVE GOT AN XFER EC TO COPY IT TO.
+
+      Atom copy = ccodon.atomof;
+      Codon & ccopy = (Codon&) copy;
+
+      EmptyCodon & xac = (EmptyCodon&) xa;
+      bcu.copySharedData(xa, copy);
+      ccopy.mDSType = cDS_NORM; // need this?
+
+      ew[xsn] = copy; // Send next codon
+      markDSPForRotation(dss, 0u, cPUNIT_REG, cDSTATUS_TEMP);  // and ask reg to push it
+
+      //// WE HAVE SENT ANOTHER CODON
+
+      //// IS THIS THE INITIAL CODON?
+      if (!mLabelAcquired) {
+        //// THIS IS THE INITIAL CODON
+        if (ccopy as QLabelMark) { // Does it have a mark?
+          setLabel(ccopy.getLabel()); // Yes, pick it up
+          mLabelAcquired = true;      // and remember we did
+          markDSPForRotationForward(dss, 0u, cPUNIT_INP); // and we're done with initial codon
+        } else {
+          f.fail(__FILE__,__LINE__); // really wanted a mark yo
+        }
+        return true;
+      }
+      //// THIS IS NOT THE INITIAL CODON
+
+      //// DID WE JUST SHIP THE FINAL CODON?
+      if (ccopy as QLabelMark) {
+        if (labelMatch(ccopy)) {
+          //// WE DID JUST SHIP THE FINAL CODON.
+          
+          markDSPForRotationForward(dss, 0u, cPUNIT_OUT); // roll out to first head insn 
+          dss.swapPUs(cPUNIT_XEQ,cPUNIT_OUT); // head buffer is now controlling operations
+
+          SN usn = ew.getSiteNumber(self);
+          if (usn == SN.maxof) f.fail(__FILE__,__LINE__);
+          ew[usn] = Empty.instanceof; // We are done
+          return true;                // and gone
+        }
+      }
+      //// WE DID NOT JUST SHIP THE FINAL CODON
+      markDSPForRotationForward(dss, 0u, cPUNIT_INP); // roll to next codon to ship insn 
+      return true;
+    }
+
+    f.fail(__FILE__,__LINE__);
+    return false; // NOT REACHED
+  }
+
+  //// CODON API
+  virtual Void init() {
+    super.init();
+    mDSType = cDS_NORM;
+  }
+
+}

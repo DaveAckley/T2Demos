@@ -1,0 +1,878 @@
+// SAMPLE 'ANCESTOR' CODE
+local constant LXMarker.Mark cMARK_LABEL = 0xDABE;
+local constant LXMarker.Mark cMARK_ILABEL = 0xFFFF^cMARK_LABEL;
+
+local constant LXMarker.Mark cRESHAPE_LABEL = 0xFACE;
+local constant LXMarker.Mark cRESHAPE_ILABEL = 0xFFFF^0xFACE;
+
+local constant LXMarker
+  cINS_FIRST_MARK = {
+  .mDSType = DTU.cDS_NORM,
+  .mLabel = cMARK_LABEL,
+
+  .mUpMap = 0x8, // set up chain on INS
+  .mDownMap = 0x8, // set down chain on INS
+  .mChainControlData = {
+    .mTQMap = (DTU.TQMap) (DTU.cTQ_NE | DTU.cTQ_SE), // set target quad NE + SE
+    .mSRMap = (DTU.ASRMap) (DTU.cASR_L | DTU.cASR_X), // set allowable edge clearance
+  },
+}; 
+
+local constant LXReset
+  cINS_RESET = {
+  .mDSType = DTU.cDS_NORM,
+  .mDestUnit = DTU.cPUNIT_XEQ
+};
+
+local constant Zong     cINS_ZONG = { .mDSType = DTU.cDS_NORM };
+/*
+local constant LXCtorArm cINS_SEED_DAUGHTER = {
+  .mDSType = DTU.cDS_NORM,
+  //  .mProgram = "nwwwwsssseeennnWWWWWWWWWWWWWW."};
+  //  .mProgram = "nwwwwsssseeennnWWWWWWWWWWWWWW"};
+  //  .mProgram = "nwwwwsssseeennnD"};
+  //  .mProgram = "nwwwwsssseeennnDnX-"};
+  //  .mProgram = "nwwwsssS."};
+  //  .mProgram = "nwwwsssS."};
+  //  .mProgram = "nwwsswwSE."};
+  .mProgram = "nwwswwwwwSE."
+  };*/
+
+local constant LXBioCtorArm
+  cINS_SEED_DAUGHTER10 = {
+  .mProgram = {
+    DTU.cBOC_LRST, // 0: reset new arm
+    DTU.cBOC_AGNT, // 1: go n
+    DTU.cBOC_AGWT, // 2: go w -1
+    DTU.cBOC_AGWT, // 3: go w -2
+    DTU.cBOC_AGST, // 4: go s
+    DTU.cBOC_AGWT, // 5: go w -3
+    DTU.cBOC_AGWT, // 6: go w -4
+  },
+  .mDSType = DTU.cDS_NORM,
+};
+
+local constant LXBioCtorArm
+  cINS_SEED_DAUGHTER11 = {
+  .mProgram = {
+    DTU.cBOC_AGWT, // 0: go w -5
+    DTU.cBOC_AGWT, // 1: go w -6
+    DTU.cBOC_AGWT, // 2: go w -7
+    DTU.cBOC_AGWT, // 3: go w -8
+    DTU.cBOC_AGWT, // 4: go w -9
+    DTU.cBOC_AGWT, // 5: go w -10
+    DTU.cBOC_AGWT, // 6: go w -11
+  },
+  .mDSType = DTU.cDS_NORM,
+};
+
+local constant LXBioCtorArm
+  cINS_SEED_DAUGHTER12 = {
+  .mProgram = {
+    DTU.cBOC_AGWT, // 0: go w -12
+    DTU.cBOC_AGWT, // 1: go w -13
+    DTU.cBOC_AGWT, // 2: go w -14
+    DTU.cBOC_AGWT, // 3: go w -15
+    DTU.cBOC_AGWT, // 4: go w -16
+    DTU.cBOC_ADDS, // 5: deploy daughter DS
+    DTU.cBOC_LAEC, // 6: E-become all ECs
+  },
+  .mDSType = DTU.cDS_NORM,
+};
+
+local constant LXCommandDS cINS_REGRIP_MOTHER = {
+  .mDSType = DTU.cDS_NORM, .mPacket = { .mCmd = DTU.cSW3C_GRIPDS, .mArg = 0xDA }
+};
+
+local constant LXDo
+  cINS_INIT_OUTBOUND_COPY = {
+  .mDSType = DTU.cDS_NORM,
+  .mStoredPU = DTU.cPUNIT_OUT
+};
+
+local constant LXCopy
+  cINS_COPY_OUTBOUND = {
+  .mDSType = DTU.cDS_NORM,
+  .mCount = 8u,
+  .mSrcPU = DTU.cPUNIT_OUT,
+  .mDstPU = DTU.cPUNIT_REG
+};
+
+local constant DaughterLoader
+  cINS_INIT_DAUGHTER_INBOUND = {
+  .mDSType = DTU.cDS_NORM,
+  .mConsumeOriginal = true,
+};
+
+local constant LXCopy
+  cINS_COPY_INBOUND = {
+  .mDSType = DTU.cDS_NORM,
+  .mCount = 7u,
+  .mSrcPU = DTU.cPUNIT_OUT,
+  .mDstPU = DTU.cPUNIT_REG
+};
+
+local constant LXMarker
+  cINS_LAST_MARK = {
+  .mDSType = DTU.cDS_NORM,
+  .mLabel = cMARK_ILABEL,
+  .mUpMap = 0x8, // set up chain on INS
+  .mDownMap = 0x8, // set down chain on INS
+  .mHalt = true,  // hang on this LX indefinitely
+  .mChainControlData = {
+    .mTQMap = 0x6, // expand to allow target quad NE (1<<1) (+ SE (1<<2))
+    .mSRMap = 0xc, // tighten allowable edge clearance (only _L and _XL)
+  },
+}; 
+
+local constant Atom cPROGRAM_OLD[] = {
+  cINS_FIRST_MARK,              // MK
+  cINS_RESET,                   // RS
+  cINS_SEED_DAUGHTER10,         // BC
+  cINS_SEED_DAUGHTER11,         // BC
+  cINS_SEED_DAUGHTER12,         // BC
+  cINS_INIT_OUTBOUND_COPY,      // DO
+  cINS_COPY_OUTBOUND,           // CP
+  cINS_INIT_DAUGHTER_INBOUND,   // DL
+  cINS_COPY_INBOUND,            // CP
+  cINS_LAST_MARK,               // MK
+};
+ 
+
+
+-------------
+      //// (1) ARE WE AT ngbrel 2 WRT OUR UPSTREAM?
+
+      NgbRels upstreamrels = { 2u, 2u, 2u, 2u}; // Assume upstream all relaxed
+      Unsigned toupstream = Unsigned.maxof;     // non-existent dir
+
+      //// ARE UPSTREAMRELS RIGHT OR RIGHT DEFAULT FOR ROOT?
+      //// AM I NOT ROOT?
+      if (hc3.myUpHops > 0u) {
+        //// I AM NOT ROOT. FIND UPSTREAM NGBRELS
+
+        C2D upc = hc3.minUpHopsC2D; // Where is upstream (if any)?
+        Bool haveupstream = upc.length() > 0u; // Have upstream?
+        if (!haveupstream) return false; // XXX Is this our way out here?
+
+        toupstream = hc3.minUpHopsAD; // Pick up upstream dir
+        HC3NgbState & upngb = hc3.mHC3NgbStates[toupstream];
+
+        if (upngb.mState != cNGB_CENTER) // upstream at 2 relative to us?
+          return false;                  // No
+
+        //// WE ARE ARE NGBREL 2 WRT OUR UPSTREAM
+        QHardCell & qhcup = (QHardCell &) ew[upc]; // or fail, at this point
+        upstreamrels = qhcup.mNgbRels;             // Pick up upstream ngbrels
+      }
+      //// UPSTREAMRELS ARE RIGHT OR RIGHT DEFAULT
+
+----------
+
+                                    //.mProgram = "nwssssswnnnnnwsssssD0"
+                                    //"nnwswswseeeWW--D"
+
+
+    Unsigned myhops = me.getHopCount();
+    mAligned = mAlignedCount > 0u && mUnalignedCount == 0u;
+    C2D origin;
+    for (SN sn = 1u; sn <= 40u; ++sn) {
+      if (!ew.isAccessible(sn)) continue;
+      C2D c = ew.getCoord(sn);
+      Atom & a = ew[sn];
+      if (a as QHardCell) {
+        if (!me.inMyGroup(a)) continue;
+        Bool isaligned = aligned(origin, c);
+        if (isaligned) ++mAlignedCount;
+        else ++mUnalignedCount;
+        Unsigned itshops = a.getHopCount();
+        Unsigned itsdist = c.length();
+        if (itshops < myhops) {
+          if (isaligned) ++mAlignedUpstreamCount;
+          else ++mUnalignedUpstreamCount;
+          
+          if (itshops + 1u == myhops) { // next upstream
+            Unsigned nextuplen = mNearestNextUpstream.length();
+            Bool winner = nextuplen == 0u || nextuplen > itsdist;
+            if (winner || (nextuplen == itsdist && random.oneIn(++mNearestNextUpstreamCount))) {
+              mNearestNextUpstream = c;
+            }
+          }
+
+          Unsigned curlen = mNearestUpstream.length();
+          Bool winner = curlen == 0u || curlen > itsdist;
+          if (winner || (curlen == itsdist && random.oneIn(++mNearestUpstreamCount))) {
+            mNearestUpstream = c;
+            mNearestUpstreamHops = itshops;
+          }
+          if (winner) mNearestUpstreamCount = 1u;
+        } else if (itshops > myhops) {
+          Unsigned curlen = mNearestDownstream.length();
+          Bool winner = curlen == 0u || curlen > itsdist;
+          if (winner || (curlen == itsdist && random.oneIn(++mNearestDownstreamCount))) {
+            mNearestDownstream = c;
+            mNearestDownstreamHops = itshops;
+          }
+          if (winner) mNearestDownstreamCount = 1u;
+        }
+      }
+    }
+-------------
+    /// I am initted and hopconsistent with my upstream
+    /*
+    /// Am I unaligned to a nearest next upstream?
+    if (hcs.mNearestNextUpstream.length() > 0u &&
+        !hcs.aligned(origin, hcs.mNearestNextUpstream)) {
+      // (None of this makes sense unless we are indeed at the origin!)
+      du.print("ALIGNEXT");
+      du.print(hcs.mNearestNextUpstream);
+      C2D toalign(hcs.mNearestNextUpstream.getX() % 3,
+                  hcs.mNearestNextUpstream.getY() % 3);
+      du.print(toalign);
+      //if (toalign.length() % 3u == 0u) return die(); // I'm ambiguously unaligned..
+      if (hcs.mNearestNextUpstream.length() == 1u) toalign = toalign*-1; // We need to back away
+      du.print(toalign);
+      if (!ew.isAccessible(toalign)) return die(); // XXX?
+      if (!ew[toalign] is Empty) return true; // I'm blocked
+      ew.swap(origin, toalign);
+      return true;              // I align myself!
+    }
+    */
+
+    /// Am I unaligned to nearest upstream?
+    /*
+    if (false && upstreamdist > 0u && !hcs.aligned(origin, hcs.mNearestUpstream)) {
+      // (None of this makes sense unless we are indeed at the origin!)
+      C2D toalign(hcs.mNearestUpstream.getX() % 3,
+                  hcs.mNearestUpstream.getY() % 3);
+      if (toalign.length() % 3u == 0u) return die(); // I'm ambiguously unaligned..
+      if (toalign.length() == 1u) toalign = toalign*-1; // We need to back away
+      if (!ew.isAccessible(toalign)) return die(); // XXX?
+      if (!ew[toalign] is Empty) return true; // I'm blocked
+      ew.swap(origin, toalign);
+      return true;              // I align myself!
+    }
+    */
+    /// I am hopconsistent and aligned with my upstream
+    // XXX
+-------------
+  MateStatus findMate(SegmentState & ss, BodyDir bdir) {
+    EventWindow ew;
+    Random random;
+    PocketPtr ptr = mPocketPtrs[bdir];
+    if (ptr == cPP_NULL) return cMATE_OK; // didn't need didn't look
+    if (ptr > cPP_EAST) { Fail f; f.fail("BAD SEG PTR"); }
+
+    RectIterator ri;
+    if (!ss.mPocket.initIterator(ri, ptr, true))
+      return false; // Can't iterate that
+
+    Unsigned pocketsize, empcount, inaccesscount;
+    while (ri.hasNext()) {
+      ++pocketsize;
+      C2D n = ri.next();
+      if (!ew.isAccessible(n)) { ++inaccesscount; continue; }
+      Atom & a = ew[n];
+      if (a as Self) {
+        if (!inMyGroup(a)) continue;
+
+        PocketPtr themp = a.mPocketPtrs[1u-bdir];
+        Bool bothHere = themp == 0u && ptr == 0u;
+        Bool opposites = themp == 5u-ptr;
+        if (opposites || bothHere) { // are they pointing back at us?
+          if (random.oneIn(++matches)) 
+            matesn = ew.getSiteNumber(n);     // good candidate
+        }
+      }
+    }
+
+    // Stash findings
+    ss.mEWSNAvailables[ptr] = randemp;
+    ss.mPocketSize[ptr] = pocketsize;
+    ss.mPocketFull[ptr] = pocketsize - empcount;
+    ss.mPocketEmpty[ptr] = empcount;
+    ss.mPocketInaccessible[ptr] = inaccesscount;
+    return true;
+
+    return cMATE_WRONG; // XXX FIX ME
+  }
+---------
+
+
+    //// IS OUR MOVING-DOWN JOB DONE?
+    if (isDown && isTail()) { // We're a temp tail
+
+      /// ARE WE DETACHED FROM THE CHAIN?
+      if (!isHead()) {
+        SN up = ds.mEWSNMate[Segment.cBODY_UP];
+        Atom & a = ew[up];
+        if (a as Self) {
+          a.mPocketPtrs[Segment.cBODY_DOWN] = cPP_NULL;
+        } else {
+          Fail f; f.fail("TEMPDOWN UP U/S MISSING");
+        }
+      }
+      /// WE ARE DETACHED FROM THE CHAIN.
+      ew[0u] = Empty.instanceof;
+      /// WE ARE GONE.
+      return;
+    }
+
+    //// SHALL WE SWAP UP OR DOWN THE CHAIN?
+    if (isUp || isDown) {
+      XXX
+    }
+---------
+  Bool update(QChainState & ds) {
+
+    EventWindow ew;
+    Random random;
+    DebugUtils du;
+    
+    //// DO WE HAVE A GOOD POCKET?
+    if (ds.init(self)) return true;
+    PocketHC3 & p = ds.mPocket;
+
+    if (p.mStatus != ds.mPocket.mStatus) {
+      Fail f; f.fail("THIS SHOULD NEVER FAIL RIGHT?");
+    }
+
+    //    du.print(p);
+
+    //    du.print("DEMOB11");
+    //    du.print(p.mCoordCount);
+    //    du.print(ds.mPocket.mCoordCount);
+    //    du.print(p.mStatus);
+    //    du.print(ds.mPocket.mStatus);
+    if (p.mStatus != PocketHC3.cSTATUS_OK) return true; // Distorted pocket
+    //// WE HAVE A GOOD POCKET.
+
+    //    du.print("DEMOB12");
+    //// CAN WE FIND OUR CHAIN NGBS?
+    Segment.MateStatus ms = findMates(ds);
+    if (ms > Segment.cMATE_UNSURE) {
+      du.print(ms);
+      return die("QChain:>MATE_UNSURE");
+    }
+    //    du.print(ms);
+    if (ms > Segment.cMATE_OK) return diffuse(ds);
+    //// WE FOUND OUR CHAIN NGBS.
+
+    //    du.print("DEMOB13");
+
+    updateGradients(ds);
+
+
+
+    //// DO WE HAVE ANYTHING MORE SPECIFIC TO DO?
+    if (chainOp(ds)) return true;  // Apparently.
+    //// WE HAD NOTHING SPECIFIC TO DO.
+
+    return diffuse(ds);
+  }
+
+
+-----------
+    //// HERE IF NOT ALL EMPTY
+
+    if (sidesn == sidesn.maxof || badside) {
+
+      if (mDeployedNs) return n.diffuse(self);
+      if (!random.oneIn(10)) return ndiffuse(self); // 90% diffuse
+
+      // We can't fail until we wake up the base..
+      SN basesn = pocket.searchPocket(mToBase, NuGrow.classidof);
+      if (basesn == SN.maxof || basesn == 0u) return n.diffuse(self);
+
+      NuGrow & base = (NuGrow&) ew[basesn];
+      base.mSuspended = false; // OK it's awake now
+
+      mResult = cRS_FAILED; // And we failed;
+      du.print("COPNUC NO SIDE BUT OCC: FAILING");
+      return true;
+    }
+
+    //// HERE sidesn is valid
+
+    {
+        /// FOUND NUSIDE: HOW'S IT DOING?
+        NuSide & ns = (NuSide&) ew[sidesn];
+        if (ns.mResult == cRS_FAILED) { // If it failed then we fail
+          du.print("COPNUC FAIL FROM SIDE");
+
+          // We can't fail until we wake up the base..
+          SN basesn = pocket.searchPocket(mToBase, NuGrow.classidof);
+          if (basesn == SN.maxof || basesn == 0u) return diffuse(ds);
+
+          NuGrow & base = (NuGrow&) ew[basesn];
+          base.mSuspended = false; // OK it's awake now
+
+          ew[sidesn] = Empty.instanceof; // and we wipe the side
+          mResult = cRS_FAILED;          // and note we failed
+
+        } else if (ns.mResult == cRS_SUCCEEDED) { // If it succeeded we have more to do
+          /* Now we want to do all of this:
+                  Nc*. Ns                 Md = Md          Md : Move down temp
+                  .    ||        ->       ||   ||          Mu : Move up temp
+             De = Ng > De = De       De = Mu   De = De
+          */
+          // Step 1: Need access to both Ns and Ng (already have sidesn)
+          SN basesn = pocket.searchPocket(mToBase, NuGrow.classidof);
+          if (basesn == SN.maxof) return diffuse(ds); // bent or missing - block
+          if (basesn == 0u) { // Not there? Uh oh.
+            du.print("BASE LOST DURING CORNER SUCCESS");
+            return die();
+          }
+
+          ns.mPocketPtrs[Segment.cBODY_UP] = (PocketPtr) (5u - mToSide); // we are upstream of side
+          self.mPocketPtrs[Segment.cBODY_DOWN] = (PocketPtr) mToSide;    // it is downstream of us
+          /* Giving us:
+                  Nc*= Ns
+                  .    ||
+             De = Ng > De = De
+          */
+
+          NuGrow & ng = (NuGrow&) ew[basesn];
+          ng.mPocketPtrs[Segment.cBODY_DOWN] = (PocketPtr) (5u - mToBase); // we are downstream of base
+          self.mPocketPtrs[Segment.cBODY_UP] = (PocketPtr) (mToBase);      // it is upstream of us
+          /* Giving us:
+                  Nc*= Ns
+                  ||   ||
+             De = Ng   De = De
+          */
+
+          Demo mup;                // Up temp to replace Ng
+          {
+            QChain & qmup = mup;   // Can't cast on LHS of assign, so make ref
+            qmup = ng;             // Copy ng's qchain info  
+            Segment & smup = mup;  
+            smup = ng;             // and their Segment info
+
+            mup.mPocketPtrs[Segment.cBODY_DOWN] = // except we're downstream of them
+              (PocketPtr) (5u - mToBase);
+
+            mup.mDSType = cDS_UP;  // mark as an upbound temp
+          }
+
+          Demo mds;                // Down temp to replace Ns
+          {
+            QChain & qmds = mds;
+            qmds = ns;             // Copy ns's qchain info
+            Segment & smds = mds;
+            smds = ns;             // and their Segment info
+
+            // except fixup pointer
+            mds.mPocketPtrs[Segment.cBODY_UP] =
+              (PocketPtr) (5u - mToSide);
+
+            mds.mDSType = cDS_DOWN;  // mark as a down temp
+          }
+
+          Demo mdc;                // Down temp to replace Nc (us)
+          {
+            QChain & qmdc = mdc;
+            qmdc = self;           // Copy nc's qchain info
+            Segment & smdc = mdc;
+            smdc = self;           // and their Segment info
+
+            // except fixup pointers.
+            mdc.mPocketPtrs[Segment.cBODY_DOWN] = mToSide;
+            mdc.mPocketPtrs[Segment.cBODY_UP] = mToBase;
+
+            mdc.mDSType = cDS_DOWN;  // mark as a down temp
+          }
+
+          ew[basesn] = mup.atomof;     // Ng is now up temp
+          ew[sidesn] = mds.atomof;     // Ns is now down temp
+          ew[0] = mdc.atomof;          // We are now down temp
+
+          /* wah lah
+
+                  Md = Md          Md : Move down temp
+                  ||   ||          Mu : Move up temp
+             De = Mu   De = De
+           */
+
+          return true;
+        }
+    }
+        print("NCIDNAct12");
+    return false;
+  }
+
+------
+  virtual Bool chainOp(QChainState & ds) {
+    DebugUtils du;
+    du.print("COPNUCO10");
+    du.print(ds);
+    du.print(ds is INTENTION);
+
+    EventWindow ew;
+    Random random;
+    typedef ClassUtils.ClassId ClassId;
+    INTENTION & ngs = (INTENTION &) ds;
+    ByteStreamLogger bsl;
+    ClassUtils csu;
+
+    PocketHC3 & pocket = ngs.mPocket;
+    //// HAVE WE EXTENDED A SIDE TO TRY?
+
+    if (mResult == cRS_PENDING) {
+
+      PocketPtr side = mToSide;
+      SN sidesn = pocket.searchPocket(side, NuSide.classidof);
+      Bool badside = false;
+
+      if (sidesn == 0u) { // Not found there
+        if (ngs.mPocketInaccessible[side] == 0u &&
+            ngs.mPocketEmpty[side] == ngs.mPocketSize[side]) {
+          // all accessible and all empty to grow into
+          SN fillsn = ngs.mEWSNAvailables[side]; // A random empty
+          NuSide nus;
+          nus.mDSType = cDS_DUMB;                // We don't auto move or grow
+          nus.mToCorner = (PocketPtr) (5u - side); // Its base is me
+          nus.mToGoal = mToBase; // Its way to goal is my way to base
+          du.print("COPNUCO11 SEEDING");
+          du.print(fillsn);
+          du.print(nus);
+          ew[fillsn] = nus.atomof;
+          mDeployedNs = true;
+          du.print(ew[fillsn]);
+          return true; // Initted Ns
+        }
+        badside = true; // Couldn't init Ns: pocket bent or incomplete
+      }
+
+      //// HERE EITHER sidesn != 0u || badside is true
+
+      if (sidesn == sidesn.maxof || badside) {
+
+        if (mDeployedNs) return diffuse(ngs);
+        if (!random.oneIn(10)) return diffuse(ngs); // 90% diffuse
+
+        // We can't fail until we wake up the base..
+        SN basesn = pocket.searchPocket(mToBase, NuGrow.classidof);
+        if (basesn == SN.maxof || basesn == 0u) return diffuse(ds);
+
+        NuGrow & base = (NuGrow&) ew[basesn];
+        base.mSuspended = false; // OK it's awake now
+
+        mResult = cRS_FAILED; // And we failed;
+        du.print("COPNUC NO SIDE BUT OCC: FAILING");
+        return true;
+      }
+
+      //// HERE sidesn is valid
+
+      {
+        /// FOUND NUSIDE: HOW'S IT DOING?
+        NuSide & ns = (NuSide&) ew[sidesn];
+        if (ns.mResult == cRS_FAILED) { // If it failed then we fail
+          du.print("COPNUC FAIL FROM SIDE");
+
+          // We can't fail until we wake up the base..
+          SN basesn = pocket.searchPocket(mToBase, NuGrow.classidof);
+          if (basesn == SN.maxof || basesn == 0u) return diffuse(ds);
+
+          NuGrow & base = (NuGrow&) ew[basesn];
+          base.mSuspended = false; // OK it's awake now
+
+          ew[sidesn] = Empty.instanceof; // and we wipe the side
+          mResult = cRS_FAILED;          // and note we failed
+
+        } else if (ns.mResult == cRS_SUCCEEDED) { // If it succeeded we have more to do
+          /* Now we want to do all of this:
+                  Nc*. Ns                 Md = Md          Md : Move down temp
+                  .    ||        ->       ||   ||          Mu : Move up temp
+             De = Ng > De = De       De = Mu   De = De
+          */
+          // Step 1: Need access to both Ns and Ng (already have sidesn)
+          SN basesn = pocket.searchPocket(mToBase, NuGrow.classidof);
+          if (basesn == SN.maxof) return diffuse(ds); // bent or missing - block
+          if (basesn == 0u) { // Not there? Uh oh.
+            du.print("BASE LOST DURING CORNER SUCCESS");
+            return die();
+          }
+
+          ns.mPocketPtrs[Segment.cBODY_UP] = (PocketPtr) (5u - mToSide); // we are upstream of side
+          self.mPocketPtrs[Segment.cBODY_DOWN] = (PocketPtr) mToSide;    // it is downstream of us
+          /* Giving us:
+                  Nc*= Ns
+                  .    ||
+             De = Ng > De = De
+          */
+
+          NuGrow & ng = (NuGrow&) ew[basesn];
+          ng.mPocketPtrs[Segment.cBODY_DOWN] = (PocketPtr) (5u - mToBase); // we are downstream of base
+          self.mPocketPtrs[Segment.cBODY_UP] = (PocketPtr) (mToBase);      // it is upstream of us
+          /* Giving us:
+                  Nc*= Ns
+                  ||   ||
+             De = Ng   De = De
+          */
+
+          Demo mup;                // Up temp to replace Ng
+          {
+            QChain & qmup = mup;   // Can't cast on LHS of assign, so make ref
+            qmup = ng;             // Copy ng's qchain info  
+            Segment & smup = mup;  
+            smup = ng;             // and their Segment info
+
+            mup.mPocketPtrs[Segment.cBODY_DOWN] = // except we're downstream of them
+              (PocketPtr) (5u - mToBase);
+
+            mup.mDSType = cDS_UP;  // mark as an upbound temp
+          }
+
+          Demo mds;                // Down temp to replace Ns
+          {
+            QChain & qmds = mds;
+            qmds = ns;             // Copy ns's qchain info
+            Segment & smds = mds;
+            smds = ns;             // and their Segment info
+
+            // except fixup pointer
+            mds.mPocketPtrs[Segment.cBODY_UP] =
+              (PocketPtr) (5u - mToSide);
+
+            mds.mDSType = cDS_DOWN;  // mark as a down temp
+          }
+
+          Demo mdc;                // Down temp to replace Nc (us)
+          {
+            QChain & qmdc = mdc;
+            qmdc = self;           // Copy nc's qchain info
+            Segment & smdc = mdc;
+            smdc = self;           // and their Segment info
+
+            // except fixup pointers.
+            mdc.mPocketPtrs[Segment.cBODY_DOWN] = mToSide;
+            mdc.mPocketPtrs[Segment.cBODY_UP] = mToBase;
+
+            mdc.mDSType = cDS_DOWN;  // mark as a down temp
+          }
+
+          ew[basesn] = mup.atomof;     // Ng is now up temp
+          ew[sidesn] = mds.atomof;     // Ns is now down temp
+          ew[0] = mdc.atomof;          // We are now down temp
+
+          /* wah lah
+
+                  Md = Md          Md : Move down temp
+                  ||   ||          Mu : Move up temp
+             De = Mu   De = De
+           */
+
+          return true;
+        }
+
+        //du.print("COPNUC HAVE SIDE HOW BLOCK");
+      }
+    }
+
+    if (mResult == cRS_FAILED) return diffuse(ngs); // Blocking til Ng notices me
+
+    /*
+    //// ARE WE BLOCKING FOR SIDE PROGRESS?
+    ClassId cornid = NuCorner.classidof;
+    PocketHC3 & pocket = ngs.mPocket;
+    SN sncw = pocket.searchPocket(mSides[0],cornid);
+    SN snccw = pocket.searchPocket(mSides[1],cornid);
+    */
+
+    //du.print("COPNUC RETURNING FALSE");
+    return false;
+  }
+----------
+NuSide:
+
+  virtual Bool chainOp(QChainState & ds) {
+    EventWindow ew;
+    Random random;
+    typedef ClassUtils.ClassId ClassId;
+    INTENTION & ngs = (INTENTION &) ds;
+    ByteStreamLogger bsl;
+    ClassUtils csu;
+    DebugUtils du;
+    //du.print("COPNUSD10");
+
+    PocketHC3 & pocket = ngs.mPocket;
+
+    //// ARE WE LOOKING FOR A QChain AHEAD TO CHAIN OP WITH?
+    if (mResult == cRS_PENDING) {
+
+      SN goalsn = pocket.searchPocket(mToGoal, QChain.classidof);
+      if (goalsn == SN.maxof) return diffuse(ds); // bent or missing - block
+
+      if (goalsn == 0u)
+        mResult = cRS_FAILED;
+      else {
+
+        /* OK now we want to do this:
+
+                  Nc . Ns*                Nc . Ns          Ng is left inconsistent
+                  .    .         ->       .    ||          (its next's prev isn't it), but
+             De = Ng = De = De       De = Ng > De = De     it's pending and doesn't check?
+        */
+
+        QChain & de = (QChain&) ew[goalsn];
+
+        de.mPocketPtrs[Segment.cBODY_UP] = (PocketPtr) (5u - mToGoal); // we are upstream of de
+        self.mPocketPtrs[Segment.cBODY_DOWN] = (PocketPtr) mToGoal;    // it is downstream of us
+
+        mResult = cRS_SUCCEEDED; // Our part is finished!
+
+        return true;
+      }
+      // FALL THROUGH
+    }
+
+    //// ARE WE TRYING TO FAIL
+    if (mResult == cRS_FAILED) {
+      PocketPtr side = mToCorner;
+      SN sidesn = pocket.searchPocket(side, NuCorner.classidof);
+      if (sidesn == SN.maxof) return diffuse(ds); // bent or missing - block
+      if (sidesn == 0u) { // Not there? Uh oh.
+        du.print("CORNER MISSING DURING SIDE FAILURE");
+        return die();
+      }
+      //// WE FOUND THE CORNER. NOTIFY IT
+      NuCorner & nc = (NuCorner&) ew[sidesn];
+      nc.mResult = cRS_FAILED;
+      return die();             // and punch out
+    }
+
+    //du.print("COPNUSD11");      // Not trying to fail
+
+    /*
+    //// HAVE WE PICKED A SIDE TO TRY?
+    if (mTrying == mTrying.maxof) { // We have not
+      Try try = (Try) random.between(0u,1u); // CW or CCW
+      PocketPtr side = ngs.mSides[try];
+      if (ngs.mPocketInaccessible[side] == 0u &&
+          ngs.mPocketEmpty[side] == ngs.mPocketSize[side]) {
+        // all accessible and all empty to grow into
+
+        SN fillsn = ngs.mEWSNAvailables[side]; // A random empty
+        NuCorner nuc;
+        nuc.mDSType = cDS_DUMB;                // We don't auto move or grow
+        nuc.mToBase = (PocketPtr) (5u - side); // Its base is me
+        nuc.mToSide = mPocketPtrs[cBODY_DOWN]; // Its side is my down
+
+        mTrying = try;  // OK we're going for it
+
+        ew[fillsn] = nuc.atomof;
+        return true;
+      }
+    }
+    */
+    /*
+    //// ARE WE BLOCKING FOR SIDE PROGRESS?
+    ClassId cornid = NuCorner.classidof;
+    PocketHC3 & pocket = ngs.mPocket;
+    SN sncw = pocket.searchPocket(mSides[0],cornid);
+    SN snccw = pocket.searchPocket(mSides[1],cornid);
+    */
+
+    return false;
+  }
+  
+------------
+Demo
+
+    // Search adjacent pockets for a tail
+    Unsigned tailcount = 0u;
+    SN tailside, tailsn;
+    for (SN side = 1u; side <= 4u; ++side) {
+      RectIterator ri;
+      if (!p.initIterator(ri)) continue;
+      while (ri.hasNext()) {
+        C2D n = ri.next();
+        Atom & a = ew[n];
+        if (a as QChain) {
+          if (a.isTail()) {
+            if (random.oneIn(++tailcount)) {
+              tailside = side;
+              tailsn = ew.getSiteNumber(n);
+            }
+          }
+        } else continue;
+      }
+    }
+    if (tailcount == 0u) return false;
+    //// LINK UP WITH tailsn
+    QChain & qtail = (QChain &) ew[tailsn];
+    Clasp clasp;                // new
+    QChain & qc = clasp;
+    qc = d;                  // copy qchain data
+    clasp.mPocketPtrs[d.cBODY_DOWN] = (PocketPtr) tailside;
+    qtail.mPocketPtrs[d.cBODY_UP] = (PocketPtr) (5u - tailside);
+    ew[0] = clasp.atomof;
+-------
+NuGrow.ulam
+
+    /* WE DON'T NEED TO CHECK
+    /// CHECK THAT BODY_DOWN IS SWAPPABLE
+    PocketHC3 & pocket = self.mPocket;
+    PocketPtr down = ng.mPocketPtrs[Segment.cBODY_DOWN];
+    Bool linked = down >= ng.cPP_WEST && down <= ng.cPP_EAST;
+    if (!linked) { print("NGIS1Act1110 Unlinked?"); return ng.die(); }
+    
+    SN downsn = pocket.searchPocket(down, QChain.classidof);
+    if (downsn == SN.maxof) return ng.diffuse(self); // bent or missing - block
+    if (downsn == 0u) { print("NGIS1Act1111 No down?"); return ng.die(); }
+
+    QChain & qc = (QChain&) ew[downsn];
+    if (!qc.isSwappable(self)) { // If can't move downstream
+      NGIAdvance i;              // skip ahead to advance
+      i.adopt(ng);               // (which will trigger
+      return true;               // decay to down-temp)
+    }
+    */
+---
+  /** Determine our current execution context */
+  ExecutionContext getExecutionContext(Intention & it) {
+    print("SQIS10");
+    PocketableState & ps = (PocketableState&) it;
+
+    C2D seqc = chooseSequencer(ps.mPocket);
+    print("SQIS11");
+    print(seqc);
+    if (seqc.length() == 0u)
+      return cEXCT_FREE;        // No sequencer around
+
+    EventWindow ew;
+    DiamondSequencer & ds = (DiamondSequencer&) ew[seqc];
+
+    print("SQIS12");
+    // Find our quadrant relative to ds
+    PocketDir ourq;
+    if (!ds.mProcUnitMap.pocketDirFromCorner(seqc, ourq))
+      return cEXCT_DIFF;
+    print("SQIS13");
+    print(ourq);
+
+    // Find the function of our quadrant
+    QProcUnitMap.ProcUnit ourpu = ds.mProcUnitMap.procUnitInQuadrant(ourq);
+    print("SQIS14");
+    print(ourpu);
+
+    // Is it instruction stream?
+    if (ourpu != QProcUnitMap.cPUNIT_INS)
+      return cEXCT_PASV;        // No: We are data
+
+    // It is.
+    print("SQIS15");
+
+    // Is it ready for us to act?
+    QDirStatusMap.ProcStatus quadstatus = ds.mDirStatusMap.statusFromQuadrant(ourq);
+    print("SQIS16");
+    print(quadstatus);
+    if (quadstatus != QDirStatusMap.cDSTATUS_IDLE)
+      return cEXCT_PASV;        // Instruction stream but not our moment to shine
+
+    // IT IS READY FOR US TO ACT!!
+    print("SQIS17");
+
+    return cEXCT_ACTV;          // DO THE THING
+  }

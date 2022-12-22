@@ -1,0 +1,207 @@
+/** Summarization of the state of an HC3 .
+ */
+transient HC3State + DTU + QDebugUtils {
+  EventWindow ew;
+  Random random;
+
+  // values from the Intender
+  Unsigned myUpHops;
+  Unsigned myUpHopsGoal; // IN EFFECT myUpHopsGoal
+  Unsigned myDSHops;
+  OnDSAxes myOnDSAxes;
+  XZone myXZone;
+
+  // reductions from the ngbs
+  Unsigned minDSHops;
+  Unsigned minUpHops;
+  C2D minUpHopsC2D;             //< Where minUpHops was found
+  AxialDir minUpHopsAD;         // which of our ngbrel idx to upstream
+  Unsigned maxUpHopsGoal;       // over ngbs not including ctr
+  XZone xzoneOfMinDSHops;
+  C2D minDSHopsC2D;
+  OnDSAxes onDSAxes;
+
+  HC3NgbState mHC3NgbStates[AxialDir.maxof+1u];
+
+  Bool uninits = false;
+
+  constant C2D mNgbOffs[AxialDir.maxof+1u] = {
+    { .x = -3, .y = 0 },           // 0: W
+    { .x =  0, .y = -3 },          // 1: N
+    { .x =  0, .y = 3 },           // 2: S
+    { .x =  3, .y = 0 },           // 3: E
+  };
+
+  /*
+  Bool getQuadrantIterator(NgbRels & rels, PocketDir pd, RectIterator & ri) {
+    constant Unsigned cW = 0u, cN = 1u, cS = 2u, cE = 3u;
+    Unsigned s1,s2;
+    which (pd) {
+      case cQUAD_NW: { s1 = cW; s2 = cN; }
+      case cQUAD_NE: { s1 = cE; s2 = cN; }
+      case cQUAD_SE: { s1 = cE; s2 = cS; }
+      case cQUAD_SW: { s1 = cW; s2 = cS; }
+      otherwise: { Fail f; f.fail(__FILE__,__LINE__); }
+    }
+    
+  }
+  */
+
+  Unsigned getFoamCount() {
+    Unsigned ret = 0u;
+    for (Unsigned i = 0u; i < 4u; ++i) 
+      ret += mHC3NgbStates[i].foamCount();
+    return ret;
+  }
+
+  Void summarizeRels(NgbRels & rels) {
+    for (Unsigned i = 0u; i < 4u; ++i) {
+      rels[i] = mHC3NgbStates[i].summarizeRel();
+    }
+  }
+
+  Void init(QHardCell & q) {
+    //    setDebugOutputEnabled(true);
+    print("H3SINMIN10");
+    init(q.getUpHops(), q.getMaxHopsGoal(), q.getDSHops(), q.getXZone());
+  }
+
+  Void init(Unsigned uphops, Unsigned maxhopsgoal, Unsigned dshops, XZone xzone) {
+    //    setDebugOutputEnabled(true);
+    print("H3SINIT10");
+    myUpHops = uphops;
+    myUpHopsGoal = maxhopsgoal; // center qhc current goal
+    myDSHops = dshops;
+    myXZone = xzone;
+  }
+
+  Void updateZone(Zone & zone, C2D off, Zone zngb) {
+    print("UPZN10");
+    print(zngb);
+    print(off);
+    print(zngb);
+    AxialDir ad;
+    if (zone2AxialDir(zngb, ad)) {
+      if ((off.x == 0 && (ad == cN || ad == cS)) ||
+          (off.y == 0 && (ad == cE || ad == cW)))
+        zone = zngb;
+      else {
+      }
+    }
+    { Fail f; f.fail(__FILE__,__LINE__); }
+    /* WRITE ME
+      
+    if (off.x == 0 && ngb[0]) ds[0] = true;
+    if (off.y == 0 && ngb[1]) ds[1] = true;
+    print(ds[0]);
+    print(ds[1]);
+                                         */
+  }
+
+  Void updateOnDSAxes(OnDSAxes & ds, C2D off, OnDSAxes ngb) {
+    print("UODSX10");
+    print(ds[0]);
+    print(ds[1]);
+    print(off);
+    print(ngb[0]);
+    print(ngb[1]);
+    if (off.x == 0 && ngb[0]) ds[0] = true;
+    if (off.y == 0 && ngb[1]) ds[1] = true;
+    print(ds[0]);
+    print(ds[1]);
+  }
+
+  // Sets up mHC3NgbStates and qhc.mNgbRels
+  Void examineNgbs(QHardCell & qhc) {
+    uninits = false;
+    minUpHops = Unsigned.maxof;
+    minUpHopsC2D = C2D.instanceof;
+    minDSHops = Unsigned.maxof;
+    xzoneOfMinDSHops = cXZONE_UN;
+    maxUpHopsGoal = Unsigned.minof;
+
+    OnDSAxes dxdy; // false, false
+    onDSAxes = dxdy;
+
+    print("H3SEXNG10");
+    for (Unsigned i = 0u; i < mHC3NgbStates.lengthof; ++i) {
+      HC3NgbState & n = mHC3NgbStates[i];
+      C2D nbgoff = mNgbOffs[i];
+      n.init(nbgoff, qhc); // sets up n.mXZone among other things
+      print("H3SEXNG11");
+      print(i);
+      print(n);
+      qhc.mNgbRels[i] = cNGBREL_OFFN; // Assume the worst
+      if (n.hasValidNeighbor()) {
+        print("H3SEXNG12");        
+        if (n.foundUninitialized()) uninits = true;
+        else {
+          print("H3SEXNG13");        
+          if (n.getUpHops() < minUpHops) {
+            print("H3SEXNG14");        
+            minUpHops = n.getUpHops();
+            minUpHopsC2D = n.getNgbC2D();
+            minUpHopsAD = (AxialDir) i;
+            //            Unsigned mg = n.getNgbMaxGoalHops();
+            //            if (mg > maxUpHopsGoal) maxUpHopsGoal = mg;
+            maxUpHopsGoal = n.getNgbMaxGoalHops(); // ANISOTROPY WARNING BEEP BEEP: believe every first minuphops we see?
+          }
+          updateOnDSAxes(onDSAxes, nbgoff, n.getOnDSAxesNS());
+          if (n.getDSHops() < minDSHops) {
+            print("H3SEXNG15");        
+            minDSHops = n.getDSHops();
+            xzoneOfMinDSHops = n.getXZone();
+            minDSHopsC2D = n.getNgbC2D();
+          }
+        }
+      }
+    }
+    print("H3SEXNG16");
+    myOnDSAxes = onDSAxes;
+    print(myOnDSAxes[0]);
+    print(myOnDSAxes[1]);
+    summarizeRels(qhc.mNgbRels);
+  }
+
+  Void updateNgbsForMove(SN movedir) {
+    DebugUtils du;
+    if (movedir < 1u || movedir > 4u) {
+      du.print("UNFM10");
+      du.print(movedir);
+      Fail f; 
+      f.fail("movedir ^^^ outside 1..4");
+    }
+    C2D mc = ew.getCoord(movedir);
+    for (Unsigned i = 0u; i < mHC3NgbStates.lengthof; ++i) {
+      HC3NgbState & n = mHC3NgbStates[i];
+      NgbState ns = n.mState;
+      if (ns > cNGB_EAST) continue; // XXX MIGHT BE WRONG?
+      C2D themc = n.getNgbCoord();    // Find where they should be
+      //      du.print("UNFM11");
+      //      du.print(themc);
+      Atom & a = ew[themc];
+      if (a as QHardCell) {    
+        C2D nc = ew.getCoord(ns); // offset relative to our start position
+        C2D newc = nc - mc;       // offset relative to our new position
+        SN newsn = ew.getSiteNumber(newc);
+        if (newsn > 4u) {
+        du.print("UNFM11");
+        du.print(ns);
+        du.print(newsn);
+        du.print(nc);
+        du.print(newc);
+          Fail f;
+          f.fail("UNFM12 BAD newc");
+        } // No good? Then how were we moving?
+        n.mState = (NgbState) newsn;             // updated state
+        a.mNgbRels[3u-i] = n.summarizeRel();              // Summarize to neighbor now
+      } else {
+        ByteStreamLogger bsl;
+        bsl.printf("UNFM NGB LOST? md %d i %d tc (%d,%d)\n",
+                   movedir, i, themc.x, themc.y);
+      }
+    }
+  }
+
+}
+

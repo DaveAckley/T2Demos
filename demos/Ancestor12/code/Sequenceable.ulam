@@ -1,0 +1,21 @@
+transient SequenceableState : PocketChainState {
+
+}
+
+quark Sequenceable : PocketChainTQ {
+  //// SEQUENCEABLE API
+
+  //// SEQUENCEABLE SERVICES
+
+  //// Intender API 
+  @Override
+  virtual ClassId getIntentionClass() { return SequenceableState.classidof; }
+
+  Void behave() {
+    pursueIntention();
+  }
+
+}
+
+
+
