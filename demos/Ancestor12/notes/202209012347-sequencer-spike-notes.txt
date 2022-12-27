@@ -1,4 +1,4 @@
-{738}  -*-  mode: text; fill-column: 50;  -*-
+{801}  -*-  mode: text; fill-column: 50;  -*-
 [0:
 
 Thu Sep  1 23:47:45 2022 OK so OK so OK come on.
@@ -11639,3 +11639,935 @@ between LD rolling to #4 and RD releasing the
 cutter. 
 
 :737]
+[738:
+
+Thu Dec 22 12:57:55 2022 (Well, if we care, it
+appears we have access to XPM images in the
+existing code base. At least, this builds:
+
+    {
+      // XXXXX TEST
+      const char * strings[] = { "foo", "bar" };
+      SDL_Surface * zot = IMG_ReadXPMFromArray((char**) strings);
+      SDL_free(zot);
+    }
+
+though it's obviously untested.)
+
+:738]
+[739:
+
+Fri Dec 23 02:21:47 2022 OK, well, let's just ride
+this 'spike' (heh heh) notes file all the way to
+T-0.. 
+
+[740:
+
+Fri Dec 23 02:27:45 2022 So. Some priorities:
+
+[742: Fri Dec 23 05:27:47 2022
+DONE :742] - Send board email
+
+[754: Sun Dec 25 00:30:32 2022 but let's say
+DONE :754] - Design goals for HC3 config change propagations
+
+[755: enough for a fix,
+DONE :755] - Design review of related existing code
+
+ - Design goals for PocketChain layout control
+
+ - Design review of related existing code
+
+ - Spike support for debugging chain control
+
+ - Make more todo
+
+:740]
+
+:739]
+[741:
+
+Fri Dec 23 02:37:01 2022
+
+DESIGN GOALS FOR HC3 CONFIG CHANGE PROPAGATIONS
+
+1: First look up.
+   1.1: Identify minimum upstream ngb independent of
+        your own hc3 values
+   1.2: If you don't have any upstream and you're not
+        mHops==0 you must die
+   1.3: Do this during observe
+   1.4: Take any HC3 config changes ONLY from your
+        selected minimum upstream ngb
+
+2: Any change in your own hc3 values causes
+   blocking and reset of settleddownhops
+
+3: Identify if you're consistent with -all- your
+   ngbs, not just your minup.
+
+4: Do not spawn unless you are consistent with all
+   existing ngbs.
+
+5: mHops/mMaxGoalHops changes are independent of
+   and logically prior to HC3 motion. Their
+   gradients are updated whether the grid is
+   relaxed or not.
+
+
+:741]
+[743:
+
+Fri Dec 23 12:19:48 2022 Let's try a
+QHardCell.ulam redo. We've redone it once already
+so maybe this round could be slightly less
+horrible. Goals are to be clear about what's
+happening and when, given our more 'mature' (or at
+least more recent) understanding about what we
+want from it.
+
+At least let's take a look at the code and rough
+out what we might try to do to it.
+
+[744:
+
+Fri Dec 23 12:40:31 2022 NOTES ON QHardCell.ulam:
+
+ - We are allegedly already doing 'MIN UPHOP' in
+   observe(..), via HC3State.examineNgbs(..)
+
+ - In that context, HC3State offers all of:
+
+      Unsigned minUpHops;
+      C2D minUpHopsC2D;             //< Where minUpHops was found
+      AxialDir minUpHopsAD;         // which of our ngbrel idx to upstream
+
+ - There's a warning in the code about an
+   anisotropy in dealing with maxUpHopsGoal, but
+   looking at it now I'm not convinced that's
+   really an/the issue. We're just taking the
+   maxUpHopsGoal of whatever we end up taking as
+   the minUpHopsC2D, and the only sin I see is
+   we're not randomizing over ties for minUpHops.
+
+   = In particular, the code used to do a separate
+     max over maxUpHopsGoal, but now it doesn't;
+     it just takes the maxUpHopGoal of the
+     minUpHops, which we really think is what we
+     want. (Because of design goal 1 in :741: ?)
+     (And 1.4 which I just added..)
+   
+[745:
+
+Sat Dec 24 00:04:59 2022
+
+So, on to QHardCell.stabilize(..).
+
+ - Which goes to stabilizeHopsOrDie(..) pretty
+   early.
+
+ - ..buuuut before that it goes to initIfNeed(..),
+   which checks hc3.myUpHops and hc3.myUpHopsGoal
+   to see if it's initted.[746:
+
+Sat Dec 24 00:38:52 2022 You know, we still have
+14 bits in HardCellG.. ooh but that's not the main
+issue, right? What about DS?[747:
+
+Sat Dec 24 00:39:50 2022 We have 16 bits in DS?
+How is that possible?  ..oh yeah we factored the
+root command data members out of QHardCell - so DS
+doesn't pay for them anymore - but we put them in
+all HGs, because we don't have a separate type for
+the root.
+
+Should we maybe make a RootHardCellG? That would
+get us hacking on the code for sure, and I'm
+starting to feel like I'm dithering a bit too much
+in design/analysis here.
+
+LET'S DO IT! AAAHHHHH! (runs out of the room)
+
+[748:
+
+Sat Dec 24 03:40:04 2022 OK so we have the diamond
+cutter seeding RootHardCellG which is then killing
+itself because it's getting bad info from the
+neighbors (which we think it shouldn't even be
+looking at):
+
+    20221224033921-3645: 10795AEPS [DBB74257]MSG: print: "QHCUP1610"
+    20221224033921-3646: 10795AEPS [DBB74257]MSG: print: Unsigned: 8
+    20221224033921-3647: 10795AEPS [DBB74257]MSG: print: Unsigned: 8
+
+is the last of the log file during the event, and
+we have:
+
+        //// DO I HAVE ANY INITTED NGBS?
+        if (hc3.minUpHops != Unsigned.maxof) {
+          print("QHCUP1610");
+
+          // I HAVE AT LEAST ONE.
+          // AM I BEYOND THE GOAL?
+          print(hc3.minUpHops + 1u);
+          print(hc3.maxUpHopsGoal);
+
+          if (hc3.minUpHops + 1u >= hc3.maxUpHopsGoal) // YES
+            return qc.die();
+        }
+
+as the explanation.
+
+So that's an example of things that need to be
+revisited. A failure to 'First look up'.
+
+But I think second sleep first.
+
+[749:
+
+Sat Dec 24 03:46:21 2022 (But that's all in the
+context of having gotten RootHardCellG to run well
+enough to get to the final cut.)
+
+:749]
+:748]
+:747]
+
+:746]
+
+:745]
+:744]
+
+:743]
+[750:
+
+Sat Dec 24 10:04:42 2022 OK we
+
+ - redid HC3State.examineNgbs(..). We
+   = renamed maxUpHopsGoal to minUpHopsGoal,
+     'better' to represent that its the goal size
+     fot the minUpHops of all our ngbs, and
+   = properly randomized over ties in the
+     selection of minUpHops and minDSHops
+     
+[751:
+
+Sat Dec 24 12:51:58 2022 OK we need something that
+will mess with root maxgoalhops, so we can test
+how response to that is coming.[752:
+
+Sat Dec 24 13:17:37 2022 Well, testing with
+CodeResizer (CR) suggests the latest fixes are
+making size changes much more solid. We have no
+fast way to test simultaneous root position + size
+change, though.
+
+:752]
+
+:751]
+:750]
+[753:
+
+Sat Dec 24 23:56:12 2022 OK have made a lot of
+progress here before xmas. Let's see:
+
+ - Got the SeedLoop11/L1's to avoid spawning into
+   DSPs
+
+ - Allowing me to eliminate all but the loader
+   loop since the other loops were keeping that
+   from bad spawning
+
+ - Allowing me to eliminate the first instruction
+   in the ancestor, since the more extensive
+   resets and inits were no longer needed
+
+ - Expanded QDSHopsStg from three bits to four
+   bits, so we'll have better gradients
+
+ - Made a custom render that added dashed line
+   'tails' to Membrane and MTip pointing in their
+   discovered outward directions, giving the cell
+   a more 'ciliated' look. (Although at certain
+   scales it also kind of looks like sperm
+   surrounding a diamond egg...)
+
+ - Made a custom render for RootHardCellG that
+   puts a black & white diamond around the root;
+   looks a bit like the ccr logo.
+
+Still facing the hard challenge of chain control.
+
+[756:
+
+Sun Dec 25 01:19:23 2022 Also want another look at
+the whole mViolation return path in the chain
+control. And the whole bidirectional aspect of
+it. That's a lot of complexity that we're
+currently not really using for anything.
+
+What if we said control always went downstream (or
+whichever way seems better up front)? And status
+or violation information went the other way.
+
+We'd keep the idea, I guess that being in a DSP
+with a downstream ptr means you're the anchor for
+a loop or cable. 
+
+:756]
+:753]
+[757:
+
+Sun Dec 25 03:39:22 2022 A new instruction that
+
+ - Configures the chain control of its own chain
+   and perhaps others.
+
+ - Waits for condition to be true or for timeout 
+
+:757]
+[758:
+
+Sun Dec 25 04:39:09 2022 OK so the two-key DX
+system isn't working mostly, it appears, because
+they don't seem to diffuse once they've reached
+the old root. So they're unlikely to see each
+other.
+
+If we get them to diffuse better we'll have a shot
+- we should also revisit the whole climbing the
+gradient code generally because the delivered
+behavior is gross.
+
+:758]
+[759: 
+
+Sun Dec 25 23:18:26 2022 OK well it's time to
+review the damn chain control code and see where
+we think we might try to go with it.[760:
+
+Sun Dec 25 23:21:03 2022 Currently looking at a bitmap
+
+  typedef Bits(4) TQMap; //< Target Quadrant Map
+
+to specify which quadrants are usable, plus a 
+
+  typedef Unsigned(2) SizeRange;
+
+to specifc how much of an allowable TQ is usable,
+plus
+
+  typedef Bits(4) ASRMap; //< Allowable Size Range Map
+
+which says which size ranges are allowable, plus
+
+  Bool mViolation; //< Map violation return signal
+
+which was meant to say whether anybody on the
+chain was violating the current TQMap+ASRMap
+controls.. but was never implemented.
+
+[761:
+
+Sun Dec 25 23:42:35 2022 So that's nine bits right
+there, but then on top of that, PocketChain has
+TWO of them:
+
+      | COMPONENTS of PocketChain <59> (28 bits/36 unused): 
+      | 
+      | Pos	| Bits	| Name	| Type <classid>
+      | 0	| 9	| mChainControlUp	| ChainControlUp <48>
+      | 9	| 9	| mChainControlDown	| ChainControlDown <51>
+
+so we're talking 18 bits of chain control - more
+than half of the total PocketChain size - and
+we're getting very little for it.
+
+So, first off I'm thinking:
+
+ - Only have 1 ChainControl per PocketChain
+
+ - Have it fixed direction - commands up, status
+   down?
+
+ - Being in a DSP and having an non-NULL up makes
+   you a ChainControl anchor. If you're injecting
+   new Codons from an anchor it's on you to get
+   their ChainControl configured properly, because
+   upstream is going to listen to whatever's up
+   there.
+[762:
+
+Mon Dec 26 08:24:59 2022
+
+ - Have a scalar return instead of
+   boolean. Reinterpret the size map as being
+   'modes' like
+   = Minimize dshops
+   = Maximize mMaxHops - mUpHops
+   = No penalties: Any move allowed
+   = Freeze: No move allowed
+
+ - Actually maybe divide the size map into two
+   U2s?
+   = Temperature: 0, low, high, oo
+   = Function: min ds,
+
+[763:
+
+Mon Dec 26 08:46:48 2022 Gah there I go
+again. What would absolutely minimal minimal be?
+
+ - Command: Bool: minimize dshops or don't
+ - Status: Return max dshops
+
+Suppose we just try to do that.
+
+[764:
+
+Mon Dec 26 08:50:02 2022 Should we make new names
+rather than try to redo all the ChainControl
+stuff? Yes.
+[765:
+
+Mon Dec 26 09:22:40 2022 OK a skeleton
+SimpleChainControl.ulam (gah 'modern art') now
+builds. Still need:
+
+ - How to evaluate SimpleChainControl values
+   (mTQMapValue and mMaxDSHopsValue) at the
+   current site
+
+..do we need to distinguish between this atom's
+values and chain propagated values?
+
+Or we just have an update-in-place?
+ - OR my TQ bit into my mTQMapValue
+ - Max my dshops into my mMaxDSHopsValue
+
+And we need some kind of API for the anchor
+
+So the update cycle wants to be like:
+
+ - if NOT anchor
+   = Bool ret = false;
+   = ret ||= takeCommandFromDown
+   = ret ||= takeValueFromUp
+   = ret ||= updateTQDSInPlace
+   = ret ||= sendCommandToUp
+   = ret ||= sendValueToDown
+   = return ret
+
+Could we really do that much in one go?
+Do we really need to bail if ret is true?
+
+But also, structurally it would be more like: 
+
+  stabilize
+   = takeCommandFromDown
+   = takeValueFromUp
+
+  act
+   = Chose action biased by mTQMapCommand and
+     mMinDSHopsCommand 
+   = updateTQDSInPlace
+
+And there'd be no
+   = sendCommandToUp
+   = sendValueToDown
+because "that's redundant"?
+
+What about anchors?
+
+  observe
+   = takeCommandFromDown
+   = takeValueFromUp
+
+[766:
+
+Mon Dec 26 09:43:42 2022 wait. waaaaaittt. We need
+a special case for non-anchor end of open chain,
+to get 0s into TQMapValue and mMaxDSHopsValue.
+
+If a link has no up -- or up is isDSP -- then
+takeValueFromUp loads 0s, then updateTQDSInPlace
+does its thing.
+
+If a link has no down, then takeCommandFromDown
+calls some rootBehave-ish type method?
+[767:
+
+Mon Dec 26 09:53:41 2022 (Renamed to
+TQDSControl.ulam before things get too crazy.)
+
+:767]
+
+:766]
+:765]
+:764]
+
+:763]
+
+:762]
+
+:761]
+
+:760]
+
+:759]
+[768:
+
+Mon Dec 26 10:28:10 2022 OK, well, I tore out
+ChainControl{Up|Down|Data} by main force and stuck
+fails all over the place, and got it to run enough
+to start hitting the fails.
+
+First up: SeedLoop11 was trying to init the
+mChainControlUp and down of new ECs it is
+making. Do we want to have an analogus init() call
+for TQDS?
+
+I'd have to think in a top-down world..
+
+Hey there's also like
+
+        ec1.mTargetQuadrant = tq;
+
+and what is that about, as opposed to our (old or
+new) chain control stuff?
+[769:
+
+Mon Dec 26 10:34:46 2022 It's from
+
+    quark PocketChainTQ : PocketChain {
+      PocketDir mTargetQuadrant;
+   ..
+
+which we imagine we should ditch completely? Or
+have it be a shim for manipulating the tqmap?
+
+But there's a lot of scattered refs to
+mTargetQuadrant..
+
+[770:
+
+Mon Dec 26 10:40:28 2022 Well, less than 20
+actually.. Let's just try writing them out..
+[771:
+
+Mon Dec 26 11:15:34 2022 Well, the hack is
+spreading, eeek. Can't look back. Have now torn
+out ChainControl.ulam completely. We shall see. 
+
+:771]
+
+:770]
+
+:769]
+:768]
+[772:
+
+Mon Dec 26 11:19:40 2022 OK, now onto the
+de-implemented PocketChain.propagateChainControls(..)
+[773:
+
+Mon Dec 26 15:27:20 2022 Which is part of
+stabilization and we're modeling its
+implementation on :765: above.
+
+And I'm asking: Do we really want to blow the
+event if takeCommandFromDown or takeValueFromUp
+return true?
+
+[774:
+
+Mon Dec 26 15:31:06 2022 So, okay: What does
+stabilization mean to a TQDSControl anchor?[775:
+
+Mon Dec 26 15:39:48 2022 Well we're saying it
+means to call
+  virtual Bool TQDSControl.stabilizeCommandAnchor(PocketChainState & pcs) 
+or
+  virtual Bool TQDSControl.stabilizeValueAnchor(PocketChainState & pcs) 
+as appropriate.
+
+Not to kick the can down the road or anything.
+
+Now we're on to:
+
+  Int PatchState.errorOfPocketChainInQuad(PocketDir quad, PocketChain & pc) ..
+
+which we deimplemented earlier today.[776:
+
+Mon Dec 26 15:43:05 2022 Now, are we still on that
+whole 'error' approach? So far we've only talked
+about reporting an OR-ed TQMap and max-ed dshops
+values back to the root. And that's fine, we
+imagine.  But, we have to also demonstrate applied
+knowledge, Bart, and how do we want that to go?
+
+Well, for one thing, I guess we were still
+imagining we want it to be worse to have a move
+going from dshops==8 to dshops==9, compared to a
+move going from dshops==2 to dshops==3, even
+thought the delta(dshops) is the same.
+
+Hey: Could we want to say that moves that would
+increase the mMaxDSHopsValue should hurt (much)
+more than perhaps similar ones that don't? Except:
+The further from the anchor the bigger
+mMaxDSHopsValue will tend to be, so how is that
+fair?
+
+But we can know if we are the (locally) high nail,
+if our upstream has a smaller value than we do. If
+so, hammering us down would improve the value of
+the 'upstream prefix" running through us, at
+least.
+
+[777:
+
+Tue Dec 27 00:08:23 2022 OK, so, we have the
+loaded program picking up the Loader's preset TQDS
+of SE/nomin, but we're not (updating or?)
+propagating tqdsvalues yet. Where does that
+happen? 
+[778:
+
+Tue Dec 27 00:15:37 2022 Seems like
+PocketChainState.stabilize would be one obvious
+place.
+
+[779:
+
+Tue Dec 27 00:19:04 2022 Perhaps, in particular,
+if we're not a value anchor, we could update our
+values off ourselves right after
+takeValueFromUp(..)?
+
+And that updating would be something similar to
+what happens during evaluation, where we sort of
+allegedly have something implemented?[780:
+
+Tue Dec 27 00:24:14 2022 Let's see, via
+
+PatchRule.evaluate(..)
+-> PatchState.errorOfPocketChainInQuad(..)
+-> TQDSControl.chainError(PatchState & ps, PocketDir pd)
+
+Where we use
+
+    XZone ctrzone = ps.mCenterXZone;
+    PocketDir tquad = xzoneAndPatchDir2TargetQuadrant(ctrzone, pd);
+
+to determine what quad we're in (though I'm
+suspect that's got edge cases), and
+ 
+    Unsigned dshops = ps.mDSHops[pd];
+
+to determine our ds distance.
+
+However. In general we're not going to have a
+PatchState, though, right? We're just going to
+have something at the level of PocketChainState or
+thereabouts.
+
+Where did PatchState init from?[781:
+
+Tue Dec 27 00:35:01 2022 Yeah, it's
+
+   PatchState QHardCellState.mPatchState;
+
+and it's initted via
+
+    //// CAN WE INIT PATCH STATE?
+    if (!mPatchState.init(qhc)) return false; // NO WE CANNOT
+
+in QHardCellState.updatePatch(QHC&)
+
+So that's pretty much a pain as far as thinking of
+updating TQDS values during arbitrary PocketChain
+events.. [782:
+
+Tue Dec 27 01:03:08 2022 Now, it seems true that,
+except for when TQDS commands change, the only
+time TQDS values will change is during
+Patch-related processing.
+
+Right? So if we updated everybody's TQDS values
+during patch processing.. they'd still be obsolete
+for a long time when the command parameters
+changed..
+
+Well, can we drill down one more level? Where does
+PatchState get its facts from?[783:
+
+Tue Dec 27 01:28:44 2022 Well it's a mix of QHC&
+info and going all the way to the ew.
+
+We Do Not Want To Redo That.
+
+So instead suppose we just say: Update all pockets
+whenever we init a PatchState? It'd be better to
+also do it after a match succeeds, but that's a
+refinement once we believe the basic idea.
+[784:
+
+Tue Dec 27 01:59:51 2022 Another sad fact, though,
+is that we can only PatchState.init(..)
+successfully when the pocket is fully relaxed,
+which, as we know, can be pretty damn rare.
+
+(Although it does suggest that if we stabilized
+the matrix before changing TQDS commands, the
+change could propagate a lot faster.)
+
+((I wonder what if we also only propagated TQDS
+commands and values during PatchState related
+activities? With the intended result being that
+once we saw the updated commands coming back
+around the loop, we could believe the returned
+values were computed after the command update.))
+
+[785:
+
+Tue Dec 27 02:11:48 2022 (((Except in general we
+won't be able to see PocketChain's up/down streams
+when we're doing patch processing from a QHC. So
+that's pretty unnatural.)))
+
+So we could have some signaling flag(s) on top of
+the existing stuff. An mOurValuesValid flag that
+we'd clear whenever we accepted a TQDS change. And
+we'd set again whenever we participated in patch
+processing.
+
+But hey. Come on. We only need to know
+(1) What quadrant we're in, and
+(2) What's our dshops
+
+to update our TQDS values. Maybe we really should
+screw the patch processing and try to figure out a
+minimal path towards answering just those two
+questions on demand in a PocketChain path?
+
+[786:
+
+Tue Dec 27 02:19:41 2022 Are we talking root
+quadrant or DS quadrant, in the existing code? Has
+to be DS quadrant, right?[787:
+
+Tue Dec 27 02:21:00 2022 We rely on
+
+    PatchState.mCenterXZone
+and
+    PocketDir tquad = xzoneAndPatchDir2TargetQuadrant(ctrzone, pd);
+
+[788:
+
+Tue Dec 27 02:28:01 2022 Well,
+
+  minDSHops + 1u
+
+of our HC3 corners looks like a pretty fair
+representation of 'dshops' for a PocketChain to
+score on.
+[789:
+
+Tue Dec 27 02:30:16 2022 And FWIW,
+DiamondCutterBase.diamondSequencerAdjacent(..) has
+code to find the minDSHops around a PocketChain,
+based on the PocketHC3 in a PocketableState. 
+[790:
+
+Tue Dec 27 03:05:04 2022 And ummm there's also
+PocketQuadrant.ulam which provides
+
+  PocketDir mQuadrant;
+  Unsigned mDSHopContour;
+
+if PocketQuadrant.init(..) succeeds, yes?
+Apparently?
+
+My god I am so utterly ditzified.
+
+Today's Dave is unaware what yesterday's Dave did.
+
+Jeez.
+
+So okay; flagellation suspended for now. Are
+people using PocketQuadrant? Do we have reason to
+believe it?[791:
+
+Tue Dec 27 03:09:00 2022
+
+SeedLoop11 is using it.
+
+and PocketHC3.isDSP(PocketPtr) too ding ding ding.
+
+and it's available if PocketHC3.mStatus is
+cSTATUS_OK
+
+[792:
+
+Tue Dec 27 03:11:13 2022 OK let's believe it. We
+should be able to make like
+
+   Bool TQDSControl.updateTQDSValues(PocketQuadrant & pq)
+
+returning true if they changed. [793:
+
+Tue Dec 27 03:19:19 2022 OK, made
+
+   Void updateTQDSValues(PocketQuadrant &pq)
+
+which fails if !pq.mQuadrantKnown, or else does
+what it says. Where do we call it from?
+[794:
+
+Tue Dec 27 03:23:04 2022 So it's
+PocketableState.mPocket that's got the
+PocketQuadrant.
+
+So any time after PocketableState.init(..) returns
+false (meaning PocketHC3 returned cSTATUS_OK) we
+could update TQDS? Hmm don't we need to coordinate
+the update with the propagation? The propagation
+overwrites our own values, yes?
+
+[795:
+
+Tue Dec 27 04:42:59 2022 OK, had to send off an
+ish, but making some progress here. One thing I'm
+seeing is that we'd really rather NOT swap TQDS
+info when we swap along the PocketChain, but
+that's not the way it's working at the moment.
+
+I'd think we want TQDSValues, like covenants, to
+run with the land, not its current occupant.
+[796:
+
+Tue Dec 27 05:38:55 2022 OK, running out of gas
+here, but current issue is it seems like TQMap
+bits, once set, aren't clearing once the
+protrusion that set a bit is gone.. Where is the
+injection of fresh TQMap 0s supposed to come from?
+[797:
+
+Tue Dec 27 05:42:55 2022 OK I think it's confusion
+because sendCommandToUp(..) and
+takeCommandFromDown always completely overwrites
+TQMap etc, but sendValueToUp(..) and
+takeValueFromDown(..) always OR/MAX merges TQMap
+values etc.
+
+At the moment we have no way to absolutely take
+values in any direction.[798:
+
+Tue Dec 27 05:47:50 2022 OK I think
+{take|send}Value should overwrite just like the
+Command methods. And updateTQDS should be the only
+place that OR/MAX merging happens.
+
+:798]
+
+:797]
+
+:796]
+:795]
+
+:794]
+:793]
+
+:792]
+
+:791]
+
+:790]
+:789]
+
+:788]
+:787]
+
+:786]
+:785]
+
+:784]
+:783]
+
+:782]
+
+:781]
+
+
+:780]
+
+:779]
+
+:778]
+:777]
+
+:776]
+
+:775]
+
+:774]
+
+:773]
+:772]
+[799:
+
+Tue Dec 27 06:52:40 2022 OK time to take a
+break. Lots of progress but still plenty of issues
+too, no grandkids yet.
+
+Main issue is the "TQDS runs with the land" thing,
+which has at least two aspects:
+
+ - Without it, the TQDS info is constantly getting
+   stirred by swaps along the chain, so it doesn't
+   settle to a clear value even when it could. But
+   that isn't so bad compared to:
+
+ - When SL copies the head insns off to the red
+   buffer, it doesn't update their target
+   quadrants, so they see themselves as bad bad
+   bad and are vanishingly unlikely to make things
+   worse by pulling a GROWB to expand the red
+   loop.. So the requested RED roll never happens,
+   since the loop has no ECs, so we're deadlocked.
+
+Both of those things can be fixed or at least
+greatly simplified once we get some kind of run
+with the land stuff going.. and find all the
+foggen places that we need to change things to
+keep that invariant. Things I can think of:
+
+1. Creating a new EC or other Codon de-novo: Need
+   to pick up the quadrant of creation as the TQ?
+
+2. Swapping PocketChain ngbs needs to leave the
+   TQDS info behind
+
+3. Overwriting an EC for insn injection, likewise,
+   needs to keep the destination TQDS. That
+   includes at least SL into the head buffer, SL
+   onto the xfer cable, and RL into the code loop.
+
+[800:
+
+Tue Dec 27 07:13:17 2022 It also looks like we're
+going to have trouble with mother TQs (in zone 6
+and 7) and left daughter TQs (in zone 3 and 4)
+running into each other and confusing the code
+loop growth.
+
+Right now the LD code loop is running with TQMap
+0xF, for reasons I don't immediately know, and I'm
+thinking maybe that's the right thing to do until
+the mother dies and the LD zones take over the
+whole area.
+
+:800]
+
+:799]
