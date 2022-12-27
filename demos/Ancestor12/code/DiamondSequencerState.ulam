@@ -89,6 +89,7 @@ transient ProcUnitInfo + DTU + QDebugUtils {
   Unsigned mOccupiedSites;      // non-empty sites in pocket
   Unsigned mCodons;             // codons in pocket
 
+  /*
   Bool getChainControlData(ChainControlData & dest, Bool up) {
     EventWindow ew;
     if (mCodonSN == SN.maxof) return false;
@@ -97,16 +98,17 @@ transient ProcUnitInfo + DTU + QDebugUtils {
     else    dest = codon.mChainControlDown.getChainControlData();
     return true;
   }
+  */
 
-  Bool setChainControlData(ChainControlData src, Bool up) {
+  Bool setTQDSControl(TQDSControl src) {
     EventWindow ew;
     if (mCodonSN == SN.maxof) return false;
     Codon & codon = (Codon &) ew[mCodonSN];
-    if (up) codon.mChainControlUp.setChainControlData(src);
-    else    codon.mChainControlDown.setChainControlData(src);
+    codon.copyTQDSControlFrom(src);
     return true;
   }
 
+  /*
   Bool getChainControlUp(ChainControlUp & dest) {
     EventWindow ew;
     if (mCodonSN == SN.maxof) return false;
@@ -136,6 +138,7 @@ transient ProcUnitInfo + DTU + QDebugUtils {
     codon.mChainControlDown = src;
     return true;
   }
+  */
 
   Void init(DiamondSequencer & ds, ProcUnit pu) {
     takeDebug(ds);

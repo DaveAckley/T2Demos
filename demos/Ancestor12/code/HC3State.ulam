@@ -5,6 +5,7 @@ transient HC3State + DTU + QDebugUtils {
   Random random;
 
   // values from the Intender
+  Bool myIsRoot;
   Unsigned myUpHops;
   Unsigned myUpHopsGoal; // IN EFFECT myUpHopsGoal
   Unsigned myDSHops;
@@ -16,7 +17,7 @@ transient HC3State + DTU + QDebugUtils {
   Unsigned minUpHops;
   C2D minUpHopsC2D;             //< Where minUpHops was found
   AxialDir minUpHopsAD;         // which of our ngbrel idx to upstream
-  Unsigned maxUpHopsGoal;       // over ngbs not including ctr
+  Unsigned minUpHopsGoal;       // of specifically minUpHopsC2D
   XZone xzoneOfMinDSHops;
   C2D minDSHopsC2D;
   OnDSAxes onDSAxes;
@@ -63,12 +64,13 @@ transient HC3State + DTU + QDebugUtils {
   Void init(QHardCell & q) {
     //    setDebugOutputEnabled(true);
     print("H3SINMIN10");
-    init(q.getUpHops(), q.getMaxHopsGoal(), q.getDSHops(), q.getXZone());
+    init(q.isRoot(), q.getUpHops(), q.getMaxHopsGoal(), q.getDSHops(), q.getXZone());
   }
 
-  Void init(Unsigned uphops, Unsigned maxhopsgoal, Unsigned dshops, XZone xzone) {
+  Void init(Bool isroot, Unsigned uphops, Unsigned maxhopsgoal, Unsigned dshops, XZone xzone) {
     //    setDebugOutputEnabled(true);
     print("H3SINIT10");
+    myIsRoot = isroot;
     myUpHops = uphops;
     myUpHopsGoal = maxhopsgoal; // center qhc current goal
     myDSHops = dshops;
@@ -118,12 +120,15 @@ transient HC3State + DTU + QDebugUtils {
     minUpHopsC2D = C2D.instanceof;
     minDSHops = Unsigned.maxof;
     xzoneOfMinDSHops = cXZONE_UN;
-    maxUpHopsGoal = Unsigned.minof;
+    minUpHopsGoal = Unsigned.minof;
 
     OnDSAxes dxdy; // false, false
     onDSAxes = dxdy;
 
     print("H3SEXNG10");
+    Random random;
+    Unsigned wincount = 0u;
+    Unsigned windscount = 0u;
     for (Unsigned i = 0u; i < mHC3NgbStates.lengthof; ++i) {
       HC3NgbState & n = mHC3NgbStates[i];
       C2D nbgoff = mNgbOffs[i];
@@ -137,18 +142,35 @@ transient HC3State + DTU + QDebugUtils {
         if (n.foundUninitialized()) uninits = true;
         else {
           print("H3SEXNG13");        
+          Bool takeinfo = false;
           if (n.getUpHops() < minUpHops) {
-            print("H3SEXNG14");        
+            print("H3SEXNG14WIN");        
+            takeinfo = true;
+            wincount = 1u;
+          } else if (n.getUpHops() == minUpHops &&
+                     random.oneIn(++wincount)) { 
+            print("H3SEXNG14TIE");
+            takeinfo = true;
+          }
+          if (takeinfo) {
             minUpHops = n.getUpHops();
             minUpHopsC2D = n.getNgbC2D();
             minUpHopsAD = (AxialDir) i;
-            //            Unsigned mg = n.getNgbMaxGoalHops();
-            //            if (mg > maxUpHopsGoal) maxUpHopsGoal = mg;
-            maxUpHopsGoal = n.getNgbMaxGoalHops(); // ANISOTROPY WARNING BEEP BEEP: believe every first minuphops we see?
+            minUpHopsGoal = n.getNgbMaxGoalHops(); // 
           }
+          
           updateOnDSAxes(onDSAxes, nbgoff, n.getOnDSAxesNS());
+
+          Bool takedsinfo = false;
           if (n.getDSHops() < minDSHops) {
-            print("H3SEXNG15");        
+            print("H3SEXNG15WIN");
+            takedsinfo = true;
+          } else if (n.getDSHops() == minDSHops &&
+                     random.oneIn(++windscount)) {
+            takedsinfo = true;
+            print("H3SEXNG15TIE");
+          }
+          if (takedsinfo) {
             minDSHops = n.getDSHops();
             xzoneOfMinDSHops = n.getXZone();
             minDSHopsC2D = n.getNgbC2D();

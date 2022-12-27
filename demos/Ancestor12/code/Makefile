@@ -33,7 +33,7 @@ run:	$(MFZ)
 
 $(MFZ):	$(ULAM_FILES) $(INC_FILES) $(TCC_FILES) $(ARGS_TXT_FILES) *.mk
 	$(ULAM) $(UFLAGS) $(SOURCE_DIR_ARGS) $(ULAM_FILES) $(INC_FILES) $(MFS_FILES) $(TCC_FILES) $(ARGS_TXT_FILES) $(MFZ) ; \
-	STAT=$$? ; kdeconnect-cli --ping-msg `date +"[$$STAT]-%D-%T:$(MFZ)"` -d fb5dce29ebb9a672 ; exit $$STAT
+	STAT=$$? ; test -x ./kdeping && ./kdeping "$$STAT" "$(MFZ)" ; exit $$STAT
 
 clean:
 	rm -f *~

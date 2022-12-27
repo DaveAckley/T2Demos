@@ -8,7 +8,7 @@ quark QHardCellG : QHardCell {
   HardCellWatchdog mHardCellWatchdog;
 
   /* XXX
-  typedef XTimer(4u,10u,100u) RootWatchdog; 
+  typedef XTimer(4u,10u,100u) RootWatchdog;
   RootWatchdog mRootWatchdog; // Make root bail faster
   */
 
@@ -20,7 +20,7 @@ quark QHardCellG : QHardCell {
   virtual Void resetWatchdog() { mHardCellWatchdog.reset(); }
 
   @Override
-  virtual Atom toSpawn() { 
+  virtual Atom toSpawn() {
     print("HCGTSP0");
     print(self);
     print("HCGTSP10");
@@ -40,9 +40,8 @@ quark QHardCellG : QHardCell {
   //// DEWLine API
   @Override
   virtual DefCon signalDC() { // HC3 signals 'contact' or 'damage'
-    return isTail() ? cDC_CONT : cDC_DAMG; 
+    return isTail() ? cDC_CONT : cDC_DAMG;
   }
-
 
   typedef EventWindow.SiteNum SN;
   typedef Unsigned(5) HopCount;
@@ -51,11 +50,9 @@ quark QHardCellG : QHardCell {
   HopCount mMaxHops;
   Unsigned(3) mToggleHack;
 
-  Bool isTail() { return mUpHops == mMaxHops - 1u; }
+  Bool isTail() { return getUpHops() == mMaxHops - 1u; }
 
   constant Unsigned cDIFFUSE_ODDS = 1u;
-
-  HopCount mUpHops = HopCount.maxof;//cMAX_HOPS;
 
   HopCount mSettledDownHops = 0u;
 
@@ -132,7 +129,7 @@ quark QHardCellG : QHardCell {
       return cu.color(0xff,0u,0u);
     return ret;
   }
-  
+
   ARGB getColorMinSettled() {
     ColorUtils cu;
     Unsigned dh = getSettledDownHops();
@@ -173,11 +170,6 @@ quark QHardCellG : QHardCell {
 
 
   @Override
-  virtual Unsigned getUpHops() { return mUpHops; }
-  @Override
-  virtual Void setUpHops(Unsigned uphops) { mUpHops = (HopCount) uphops; }
-
-  @Override
   virtual Unsigned getSettledDownHops() { return mSettledDownHops; }
   @Override
   virtual Void setSettledDownHops(Unsigned settledown) { mSettledDownHops = (HopCount) settledown; }
@@ -202,13 +194,77 @@ quark QHardCellG : QHardCell {
   }
 }
 
+quark QHardCellGField : QHardCellG {
+  HopCount mUpHops = HopCount.maxof;//cMAX_HOPS;
+
+  @Override
+  virtual Unsigned getUpHops() { return mUpHops; }
+  @Override
+  virtual Void setUpHops(Unsigned uphops) { mUpHops = (HopCount) uphops; }
+}
+
 /** HardCellG: A Growable Low-Density Mobile Grid
    \symbol HG
    \color 0xf0f0f0
  */
-element HardCellG : QHardCellG
+element HardCellG : QHardCellGField
   + QDSHopsStg
 {
+}
+
+/** RootHardCellG: An anchor point for Growable Low-Density Mobile Grid
+   \symbol RG
+   \color 0x0f0f0f
+ */
+element RootHardCellG : QHardCellG
+  + QDSHopsStg
+{
+  @Override
+  virtual Void renderGraphics() {
+    Drawable drawable;
+    if (!drawable.canDraw()) return;
+    super.renderGraphics();
+
+    // Looking for a diamond outline
+
+    ColorUtils cu;
+    ARGB oncol = cu.color(0xff000000u);
+    ARGB offcol =  cu.color(0xffffffffu);
+
+    constant C2D.Coord side = Drawable.cUNITS_PER_SITE;
+    constant C2D.Coord halfSide = side/2;
+    constant C2D.Coord thick = 150;
+    /*
+    C2D cPTS[] = {
+      { .x = 0,         .y = -halfSide },
+      { .x = halfSide,  .y = 0         },
+      { .x = 0,         .y = halfSide  },
+      { .x = -halfSide, .y = 0         },
+      { .x = 0,         .y = -halfSide },
+      { .x = halfSide,  .y = 0         },
+    };
+    for (Unsigned i = 0u; i < cPTS.lengthof - 1u; ++i) {
+      drawable.drawMaskedLine(cPTS[i], cPTS[i+1u], oncol, offcol, (Bits) 0xff00ff00, thick);
+    }
+    */
+
+    {
+      C2D a = { .x = 0,         .y = -halfSide };
+      C2D b = { .x = halfSide,  .y = 0         };
+      C2D c = { .x = 0,         .y = halfSide  };
+      C2D d = { .x = -halfSide, .y = 0         };
+      C2D e = { .x = 0,         .y = -halfSide };
+      drawable.drawMaskedLine(a,b, oncol, offcol, (Bits) 0x33333333, thick);
+      drawable.drawMaskedLine(b,c, oncol, offcol, (Bits) 0x33333333, thick);
+      drawable.drawMaskedLine(c,d, oncol, offcol, (Bits) 0x33333333, thick);
+      drawable.drawMaskedLine(d,e, oncol, offcol, (Bits) 0x33333333, thick);
+    }
+  }
+
+  @Override
+  virtual Unsigned getUpHops() { return 0u; }
+  @Override
+  virtual Void setUpHops(Unsigned uphops) { Fail f; f.fail(__FILE__,__LINE__); }
 
   typedef Unsigned(2) CmdPhase;
   constant CmdPhase cCMD_MOVE = 0u;
@@ -217,9 +273,8 @@ element HardCellG : QHardCellG
   constant CmdPhase cCMD_WAIT = 3u;
   CmdPhase mCmdPhase = cCMD_MOVE;
 
-  Void makeRoot() {
+  Void init() {
     Random random;
-    setUpHops(0u);                       // You are root
     mMaxHops = (HopCount) (Parms.cSEED_HG_LARGE_MIN_MAXHOPS ?
                            9u : cMIN_MAX_HOPS); // of (appropriately) min size
     changeDir(); // and a random dir
@@ -231,40 +286,42 @@ element HardCellG : QHardCellG
   DirSpeed mDirs[2];
 
   @Override
+  virtual Bool isRoot() { return true; }
+
+  @Override
   virtual Bool rootBehave(QHardCellState & qcs) {
     HC3State &hcs = qcs.getHC3State();
     DebugUtils du;
+
     /// AM I ROOT?
-    if (mUpHops != 0u) return false;
+    if (!isRoot()) return false;
     /// I AM ROOT.
 
     /// AM I ALIVE?
     if (rootAlarm()) return die(); // NO I WAS STUCK TOOO LONG
     /// I AM ALIVE.
 
-    /// DO ANY OF THE NGBS THINK THE WORLD IS BIGGER THAN I DO?
-    Unsigned maxgoal = getMaxHopsGoal();
-    if (hcs.maxUpHopsGoal > maxgoal) {
-      Unsigned hit = 0u;
-      EventWindow ew;
-      for (Unsigned i = 0u; i < hcs.mHC3NgbStates.lengthof; ++i) {
-        HC3NgbState & n = hcs.mHC3NgbStates[i];
-        if (n.hasValidNeighbor()) {
-          Atom & a = ew[n.getNgbC2D()];
-          if (a as QHardCell) {
-            print("ROOTMODGOAL");
-            print(a);
-            a.setMaxHopsGoal(maxgoal);
-            a.setUpHops(maxgoal-1u);
-            ++hit;
+    /// ARE ANY OF THE NGBS INCONSISTENT WITH MY HOPS OR GOAL?
+    Unsigned roothops = getUpHops();
+    Unsigned rootmaxgoal = getMaxHopsGoal();
+    EventWindow ew;
+    Random random;
+    for (Unsigned i = 0u; i < hcs.mHC3NgbStates.lengthof; ++i) {
+      HC3NgbState & n = hcs.mHC3NgbStates[i];
+      if (n.hasValidNeighbor()) {
+        Atom & a = ew[n.getNgbC2D()];
+        if (a as QHardCell) {
+          Unsigned ngbhops = a.getUpHops();
+          Unsigned ngbmaxgoal = a.getMaxHopsGoal();
+          if (ngbmaxgoal != rootmaxgoal ||
+              ngbhops != roothops + 1u) {
+            print("NGBINCONSISTENTWAIT");
+            return qcs.block(); // better wait
           }
         }
       }
-      if (hit > 0u) {
-        printContext();
-        return qcs.block(); // better wait
-      }
     }
+    /// ALL OF THE NGBS ARE CONSISTENT WITH MY HOPS OR GOAL.
 
     /// AM I BLOCKED BY UNSETTLED DOWNSTREAM?
     Unsigned unsettledDown = getSettledDownHops();
@@ -273,8 +330,6 @@ element HardCellG : QHardCellG
     }
     /// DOWNSTREAM IS ALIGNED WITH ME SUFFICIENTLY FOR MOVING
 
-    Random random;
-    EventWindow ew;
     which (mCmdPhase) {
     case cCMD_MOVE: {
       /// TRY TO GROW NOW?
@@ -303,7 +358,7 @@ element HardCellG : QHardCellG
       /// ROOM TO GROW?
       if (mMaxHops >= cMAX_MAX_HOPS) {
         mCmdPhase = cCMD_MOVE; // No
-        return true; 
+        return true;
       }
       /// ROOM TO GROW.
       /// STABLE TO EDGE?
@@ -344,7 +399,7 @@ element HardCellG : QHardCellG
 
         mToggleHack++;
         mToggleHack %= 3u;
-        
+
         //        if (mToggleHack != 0u)  // two grows to one shift
         if (true)  // BACK TO ONLY GROWING
           ++mMaxHops;
@@ -420,3 +475,26 @@ element HardCellG : QHardCellG
   }
 }
 
+/** Cell Resizer
+    \symbol CR
+    \color #48a
+*/
+element CellResizer + DTU {
+  Void behave() {
+    EventWindow ew;
+    Random random;
+    for (SN sn = 1u; sn <= 4u; ++sn) {
+      if (!ew.isAccessible(sn)) continue;
+      Atom & a = ew[sn];
+      if (a as RootHardCellG) {
+        Int goal = (Int) a.getMaxHopsGoal();
+        Int mod = random.between(-2,2);
+        goal += mod;
+        if (goal > 2 && goal < 20)
+          a.setMaxHopsGoal((Unsigned) goal);
+        break;
+      }
+    }
+    ew[0] = Empty.instanceof;
+  }
+}

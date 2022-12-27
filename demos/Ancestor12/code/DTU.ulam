@@ -7,7 +7,7 @@ quark DTU {
   typedef EventWindow.SiteNum SN;
 
   //// DISTANCE GRADIENT FROM DIAMONDSEQUENCER
-  typedef Unsigned(3) DSHops;
+  typedef Unsigned(5) DSHops;
 
   //// AXIS ALIGNMENT WITH NEAREST DIAMONDSEQUENCER
   typedef Bool OnDSAxes[2]; // [0] dx==0; [1] dy==0
@@ -367,6 +367,11 @@ quark DTU {
     return __FUNC__;
   }
 
+  C2D axialDir2C2D(AxialDir ad) {
+    MDist md;
+    return md.getSiteCoord(ad+1u);
+  }
+
   Void axialDirsBorderingQuad(PocketDir from, AxialDir & had, AxialDir & vad) {
     which (from) {
     case cQUAD_NW:  { had = cW; vad = cN; }
@@ -456,7 +461,7 @@ quark DTU {
 
   constant NgbState cNGB_INIT   = NgbState.maxof; // Found nothing so far
 
-  //// CHAINCONTROLDATA DEFINITIONS
+  //// TQDSCONTROL DEFINITIONS
 
   typedef Bits(4) TQMap; //< Target Quadrant Map
   constant TQMap cTQ_NW = 1u << cQUAD_NW;
@@ -464,6 +469,7 @@ quark DTU {
   constant TQMap cTQ_SE = 1u << cQUAD_SE;
   constant TQMap cTQ_SW = 1u << cQUAD_SW;
 
+  /*
   typedef Unsigned(2) SizeRange;
   constant SizeRange cSZRG_S = 0u; //< small
   constant SizeRange cSZRG_M = 1u; //< medium
@@ -480,11 +486,12 @@ quark DTU {
   };
 
   typedef Bits(4) ASRMap; //< Allowable Size Range Map
-
+  
   constant ASRMap cASR_S = 1u << cSZRG_S;
   constant ASRMap cASR_M = 1u << cSZRG_M;
   constant ASRMap cASR_L = 1u << cSZRG_L;
   constant ASRMap cASR_X = 1u << cSZRG_X;
+  */
 
   //// "BIO-OP CODES" FOR LXBIOCTORARM
   typedef Unsigned(4) BOpCode;

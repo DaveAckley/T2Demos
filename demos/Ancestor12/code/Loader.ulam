@@ -41,8 +41,9 @@ transient ChainRule_LOADER_LOAD : ChainRule_GENL_ALONE {
     super.whenAloneDo(ss,mat);
     EventWindow ew;
     Loader & ld = (Loader&) ew[mat[1]];
-    ChainControlUp ccu = ld.mChainControlUp;
-    ChainControlDown ccd = ld.mChainControlDown;
+    //        { Fail f; f.fail(__FILE__,__LINE__); } // IMPLEMENT ME TQDS
+        //    ChainControlUp ccu = ld.mChainControlUp;
+        //    ChainControlDown ccd = ld.mChainControlDown;
     // print(ld.mChainControlDown);
     // print(ld.mNextInstruction);
     Atom a = Ancestor.cPROGRAM[ld.mNextInstruction];
@@ -52,9 +53,11 @@ transient ChainRule_LOADER_LOAD : ChainRule_GENL_ALONE {
     Codon & newc = (Codon&) a;
     print("CR_LDRL_WAD12INB");
     print(newc);
+    newc.copyTQDSControlFrom(ld); // Init chain control from loader
     down.swapPocketPtrs(newc);
     print("CR_LDRL_WAD12INC-newc");
     print(newc);
+    /*
     print("CR_LDRL_WAD12INC-newc.ccu");
     print(newc.mChainControlUp);
     print("CR_LDRL_WAD12INC-init");
@@ -77,6 +80,7 @@ transient ChainRule_LOADER_LOAD : ChainRule_GENL_ALONE {
     print(ld.mChainControlDown);
     print("CR_LDRL_WAD12INE-ld.ccu");
     print(ld.mChainControlUp);
+    */
     print("CR_LDRL_WAD12INF-a");
     print(a);
     print("CR_LDRL_WAD12INF-newc");
@@ -138,6 +142,8 @@ element Loader : LX {
   virtual Void init() {
     super.init();
     mDSType = cDS_NORM;
+    setSingleTQ(cQUAD_SE);      // loaded stuff should stay in the SE
+    setMinDSHopsCommand(false); // but can spread in there
   }
 
   //// Intender API 

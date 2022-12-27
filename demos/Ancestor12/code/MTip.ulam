@@ -1,7 +1,7 @@
 /** \symbol MT
     \color #f63
  */
-element MTip : DEWLine + DebugUtils {
+element MTip : DEWLine + DebugUtils + DTU {
   typedef XTimer(3u,5u,10u) BothSidesWatchdog;
   BothSidesWatchdog mBothSidesWatchdog;
 
@@ -22,6 +22,44 @@ element MTip : DEWLine + DebugUtils {
     if (!mAxisBound) ret = cu.dimmer(ret);
     return ret;
   }
+
+  @Override
+  virtual Void renderGraphics() {
+    Drawable drawable;
+    if (!drawable.canDraw()) return;
+    super.renderGraphics();
+
+    if (!Parms.cRENDER_MEMBRANE_BOXES) return;
+
+    Unsigned max = maxDCs();
+
+    ColorUtils cu;
+    C2D.Coord size;
+    ARGB oncol;
+    which (max) {
+    case DEWLine.cDC_OPEN: { size = 200; oncol = cu.color(0xff000000u); }
+    case DEWLine.cDC_SGHT: { size = 400; oncol = cu.color(0xffffff00u); }
+    case DEWLine.cDC_CONT: { size = 600; oncol = cu.color(0xffff0000u); }
+    case DEWLine.cDC_DAMG: { size = 700; oncol = cu.color(0xffffffffu); }
+    }
+    ARGB col = getColor(2u);
+    C2D siz(size, size);
+    C2D pos(-size/2,-size/2);
+
+    drawable.fillRectangle(pos, siz, col);
+
+    if (mAxisBound) {
+      constant C2D.Coord side = Drawable.cUNITS_PER_SITE;
+      constant C2D.Coord halfSide = side/2;
+      constant C2D.Coord thick = 100;
+      constant C2D.Coord len = 2*side;
+
+      C2D ad = axialDir2C2D(mHorizonAxis);
+      C2D start(0,0), end = ad * len;
+      ARGB offcol = col;
+      drawable.drawMaskedLine(start, end, oncol, offcol, (Bits) 0x33333333, thick);
+    }
+  }  
 
   //// DEWLine API
   @Override

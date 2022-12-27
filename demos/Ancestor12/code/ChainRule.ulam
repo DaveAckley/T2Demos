@@ -173,8 +173,7 @@ transient ChainRule_INSERT : ChainRule {
     if (atmp as Codon) {
       print("CR_IN13");
       print(atmp);
-      atmp.copySegPtrsOnly(ec);
-      atmp.mTargetQuadrant = ec.mTargetQuadrant;
+      atmp.copySegAndPChain(ec);
       print("CR_IN14");
       print(atmp);
       //BUGGY      ew[mat[1]] = mCodonToInsert.atomof;
@@ -330,8 +329,7 @@ transient ChainRule_DELETE : ChainRule {
     EmptyCodon ec;
     Random random;
     ec.mDSType = random.oneIn(2) ? cDS_DOWN : cDS_UP; // Go someway
-    ec.copySegPtrsOnly(y);
-    ec.mTargetQuadrant = y.mTargetQuadrant;
+    ec.copySegAndPChain(y);
     print("CR_DL14");
     ew[mat[1]] = ec.atomof;
     return; 

@@ -117,6 +117,53 @@ transient QHardCellState : Intention + DTU + QDebugUtils + Fail {
 
     HC3State& hc3 = getHC3State();
 
+    //// MIGHT I NEED TO UPDATE UPHOPS OR GOAL HOPS?
+    if (hc3.myIsRoot) return false; // I'M ROOT THEREFORE NO
+
+    //// I'M NOT ROOT AND SO MIGHT NEED TO UPDATE UPHOPS OR GOAL HOPS.
+
+    print("QHCUP14");
+    // DIE IF NO NGBS.
+    if (hc3.minUpHops == hc3.minUpHops.maxof) return qc.die();
+
+    // DO I NEED TO UPDATE EITHER MINUP HOP & GOAL?
+    if (hc3.minUpHops + 1u != hc3.myUpHops ||
+        hc3.minUpHopsGoal != hc3.myUpHopsGoal) {
+      // I DO.
+      print("QHDCL MAXGOALHOPS CHG");
+      printContext();
+      qc.setMaxHopsGoal(hc3.minUpHopsGoal); // Be consistent with chosen
+      qc.setUpHops(hc3.minUpHops+1u);       // upstream ngb
+      qc.setSettledDownHops(0u);  // and downstream is now considered unsettled
+      return block();
+    }
+    //// I DO NOT NEED TO UPDATE HOPS OR GOAL
+      
+    print("QHCUP1610");
+
+    // AM I BEYOND THE GOAL?
+    if (hc3.myUpHops >= hc3.myUpHopsGoal) { // YES
+      print("QHCUP1610DIE");
+      return qc.die(); // I MUST DIE
+    }
+
+    print("QHCUP1611");
+
+    //// DO I HAVE UNINITTED NGBS?
+    if (hc3.uninits)
+      return block();
+    //// I HAVE NO UNINITTED NGBS.
+
+    print("QHCUP17");
+
+    return false;
+  }
+
+  /*
+  Bool stabilizeHopsOrDieOLD(QHardCell & qc) {
+
+    HC3State& hc3 = getHC3State();
+
     //// DO I NEED TO UPDATE GOAL HOPS?
     if (hc3.myUpHops != 0u) {       // I'M NOT ROOT.
       print("QHCUP14");
@@ -195,6 +242,7 @@ transient QHardCellState : Intention + DTU + QDebugUtils + Fail {
     }
     return false;
   }
+  */
 
   Bool stabilizeDSHops(QHardCell& qc) {
     HC3State& hc3 = getHC3State();
@@ -511,7 +559,7 @@ transient QHardCellState : Intention + DTU + QDebugUtils + Fail {
 
     print("QHCUP224");
     //// AM I ROOT?
-    if (hc3.myUpHops == 0u)
+    if (hc.isRoot())
       return hc.rootBehave(self); // YES, HANDLE ME
     //// I AM NOT ROOT.
 
@@ -648,6 +696,7 @@ quark QHardCell : Intender
   virtual Unsigned getSettledDownHops() ; // Down hops all aligned with me 
   virtual Void setSettledDownHops(Unsigned settledown) ;
 
+  virtual Bool isRoot() { return false; } 
   virtual Bool rootBehave(QHardCellState &hcs) { return false; } 
   virtual Void initCopy() { setUpHops(Unsigned.maxof); /* set uninitted */ }
 

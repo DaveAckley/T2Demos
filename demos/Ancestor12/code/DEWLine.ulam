@@ -110,8 +110,8 @@ quark DEWLine {
     if (!dewColor) oncol = getColor(0xff000000);
     else {
       which (size) {
-      case cDC_SGHT: { oncol = cu.color(0xffffff00); }
-      case cDC_CONT: { oncol = cu.color(0xffffa500); }
+      case cDC_SGHT: { oncol = cu.color(0xffaaaa00); } 
+      case cDC_CONT: { oncol = cu.color(0xffaa8500); } // common warnings could be a little darker
       case cDC_DAMG: { oncol = cu.color(0xffff0000); }
       }
       // XXX      oncol = cu.between(oncol, basecol, 50u);
@@ -135,10 +135,10 @@ quark DEWLine {
     ColorUtils cu;
     if (!dewColor) oncol = getColor(0xff000000);
     else which (dc) {
-      case cDC_SGHT: { oncol = cu.color(0xffffff00); }
-      case cDC_CONT: { oncol = cu.color(0xffffa500); }
-      case cDC_DAMG: { oncol = cu.color(0xffff0000); }
-      }
+    case cDC_SGHT: { oncol = cu.color(0xffaaaa00); } 
+    case cDC_CONT: { oncol = cu.color(0xffaa8500); } // common warnings could be a little darker
+    case cDC_DAMG: { oncol = cu.color(0xffff0000); }
+    }
     drawable.drawMaskedLine(start, end, oncol, oncol, (Bits) 0xffffffff, width);
     return;
   }

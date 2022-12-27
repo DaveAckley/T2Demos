@@ -56,10 +56,11 @@ element SeedLoop : XTimer(3u,6u,4u) + DTU {
     Demo d;
     d.mDemoProvider = true;     // I make the loop grow
     
-    PocketDir tq = (PocketDir) p.mPocketQuadrant.mQuadrant;
-    d.mTargetQuadrant = tq;
-    d.mChainControlUp.init();
-    d.mChainControlDown.init();
+    PocketQuadrant & pishtar = p.mPocketQuadrant;
+    PocketDir tq = (PocketDir) pishtar.mQuadrant;
+    d.setSingleTQ(tq);
+    //    d.mChainControlUp.init();
+    //    d.mChainControlDown.init();
     d.mDSType = Demo.cDS_NORM;
     d.mPocketPtrs[Segment.cBODY_UP] = (PocketPtr) openptr; // Up and down are 
     d.mPocketPtrs[Segment.cBODY_DOWN] = (PocketPtr) openptr; // both thataway
@@ -67,9 +68,9 @@ element SeedLoop : XTimer(3u,6u,4u) + DTU {
     //    Sh*peSh*fter g;
     EmptyCodon g;
     //    g.mDSType = g.cDS_DUMB;                // We don't auto move or grow
-    g.mTargetQuadrant = tq;
-    g.mChainControlUp.init();
-    g.mChainControlDown.init();
+    g.setSingleTQ(tq);
+    //    g.mChainControlUp.init();
+    //    g.mChainControlDown.init();
     g.mDSType = Demo.cDS_NORM;
     g.mPocketPtrs[Segment.cBODY_UP] = (PocketPtr) (5u-openptr);
     g.mPocketPtrs[Segment.cBODY_DOWN] = (PocketPtr) (5u-openptr);

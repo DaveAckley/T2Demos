@@ -28,8 +28,8 @@ element SeedSeq : XTimer(3u,6u,4u) + DTU + QDebugUtils {
 
     C2D rootc(0,3);
     { // Make and place root
-      HardCellG g;
-      g.makeRoot();
+      RootHardCellG g;
+      g.init();
       ew[rootc] = g.atomof;
     }
 
@@ -43,9 +43,9 @@ element SeedSeq : XTimer(3u,6u,4u) + DTU + QDebugUtils {
         ew[at] = sl.atomof;
       }
 
-      makeSL(C2D.instanceof(1,-1), cPP_EAST, cQUAD_NE);
-      makeSL(C2D.instanceof(-1,1), cPP_WEST, cQUAD_SW);
-      makeSL(C2D.instanceof(-1,-1), cPP_WEST, cQUAD_NW);
+      //      makeSL(C2D.instanceof(1,-1), cPP_EAST, cQUAD_NE);
+      //      makeSL(C2D.instanceof(-1,1), cPP_WEST, cQUAD_SW);
+      //      makeSL(C2D.instanceof(-1,-1), cPP_WEST, cQUAD_NW);
     }
 
     { // Replace self with the DS
@@ -53,7 +53,7 @@ element SeedSeq : XTimer(3u,6u,4u) + DTU + QDebugUtils {
       DiamondSequencer ds;
       QHardCellG & rds = ds;
       rds = root; // pick up all QHardCellG fields
-      ds.mUpHops = 1u; // we're down one hop
+      ds.setUpHops(1u); // we're down one hop
       ew[0] = ds.atomof;
       return;
     }

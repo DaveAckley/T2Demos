@@ -57,7 +57,6 @@ transient DemoState : CodonState /*SequenceableState*/ {
     if (false /*ONLY GROW BY PATCH! random.oneIn(15u)*/) {
       /// GO FOR GROW!
       EmptyCodon g; // XXX was Sf
-      g.mTargetQuadrant = d.mTargetQuadrant;
       PocketChain & qg = g;
       qg = qd;             // Copy qd's qchain info
       Segment & sg = g;
@@ -137,10 +136,10 @@ element SeedDemo : XTimer(3u,6u,2u) + DTU {
     if (pstat == PocketHC3.cSTATUS_BENT) return;           // wait for clarity
 
     Demo d;
-    d.mChainControlUp.init();
-    d.mChainControlDown.init();
+    //    d.mChainControlUp.init();
+    //    d.mChainControlDown.init();
     d.mDSType = Demo.cDS_NORM;
-    d.mTargetQuadrant =  (PocketDir) random.between(0,3);
+    d.setSingleTQ((PocketDir) random.between(0,3));
     d.mPocketPtrs[Segment.cBODY_UP] = Segment.cPP_NULL; // you're the head
     d.mPocketPtrs[Segment.cBODY_DOWN] = Segment.cPP_NULL; // you're also the tail (for now)
     ew[0] = d.atomof;

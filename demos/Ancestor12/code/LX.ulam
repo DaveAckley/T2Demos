@@ -126,9 +126,9 @@ quark QLabelMark {
  */
 element LXMarker : LX + QLabelMark {
   typedef Bits(4) ControlMap;
-  ControlMap mUpMap;            //< which pui up maps to set
-  ControlMap mDownMap;          //< which pui down maps to set
-  ChainControlData mChainControlData; //< value to set them all to
+  ControlMap mPUMap;            //< which pui up maps to set
+  TQDSControl mTQDSControl;
+
   Bool mHalt;
 
   //// LX API
@@ -145,21 +145,15 @@ element LXMarker : LX + QLabelMark {
       ProcUnitInfo & pui = dss.mPUInfos.mPUInfoAry[pu];
       ControlMap cm = (ControlMap) (1u<<pu);
       
-      if ((mUpMap & cm) != 0u) {
-        Bool ret = pui.setChainControlData(mChainControlData, true);
+      if ((mPUMap & cm) != 0u) {
+        Bool ret = pui.setTQDSControl(mTQDSControl);
+        /*
         bsl.printf("setCCD(%s,%x%x) up=%d\n",
                    getProcUnitName(pu),
                    mChainControlData.mTQMap,
                    mChainControlData.mSRMap,
                    ret);
-      }
-      if ((mDownMap & cm) != 0u) {
-        Bool ret = pui.setChainControlData(mChainControlData, false);
-        bsl.printf("setCCD(%s,%x%x) down=%d\n",
-                   getProcUnitName(pu),
-                   mChainControlData.mTQMap,
-                   mChainControlData.mSRMap,
-                   ret);
+        */
       }
     }
 

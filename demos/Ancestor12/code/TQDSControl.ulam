@@ -1,0 +1,174 @@
+quark TQDSControl + DTU {
+  TQMap mTQMapCommand = 0xf; //< currently acceptable target quadrants; default: all
+  TQMap mTQMapValue = 0x0;   //< currently occupied target quadrants; default: all
+
+  Bool mMinDSHopsCommand;             //< Command enabled
+  typedef HardCellG.HopCount HopCount;
+  HopCount mMaxDSHopsValue;           //< Value return
+
+  //// TQDSControl API
+  virtual Bool stabilizeCommandAnchor(PocketChainState & pcs) {
+    pcs.print("TQDSSTABCOM10");
+    return false;
+  }
+
+  virtual Bool stabilizeValueAnchor(PocketChainState & pcs) {
+    pcs.print("TQDSSTABVAL10");
+    mTQMapValue = 0u;
+    mMaxDSHopsValue = 0u;
+    return true;
+  }
+
+  //// TQDSControl SERVICES
+
+  Void updateTQDSValues(PocketChainState & pcs) {
+    PocketQuadrant & pqWRONG = pcs.mPocket.mPocketQuadrant;
+
+    PocketHC3 & hc3 = pcs.mPocket;
+    PocketQuadrant & pq = hc3.mPocketQuadrant;
+
+    pcs.print("UTQDSV10");
+    pcs.print(pqWRONG);
+    pcs.print("UTQDSV10SHOULDBESAMEAS:");
+    pcs.print(pq);
+
+    if (!pq.mQuadrantKnown) {
+      Fail f;
+      f.fail(__FILE__,__LINE__);
+    }
+
+    pcs.print("UTQDSV11PRE");
+    pcs.print(self);
+    /// MAX-in our dshops
+    Unsigned ourdshops = pq.mMinDSHops + 1u;
+    if (ourdshops > mMaxDSHopsValue)
+      mMaxDSHopsValue = (HopCount) ourdshops;
+
+    /// OR-in our quadrant
+    mTQMapValue |= (TQMap) (1u<<pq.mQuadrant);
+
+    pcs.print("UTQDSV12POST");
+    pcs.print(self);
+  }
+
+
+  Int chainError(PatchState & ps, PocketDir pd) {
+    ps.print("CHAERR10");
+    Unsigned dshops = ps.mDSHops[pd];
+    Unsigned uphops = ps.mUpHops[pd];
+    Unsigned maxhops = ps.mMaxUpHops;
+    Unsigned srdist = maxhops - uphops - 1u;
+    XZone ctrzone = ps.mCenterXZone;
+    PocketDir tquad = xzoneAndPatchDir2TargetQuadrant(ctrzone, pd);
+    ps.print(dshops);
+    ps.print(uphops);
+    ps.print(tquad);
+
+    Int srerr = errorFromDSHops(ps,dshops); // size range error
+    Int tqerr = errorFromTQ(ps,tquad); // target quadrant error
+    ps.print("CHAERR11");
+    ps.print(srerr);
+    ps.print(tqerr);
+    return srerr + tqerr;
+  }
+
+  constant Int cILLEGAL_TQ_ERROR = 100;
+  Int errorFromTQ(PatchState & ps, PocketDir forpd) {
+    ps.print("ERFMTQ10");
+    ps.print(forpd);
+    ps.print(1u<<forpd);
+    Int ret = ((mTQMapCommand & (1u<<forpd)) == 0u) ?
+      cILLEGAL_TQ_ERROR :
+      0;
+    ps.print("ERFMTQ11");
+    ps.print(ret);
+    return ret;
+  }
+
+  constant Int cILLEGAL_DSHOPS_ERROR = 10;
+
+  Int errorFromDSHops(PatchState & ps, Unsigned dshops) {
+    ps.print("ERFMSR10");
+    if (!mMinDSHopsCommand) return 0; // Not constrained by dshops
+    Int ret = cILLEGAL_DSHOPS_ERROR * (Int) dshops;
+    ps.print("ERFMSR11");
+    ps.print(ret);
+    return ret;
+  }
+
+  Void copyTQDSControlFrom(TQDSControl & srctqds) {
+    self = srctqds;
+  }
+
+  Bool takeCommandFromDown(TQDSControl & down) {
+    return down.sendCommandToUp(self);
+  }
+
+  Bool takeValueFromUp(TQDSControl & up) {
+    return up.sendValueToDown(self);
+  }
+
+  Bool sendCommandToUp(TQDSControl & up) {
+    Bool ret = false;
+
+    // Overwrite up command
+    if (up.mMinDSHopsCommand != mMinDSHopsCommand) {
+      up.mMinDSHopsCommand = mMinDSHopsCommand;
+      ret = true;
+    }
+
+    // Overwrite up map
+    if (up.mTQMapCommand != mTQMapCommand) {
+      up.mTQMapCommand = mTQMapCommand;
+      ret = true;
+    }
+
+    return ret;
+  }
+
+  Bool sendValueToDown(TQDSControl & down) {
+    Bool ret;
+    
+    // Overwrite down values, true if changes
+
+    if (down.mMaxDSHopsValue != mMaxDSHopsValue) {
+      down.mMaxDSHopsValue = mMaxDSHopsValue;
+      ret = true;
+    }
+
+    if (down.mTQMapValue != mTQMapValue) {
+      down.mTQMapValue = mTQMapValue;
+      ret = true;
+    }
+    
+    return ret;
+  }
+
+  Void setSingleTQ(PocketDir tq) {
+    mTQMapCommand = (TQMap) (1u << tq);
+  }
+
+  Void setMinDSHopsCommand(Bool minEnabled) {
+    mMinDSHopsCommand = minEnabled;
+  }
+
+}
+
+/** Flip the mMinDSHopsCommand in all dist 1 TQDS
+    \symbol QT
+    \color #33c
+
+ */
+element TQDSToggleMin + DTU {
+  Void behave() {
+    EventWindow ew;
+    for (SN sn = 1u; sn <= 4u; ++sn) {
+      if (!ew.isAccessible(sn)) continue;
+      Atom & a = ew[sn];
+      if (a as TQDSControl) {
+        a.mMinDSHopsCommand = !a.mMinDSHopsCommand;
+      }
+    }
+    ew[0] = Empty.instanceof;
+  }
+}

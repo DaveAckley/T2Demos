@@ -15,18 +15,32 @@ quark Membrane : Pocketable + DEWLine + DTU {
 
     Unsigned max = maxDCs();
 
+    ColorUtils cu;
     C2D.Coord size;
+    ARGB oncol;
     which (max) {
-    case DEWLine.cDC_OPEN: { size = 200; }
-    case DEWLine.cDC_SGHT: { size = 400; }
-    case DEWLine.cDC_CONT: { size = 600; }
-    case DEWLine.cDC_DAMG: { size = 700; }
+    case DEWLine.cDC_OPEN: { size = 200; oncol = cu.color(0xff000000u); }
+    case DEWLine.cDC_SGHT: { size = 400; oncol = cu.color(0xffffff00u); }
+    case DEWLine.cDC_CONT: { size = 600; oncol = cu.color(0xffff0000u); }
+    case DEWLine.cDC_DAMG: { size = 700; oncol = cu.color(0xffffffffu); }
     }
     ARGB col = getColor(2u);
     C2D siz(size, size);
     C2D pos(-size/2,-size/2);
 
     drawable.fillRectangle(pos, siz, col);
+
+    if (mDirBound) {
+      constant C2D.Coord side = Drawable.cUNITS_PER_SITE;
+      constant C2D.Coord halfSide = side/2;
+      constant C2D.Coord thick = 100;
+      constant C2D.Coord len = side;
+
+      C2D pd = pocketDir2C2D(mOpenDir);
+      C2D start(0,0), end = pd * len;
+      ARGB offcol = col;
+      drawable.drawMaskedLine(start, end, oncol, offcol, (Bits) 0x33333333, thick);
+    }
   }
 
   //// Membrane API

@@ -39,11 +39,25 @@ transient DiamondCutterBase : PocketableState + QDebugUtils {
       ad, or (0,0) if cannot find such a site
    */
   C2D couldMoveAD(AxialDir ad) {
+    return couldMovePP((PocketPtr) (ad+1u));
+  }
+
+  Bool localDiffuse(Bool ret) {
+    C2D c = couldMovePP(cPP_SELF);
+    if (c.length() > 0u) {
+      C2D origin;
+      ew.swap(origin,c);
+      return true;
+    }
+    return ret;
+  }
+
+  C2D couldMovePP(PocketPtr pp) {
     C2D origin; // (0,0) means can't move ad
 
     RectIterator ri;
     mPocket.takeDebug(self);
-    if (!mPocket.initIterator(ri, (SN) (ad + 1u), true)) return origin;
+    if (!mPocket.initIterator(ri, pp, true)) return origin;
     print("DCTMAD11");
     Unsigned emptycount, fullcount;
     C2D emptyc;
@@ -67,7 +81,12 @@ transient DiamondCutterBase : PocketableState + QDebugUtils {
   Bool tryMoveAD(DiamondCutter & dc, AxialDir ad) {
     print("DCTMAD10");
     C2D destc = couldMoveAD(ad);
-    if (destc.length() == 0u) return false;
+    if (destc.length() == 0u) {
+      C2D destc = couldMovePP(cPP_SELF); // try 'diffusing' locally
+      if (destc.length() == 0u) {
+        return false;
+      }
+    }
     print("DCTMAD11");
     ew.swap(C2D.instanceof, destc);
     return true;
@@ -158,7 +177,9 @@ transient DiamondCutterBase : PocketableState + QDebugUtils {
 
 /**  - DC intention 0:
        = Find root
-       = Derive config info from it
+       = Wait until two DC intention 0s in sight
+       = Derive config info from root
+       = Erase second DC intention 0
        = Release DC intention 1s toward new roots
        = adopt intention 2
  */
@@ -203,14 +224,30 @@ transient DiamondCutterFindOldRoot : DiamondCutterBase {
     if (qhc.getUpHops() != 0u) f.fail(__FILE__,__LINE__);
     //// GOT ACCESS TO THE ROOT
 
-    //// FOR NOW AT LEAST, INSIST THE ROOT IS HARDCELLG
-    HardCellG & rootg = (HardCellG &) qhc; // or fail
+    //// IS THERE A SECOND KEY PRESENT?
+    Bool found2ndkey = false;
+    SN snk;
+    for (snk = 1u; snk < 41u; ++snk) {
+      if (!ew.isAccessible(snk)) continue;
+      Atom & a = ew[snk];
+      if (a as DiamondCutter) {
+        if (a.mStateIdx == a.cDCS_FIND_OLD_ROOT) {
+          found2ndkey = true;
+          break;
+        }
+      }
+    }
+    if (!found2ndkey)
+      return localDiffuse(true); // block
+
+    //// FOR NOW AT LEAST, INSIST THE ROOT IS ROOTHARDCELLG
+    RootHardCellG & rootg = (RootHardCellG &) qhc; // or fail
 
     //// TAKE IT OVER
-    rootg.mCmdPhase = HardCellG.cCMD_WAIT;
+    rootg.mCmdPhase = RootHardCellG.cCMD_WAIT;
 
     //// IS THE GRID ALL SETTLED?
-    if (!rootg.stableToEdge()) return true; // no, block
+    if (!rootg.stableToEdge()) return localDiffuse(true); // no, block
     //// THE GRID IS ALL SETTLED
 
     //// CONFIGURE PARAMETERS
@@ -246,6 +283,9 @@ transient DiamondCutterFindOldRoot : DiamondCutterBase {
     //// WE HAVE FULLY DEPLOYED;
     dc.mStateIdx = dc.cDCS_DELETE_OLD_ROOT; // Adopt a new intention
     dc.mEventCounter = (DiamondCutter.EventCounter) (5u*oldmaxgoal/2u); // set timer
+
+    //// ERASE SECOND KEY
+    ew[snk] = Empty.instanceof;
 
     return true;
   }
@@ -294,14 +334,15 @@ transient DiamondCutterSeedNewRoot : DiamondCutterBase {
     PocketHC3 & p = mPocket;
 
     Atom & a = ew[p.mCoords[newrootpd]];
-    QHardCell & newroot = (QHardCell&) a; // or fail
+    BaseClassUtils bcu;
+    RootHardCellG newroot;                      // YOU ARE TO BE ROOT THOUGH
+    bcu.copySharedData(a, newroot.atomof);      // YOU ARE LIKE ME IN MANY WAYS
 
-    if (newroot as HardCellG)
-      newroot.mCmdPhase = newroot.cCMD_STOP; // START OUT STOPPED
-
-    newroot.setUpHops(0u);                      // YOU ARE ROOT
-    newroot.setMaxHopsGoal(dc.mNewMaxGoalHops); // OVER ALL THIS LAND
+    newroot.setMaxHopsGoal(dc.mNewMaxGoalHops); // ROOT OVER ALL THIS LAND
     newroot.setSettledDownHops(0u);             // WHICH DOES NEED A MOMENT
+    newroot.mCmdPhase = newroot.cCMD_STOP;      // START OUT STOPPED
+
+    ew[p.mCoords[newrootpd]] = newroot.atomof;  // YOUR JOB HAS JUST BEGUN
     ew[0] = Empty.instanceof;                   // BUT MY JOB IS DONE
 
     return true;
@@ -419,7 +460,7 @@ element XCutDiamond : DiamondCutter {
     \symbol DX
     \color #ccf
  */
-element LXReleaseDiamondCutter : LX {
+element LXReleaseDiamondCutter : LX + QLabelMark {
   //// LX API
   @Override
   virtual Bool perform(DiamondSequencerState & dss) {

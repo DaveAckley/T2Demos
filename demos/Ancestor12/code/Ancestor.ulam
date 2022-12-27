@@ -115,9 +115,8 @@ local constant LXWait
 };
   
 local constant LXWait
-  cINS_MK4_WAIT_CUT = {
+  cINS_WAIT_CUT = {
   .mDSType = DTU.cDS_NORM,
-  .mLabel = 4u,                 // We are mark#4
   .mTest = LXWait.cTST_HOPGTR, // wait while max goal hops..
   .mOperand = 9u,              // ..gtr than 9
 };
@@ -142,8 +141,9 @@ local constant LXRecvLoop
 };
 
 local constant LXReleaseDiamondCutter
-  cINS_RELEASE_CUTTER = {
+  cINS_MK4_RELEASE_CUTTER = {
   .mDSType = DTU.cDS_NORM,
+  .mLabel = 4u,
 };
 
 
@@ -215,7 +215,6 @@ local constant LXMarker
 transient Ancestor {
 
   constant Atom cPROGRAM[] = {
-    cINS_MK1_RESET_MOTHER,        // MO: KL#1 BGR
     cINS_MOVE_MOTHER10,           // MO: BC BUILD 1ST ARM 
     cINS_MOVE_MOTHER11,           // MO: BC BUILD 1ST ARM
     cINS_SEND_LOOP10,             // MO: SL SEND CODE
@@ -231,9 +230,9 @@ transient Ancestor {
      cINS_ROLL_TO_MK4,            // LD: WT GO TO RENDEVOUS POINT
 
     cINS_MK3_RECV_LOOP,           // RD: RL#3 RECEIVE CODE
-    cINS_RELEASE_CUTTER,          // RD: DX START CUT
 
-    cINS_MK4_WAIT_CUT,            // LD+RD: WT#4 GRAND PAUSE 
+    cINS_MK4_RELEASE_CUTTER,      // LD+RD: DX#4 START CUT (TWO KEY SYSTEM)
+    cINS_WAIT_CUT,                // LD+RD: WT GRAND PAUSE 
   };
 }
 

@@ -128,11 +128,14 @@ transient PocketChainState : SegmentState + Fail {
   }
 }
 
-quark PocketChain : Segment + Fail {
+quark PocketChain : Segment + TQDSControl + Fail {
+  //  TQDSControl mTQDSControl;     //< target quadrant and dshops information
 
+  /* DEPRECATED WITH PREJUDICE
   ChainControlUp mChainControlUp;        // control signals from body up
   ChainControlDown mChainControlDown;    // control signals from body down
-  
+  */
+
   DriveStatusCode mDSType = cDS_DUMB;
   Bool mArrived;                //< true when we've had an event after moving
 
@@ -282,8 +285,11 @@ quark PocketChain : Segment + Fail {
    */
   Void doDSPSwapOut(PocketChainState & pcs, Self & other, SN destsn) {
     // Spread our DSP-is-root control info to swappee
+    other.copyTQDSControlFrom(self);
+    /*
     other.mChainControlUp = mChainControlUp;
     other.mChainControlDown = mChainControlDown;
+    */
     swapPocketPtrs(other);
     doSwap(pcs,destsn);
   }
@@ -347,51 +353,57 @@ quark PocketChain : Segment + Fail {
     print("PRCHCN10");
     printContext();
     print(iAmInDSP);
-    Unsigned changes = 0;
-    if (mPocketPtrs[cBODY_DOWN] == cPP_NULL || iAmInDSP) {
+
+    PocketHC3 & ishtar = ds.mPocket;
+    PocketQuadrant & pquad = ishtar.mPocketQuadrant;
+
+    if (!pquad.mQuadrantKnown) 
+      return false;  //?? 
+
+    Bool ret = false;
+
+    Bool isCmdAnchor = mPocketPtrs[cBODY_DOWN] == cPP_NULL || iAmInDSP;
+    Bool isValueAnchor = mPocketPtrs[cBODY_UP] == cPP_NULL || iAmInDSP;
+
+    if (isCmdAnchor) {
       print("PRCHCN11");
-      mChainControlDown.atEnd
-        (ds);  // Tail has nobody down
+
+      stabilizeCommandAnchor(ds);
+
     } else {
+
+      //// NOT A CMD ANCHOR
       print("PRCHCN12");
       SN down = ds.mEWSNMate[Segment.cBODY_DOWN];
-      Atom & a = ew[down];
-      if (a as Self) {
-        print("PRCHCN13");
-        print(mChainControlDown);
-        ChainControlDown & ccd = a.mChainControlDown;
-        if (mChainControlDown.takeFrom(ccd)) {
-          print("PRCHCN1310");
-          print(mChainControlDown);
-          print(a.mChainControlDown);
-          ++changes;
-        }
-      } else die("PRCHCN14: Down not Self");
+      {
+        Atom & a = ew[down];
+        
+        if (a as Self) {
+          if (takeCommandFromDown(a)) ret = true;
+        } else die("PRCHCN14: Down not Self");
+      }
     }
-    print("PRCHCN15");
-    
-    // Check ups if any
-    if (mPocketPtrs[cBODY_UP] == cPP_NULL || iAmInDSP ) {
-      print("PRCHCN16");
-      mChainControlUp.atEnd(ds);  // Head has nobody up
+
+    if (isValueAnchor) {
+
+      stabilizeValueAnchor(ds);
     } else {
+      
+      //// NOT A VALUE ANCHOR
+
       SN up = ds.mEWSNMate[Segment.cBODY_UP];
-      Atom & a = ew[up];
-      if (a as Self) {
-        print("PRCHCN17");
-        print(mChainControlUp);
-        ChainControlUp & ccu = a.mChainControlUp;
-        if (mChainControlUp.takeFrom(ccu)) {
-          print("PRCHCN1710");
-          print(mChainControlUp);
-          print(a.mChainControlUp);
-          ++changes;
-        }
-      } else die("PRCHCN18: Up not Self");
+      {
+        Atom & a = ew[up];
+        if (a as Self) {
+          print("PRCHCN17");
+          if (takeValueFromUp(a)) ret = true;
+        } else die("PRCHCN18: Up not Self");
+      }
     }
-    print("PRCHCN19");
-    print(changes);
-    return changes != 0u;
+
+    updateTQDSValues(ds);
+
+    return false;
   }
 
   Bool updateGradients(PocketChainState & ds) {
@@ -405,7 +417,8 @@ quark PocketChain : Segment + Fail {
     // Check downs if any
     if (mPocketPtrs[cBODY_DOWN] == cPP_NULL || iAmFixedDown) {
       print("UPGD11");
-      mChainControlDown.atEnd(ds);  // Tail has nobody down
+    { Fail f; f.fail(__FILE__,__LINE__); } // IMPLEMENT ME TQDS
+    //      mChainControlDown.atEnd(ds);  // Tail has nobody down
     } else {
       print("UPGD12");
       SN down = ds.mEWSNMate[Segment.cBODY_DOWN];
@@ -430,7 +443,8 @@ quark PocketChain : Segment + Fail {
     // Check ups if any
     if (mPocketPtrs[cBODY_UP] == cPP_NULL || iAmFixedUp ) {
       print("UPGD17");
-      mChainControlUp.atEnd(ds);  // Head has nobody up
+    { Fail f; f.fail(__FILE__,__LINE__); } // IMPLEMENT ME TQDS
+    //      mChainControlUp.atEnd(ds);  // Head has nobody up
     } else {
       SN up = ds.mEWSNMate[Segment.cBODY_UP];
       Atom & a = ew[up];
@@ -699,6 +713,7 @@ quark PocketChain : Segment + Fail {
 }
 
 quark PocketChainTQ : PocketChain {
+  /*
   PocketDir mTargetQuadrant;
 
   //// PocketChainTQ SERVICES
@@ -709,6 +724,7 @@ quark PocketChainTQ : PocketChain {
       mTargetQuadrant = from.mTargetQuadrant;
     } else fail(__FILE__,__LINE__);
   }
-  
+  */
+
 }
 

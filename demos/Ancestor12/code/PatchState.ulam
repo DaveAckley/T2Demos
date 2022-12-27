@@ -44,12 +44,15 @@ transient PatchState + DTU + QDebugUtils + Fail {
   }
 
   Int errorOfPocketChainInQuad(PocketDir quad, PocketChain & pc) {
+    return pc.chainError(self, quad);
+    /*
     Int erup = pc.mChainControlUp.chainError(self,quad);
     Int erdn = pc.mChainControlDown.chainError(self,quad);
     print(erup);
     print(erdn);
     print("EIQFN13");
     return erup + erdn;
+    */
   }
 
   Bool init(QHardCell & qhc) {

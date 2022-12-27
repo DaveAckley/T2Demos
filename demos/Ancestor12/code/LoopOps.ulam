@@ -36,13 +36,25 @@ quark LoopOps + DTU + Fail {
         pstat == PocketHC3.cSTATUS_OPEN ||
         pstat == PocketHC3.cSTATUS_BENT) return cRESULT_NOGO; // wait for clarity
 
+    // Can't use PocketHC3.isDSP because stuff may be just setting up
+    // So we'll search for DS and just stay far away from it
+    EventWindow ew;
+    Random random;
+    SN dsn = SN.maxof;
+    Unsigned dscount = 0u;
+
+    for (SN sn = 1u; sn < 41u; ++sn) {
+      if (!ew.isAccessible(sn)) continue;
+      Atom & a = ew[sn];
+      if (a is DiamondSequencer && random.oneIn(++dscount))
+        dsn = sn;
+    }
+
     RectIterator ri;
 
     // First make sure we're alone in here
     if (!p.initIterator(ri, 0u, true)) return cRESULT_NOGO;
 
-    EventWindow ew;
-    Random random;
     C2D empc;
     Unsigned ecount = 0;
     Bool foundbad = false;
@@ -84,21 +96,25 @@ quark LoopOps + DTU + Fail {
     /// - An empty-but-us center pocket in empc
     /// - An all-accessible selected side pocket with an empty in pickc
     
+    //// FINAL CHECK: IS IT TOO CLOSE TO A DSP WE KNOW OF?
+    if (dsn != SN.maxof) {
+      C2D dsc = ew.getCoord(dsn);
+      Unsigned dist = dsc.manhattanDistance(pickc);
+      if (dist < 5u) return pdiff(empc); // WARNING: dist 4u could be in stretched DSP
+    }
+    //// THE SELECTED PICKC IS NOT TOO CLOSE TO A DSP WE KNOW OF.
+
     /// Make linked ECs in empc and picks
 
     EmptyCodon ec1;
     ec1.init(); // random up or down
 
     PocketDir tq = targetQuadrant;
-    ec1.mTargetQuadrant = tq;
-    ec1.mChainControlUp.init();
-    ec1.mChainControlDown.init();
+    ec1.setSingleTQ(tq);
 
     EmptyCodon ec2;
     ec2.init(); // random up or down
-    ec2.mTargetQuadrant = tq;
-    ec2.mChainControlUp.init();
-    ec2.mChainControlDown.init();
+    ec2.setSingleTQ(tq);
 
     ec1.mPocketPtrs[Segment.cBODY_UP] = (PocketPtr) openptr; // Up and down are 
     ec1.mPocketPtrs[Segment.cBODY_DOWN] = (PocketPtr) openptr; // both thataway
@@ -160,13 +176,9 @@ element SeedLoop11 : NullIntender + LoopOps + Fail {
     Atom a = au.new(etype);
     PocketChainTQ & atq = (PocketChainTQ&) a;
 
-    atq.copySegAndPChain(ec); // Copy ptrs and targetting
-    atq.mDSType = Demo.cDS_NORM;
-    atq.mChainControlUp.init();
-    atq.mChainControlDown.init();
-
-    //atq.mChainControlUp.randomize();  // XXX Make visible as something
-    //atq.mChainControlDown.randomize(); // XXX
+    atq.copySegAndPChain(ec);   // Copy ptrs and targetting 
+    if (atq as Codon)
+      atq.init();               // Set up Codons however they want
 
     ew[sn] = atq.atomof;
   }
@@ -181,7 +193,7 @@ element SeedLoop11 : NullIntender + LoopOps + Fail {
     if (++mCount < mCount.maxof) return;
 
     PocketableState ps;
-    //    ps.setDebugOutputEnabled(true);
+    ps.takeDebug(self);
     ps.print("SL11BH10");
     ps.print(mCount);
     if (ps.init(self)) return;

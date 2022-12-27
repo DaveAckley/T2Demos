@@ -114,7 +114,7 @@ quark QDirStatusMap + DTU {
    \symbol DS
    \color #aaa
  */
-element DiamondSequencer : QHardCellG + Fail /* + QDSHops*/ {
+element DiamondSequencer : QHardCellGField + Fail /* + QDSHops*/ {
 
   //// INTENDER API
   @Override
