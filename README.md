@@ -1,6 +1,6 @@
 # T2Demos
 
-These Are Not The Demos You Are Looking For.
+*These Are Not The Demos You Are Looking For.*
 
 This is a messy, haphazard, permanently WORK-IN-PROGRESS repository
 reflecting only the actual history of development of demos for T2 Tile
