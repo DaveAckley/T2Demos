@@ -1,0 +1,419 @@
+use QHardCell;
+
+transient QHCAxialNgb + DTU + QDebugUtils + Fail {
+  AxialDir mAxis;    //< dir relative to ctr
+  NgbRel mGap;       //< size of pocket in that dir
+  NgbRels mNgbRels;  //< ngbs view of pocket gaps
+  Bool mInitted;
+  Bool mExamined;
+  
+  Void init(DiamondSequencerState & dss, AxialDir ad) {
+    takeDebug(dss);
+
+    mAxis = ad;
+    mGap = cNGBREL_OFFN;
+    for (Unsigned i = 0u; i < mNgbRels.lengthof; ++i) {
+      mNgbRels[i] = cNGBREL_OFFN;
+    }
+
+    mInitted = true;
+    mExamined = false;
+  }
+
+  Void examine(DiamondSequencerState & dss) {
+    HC3State & hc3 = dss.mHC3State;
+    print("QAXNEX10");
+    
+    if (!mInitted) fail(__FILE__,__LINE__);
+
+    print("QAXNEX11");
+    HC3NgbState & hns = hc3.mHC3NgbStates[mAxis];
+    print(mAxis);
+    print(hns);
+    if (hns.mState == cNGB_INIT) fail(__FILE__,__LINE__);
+
+    print("QAXNEX12");
+    mGap = hns.summarizeRel();  // gap in mAxis direction
+    EventWindow ew;
+    print("QAXNEX13");
+    if (!ew.isAccessible(hns.mFoundAt)) fail(__FILE__,__LINE__);
+    Atom & a = ew[hns.mFoundAt];
+    if (a as QHardCell) {
+      print("QAXNEX14");
+      for (Unsigned i = 0u; i < mNgbRels.lengthof; ++i) {
+        mNgbRels[i] = a.mNgbRels[i];
+      }
+    } else fail(__FILE__,__LINE__);
+
+    print("QAXNEX15");
+
+    mExamined = true;
+  }
+
+}
+
+transient QHCAxialNgbs + DTU + QDebugUtils + Fail {
+  Bool mInitted;
+  Bool mExamined;
+  QHCAxialNgb mAxialNgbs[AxialDir.maxof + 1u];
+
+  Void init(DiamondSequencerState & dss) {
+    for (Unsigned i = 0u; i < mAxialNgbs.lengthof; ++i) {
+      AxialDir ad = (AxialDir) i;
+      mAxialNgbs[ad].init(dss,ad);
+    }
+    mInitted = true;
+  }
+
+  Void examine(DiamondSequencerState & dss) {
+    print("QAXSEX10");
+    for (Unsigned i = 0u; i < mAxialNgbs.lengthof; ++i) {
+      AxialDir ad = (AxialDir) i;
+      print(i);
+      mAxialNgbs[ad].examine(dss);
+    }
+    print("QAXSEX11");
+    mExamined = true;
+  }
+}
+
+transient ProcUnitInfo + DTU + QDebugUtils {
+  ProcUnit mPU;                 // Component we represent
+  Bool mFound;                  // true if mInQuadrant valid
+  PocketDir mInQuadrant;        // quadrant we're in if any
+  RectIterator mRI;             // iterator to visit this pocket
+  SN mCodonSN;                  // single codon position or SN.maxof
+  Bool mIsEmptyCodon;           // true if mCodonSN is EC
+  SN mEmptySN;                  // random empty position or SN.maxof
+  Unsigned mPocketSites;        // total sites in pocket
+  Unsigned mOccupiedSites;      // non-empty sites in pocket
+  Unsigned mCodons;             // codons in pocket
+
+  /*
+  Bool getChainControlData(ChainControlData & dest, Bool up) {
+    EventWindow ew;
+    if (mCodonSN == SN.maxof) return false;
+    Codon & codon = (Codon &) ew[mCodonSN];
+    if (up) dest = codon.mChainControlUp.getChainControlData();
+    else    dest = codon.mChainControlDown.getChainControlData();
+    return true;
+  }
+  */
+
+  Bool setTQDSControl(TQDSControl src) {
+    EventWindow ew;
+    if (mCodonSN == SN.maxof) return false;
+    Codon & codon = (Codon &) ew[mCodonSN];
+    codon.copyTQDSControlFrom(src);
+    return true;
+  }
+
+  /*
+  Bool getChainControlUp(ChainControlUp & dest) {
+    EventWindow ew;
+    if (mCodonSN == SN.maxof) return false;
+    Codon & codon = (Codon &) ew[mCodonSN];
+    dest = codon.mChainControlUp;
+    return true;
+  }
+  Bool setChainControlUp(ChainControlUp src) {
+    EventWindow ew;
+    if (mCodonSN == SN.maxof) return false;
+    Codon & codon = (Codon &) ew[mCodonSN];
+    codon.mChainControlUp = src;
+    return true;
+  }
+
+  Bool getChainControlDown(ChainControlDown & dest) {
+    EventWindow ew;
+    if (mCodonSN == SN.maxof) return false;
+    Codon & codon = (Codon &) ew[mCodonSN];
+    dest = codon.mChainControlDown;
+    return true;
+  }
+  Bool setChainControlDown(ChainControlDown src) {
+    EventWindow ew;
+    if (mCodonSN == SN.maxof) return false;
+    Codon & codon = (Codon &) ew[mCodonSN];
+    codon.mChainControlDown = src;
+    return true;
+  }
+  */
+
+  Void init(DiamondSequencer & ds, ProcUnit pu) {
+    takeDebug(ds);
+
+    mPU = pu;
+    mFound = false;
+    mInQuadrant = 0u;
+    mCodonSN = SN.maxof;
+
+  }
+
+  /** \returns true if good quadrant found for PU */
+  Bool findQuadrant(DiamondSequencer & ds) {
+    print("PUIFDQD10");
+    mFound = ds.getQuadrantOfPU(mPU, mInQuadrant);
+    print(self);
+    return mFound;
+  }
+
+  /** \returns true if quadrant usable for instruction execution 
+      In the spirit of 202209012347-sequencer-spike-notes.txt:200:
+      For quadrant mInQuadrant:
+        AxialDir prevad = .., nextad = ..;
+        QHCAxialNgb & prevngb = dss.mAxialNgbs.mAxialNgbs[prevad];
+        QHCAxialNgb & nextngb = dss.mAxialNgbs.mAxialNgbs[nextad];
+        Bool isSquareQuad = 
+          prevngb.mNgbRels[nextad] ==
+          nextngb.mNgbRels[prevad];
+        if (!isSquareQuad) return false;
+        // pocket is square. are the gaps okay?
+        if (prevngb.mGap < 1u || prevngb.mGap > 2u) return false;
+        if (nextngb.mGap < 1u || nextngb.mGap > 2u) return false;
+        // pocket is 2x2, 1x2, or 2x1
+        return true;
+   */
+  Bool isQuadrantGoForIX(DiamondSequencerState & dss) {
+    print("IQG4IX10");
+    print(self);
+    if (!mFound) 
+      return true;              // skip unused puis
+    //      return false;
+    print("IQG4IX11");
+
+    PocketDir q = mInQuadrant;
+
+    AxialDir xad, yad;
+    dss.axialDirsBorderingQuad(q, xad, yad);
+
+    print("IQG4IX11ADS");
+    print(xad);
+    print(yad);
+
+    HC3State & hc3 = dss.mHC3State;
+    HC3NgbState & xns = hc3.mHC3NgbStates[xad];
+    HC3NgbState & yns = hc3.mHC3NgbStates[yad];
+
+    print("IQG4IX11NSS");
+    print(xns);
+    print(yns);
+
+    if (xns.mState > cNGB_EAST || yns.mState > cNGB_EAST)
+      return false;
+
+    print("IQG4IX12");
+
+    QHCAxialNgbs & angbs = dss.mAxialNgbs;
+
+    QHCAxialNgb & xngb = angbs.mAxialNgbs[xad];
+    QHCAxialNgb & yngb = angbs.mAxialNgbs[yad];
+
+    //// INSIST ALL RELS ARE 2 EXACTLY
+    for (Unsigned i = 0u; i < xngb.mNgbRels.lengthof; ++i) {
+      if (xngb.mNgbRels[i] != 2u) return false;
+      if (yngb.mNgbRels[i] != 2u) return false;
+    }
+
+    Bool isSquareQuad = xngb.mNgbRels[yad] == yngb.mNgbRels[xad];
+    if (!isSquareQuad)
+      return false;
+    print("IQG4IX13");
+
+    if (xngb.mGap < 1u || xngb.mGap > 2u) return false;
+    print("IQG4IX14");
+
+    if (yngb.mGap < 1u || yngb.mGap > 2u) return false;
+    print("IQG4IX15");
+
+    //// WE'RE GOOD. SET UP ITERATOR
+    C2D xhc3at = xns.mFoundAt;
+    C2D yhc3at = yns.mFoundAt;
+    C2D minp = xhc3at.min(yhc3at);
+    C2D maxp = xhc3at.max(yhc3at);
+
+    mRI.init(minp,maxp);
+    print(mRI);
+
+    //// SEARCH FOR CODON AND EMPTY
+    EventWindow ew;
+    Random random;
+
+    mPocketSites = 0u;
+    mOccupiedSites = 0u;
+    mCodons = 0u;
+    Unsigned empties = 0u;
+    while (mRI.hasNext()) {
+      C2D n = mRI.next();
+      if (!ew.isAccessible(n)) return false; // whaaaat?
+      ++mPocketSites;
+      print("IQG4IX16");
+      print(n);
+      SN sn = ew.getSiteNumber(n);
+      if (ew[n] is Empty) {
+        if (random.oneIn(++empties)) mEmptySN = sn;
+      } else {
+        ++mOccupiedSites;
+        if (ew[n] is Codon) {
+          if (random.oneIn(++mCodons)) mCodonSN = sn;
+        }
+      }
+    }
+    if (mCodons > 1u) return false; // possibly want to allow this?
+    if (mCodons > 0u)
+      mIsEmptyCodon = ew[mCodonSN] is EmptyCodon;
+
+    print("IQG4IX17");
+    print(self);
+    
+    return true;
+  }
+}
+
+transient ProcUnitInfos + DTU + QDebugUtils {
+  ProcUnitInfo mPUInfoAry[ProcUnit.maxof+1u];
+
+  Void init(DiamondSequencer & ds) {
+    takeDebug(ds);
+
+    print("PUISINIT10");
+    for (Unsigned i = 0u; i < mPUInfoAry.lengthof; ++i) {
+      ProcUnit pu = (ProcUnit) i;
+      mPUInfoAry[i].init(ds,pu);
+    }
+  }
+
+  /** \return true if any findQuadrant fails */
+  Bool observe(DiamondSequencer & ds) {
+    print("PUISOBS10");
+    for (Unsigned i = 0u; i < mPUInfoAry.lengthof; ++i) {
+      print(i);
+      ProcUnit pu = (ProcUnit) i;
+      mPUInfoAry[i].findQuadrant(ds); // okay if some procs missing
+      //      if (!mPUInfoAry[i].findQuadrant(ds)) return true;
+    }
+    print("PUISOBS11");
+    return false;
+  }
+
+  Bool areAllQuadrantsGoForIX(DiamondSequencerState & dss, QHardCell & ctr) {
+    print("AAQG10");
+
+    /// IS CENTER RELAXED?
+    for (Unsigned i = 0u; i < 4u; ++i)
+      if (ctr.mNgbRels[i] != 2u) return false; // NO
+    /// CENTER IS RELAXED.
+
+    for (Unsigned i = 0u; i < mPUInfoAry.lengthof; ++i) {
+      print(i);
+      if (!mPUInfoAry[i].isQuadrantGoForIX(dss)) return false;
+    }
+    print("AAQG11"); // all puis are either non-existent or good
+    return true;
+  }
+}
+
+transient DiamondSequencerState : QHardCellState + Fail {
+
+  SN mDSSN;
+  QHCAxialNgbs mAxialNgbs;
+  ProcUnitInfos mPUInfos;
+
+  //// Intention API
+  @Override
+  Bool init(Intender & in) {
+    takeDebug(in);
+    if (super.init(in)) return true;
+    DiamondSequencer & ds = (DiamondSequencer&) in;
+
+    EventWindow ew;
+    mDSSN = ew.getSiteNumber(ds);
+    if (mDSSN == SN.maxof) fail(__FILE__,__LINE__);
+
+    mPUInfos.init(ds);
+    print("DSSINIT11");
+    print(mPUInfos);
+    print("DSSINIT12");
+    mAxialNgbs.init(self);
+    print(mAxialNgbs);
+    return false;
+  }
+
+  @Override
+  Bool stabilize(Intender & in) {
+    print("DSSSTBL10");
+    print(mPUInfos);
+    if (super.stabilize(in)) return true;
+    print("DSSSTBL11");
+    print(mPUInfos);
+    DiamondSequencer & ds = (DiamondSequencer&) in;
+    mPUInfos.observe(ds); // ignore result
+    print("DSSSTBL12");
+    print(mPUInfos);
+    mAxialNgbs.examine(self);
+    print("DSSSTBL13");
+    print(mAxialNgbs);
+    return false;         // whether or not findQuadrant succeeded
+  }
+
+  @Override
+  Bool act(Intender & in) {
+    print("DSSACT10");
+    if (super.act(in)) return true;
+    print("DSSACT11");
+    DiamondSequencer & ds = (DiamondSequencer&) in;
+    if (ds.mDirStatusMap.isAllIdle()) {
+      print("DSSACT12");
+      print(mPUInfos);
+      if (ds.tryExecution(self))
+        return true;
+    }
+    print("DSSACT13");
+    return false;
+  }
+
+  //// DSS SERVICES
+  Bool areAllQuadrantsGoForIX(DiamondSequencer & ds) {
+    return mPUInfos.areAllQuadrantsGoForIX(self, ds);
+  }
+
+  ProcUnitInfo & getPUInfo(ProcUnit pu) {
+    return mPUInfos.mPUInfoAry[pu];
+  }
+
+  /** Set \c pd to quadrant with function \c pu and \returns true, if
+     any, otherwise \returns false */
+  Bool getDSP(ProcUnit pu, PocketDir & pd) {
+    ProcUnitInfo & pui = getPUInfo(pu);
+    if (!pui.mFound) return false;
+    pd = pui.mInQuadrant;
+    return true;
+  }
+
+  Bool swapPUs(ProcUnit pu1, ProcUnit pu2) {
+    ProcUnitInfo & pui1 = getPUInfo(pu1);
+    if (!pui1.mFound) return false;
+
+    ProcUnitInfo & pui2 = getPUInfo(pu2);
+    if (!pui2.mFound) return false;
+
+    PocketDir quad1 = pui1.mInQuadrant;
+    PocketDir quad2 = pui2.mInQuadrant;
+
+    EventWindow ew;
+    DiamondSequencer & ds = (DiamondSequencer&) ew[mDSSN];
+    ds.mProcUnitMap.setProcUnitInQuadrant(quad1, pu2);
+    ds.mProcUnitMap.setProcUnitInQuadrant(quad2, pu1);
+
+    return true;
+  }
+
+
+  /** \returns true and sets \c ri to the imputed pocket in the \c
+   * quad direction, if that pocket isn't bent.
+   */
+  Bool initIterator(PocketDir quad, RectIterator & ri) {
+    return false;
+  }
+}
+

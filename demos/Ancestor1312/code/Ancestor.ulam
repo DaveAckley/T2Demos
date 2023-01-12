@@ -1,0 +1,265 @@
+// SAMPLE 'ANCESTOR' CODE
+local constant LXMarker.Mark cMAX_MARK = (LXMarker.Mark) Unsigned(LXMarker.Mark.sizeof).maxof;
+
+local constant LXKill
+  cINS_MK1_RESET_MOTHER = {
+  .mDSType = DTU.cDS_NORM,
+  .mLabel = 0x1,
+  .mPocketsToKill = { true, true, true, false}, // kill BGR !W
+  .mPocketsToInit = { false, false, true, false}, // init R (tie up space)
+};
+
+local constant LXBioCtorArm
+  cINS_MOVE_MOTHER10 = {
+  .mProgram = {
+    DTU.cBOC_LRST, // 0: reset new arm
+    DTU.cBOC_AGWT, // 1: go w -1
+    DTU.cBOC_AGWT, // 2: go w -2
+    DTU.cBOC_AGWT, // 3: go w -3
+    DTU.cBOC_AGWT, // 4: go w -4
+    DTU.cBOC_AGWT, // 5: go w -5
+    DTU.cBOC_AGWT, // 6: go w -6
+  },
+  .mDSType = DTU.cDS_NORM,
+};
+
+local constant LXBioCtorArm
+  cINS_MOVE_MOTHER11 = {
+  .mProgram = {
+    DTU.cBOC_AGWT, // 0: go w -7
+    DTU.cBOC_AGWT, // 1: go w -8
+    DTU.cBOC_ADDS, // 2: deploy new mother DS
+    DTU.cBOC_LAEC, // 3: E-become all ECs
+    DTU.cBOC_LEOP, // 4: end of program
+  },
+  .mDSType = DTU.cDS_NORM,
+};
+
+local constant LXBioCtorArm
+  cINS_SEED_DAUGHTER10 = {
+  .mProgram = {
+    DTU.cBOC_LRST, // 0: reset new arm
+    DTU.cBOC_AGNT, // 1: go n
+    DTU.cBOC_AGET, // 2: go e -1
+    DTU.cBOC_AGET, // 3: go e -2
+    DTU.cBOC_AGET, // 4: go e -3
+    DTU.cBOC_AGET, // 5: go e -4
+    DTU.cBOC_AGET, // 6: go e -5
+  },
+  .mDSType = DTU.cDS_NORM,
+};
+
+local constant LXBioCtorArm
+  cINS_SEED_DAUGHTER11 = {
+  .mProgram = {
+    DTU.cBOC_AGET, // 0: go e -6
+    DTU.cBOC_AGET, // 1: go e -7
+    DTU.cBOC_AGET, // 2: go e -8
+    DTU.cBOC_AGET, // 3: go e -9
+    DTU.cBOC_AGET, // 4: go e -10
+    DTU.cBOC_AGET, // 5: go e -11
+    DTU.cBOC_AGET, // 6: go e -12
+  },
+  .mDSType = DTU.cDS_NORM,
+};
+
+local constant LXBioCtorArm
+  cINS_SEED_DAUGHTER12 = {
+  .mProgram = {
+    DTU.cBOC_AGET, // 0: go e -13
+    DTU.cBOC_AGET, // 1: go e -14
+    DTU.cBOC_AGET, // 2: go e -15
+    DTU.cBOC_AGET, // 3: go e -16
+    DTU.cBOC_AGET, // 4: go e -17
+    DTU.cBOC_AGET, // 5: go e -18
+    DTU.cBOC_AGET, // 6: go e -19
+  },
+  .mDSType = DTU.cDS_NORM,
+};
+
+local constant LXBioCtorArm
+  cINS_SEED_DAUGHTER13 = {
+  .mProgram = {
+    DTU.cBOC_AGST, // 0: go s
+    DTU.cBOC_ADDS, // 1: deploy daughter DS
+    DTU.cBOC_LAEC, // 2: E-become all ECs
+    DTU.cBOC_LEOP, // 3: end
+  },
+  .mDSType = DTU.cDS_NORM,
+};
+
+local constant LXSendLoop
+  cINS_SEND_LOOP10 = {
+  .mDSType = DTU.cDS_NORM,
+  .mHeadCount = 2u,
+};
+
+local constant LXSendLoop
+  cINS_SEND_LOOP11 = {
+  .mDSType = DTU.cDS_NORM,
+  .mHeadCount = 1u,
+};
+
+local constant LXWait
+  cINS_WAIT_FOR_EMPTYREG = {
+  .mDSType = DTU.cDS_NORM,
+  .mOperand = LXWait.cOPN_PU_REG, // for PU REG,
+  .mTest = LXWait.cTST_NONEMPTY, // wait while it's not empty
+};
+  
+local constant LXWait
+  cINS_ROLL_TO_MK4 = {
+  .mDSType = DTU.cDS_NORM,
+  .mTest = LXWait.cTST_ROLGRN, // roll green fwd to..
+  .mOperand = 4u,              // ..mark#4
+};
+  
+local constant LXWait
+  cINS_WAIT_CUT = {
+  .mDSType = DTU.cDS_NORM,
+  .mTest = LXWait.cTST_HOPGTR, // wait while max goal hops..
+  .mOperand = 11u,             // ..gtr than 11
+};
+
+local constant LXWait
+  cINS_WAIT_GROW = {
+  .mDSType = DTU.cDS_NORM,
+  .mTest = LXWait.cTST_HOPLSS, // wait while max goal hops..
+  .mOperand = 10u,             // ..lss than 10
+};
+
+/*
+local constant LXWait
+  cINS_WAIT_SHRINK = {
+  .mDSType = DTU.cDS_NORM,
+  .mTest = LXWait.cTST_TQDSGTR, // wait while TQDS max dshops..
+  .mOperand = 8u,             // ..gtr than 8
+};
+*/
+
+local constant LXKill
+  cINS_DESTROY_ENDPOINT = {
+  .mDSType = DTU.cDS_NORM,
+  .mPocketsToKill = { true, true, true, true}, // kill all the pockets
+  .mKillDS = true,                             // and kill the DS too
+};
+
+local constant LXRecvLoop
+  cINS_MK2_RECV_LOOP = {
+  .mDSType = DTU.cDS_NORM,
+  .mLabel = 2u,
+};
+
+local constant LXRecvLoop
+  cINS_MK3_RECV_LOOP = {
+  .mDSType = DTU.cDS_NORM,
+  .mLabel = 3u,
+};
+
+local constant LXRemapLoop
+  cINS_MK4_RESHAPE_CODE = {
+  .mDSType = DTU.cDS_NORM,
+  .mLabel = 4u,
+  .mConfigTQMap = 0xe,    // allow target quad NE (1<<1) | SE (1<<2) | SW (1<<3)
+  .mConfigMaxDSHops = 8u, // block while maxds > 8 (on 9 dest size)
+};
+
+local constant LXReleaseDiamondCutter
+  cINS_RELEASE_CUTTER = {
+  .mDSType = DTU.cDS_NORM,
+};
+
+
+local constant LXCommandDS cINS_REGRIP_MOTHER = {
+  .mDSType = DTU.cDS_NORM, .mPacket = { .mCmd = DTU.cSW3C_GRIPDS, .mArg = 0xDA }
+};
+
+local constant LXDo
+  cINS_INIT_OUTBOUND_COPY = {
+  .mDSType = DTU.cDS_NORM,
+  .mStoredPU = DTU.cPUNIT_OUT
+};
+
+local constant LXCopy
+  cINS_COPY_OUTBOUND = {
+  .mDSType = DTU.cDS_NORM,
+  .mLabel = 8u, // XXX
+  .mSrcPU = DTU.cPUNIT_OUT,
+  .mDstPU = DTU.cPUNIT_REG
+};
+
+
+local constant LXCopy
+  cINS_XFER_OUTBOUND = {
+  .mDSType = DTU.cDS_NORM,
+  .mLabel = 0xF0, // XXX
+  .mConsume = true,
+  .mSrcPU = DTU.cPUNIT_OUT,
+  .mDstPU = DTU.cPUNIT_REG
+};
+
+local constant DaughterLoader
+  cINS_INIT_DAUGHTER_INBOUND10 = {
+  .mDSType = DTU.cDS_NORM,
+  .mLabel = 0xf1, // XXX
+  .mHeadCount = 1u,             // XXX NEED AN ARGUMENT FOR THAT
+  .mConsumeOriginal = false,
+};
+
+local constant DaughterLoader
+  cINS_INIT_DAUGHTER_INBOUND11 = {
+  .mDSType = DTU.cDS_NORM,
+  .mLabel = 0xf2, // XXX
+  .mConsumeOriginal = true,
+};
+
+local constant LXCopy
+  cINS_COPY_INBOUND = {
+  .mDSType = DTU.cDS_NORM,
+  .mLabel = 0u, // XXX
+  .mSrcPU = DTU.cPUNIT_OUT,
+  .mDstPU = DTU.cPUNIT_REG
+};
+
+/*
+local constant LXMarker
+  cINS_LAST_MARK = {
+  .mDSType = DTU.cDS_NORM,
+  .mLabel = cMARK_ILABEL,
+  .mUpMap = 0x8, // set up chain on INS
+  .mDownMap = 0x8, // set down chain on INS
+  .mHalt = true,  // hang on this LX indefinitely
+  .mChainControlData = {
+    .mTQMap = 0x6, // expand to allow target quad NE (1<<1) (+ SE (1<<2))
+    .mSRMap = 0xc, // tighten allowable edge clearance (only _L and _XL)
+  },
+}; 
+*/
+transient Ancestor {
+
+  constant Atom cPROGRAM[] = {
+    cINS_MOVE_MOTHER10,           // MO: BC BUILD 1ST ARM 
+    cINS_MOVE_MOTHER11,           // MO: BC BUILD 1ST ARM
+    cINS_SEND_LOOP10,             // MO: SL SEND CODE
+     cINS_WAIT_FOR_EMPTYREG,      // MO: WT WAIT FOR REPLY
+     cINS_DESTROY_ENDPOINT,       // MO: KL ERASE MOTHER
+
+    cINS_MK2_RECV_LOOP,           // LD: RL#2 RECEIVE CODE
+    cINS_SEED_DAUGHTER10,         // LD: BC BUILD 2ND ARM
+    cINS_SEED_DAUGHTER11,         // LD: BC BUILD 2ND ARM
+    cINS_SEED_DAUGHTER12,         // LD: BC BUILD 2ND ARM
+    cINS_SEED_DAUGHTER13,         // LD: BC BUILD 2ND ARM
+    cINS_SEND_LOOP11,             // LD: SL SEND CODE
+     cINS_ROLL_TO_MK4,            // LD: WT GO TO RENDEVOUS POINT
+
+    cINS_MK3_RECV_LOOP,           // RD: RL#3 RECEIVE CODE
+
+    cINS_MK4_RESHAPE_CODE,        // LD+RD: RM#4 PACK CODE FOR CUT
+    cINS_RELEASE_CUTTER,          // LD+RD: DX START CUT (TWO KEY SYSTEM)
+    cINS_WAIT_CUT,                // LD+RD: WT GRAND PAUSE 
+    cINS_WAIT_GROW,               // LD+RD: WT WAIT FOR CUT TO HEAL
+  };
+}
+
+ 
+

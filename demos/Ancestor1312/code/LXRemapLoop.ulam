@@ -1,0 +1,138 @@
+
+/** 
+
+   \symbol RM
+   \color #0da
+*/
+element LXRemapLoop : LX + QLabelMark + Fail {
+
+  typedef HardCellG.HopCount HopCount;
+  TQMap mConfigTQMap;           //< Configured TQMap to set
+  HopCount mConfigMaxDSHops;    //< Configured maxds to get under
+
+  Bool mTQDSCmdAndValValid;
+  TQMap mNgbTQMapValue;
+  HopCount mNgbMaxDSHopsValue;
+
+  typedef Unary(2) RMPhase;
+  constant RMPhase cRM_INIT  = 0u; //< wait for perform to kick us
+  constant RMPhase cRM_RESET = 1u; //< force map to 0, wait for propagation
+  constant RMPhase cRM_WAIT = 2u; //< set requested map, wait for condition
+
+  RMPhase mRMPhase = cRM_INIT;
+
+  //// LX API
+  @Override
+  virtual Bool perform(DiamondSequencerState & dss) {
+    print(__FILE__,__LINE__);
+    /// 1: if intention = RemapLoopInit, switch to
+    ///    RemapLoopReset, and block
+    if (mRMPhase == cRM_INIT) {
+      mRMPhase = cRM_RESET;
+      return true;
+    }
+
+    /// 2: if intention != RemapLoopWait, block
+    if (mRMPhase != cRM_WAIT) return true;
+
+    /// 3: if !mTQDSCmdAndValValid, block
+    if (!mTQDSCmdAndValValid) return true;
+
+    /// 4: if mTQDSCmdAndVal > op, block
+    if (mNgbMaxDSHopsValue > mConfigMaxDSHops) {
+      Random random;
+      // Minimize 90% of time but be slack sometimes:
+      mMinDSHopsCommand = random.oddsOf(9u,10u);
+      return true;
+    }
+
+    /// 5: switch to intention RemapLoopInit, and mark
+    ///    current instruction for rotation
+    mRMPhase = cRM_INIT;
+    mMinDSHopsCommand = true;  // End in minimization mode
+    markCurrentInstructionForRotation(dss, 0u); // move on
+    return true;
+  }
+
+  //// URSELF API
+  Void behave() {
+
+    if (pursueIntention())
+      return;
+
+    SegmentState ss;
+    if (ss.init(self)) return;
+
+    print(__FILE__,__LINE__);
+    which (mRMPhase) {
+      case cRM_INIT: { return behaveInit(ss); }
+      case cRM_RESET: { return behaveReset(ss); }
+      case cRM_WAIT: { return behaveWait(ss); }
+      otherwise: { fail(__FILE__,__LINE__); }
+    }
+  }
+
+  Void behaveInit(SegmentState & ss) {
+    print(__FILE__,__LINE__);
+    diffuseInPocket(ss);
+    return;
+  }
+
+  Void behaveReset(SegmentState & ss) {
+    print(__FILE__,__LINE__);
+    /// 1:sets base class TQDS tqmap to zero, and sets 
+    ///   mTQDSCmdAndValValid to false;
+    mTQMapCommand = 0u; 
+    mTQDSCmdAndValValid = false; 
+
+    /// 2: Checks for max value ngb
+    EventWindow ew;
+    SN maxngbsn = getMaxValueNgb(ss);
+    if (maxngbsn == SN.maxof) fail(__FILE__,__LINE__);
+    TQDSControl & ngb = (TQDSControl &) ew[maxngbsn];
+
+    /// 3: If max value ngb command != 0, block
+    TQMap ngbmapcmd = ngb.mTQMapCommand;
+    if (ngbmapcmd != 0u) return;
+
+    /// 4: copies mTQDSCmdAndVal command stuff to base
+    ///    class TQDS command
+    mTQMapCommand = mConfigTQMap;
+    mMinDSHopsCommand = true;
+
+    /// 5: switch to intention RemapLoopWait
+    mRMPhase = cRM_WAIT;
+  }
+
+  Void behaveWait(SegmentState & ss) {
+    print(__FILE__,__LINE__);
+
+    /// 1: Checks for max value ngb
+    EventWindow ew;
+    SN maxngbsn = getMaxValueNgb(ss);
+    if (maxngbsn == SN.maxof) return; // block
+    TQDSControl & ngb = (TQDSControl &) ew[maxngbsn];
+
+    /// 2: If max ngb cmd != ours, block
+    if (ngb.mTQMapCommand != mTQMapCommand) {
+      diffuseInPocket(ss);
+      return;
+    }
+
+    /// 3: Copy max ngb map and ds vals to mTQDSCmdAndVal
+    mNgbTQMapValue = ngb.mTQMapValue;
+    mNgbMaxDSHopsValue = ngb.mMaxDSHopsValue;
+
+    /// 4: set mTQDSCmdAndValValid to true
+    mTQDSCmdAndValValid = true;
+  }
+
+  SN getMaxValueNgb(SegmentState & ss) {
+
+    Segment.MateStatus ms = findMates(ss);
+    if (ms != cMATE_OK) return SN.maxof;
+
+    return ss.mEWSNMate[cBODY_UP];
+  }
+
+}

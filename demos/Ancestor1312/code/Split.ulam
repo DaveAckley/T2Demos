@@ -1,0 +1,125 @@
+/** SplitV: Divide a HG3 grid vertically
+    \symbol SV
+    \color #f00
+*/
+element DeploySplitV + DTU {
+  Void behave() {
+    EventWindow ew;
+
+    for (SN sn = 1u; sn <= 4u; ++sn) {
+      if (!ew.isAccessible(sn)) continue;
+      Atom & a = ew[sn];
+      if (a as QHardCell) {
+        Split s;
+        s.mHorizontal = false;
+        s.mPosition = 1u; // 0:neg, 1:center, 2:pos
+        ew[sn] = s.atomof;
+        break;
+      }
+    }
+    ew[0] = Empty.instanceof;
+  }
+}
+
+/** Split: Divide a HG3 grid
+    \symbol SG
+    \color #f00
+*/
+element Split + Unpocketed + DTU + QDebugUtils {
+  typedef Unary(3) Position;
+  constant Position cPSN_NEG = 0u;
+  constant Position cPSN_CTR = 1u;
+  constant Position cPSN_POS = 2u;
+  Position mPosition;
+
+  Bool mToggle;
+
+  Bool mHorizontal;  //< else vertical: Direction to grow
+
+  @Override
+  ARGB getColor(Unsigned selector) {
+    ColorUtils cu;
+    return cu.color(mToggle ? 0xffff0000 : 0xff00ff00);
+  }
+
+  Void behave() {
+    mToggle = !mToggle; // Show liveness
+
+    Unsigned hcCount;
+    Unsigned hcSN;
+
+    Unsigned axisAvailCount;
+    SN axisAvailSN[41];
+    Int offsetAvail[41];
+
+    Unsigned axisHCCount;
+    SN axisHCSN[41];
+
+    EventWindow ew;
+    Random random;
+    Int min, max;
+    which (mPosition) {
+      case cPSN_NEG: { min =  0; max = 1; }
+      case cPSN_CTR: { min = -1; max = 1; }
+      case cPSN_POS: { min = -1; max = 0; }
+    }
+
+    for (SN sn = 1u; sn < 41u; ++sn) {
+      if (!ew.isAccessible(sn)) continue;
+
+      C2D c2d = ew.getCoord(sn);
+      Int offset = mHorizontal ? c2d.y : c2d.x;
+      Bool onAxis = mHorizontal
+        ? min <= offset && offset <= max
+        : min <= offset && offset <= max;
+
+      Atom & a = ew[sn];
+
+      if (onAxis) {
+
+        //// Collect all axis empties and QHC for fast spread
+        if (a is Empty || a is QHardCell) {
+          axisAvailSN[axisAvailCount] = sn;
+          offsetAvail[axisAvailCount] = offset;
+          ++axisAvailCount;
+        }
+
+        //// Done with onaxis
+        continue;
+      }
+
+      //// Scan for any off-axis QHC to support us
+      if (a as QHardCell) {
+        if (random.oneIn(++hcCount))
+          hcSN = sn;
+      }
+    }
+
+    //// If no off-axis QHC, we are done
+    if (hcCount == 0u) {
+      ew[0] = Empty.instanceof;
+      return;
+    }
+
+    //// Otherwise spread fast if possible
+    for (Unsigned n = 0u; n < axisAvailCount; ++n) {
+      SN sn = axisAvailSN[n];
+      Int offset = offsetAvail[n];
+      Self new = self;
+      print("ZONG");
+      print(n);
+      print(sn);
+      print("mP+of->newmP");
+      Int mpos = (Int) mPosition - 1;
+      Int npos = mpos + offset;
+
+      print(mpos);
+      print(offset);
+      print(npos);
+      new.mPosition = (Position) (npos + 1);
+      print((Unsigned) new.mPosition);
+      ew[sn] = new.atomof;
+    }
+  }
+}
+

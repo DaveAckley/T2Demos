@@ -1,0 +1,231 @@
+/** \symbol MT
+    \color #f63
+ */
+element MTip : DEWLine + DebugUtils + DTU {
+  typedef XTimer(3u,5u,10u) BothSidesWatchdog;
+  BothSidesWatchdog mBothSidesWatchdog;
+
+  typedef Membrane.PocketDir PocketDir;
+  constant PocketDir cQUAD_NW = Membrane.cQUAD_NW;
+  constant PocketDir cQUAD_NE = Membrane.cQUAD_NE;
+  constant PocketDir cQUAD_SE = Membrane.cQUAD_SE;
+  constant PocketDir cQUAD_SW = Membrane.cQUAD_SW;
+
+  DirIdx mHorizonAxis;
+  Bool mAxisBound;
+
+  //// UrSelf API
+  @Override
+  virtual ARGB getColor(Unsigned selector) {
+    ColorUtils cu;
+    ARGB ret = super.getColor(selector);
+    if (!mAxisBound) ret = cu.dimmer(ret);
+    return ret;
+  }
+
+  @Override
+  virtual Void renderGraphics() {
+    Drawable drawable;
+    if (!drawable.canDraw()) return;
+    super.renderGraphics();
+
+    if (!Parms.cRENDER_MEMBRANE_BOXES) return;
+
+    Unsigned max = maxDCs();
+
+    ColorUtils cu;
+    C2D.Coord size;
+    ARGB oncol;
+    which (max) {
+    case DEWLine.cDC_OPEN: { size = 200; oncol = cu.color(0xff000000u); }
+    case DEWLine.cDC_SGHT: { size = 400; oncol = cu.color(0xffffff00u); }
+    case DEWLine.cDC_CONT: { size = 600; oncol = cu.color(0xffff0000u); }
+    case DEWLine.cDC_DAMG: { size = 700; oncol = cu.color(0xffffffffu); }
+    }
+    ARGB col = getColor(2u);
+    C2D siz(size, size);
+    C2D pos(-size/2,-size/2);
+
+    drawable.fillRectangle(pos, siz, col);
+
+    if (mAxisBound) {
+      constant C2D.Coord side = Drawable.cUNITS_PER_SITE;
+      constant C2D.Coord halfSide = side/2;
+      constant C2D.Coord thick = 100;
+      constant C2D.Coord len = 2*side;
+
+      C2D ad = axialDir2C2D(mHorizonAxis);
+      C2D start(0,0), end = ad * len;
+      ARGB offcol = col;
+      drawable.drawMaskedLine(start, end, oncol, offcol, (Bits) 0x33333333, thick);
+    }
+  }  
+
+  //// DEWLine API
+  @Override
+  virtual DefCon signalDC() {
+    return cDC_SGHT; // MTip signals 'sighting' (like MSensor)
+  }
+
+  virtual Int sourceRank() {  //< our source ranking (lower flows to higher)
+    return (Int) cDC_SGHT-1;  // But is lower rank so warnings go MTip -> MSensor
+  }
+
+  Bool inHemisphere(C2D c, DirIdx d) {
+    which (d) {
+    case cDRIX_WEST: { return c.x < 0; }
+    case cDRIX_NRTH: { return c.y < 0; }
+    case cDRIX_SOTH: { return c.y > 0; }
+    case cDRIX_EAST: { return c.x > 0; }
+    }
+    return false; // Not reached
+  }
+
+  Void dirsOf(DirIdx s, PocketDir & d1, PocketDir & d2) {
+    which (s) {
+    case cDRIX_WEST: { d1 = cQUAD_NW; d2 = cQUAD_SW; }
+    case cDRIX_NRTH: { d1 = cQUAD_NW; d2 = cQUAD_NE; }
+    case cDRIX_SOTH: { d1 = cQUAD_SE; d2 = cQUAD_SW; }
+    case cDRIX_EAST: { d1 = cQUAD_NE; d2 = cQUAD_SE; }
+    }
+  }
+
+  Bool axisOf(PocketDir d1, PocketDir d2, DirIdx & a) {
+    if (d1 > d2) { PocketDir t = d1; d1 = d2; d2 = t; }
+    if (false) { }
+    else if (d1 == cQUAD_NW && d2 == cQUAD_NE) a = cDRIX_NRTH;
+    else if (d1 == cQUAD_NE && d2 == cQUAD_SE) a = cDRIX_EAST;
+    else if (d1 == cQUAD_SE && d2 == cQUAD_SW) a = cDRIX_SOTH;
+    else if (d1 == cQUAD_NW && d2 == cQUAD_SW) a = cDRIX_WEST;
+    else return false;
+    return true;
+  }
+
+  Void blockOrDie() {
+    Random random;
+    EventWindow ew;
+    if (random.oneIn(5u)) 
+      ew[0] = Empty.instanceof;
+    return;
+  }
+
+  Void signalAxis() {
+    //    print("SIGAX");
+    maxDC(mHorizonAxis, signalDC());
+  }
+
+  Void behave() {
+    EventWindow ew;
+    Random random;
+    Unsigned msodcount[4]; // The four opendirs
+    //    C2D odpossum[4];
+    /// SEARCH FOR MSENSORS AND HC3
+    SN hc3sn;
+    Unsigned hc3count;
+    for (SN sn = 1u; sn < 41u; ++sn) {
+      if (!ew.isAccessible(sn)) continue;
+      Atom & a = ew[sn];
+      if (a as MSensor) {
+        if (!a.mDirBound) continue;
+        ++msodcount[a.mOpenDir]; // track dirs
+        //        odpossum[a.mOpenDir] += ew.getCoord(sn); // accumulate positions
+      }
+      if (a as QHardCell) {
+        if (hc3count == 0u) { // take nearest only
+          hc3sn = sn;
+          ++hc3count;
+        }
+        continue;
+      }
+    }
+    PocketDir d1, d2;
+    if (mAxisBound) {
+      dirsOf(mHorizonAxis, d1, d2);
+      if (hc3sn == 0u) return blockOrDie();
+      if (msodcount[d1] == 0u || msodcount[d2] == 0u) {
+        if (mBothSidesWatchdog.countAlarm())
+          return blockOrDie();
+      } else mBothSidesWatchdog.reset();
+
+    } else { // !mAxisBound
+      /// OR COMMIT TO AXIS HORIZON
+      //      print("NAXIS10");
+      Unsigned dc = 0;
+      for (Unsigned i = 0u; i < 4u; ++i) {
+        if (msodcount[i] != 0u) {
+          if (dc == 0u) d1 = (PocketDir) i;
+          else if (dc == 1u) d2 = (PocketDir) i;
+          else return blockOrDie();
+          ++dc;
+        }
+      }
+      if (dc != 2u || hc3sn == 0u) return blockOrDie();
+      DirIdx a;
+      if (axisOf(d1,d2,a)) {
+        //        print("NAXIS14");
+        //        print(a);
+        mHorizonAxis = a;
+        mAxisBound = true;
+        return;
+      }
+      //      print("NAXIS15");
+      return blockOrDie();
+    }
+    if (hc3count != 1u) return blockOrDie();
+    
+    /// WE HAVE A GOOD HORIZON; CHECK OUR POSITION
+    resetDCs();
+    C2D etarg;
+    C2D swappos;
+    Unsigned etargdist = 0u;
+    Unsigned etargdistcnt = 0u;
+    
+    C2D hc3c = ew.getCoord(hc3sn);
+    C2D off = ew.getCoord((SN)(mHorizonAxis+1))*2;
+    etarg = hc3c + off;
+    if (etarg.length() != 0u) {
+      if (!ew.isAccessible(etarg)) return blockOrDie();
+      Atom & a = ew[etarg];
+      if (a is Empty || a is MSensor || a is MTip) {
+        ew[etarg] = self.atomof;
+        ew[0] = Empty.instanceof;
+        return;
+      }
+      return blockOrDie();
+    }
+
+    /// WE ARE IN POSITION; SCAN FOR CONTACTS
+    for (SN sn = 1u; sn < 41u; ++sn) {
+      C2D c = ew.getCoord(sn);
+      //      print(c);
+      if (!inHemisphere(c,mHorizonAxis)) continue;
+      //      print("AFKS12");
+
+      if (!ew.isAccessible(sn))
+        return signalAxis();
+
+      //      print("AFKS13");
+      Atom & a = ew[sn];
+      if (a as MTip) {
+        if (!a.mAxisBound) continue;
+        if (a.mHorizonAxis == mHorizonAxis) continue;
+        return signalAxis();
+      }
+      //      print("AFKS14");
+      if (a as Membrane) {
+        if (!a.mDirBound) continue;
+        if (a.mOpenDir == d1 || a.mOpenDir == d2) continue;
+        return signalAxis();
+      }
+      //      print("AFKS15");
+      if (a is Empty || a is MSensor) {
+        continue;
+      }
+
+      /// It's not tip, membrane, empty, or sensor
+      //      print("ACONDEIOUT");
+      //      print(a);
+      return signalAxis();
+    }
+  }
+}

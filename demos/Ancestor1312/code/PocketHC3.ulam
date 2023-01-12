@@ -1,0 +1,304 @@
+/** 
+    A fully-bounded pocket has four HC3 atoms, one in each ew quadrant
+    and none directly on an axis.
+
+    NOTE: In general, a PocketHC3 can be successfully init()ed only
+    when ew[0] actually IS in an HC3 pocket. For example, if an HC3
+    itself tries to init a pocket, the result is always cSTATUS_EDGE.
+*/
+transient PocketHC3 + DTU + QDebugUtils + Fail {
+  typedef EventWindow.SiteNum SN;
+
+  C2D mCoords[PocketDir.maxof+1]; // 0 --, 1 +-, 2 ++, 3 -+
+  Unsigned mCoordCount;
+  Unsigned mDiamondSequencerCount;
+
+  Unsigned mCornerHops[PocketDir.maxof+1]; // 0 --, 1 +-, 2 ++, 3 -+
+  Unsigned mCornerMaxHopsGoal[PocketDir.maxof+1]; // 0 --, 1 +-, 2 ++, 3 -+
+
+  //  Unsigned mCornerDSHops[PocketDir.maxof+1]; // 0 --, 1 +-, 2 ++, 3 -+
+  Bool mCornerZoneValid[PocketDir.maxof+1]; // 0 W, 1 N, 2 E, 3 S
+  QDSHopsStg mCornerQDSHopsStg[PocketDir.maxof+1]; // 0 W, 1 N, 2 E, 3 S
+  
+  PocketDir mMinDSHopsCorner;
+  Unsigned mInferredDSHops;
+
+  PocketQuadrant mPocketQuadrant;
+
+  typedef Int(16) Bound;
+  Bound mBounds[4]; 
+  constant Unsigned cMINY = 0u;
+  constant Unsigned cMAXX = 1u;
+  constant Unsigned cMAXY = 2u;
+  constant Unsigned cMINX = 3u;
+
+
+  typedef Unsigned(2) Status;
+  constant Status cSTATUS_OK =   0u;     //< Properly-bounded pocket found
+  constant Status cSTATUS_EDGE = 1u;     //< No pocket: Pocket on axis
+  constant Status cSTATUS_OPEN = 2u;     //< No pocket: At least one corner missing
+  constant Status cSTATUS_BENT = 3u;     //< No pocket: Unaligned adjacent corners or unitted
+  Status mStatus = cSTATUS_BENT;
+
+  PocketHC3_CornerInfo mCornerInfo[4];
+
+  typedef ClassUtils.ClassId ClassId;
+
+  //// SERVICES
+  /** \returns true if the \c ptr pocket is a DiamondSequencer pocket,
+       and thus immune from passive modifications. 
+       Fails unless mStatus is OK */
+  Bool isDSP(PocketPtr ptr) {
+    print("ISDSP10");
+    if (mStatus != cSTATUS_OK) fail(__FILE__,__LINE__);
+
+    PocketQuadrant & pq = mPocketQuadrant;
+    if (!pq.mQuadrantKnown) fail(__FILE__,__LINE__);
+    print("ISDSP11");
+    if (pq.mOutOfQuadrantRange) return false; // regardless of ptr
+
+    if (ptr > cPP_EAST)         // Points illegal or to nowhere
+      return false;             // DSPs they just ain't there
+
+    print("ISDSP12");
+    if (ptr == cPP_SELF)
+      return pq.mDSHopContour == 1u; 
+
+    print("ISDSP13");
+    if (pq.mDSHopContour != 2u)
+      return false;
+
+    print("ISDSP14");
+    Unsigned q = pq.mQuadrant;
+    print(q);
+    print(ptr);
+
+    /// TRUE IF PTR IS OPPOSITE TO OUR QUADRANT
+    /// AND WE'RE NOT POINTING ACROSS A DSAXIS
+    print("ISDSP14X10");
+    print(self);
+    //    QDSHopsStg onds = mCornerQDSHopsStg[ptr-1u];
+    //    print(onds);
+    //    print(onds[0]);
+    //    print(onds[1]);
+
+    if (ptr == cPP_WEST && (q == cQUAD_NE || q == cQUAD_SE))
+      return !mCornerQDSHopsStg[cQUAD_NW].getOnDSAxes()[0]; // cQUAD_NW meaning W here
+    
+    print("ISDSP15");
+    if (ptr == cPP_NORTH && (q == cQUAD_SW || q == cQUAD_SE))
+      return !mCornerQDSHopsStg[cQUAD_NE].getOnDSAxes()[1]; // cQUAD_NE meaning N here
+
+    print("ISDSP16");
+    if (ptr == cPP_SOUTH && (q == cQUAD_NW || q == cQUAD_NE))
+      return !mCornerQDSHopsStg[cQUAD_SW].getOnDSAxes()[1]; // cQUAD_SW meaning S here
+
+    print("ISDSP17");
+    if (ptr == cPP_EAST && (q == cQUAD_NW || q == cQUAD_SW))
+      return !mCornerQDSHopsStg[cQUAD_SE].getOnDSAxes()[0]; // cQUAD_SE meaning E here
+
+    print("ISDSP18");
+
+    return false;
+  }
+
+  /** 
+      \returns SN.maxof if pocket[side] bent 
+      \returns SN.maxof if not found but some inaccessible
+      \returns 0 if forbase not found in full pocket[side]
+      \returns valid SN if forbase found there
+   */
+  SN searchPocket(SN side, ClassId forbase) {
+    EventWindow ew;
+    Random random;
+
+    RectIterator ri;
+    if (!initIterator(ri, side, true)) return SN.maxof;
+    Unsigned ccount, misscount;
+    SN csn;
+    ClassUtils cu;
+    while (ri.hasNext()) {
+      C2D c = ri.next();
+      if (!ew.isAccessible(c)) {
+        ++misscount;
+        continue;
+      }
+      ClassId cid = cu.getClassId(ew[c]);
+      if (cu.isBase(cid, forbase)) {
+        if (random.oneIn(++ccount)) {
+          csn = ew.getSiteNumber(c);
+        }
+      }
+    }
+    if (ccount == 0u) 
+      return misscount > 0u ? SN.maxof : 0u;
+
+    return csn;
+  }
+
+  /** Init ri to iterate over the pocket */
+  Bool initIterator(RectIterator & ri) { return initIterator(ri, 0u, false); }
+
+  /** Init ri to iterate over the pocket or an adjacent side */
+  Bool initIterator(RectIterator & ri, SN side, Bool full) { /* 0: self, 1..4: WNSE */
+    typedef C2D.Coord C;
+    if (mStatus != cSTATUS_OK) return false;
+    if (side != 0u && full) return initFullSide_(ri, side);
+    which (side) {
+      case 0u: { // THE POCKET ITSELF
+        ri.init(C2D.instanceof(mBounds[cMINX],mBounds[cMINY]),
+                C2D.instanceof(mBounds[cMAXX],mBounds[cMAXY]));
+      }
+      case 1u: { // ADJACENT WEST SIDE
+        ri.init(C2D.instanceof((C) (mBounds[cMINX]-2),mBounds[cMINY]),
+                C2D.instanceof((C) (mBounds[cMINX]-1),mBounds[cMAXY]));
+      }
+      case 2u: { // ADJACENT NORTH SIDE
+        ri.init(C2D.instanceof(mBounds[cMINX],(C) (mBounds[cMINY]-2)),
+                C2D.instanceof(mBounds[cMAXX],(C) (mBounds[cMINY]-1)));
+      }
+      case 3u: { // ADJACENT SOUTH SIDE
+        ri.init(C2D.instanceof(mBounds[cMINX],(C) (mBounds[cMAXY]+1)),
+                C2D.instanceof(mBounds[cMAXX],(C) (mBounds[cMAXY]+2)));
+      }
+      case 4u: { // ADJACENT EAST SIDE
+        ri.init(C2D.instanceof((C) (mBounds[cMAXX]+1),  mBounds[cMINY]),
+                C2D.instanceof((C) (mBounds[cMAXX]+2),mBounds[cMAXY]));
+      }
+      otherwise: { Fail f; f.fail("UNDEFINED SIDE"); }
+    }
+    return true;
+  }
+
+  /** \returns cSTATUS_OK if fully-bounded pocket found.
+      
+      A fully-bounded pocket has four HC3 atoms, one in each ew
+      quadrant and none directly on an axis.
+   */
+  Status init(UrSelf & qdu) {
+    if (qdu as QDebugUtils)
+      takeDebug(qdu);
+    EventWindow ew;
+    Unsigned boundCount = 0u;
+    print("PKHC10");
+    for (SN sn = 0u; sn < 41u; ++sn) {
+      print(sn);
+      Atom & a = ew[sn];
+      if (a as QHardCell) {
+        PocketHC3_CornerInfo ci;
+        Unsigned uphops = a.getUpHops();
+        Unsigned maxhops = a.getMaxHopsGoal();
+        Unsigned dshops = a.getDSHops();
+        OnDSAxes ondsaxes = a.getOnDSAxes();
+        XZone xzone = a.getXZone();
+
+        /// DISGUSTING SPECIAL CASE HACK FOR FOLKS TO AVOID DSPs!
+        if (a is DiamondSequencer)
+          mDiamondSequencerCount++;
+
+        ci.mNgbRels = a.mNgbRels;
+        C2D c = ew.getCoord(sn);
+        print("PKHC1010");
+        print(c);
+        if (c.x == 0 || c.y == 0) return mStatus = cSTATUS_EDGE;
+        else if (c.x < 0 && c.y < 0) update_(cQUAD_NW,c,ci,uphops,maxhops,dshops,xzone);
+        else if (c.x > 0 && c.y < 0) update_(cQUAD_NE,c,ci,uphops,maxhops,dshops,xzone);
+        else if (c.x > 0 && c.y > 0) update_(cQUAD_SE,c,ci,uphops,maxhops,dshops,xzone);
+        else /* c.x < 0 && c.y > 0*/ update_(cQUAD_SW,c,ci,uphops,maxhops,dshops,xzone);
+      }
+      if (mCoordCount >= 4u) break;
+    }
+    print("PKHC11");
+    if (mCoordCount < 4u) return mStatus = cSTATUS_OPEN;
+    print("PKHC12");
+    for (Unsigned i = 0u; i < 4u; ++i) {
+      Unsigned n = (i+1u)%4u;
+      Bool yaxis = (i&1)==0u;
+      if (yaxis) {
+        if (mCoords[i].y != mCoords[n].y) return mStatus = cSTATUS_BENT;
+        mBounds[i] = mCoords[i].y;
+      } else {
+        if (mCoords[i].x != mCoords[n].x) return mStatus = cSTATUS_BENT;
+        mBounds[i] = mCoords[i].x;
+      }
+    }
+
+    print("PKHC13");
+
+    //    mNext = mCoords[0] + C2D.instanceof(1,1);
+    mStatus = cSTATUS_OK;
+    mPocketQuadrant.init(self);
+
+    print("PKHC14");
+
+    return mStatus;
+  }
+
+  // internal
+  Void update_(Unsigned(2) idx, C2D coord, PocketHC3_CornerInfo ci,
+               Unsigned uphops, Unsigned maxhopsgoal, Unsigned dshops,
+               XZone xzone) {
+    if (mCoords[idx].length() == 0u) {
+      ++mCoordCount;
+      mCoords[idx] = coord;
+      mCornerInfo[idx] = ci;
+      mCornerHops[idx] = uphops;
+      mCornerMaxHopsGoal[idx] = maxhopsgoal;
+      mCornerQDSHopsStg[idx].setDSHops(dshops);
+      if (xzone < cXZONE_CT) {
+        mCornerZoneValid[idx] = true;
+        mCornerQDSHopsStg[idx].setZone((Zone) xzone);
+      } else {
+        mCornerZoneValid[idx] = false;
+      }
+    }
+  }
+
+  Bool initFullSide_(RectIterator & ri, SN side) {
+    typedef C2D.Coord C;
+    if (side == 0u) return false; // center is not a side pocket
+    which (side) {
+      case 1u: { // WEST SIDE: ci 0 & 3, ngb 0
+        C rel1 = mCornerInfo[0].mNgbRels[0];
+        C rel2 = mCornerInfo[3].mNgbRels[0];
+        if (rel1 == 0u || rel1 != rel2) return false; // incomplete or bent
+        ri.init(C2D.instanceof((C) (mBounds[cMINX]-rel1-1),mBounds[cMINY]),
+                C2D.instanceof((C) (mBounds[cMINX]),mBounds[cMAXY]));
+      }
+      case 2u: { // NORTH SIDE: ci 0 & 1, ngb 1
+        C rel1 = mCornerInfo[0].mNgbRels[1];
+        C rel2 = mCornerInfo[1].mNgbRels[1];
+        if (rel1 == 0u || rel1 != rel2) return false; // incomplete or bent
+        ri.init(C2D.instanceof(mBounds[cMINX],(C) (mBounds[cMINY]-rel1-1)),
+                C2D.instanceof(mBounds[cMAXX],(C) (mBounds[cMINY])));
+      }
+      case 3u: { // SOUTH SIDE: ci 2 & 3, ngb 2
+        C rel1 = mCornerInfo[2].mNgbRels[2];
+        C rel2 = mCornerInfo[3].mNgbRels[2];
+        if (rel1 == 0u || rel1 != rel2) return false; // incomplete or bent
+        ri.init(C2D.instanceof(mBounds[cMINX],(C) (mBounds[cMAXY])),
+                C2D.instanceof(mBounds[cMAXX],(C) (mBounds[cMAXY]+rel1+1)));
+      }
+      case 4u: { // EAST SIDE: ci 1 & 2, ngb 3
+        C rel1 = mCornerInfo[1].mNgbRels[3];
+        C rel2 = mCornerInfo[2].mNgbRels[3];
+        if (rel1 == 0u || rel1 != rel2) return false; // incomplete or bent
+        ri.init(C2D.instanceof((C) (mBounds[cMAXX]),     mBounds[cMINY]),
+                C2D.instanceof((C) (mBounds[cMAXX]+rel1+1),mBounds[cMAXY]));
+      }
+    }
+    if (false) {
+      ByteStreamLogger bsl;
+      bsl.printf("iFS %d (%d,%d) - (%d,%d)\n",
+                 side,
+                 ri.mMin.x, ri.mMin.y,
+                 ri.mMax.x, ri.mMax.y);
+    }
+    return true;
+  }
+}
+
+transient PocketHC3_CornerInfo {
+  typedef QHardCell.NgbRels NgbRels;
+  NgbRels mNgbRels;
+}

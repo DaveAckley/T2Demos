@@ -1,0 +1,80 @@
+transient EmptyCodonState : CodonState {
+
+  @Override
+  virtual Bool stabilize(Intender & in) {
+    print("ECSTAB10");
+    if (super.stabilize(in)) return true;
+ 
+    print("ECSTAB11");
+    EmptyCodon & ec = (EmptyCodon&) in;
+    Random random;
+    if (!ec.isTemp()/* || random.oneIn(10u)*/) {
+      print("ECSTAB12");
+      ec.mDSType = random.oneIn(2) ? ec.cDS_UP : ec.cDS_DOWN;  // mark as some kind of temp
+    }
+
+    print("ECSTAB13");
+    return false;
+  }
+
+}
+
+
+/**
+   \symbol EC
+   \color #933
+ */
+element EmptyCodon : Codon + QDebugUtils + DTU {
+  //// Intender API 
+  @Override
+  virtual ClassId getIntentionClass() { return EmptyCodonState.classidof; }
+
+  //// EMPTYCODON SERVICES
+  Bool ensureMobile() {
+    if (mPocketPtrs[cBODY_UP] == cPP_NULL &&
+        mPocketPtrs[cBODY_DOWN] == cPP_NULL)
+      return false;             // nowhere to go: nothing to do
+
+    if (mPocketPtrs[cBODY_UP] == cPP_NULL &&
+        (mDSType == cDS_NORM || mDSType == cDS_UP)) {
+      mDSType = cDS_DOWN;
+      return true;
+    }
+    if (mPocketPtrs[cBODY_DOWN] == cPP_NULL &&
+        (mDSType == cDS_NORM || mDSType == cDS_DOWN)) {
+      mDSType = cDS_UP;
+      return true;
+    }
+    return false;
+  }
+
+  Void init() {
+    init(false);
+  }
+  Void init(Bool force) {
+    if (mTag == 0u || force) {
+      Random random;
+      print("ECINIT10");
+      print(mDSType);
+      if (mDSType <= cDS_NORM || force) { // non temp values
+        print("ECINIT11");
+        mDSType = random.oneIn(2) ? cDS_UP : cDS_DOWN;
+        print(mDSType);
+      }
+      mTag = (Tag) (random.bits(cTAG_BITS)|0x1);
+    }
+  }
+
+  typedef Unsigned(4) CrowdWeight;
+  CrowdWeight mCrowdWeight = 0u;
+
+  constant Unsigned cTAG_BITS = 20u;
+  typedef Bits(cTAG_BITS) Tag;
+  Tag mTag;
+  
+  Void behave() {
+    init();
+    pursueIntention();
+  }
+}
+

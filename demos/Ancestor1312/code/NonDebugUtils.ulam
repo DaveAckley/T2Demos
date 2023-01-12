@@ -1,0 +1,9 @@
+quark NonDebugUtils {
+  Void print(UrSelf & ur) { }
+  Void print(String s) { }
+  Void print(Int s) { }
+  Void print(Unsigned s) { }
+  Void print(Bool s) { }
+  Void print(Bits s) { }
+  Void print(Atom & s) { }
+}

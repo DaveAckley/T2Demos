@@ -1,0 +1,96 @@
+quark CodonInserter : XTimer(3u,6u,4u) + DTU + QDebugUtils + Fail {
+
+  //// CodonInserter API
+  typedef AtomUtils.Type ElementType;
+
+  virtual ElementType getCodonTypeToInsert() ;
+
+  EventWindow ew;
+  Random random;
+  DebugUtils du;
+
+  Void die() { ew[0] = Empty.instanceof; }
+  Void diffuse() {
+    SN n = (SN) random.between(1,4);
+    if (ew.isEmpty(n))
+      ew.swap(0u,n);
+  }
+
+  Void behave() {
+    print("CIBV10");
+    //    if (random.oneIn(4u)) return diffuse(); // Mix up pocket position
+    if (countAlarm()) return die(); // one shot lives to shoot
+
+    print("CIBV11");
+
+    PocketChainState ss;
+    EmptyCodon tmp;
+    if (ss.init(tmp)) {        // Bad pocket
+      PocketHC3 & p = ss.mPocket;
+      PocketHC3.Status pstat = p.mStatus;
+      if (pstat == PocketHC3.cSTATUS_EDGE ||
+          pstat == PocketHC3.cSTATUS_OPEN)
+        return diffuse(); // seek greener pastures
+      if (pstat == PocketHC3.cSTATUS_BENT) return;           // wait for clarity
+      fail(__FILE__,__LINE__); 
+    }
+    print("CIBV12");
+
+    //// FOUND GOOD POCKET
+    PocketHC3 & p = ss.mPocket;
+    //// IS THERE A CODON IN THERE OTHER THAN ME?
+
+    RectIterator ri;
+    if (!p.initIterator(ri, 0u, true)) 
+      fail(__FILE__,__LINE__); 
+
+    SN csn = SN.maxof;
+    Unsigned ccnt = 0u;
+    while (ri.hasNext()) {
+      C2D n = ri.next();
+      SN sn = ew.getSiteNumber(n);
+      if (sn == 0u) continue; // not me
+      if (!ew.isAccessible(sn)) continue; // sure
+      Atom & a = ew[sn];
+      if (a is Codon) {
+        if (random.oneIn(++ccnt))
+          csn = sn;
+      }
+    }
+
+    print("CIBV13");
+
+    if (ccnt == 0u)
+      return;
+
+    //// FOUND NON-ME CODON AT CSN
+    //// DOES NON-ME CODON HAVE FINDABLE MATES?
+    
+    Codon & c = (Codon&) ew[csn];
+    Segment.MateStatus ms = c.findMates(ss);
+    print("CIBV14");
+    print(ms);
+
+    if (ms != Segment.cMATE_OK) return;
+    print("CIBV15");
+
+    /// FOUND A CODON, TRY TO INSERT SOMETHING
+    ElementType toInsert = getCodonTypeToInsert();
+    AtomUtils au;
+    Atom a = au.new(toInsert);
+    Codon & ca = (Codon&) a; // or fail if bogus toInsert
+    ca.init();               // init however it likes
+    print(ca);               // Here's what's coming
+    ChainRule_INSERT rule;
+    //rule.setDebugOutputEnabled(true);
+    print("CIBV16");
+    if (rule.try(ss, ca)) {
+      print("YAZONG");
+      ew[0] = Empty.instanceof;
+      return;
+    }
+
+    print("NOT ZONGDAY");
+    return;
+  }
+}

@@ -1,0 +1,774 @@
+
+use HC3NgbState;
+
+transient QHardCellState : Intention + DTU + QDebugUtils + Fail {
+  HC3State mHC3State;
+  HC3State & getHC3State() { return mHC3State; }
+
+  Unsigned mysettleddowns;
+  Unsigned mytotaldowns;
+
+  Bool block() {
+    print("QHCSBLOCK10");
+    return true;
+  }
+
+  //// Intention API
+  @Override virtual Bool init(Intender & in) {
+    print("QHCSIN10");
+    if (super.init(in)) return true;
+    HC3State & hc3 = getHC3State();
+    hc3.takeDebug(in);
+
+    print("QHCSIN11");
+    QHardCell & qc = (QHardCell&) in;
+
+    if (qc.countWatchdog()) return qc.die();
+    print("QHCSIN11WD");
+
+    mHC3State.init(qc);
+    print("QHCSIN12");
+    return false;
+  }
+
+  @Override
+  virtual Bool observe(Intender & in) {
+    QHardCell & hc = (QHardCell&) in;
+    print("QHCSOBS10");
+    if (super.observe(in)) return true;
+    print("QHCSOBS11");
+
+    //// NEIGHBORS INITS AND MIN UPHOP 
+    HC3State & hc3 = getHC3State();
+    hc3.examineNgbs(hc);
+    print("QHCSOBS12NGBS");
+    print(hc3);
+    
+    return false;
+  }
+
+  @Override
+  virtual Bool stabilize(Intender & in) {
+    QHardCell & hc = (QHardCell&) in;
+    print("QHCSSTAB10");
+
+    if (initIfNeeded(hc)) return true;
+    print("QHCSSTAB11");
+
+    if (stabilizeHopsOrDie(hc)) return true;
+    print("QHCSSTAB12");
+
+    if (stabilizeDSHops(hc)) return true;
+    print("QHCSSTAB13");
+
+    if (stabilizeZone(hc)) return true;
+    print("QHCSSTAB13ZONE");
+
+    if (stabilizeContactWarnings(hc)) return true;
+    print("QHCSSTAB14");
+    
+    if (stabilizeSpawning(hc)) return true;
+    print("QHCSSTAB1");
+
+    return false;
+  }
+
+  @Override virtual Bool act(Intender & in) {
+    QHardCell & hc = (QHardCell&) in;
+    print("QHCSACT10");
+
+    if (super.act(hc)) return true;
+    print("QHCSACT11");
+
+    if (updatePatch(hc)) return true;
+    print("QHCSACT12");
+
+    if (checkMoving(hc)) return true;
+    print("QHCSACT13");
+
+    return false;
+  }
+
+  //// QHCS SERVICES
+
+  Bool initIfNeeded(QHardCell & qc) {
+
+    HC3State& hc3 = getHC3State();
+
+    //// AM I UNINITTED?
+    if (hc3.myUpHops > hc3.myUpHopsGoal) {
+      print("QHCUP12");
+      // YES
+      /// ARE THERE ANY NGBS TO LOOK TO?
+      if (hc3.minUpHops >= hc3.myUpHopsGoal) return qc.die(); // NO
+      qc.setUpHops(hc3.minUpHops + 1u);
+      qc.setDSHops(hc3.minDSHops + 1u);
+      //XXX ?      setZone()
+      //      qc.setOnDSAxes(hc3.myOnDSAxes);
+
+      return block();
+    }
+    //// I AM INITTED
+    print("QHCUP13");
+    return false;
+  }
+
+  Bool stabilizeHopsOrDie(QHardCell & qc) {
+
+    HC3State& hc3 = getHC3State();
+
+    //// MIGHT I NEED TO UPDATE UPHOPS OR GOAL HOPS?
+    if (hc3.myIsRoot) return false; // I'M ROOT THEREFORE NO
+
+    //// I'M NOT ROOT AND SO MIGHT NEED TO UPDATE UPHOPS OR GOAL HOPS.
+
+    print("QHCUP14");
+    // DIE IF NO NGBS.
+    if (hc3.minUpHops == hc3.minUpHops.maxof) return qc.die();
+
+    // DO I NEED TO UPDATE EITHER MINUP HOP & GOAL?
+    if (hc3.minUpHops + 1u != hc3.myUpHops ||
+        hc3.minUpHopsGoal != hc3.myUpHopsGoal) {
+      // I DO.
+      print("QHDCL MAXGOALHOPS CHG");
+      printContext();
+      qc.setMaxHopsGoal(hc3.minUpHopsGoal); // Be consistent with chosen
+      qc.setUpHops(hc3.minUpHops+1u);       // upstream ngb
+      qc.setSettledDownHops(0u);  // and downstream is now considered unsettled
+      return block();
+    }
+    //// I DO NOT NEED TO UPDATE HOPS OR GOAL
+      
+    print("QHCUP1610");
+
+    // AM I BEYOND THE GOAL?
+    if (hc3.myUpHops >= hc3.myUpHopsGoal) { // YES
+      print("QHCUP1610DIE");
+      return qc.die(); // I MUST DIE
+    }
+
+    print("QHCUP1611");
+
+    //// DO I HAVE UNINITTED NGBS?
+    if (hc3.uninits)
+      return block();
+    //// I HAVE NO UNINITTED NGBS.
+
+    print("QHCUP17");
+
+    return false;
+  }
+
+  /*
+  Bool stabilizeHopsOrDieOLD(QHardCell & qc) {
+
+    HC3State& hc3 = getHC3State();
+
+    //// DO I NEED TO UPDATE GOAL HOPS?
+    if (hc3.myUpHops != 0u) {       // I'M NOT ROOT.
+      print("QHCUP14");
+
+      // DIE IF NO NGBS.
+      if (hc3.minUpHops == hc3.minUpHops.maxof) return qc.die();
+
+      //// DO I NEED TO UPDATE MAXHOPS?
+      if (hc3.myUpHopsGoal != hc3.maxUpHopsGoal) {
+        print("QHCUP15");
+      
+        // I DO.
+        print("QHDCL MAXGOALHOPS CHG");
+        printContext();
+        qc.setMaxHopsGoal(hc3.maxUpHopsGoal);
+        qc.setUpHops(hc3.maxUpHopsGoal-1u); // force my hops into the new range for now
+        qc.setSettledDownHops(0u);  // and downstream is now considered unsettled
+        return block();
+      }
+    }
+    //// MY MAX GOAL HOPS IS CONSISTENT
+    print("QHCUP16");
+
+    //// DO I HAVE ANY INITTED NGBS?
+    if (hc3.minUpHops != Unsigned.maxof) {
+      print("QHCUP1610");
+
+      // I HAVE AT LEAST ONE.
+      // AM I BEYOND THE GOAL?
+      print(hc3.minUpHops + 1u);
+      print(hc3.maxUpHopsGoal);
+
+      if (hc3.minUpHops + 1u >= hc3.maxUpHopsGoal) // YES
+        return qc.die();
+    }
+
+    print("QHCUP1611");
+
+    //// DO I HAVE UNINITTED NGBS?
+    if (hc3.uninits)
+      return block();
+    //// I HAVE NO UNINITTED NGBS.
+
+    print("QHCUP17");
+
+    //// AM I ROOT?
+    if (hc3.myUpHops != 0u) {
+      // I'M NOT ROOT.
+      print("QHCUP18");
+
+      // DIE IF NO NGBS.
+      if (hc3.minUpHops == hc3.minUpHops.maxof) return qc.die();
+
+      //// DO I NEED TO UPDATE MAXHOPS?
+      if (hc3.myUpHopsGoal != hc3.maxUpHopsGoal) {
+        // I DO.
+        print("QHCUP19");
+        qc.setMaxHopsGoal(hc3.maxUpHopsGoal);
+        qc.setUpHops(hc3.maxUpHopsGoal-1u); // force my hops into the new range for now
+        return block();
+      }
+      
+      //// DO I NEED TO UPDATE UPHOPS?
+      if (hc3.myUpHops != hc3.minUpHops + 1u) {
+        print("QHCUP210");
+        // I DO.
+        qc.setUpHops(hc3.minUpHops + 1u);
+        return block();
+      }
+
+      print("QHCUP211");
+      // LIKELY DIE IF NO ROOM FOR ME.
+      if (hc3.minUpHops >= hc3.myUpHopsGoal) return qc.done(); // ?? or die() ??
+      // THERE IS ROOM FOR ME.
+
+    }
+    return false;
+  }
+  */
+
+  Bool stabilizeDSHops(QHardCell& qc) {
+    HC3State& hc3 = getHC3State();
+
+    //// AM I NOT A DS?
+    if (!(qc is DiamondSequencer)) {
+      //      qc.setOnDSAxes(hc3.myOnDSAxes); //FOG IT JUST ALWAYS UPDATE AXES??
+
+      //// I AM NOT A DS. DO I NEED TO UPDATE DSHOPS?
+      if (hc3.myDSHops != (DSHops) (hc3.minDSHops + 1u)) {
+        print("QHCUP1710");
+        // I DO.
+        qc.setDSHops(hc3.minDSHops + 1u);
+        return block();
+      }
+    }
+
+    //// MY UPHOPS WAS CONSISTENT WITH NGBS
+    // (I MAY OR MAY NOT BE ROOT.)
+    print("QHCUP212");
+
+    //// DO I HAVE ANY cNGB_MULTI NGBS?
+    for (Unsigned i = 0u; i < hc3.mHC3NgbStates.lengthof; ++i) {
+      HC3NgbState & n = hc3.mHC3NgbStates[i];
+      if (n.ngbState() == HC3NgbState.cNGB_MULTI)
+        return block();
+    }
+    //// I HAVE NO cNGB_MULTI NGBS.
+    print("QHCUP213");
+
+    //// REFRESH MY SETTLEDDOWNHOPS?
+    for (Unsigned i = 0u; i < hc3.mHC3NgbStates.lengthof; ++i) {
+      HC3NgbState & n = hc3.mHC3NgbStates[i];
+      if (n.foundAnyDownstream()) {
+        ++mytotaldowns;
+
+        if (!n.hasValidNeighbor()) {
+          DebugUtils du;
+          du.print("INVALID SETTLEDDOWNHOPS");
+          du.print(i);
+          du.print(n);
+          n.assertHasNeighbor(); // boom
+        }
+        NgbState ngbstate = n.ngbState();
+        if (ngbstate != cNGB_CENTER ||    // Downstream not settled on us
+            n.getNgbMaxGoalHops() != hc3.myUpHopsGoal) { // or disagreement about size
+          mysettleddowns = 0u;
+          break;
+        }
+        QHardCell & ngb = n.getNgb();
+        Unsigned downsbythis = ngb.getSettledDownHops() + 1u;
+        if (mysettleddowns == 0u || mysettleddowns > downsbythis)
+          mysettleddowns = downsbythis;
+      }
+    }
+    // mysed == 0 : we have an unaligned down or no downs at all
+    // otherwise : all downs aligned at least this far to us
+    qc.setSettledDownHops(mysettleddowns);
+    //// MY SETTLEDDOWNHOPS IS CURRENT
+    print("QHCUP214");
+    return false;
+  }
+
+  Bool maybeRezone(QHardCell& qc, XZone oldxz, XZone newxz) {
+    print("QHCMYBREZ10");
+    if (oldxz == newxz ||
+        newxz == cXZONE_CT) // Can't store _CT why are we here
+      return false;
+
+    print("QHCMYBREZ11");
+    print(getXZoneName(oldxz));
+    print(getXZoneName(newxz));
+    qc.setZone((Zone) newxz);
+    print(getXZoneName(qc.getXZone()));
+    return true;
+  }
+
+  Bool stabilizeZone(QHardCell& qc) {
+    print("QHCSTBZON10START");
+    HC3State & hc3 = getHC3State();
+    for (Unsigned i = 0u; i < hc3.mHC3NgbStates.lengthof; ++i) {
+      HC3NgbState & n = hc3.mHC3NgbStates[i];
+      if (n.mState != cNGB_CENTER)
+        return false;           // let's only do zones when relaxed
+    }
+    print("QHCSTBZON10");
+    XZone myxz = qc.getXZone();
+    if (myxz == cXZONE_CT) // zone root always be stable yo
+      return false;
+    print("QHCSTBZON11");
+
+    XZone upzone = hc3.xzoneOfMinDSHops;
+    C2D upzoneasc2d = xzone2C2D(upzone);
+    C2D upc = hc3.minDSHopsC2D/3; // /3 to reduce to max length 2
+
+    print(getXZoneName(upzone));
+    print(upzoneasc2d);
+    print(upc);
+
+    if (upzone == cXZONE_UN) // can't do squat til they init
+      return false;          // (if there's any way for them to be uninit)
+
+    //// THEY ARE INITTED
+    print("QHCSTBZON12");
+
+    if (upzone == cXZONE_CT) {
+      // We are dsroot-adjacent
+      print("QHCSTBZON13");
+      XZone newxz = c2D2XZone(-upc);
+      print(getXZoneName(newxz));
+      if (newxz >= cXZONE_CT) fail(__FILE__,__LINE__);
+      return maybeRezone(qc, myxz, newxz);
+    }
+
+    //// NGB IS NOT DSROOT
+    print("QHCSTBZON14");
+
+    if (upzoneasc2d.length() == 1u) {
+      print("QHCSTBZON15ONAX");
+      //// NGB IS ON AXIS
+      C2D newc = upzoneasc2d-upc;
+      XZone newxz = c2D2XZone(newc);
+      print(newc);
+      print(getXZoneName(newxz));
+      return maybeRezone(qc, myxz, newxz);
+    }
+
+    //// NGB IS OFF-AXIS
+    print("QHCSTBZON16OFFAX");
+    return maybeRezone(qc, myxz, upzone);
+  }
+
+  Bool stabilizeContactWarnings(QHardCell & qc) {
+    HC3State& hc3 = getHC3State();
+    EventWindow ew;
+
+    /// UPDATE MY CONTACTWARNINGS IF NEEDED
+    DEWLineC dl;
+    if (mytotaldowns == 0u) {
+      print("QHCUP215");
+
+      /// ..BASED ON OBSERVATIONS, BECAUSE I AM A LEAF (NO DOWNSTREAM?)
+      for (Unsigned i = 0u; i < hc3.mHC3NgbStates.lengthof; ++i) {
+        HC3NgbState & n = hc3.mHC3NgbStates[i];
+        if (n.foundInaccessible() || n.foundBlockage()) {
+          dl.maxDC((DEWLine.DirIdx) i,
+                   (hc3.myUpHops < hc3.myUpHopsGoal - 1u) ? DEWLine.cDC_DAMG : DEWLine.cDC_CONT);
+        }
+      }
+      /// ..OR BY MEMBRANE REPORTS
+      for (SN sn = 1u; sn <= 8u; ++sn) {
+        if (!ew.isAccessible(sn)) continue;
+        Atom & a = ew[sn];
+        if (a as Membrane) {
+          dl.mergeDCs(a);
+        }
+      }
+
+    } else {
+      print("QHCUP216");
+      /// ..OR BY MAXING DOWNSTREAM, BECAUSE I AM NOT A LEAF
+      for (Unsigned i = 0u; i < hc3.mHC3NgbStates.lengthof; ++i) {
+        HC3NgbState & n = hc3.mHC3NgbStates[i];
+        if (n.foundAnyDownstream()) {
+          QHardCell & hc = n.getNgb();
+          dl.mergeDCs(hc);
+        }
+      }
+    }
+    print("QHCUP217");
+    if (dl != qc) {
+      qc.copyDEWLine(dl);
+      return block();         // AND QUIT (HELP WARNINGS SPEED AHEAD)
+    }
+    //// MY CONTACTWARNINGS ARE UNCHANGED
+
+    print("QHCUP218");
+    return false;
+  }
+
+  Bool stabilizeSpawning(QHardCell & qc) {
+    HC3State& hc3 = getHC3State();
+    EventWindow ew;
+
+    //// AM I TAIL?
+    if (hc3.myUpHops < hc3.myUpHopsGoal - 1u) {
+      // I'M NOT TAIL
+      
+      print("QHCUP219");
+      //// DO I NEED TO SPAWN?
+      Bool spawns = false;
+
+      //// EXTRA SPAWNING CONDITIONS SUPPORT
+
+      Unsigned ourhops = hc3.myUpHops;
+
+      for (Unsigned i = 0u; i < hc3.mHC3NgbStates.lengthof; ++i) {
+        AxialDir ad = (AxialDir) i;
+        HC3NgbState & n = hc3.mHC3NgbStates[i];
+
+        if (ourhops != 0u && n.hasValidNeighbor() && n.getUpHops() == ourhops - 1u)
+          continue;             // Ignore our uphops here
+
+        if (!n.foundBlockage() &&         // unblocked ctr
+            n.isEmpty() &&                // Whole ngb empty
+            ew.isAccessible(n.mNgbCtr)) { // ctr is accessible
+
+          //// WE HAVE A POTENTIAL SPAWNING DIR.
+          // Check for vetoes by adjacent upstreams
+
+          if (ourhops != 0u) {
+            Bool skip = false;
+            for (Unsigned rot = 0u; rot < 2u; ++rot) {
+              Bool clockwise = rot == 0u;
+              AxialDir rad = adjacentAxialDir(ad, clockwise);
+              HC3NgbState & nr = hc3.mHC3NgbStates[rad];
+              if (!nr.hasValidNeighbor()) continue; // can't be our upstream
+              if (nr.getUpHops() != ourhops - 1u) continue; // isn't our upstream
+              // We have an upstream of us. At 2?
+              if (nr.mState != cNGB_CENTER) { skip = true; break; } // no
+              // upstream ngb is at 2 to us
+              
+              // upstream at 2 in spawn dir?
+              C2D upc = nr.getNgbC2D(); // Find ngb pos
+              QHardCell & qhcup = (QHardCell &) ew[upc]; // or fail, at this point
+              if (qhcup.mNgbRels[i] != 2u) {  // No it is not: Unrelaxed pocket
+                skip = true; break;
+              }
+            }
+            if (skip)
+              continue; // upstream ngb vetoed this spawn
+          }
+
+          //// THERE ARE NO VETOES BY ADJACENT UPSTREAMS
+
+          qc.setSettledDownHops(0u);  // After I spawn, downstream will be unsettled
+          Atom a = qc.toSpawn();      // Get a concete Self subclass to spawn
+          print("QHCUP219SPONG");
+          print(a);
+          QHardCell & copy = (QHardCell&) a;
+          copy.initCopy();
+
+          ew[n.mNgbCtr] = a;
+          print("QHCUP219DONE");
+          print(n.mNgbCtr);
+          print(ew[n.mNgbCtr]);
+          spawns = true;
+        }
+      }
+
+      if (spawns) return true; // I SPAWNED.
+
+      print("QHCUP220");
+
+      //// I DID NOT NEED TO SPAWN.
+      // (I MAY OR MAY NOT BE TAIL)
+    } else {
+      print("QHCUP221");
+      //// I AM TAIL
+      /// XXX HACK RE-SEARCH MOORE NGB
+      Unsigned baseCount;
+      for (SN sn = 5u; sn <= 8u; ++sn) {
+        if (!ew.isAccessible(sn)) continue;
+        if (ew[sn] is MBase) 
+          ++baseCount;
+      }
+      if (baseCount < 2u) {
+        Random random;
+        SN ngb = (SN) random.between(5u,8u); // diago to me
+        if (ew[ngb] is Empty) {
+          ew[ngb] = MBase.instanceof;
+          return true; // I foamed
+        }
+      }
+    }
+    print("QHCUP222");
+
+    return false;
+  }
+
+  Void resetSettledDownHops(QHardCell & qc, HC3State & hc3) {
+    qc.setSettledDownHops(0u);     // Full restart for settlements
+    for (Unsigned i = 0u; i < hc3.mHC3NgbStates.lengthof; ++i) {
+      HC3NgbState & n = hc3.mHC3NgbStates[i];
+      if (n.hasValidNeighbor()) {
+        QHardCell & nqc = n.getNgb();
+        nqc.setSettledDownHops(0u); // NUKE all down ngb hops
+      }
+    }
+
+  }
+
+  Bool checkMoving(QHardCell & hc) {
+    HC3State& hc3 = getHC3State();
+    EventWindow ew;
+
+    /////// CONSIDERATIONS FOR MOVING (ROOT OR NON-ROOT)
+
+    //// DO I HAVE ENOUGH DOWN ALIGNMENT TO MOVE NOW?
+    if (mytotaldowns > 0u &&                  // If I have any downs at all (not tail)
+        mysettleddowns < hc.cMIN_DOWN_SETTLED &&  // No good if not there yet and
+        hc3.myUpHops + mysettleddowns < hc3.myUpHopsGoal - 1u) { // not near the tail
+      print("QHCUP223");
+      
+      ByteStreamLogger bsl;
+      /*      bsl.printf("msd %d, mtd %d, myu %d, mxh %d\n",
+                 mysettleddowns,
+                 mytotaldowns,
+                 hcs.myuphops,
+                 hcs.maxhop);*/
+      return block(); // NOT SETTLED DOWN ENOUGH TO MOVE
+    }
+    //// I HAVE AT LEAST cMIN_DOWN_SETTLED DOWN ALIGNMENT OR TO TAIL
+
+    print("QHCUP224");
+    //// AM I ROOT?
+    if (hc.isRoot())
+      return hc.rootBehave(self); // YES, HANDLE ME
+    //// I AM NOT ROOT.
+
+    print("QHCUP225");
+    //// DO MY UPS HAVE A CONSENSUS ALIGNMENT?
+    NgbState upstate = cNGB_INIT;
+    for (Unsigned i = 0u; i < hc3.mHC3NgbStates.lengthof; ++i) {
+      HC3NgbState & n = hc3.mHC3NgbStates[i];
+      if (n.foundAnyUpstream()) {
+        if (!n.hasValidNeighbor()) {
+          DebugUtils du;
+          du.print("INVALID FOUND UPS");
+          n.assertHasNeighbor(); // boom
+        }
+        NgbState ngbstate = n.ngbState();
+        if (upstate == cNGB_INIT) upstate = ngbstate;
+        else if (upstate != ngbstate)
+          return block(); // MY UPS ARE NOT ALL ALIGNED WITH EACH OTHER
+      }
+    }
+    //// MY UPS ARE ALL ALIGNED upstate.
+
+    print("QHCUP226");
+    //// AM I UNALIGNED WITH upstate?
+    if (upstate == 0u) return false; // I (AM NOT ROOT AND I) ALIGN WITH UPSTATE NOTHING TO DO HERE
+    //// I AM NOT ALIGNED WITH upstate.
+
+    print("QHCUP227");
+
+    /// AM I BLOCKED FROM MOVING upstate?
+    if (!ew.isEmpty(upstate))
+      return block(); // I AM BLOCKED.
+
+    /// I AM NOT BLOCKED: upstate IS EMPTY (OR INACCESSIBLE)
+
+    //// I AM GOING TO FOGGEN MOVE. I WILL NOT REMAIN SETTLED.
+    resetSettledDownHops(hc, hc3);
+    print("QHCUP228");
+    hc.moveEntourage(self, upstate); // GO HERE
+    //// I MOVED.
+    
+    return true; // CANNOT SAFELY CALL (eg) done() HERE!
+  }
+
+  PatchState mPatchState;
+  PatchState & getPatchState() { return mPatchState; }
+
+  Bool updatePatch(QHardCell & qhc) {
+    print("QSUPTC10");
+
+    constant Unsigned cUPDATE_PATCH_ODDS = 1u; // XXX
+    Random random;
+    if (!random.oneIn(cUPDATE_PATCH_ODDS))
+      return false;
+
+    print("QSUPTC1010");
+
+    //// CAN WE INIT PATCH STATE?
+    if (!mPatchState.init(qhc)) return false; // NO WE CANNOT
+
+    //// WE INITTED PATCH STATE
+
+    print("QSUPTC11");
+    /*
+    {
+      print("EIQ10");
+      Int terr = 0;
+      for (Unsigned i = cQUAD_NW; i <= cQUAD_SW; ++i) {
+        PocketDir pd = (PocketDir) i;
+        print("EIQ11");
+        print(getPocketDirName(pd));
+        Int qerr = mPatchState.errorInQuad(pd);
+        print("EIQ12");
+        print(getPocketDirName(pd));
+        print(qerr);
+        terr += qerr;
+      }
+      if (terr > 0) {
+        Bool dbg = isDebugOutputEnabled();
+        setDebugOutputEnabled(true);
+        print("EIQ1TOTALERRORINPATCH");
+        print(terr);
+        printContext();
+        //        setDebugOutputEnabled(dbg);
+      }
+    }
+    */
+
+    //// IS THERE A POCKETABLE TO UPDATE?
+    if (mPatchState.mPCount > 0u) {
+      EventWindow ew;
+      Pocketable & pa = (Pocketable&) ew[mPatchState.mPSN];
+      print("QSUPTC12");
+      print(pa);
+      return pa.updatePatch(self, qhc);
+    }
+
+    print("QSUPTC13");
+    return false;
+  }
+
+}
+
+quark Unpocketed { } // Flag type meaning don't move me
+
+quark QHardCell : Intender
+  + QDSHops
+  + DEWLine
+  + DTU
+  + QDebugUtils {
+
+  
+  //// Intender API
+  @Override
+  virtual ClassId getIntentionClass() { return QHardCellState.classidof; }
+
+  //// QHardCell STATE
+  NgbRels mNgbRels;
+
+  //// QHardCell API
+  typedef EventWindow.SiteNum SN;
+
+  virtual Bool countWatchdog() ;
+  virtual Void resetWatchdog() ;
+
+  virtual Bool inMyGroup(QHardCell & qh) { return true; }
+
+  virtual Unsigned getUpHops() ;          // Distance to root
+  virtual Void setUpHops(Unsigned uphops) ;
+
+  virtual Unsigned getMaxHopsGoal() ;     // Intended max hops (here)
+  virtual Void setMaxHopsGoal(Unsigned maxup) ; 
+  
+  virtual Unsigned getSettledDownHops() ; // Down hops all aligned with me 
+  virtual Void setSettledDownHops(Unsigned settledown) ;
+
+  virtual Bool isRoot() { return false; } 
+  virtual Bool rootBehave(QHardCellState &hcs) { return false; } 
+  virtual Void initCopy() { setUpHops(Unsigned.maxof); /* set uninitted */ }
+
+  virtual Atom toSpawn() ;      //< Concrete subclass to build for spawning
+
+  //// QHardCell SERVICES
+  Bool isTail() { return getUpHops() == getMaxHopsGoal() - 1u; }
+
+  Bool done() { return true; }  // Things are different now 
+  Bool die() {
+    EventWindow ew;
+    ew[0] = Empty.instanceof; 
+    return true;
+  }
+  
+  constant Unsigned cMIN_DOWN_SETTLED = 3u; // DEBUG TEST Say we must be this settled to ride
+
+  Void moveEntourage(QHardCellState& qcs, SN destsn) {
+    HC3State & hcs = qcs.getHC3State();
+    DebugUtils du;
+    EventWindow ew;
+    C2D dest = ew.getCoord(destsn);
+    C2D side(dest.y,dest.x); // swap coords
+
+    //// MARK WE ARE LIVE
+    resetWatchdog();
+
+    //// RECOMPUTE NGBRELS AS OF AFTER I MOVE
+    {
+      ByteStreamLogger bsl;
+      //      bsl.printf("rels %d %d %d %d + %d\n",mNgbRels[0],mNgbRels[1],mNgbRels[2],mNgbRels[3],destsn);
+      hcs.updateNgbsForMove(destsn);
+      hcs.summarizeRels(mNgbRels);
+      //      bsl.printf("rels %d %d %d %d\n",mNgbRels[0],mNgbRels[1],mNgbRels[2],mNgbRels[3]);
+    }
+
+    // Advance the entourage
+    for (C2D.Coord flip = -1; flip < 2; flip += 2) {
+      C2D sideout = side*flip;
+      C2D fmover = dest + sideout;
+
+      if (!(ew[fmover] is Empty)) { // Need to advance front bein
+
+        if (!(ew[fmover] is Unpocketed)) { // if is unpocketed, just delete
+          C2D mdest = dest*2 + sideout;
+          if (!(ew[mdest] is Empty)) { // Need to push
+            C2D altdest = mdest + sideout;
+            if (!(ew[altdest] is Empty)) {
+              DebugUtils du;
+              //du.print("SMASH OUT");
+              //du.print(ew[altdest]);
+            }
+            ew[altdest] = ew[mdest]; // pushed
+          }
+          ew[mdest] = ew[fmover];
+        }
+        ew[fmover] = Empty.instanceof;
+      }
+
+      C2D bmover = dest*-1 + sideout;
+      if (!(ew[bmover] is Empty)) { // Need to advance back bein
+        if (!(ew[bmover] is Unpocketed)) { // if is unpocketed, just delete
+          C2D bdest = bmover + dest;
+          ew[bdest] = ew[bmover];
+        }
+        ew[bmover] = Empty.instanceof;
+        
+      }
+    }
+
+    // Lastly, advance self
+    ew.swap(0u,destsn);
+  }
+
+}

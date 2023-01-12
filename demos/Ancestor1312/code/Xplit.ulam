@@ -1,0 +1,192 @@
+/** XplitV: Deploy an Xplit
+    \symbol DX
+    \color #f00
+*/
+element DeployXplitV + DTU {
+  Void behave() {
+    EventWindow ew;
+
+    for (SN sn = 1u; sn <= 4u; ++sn) {
+      if (!ew.isAccessible(sn)) continue;
+      Atom & a = ew[sn];
+      if (a as QHardCell) {
+        Xplit s;
+        s.mRoot = true;
+        s.mPosition = 1u; // 0:neg, 1:center, 2:pos
+        ew[sn] = s.atomof;
+        break;
+      }
+    }
+    ew[0] = Empty.instanceof;
+  }
+}
+
+/** Xplit: Divide a HG3 grid four ways in an X
+    \symbol XP
+    \color #f00
+*/
+element Xplit + Unpocketed + DTU + QDebugUtils {
+  typedef Unary(3) Position;
+  constant Position cPSN_NEG = 0u;
+  constant Position cPSN_CTR = 1u;
+  constant Position cPSN_POS = 2u;
+  Position mPosition;
+
+  Bool mToggle;
+
+  Bool mRoot;  //< else arm: Are we the center
+  Bool mNWSEArm; //< else NE-SW arm
+  Bool mRipcord; //< pull to end Xplit collectively
+
+  typedef XTimer(4u,12u,1u) RipcordTimer;
+  RipcordTimer mRipcordTimer;
+
+  @Override
+  ARGB getColor(Unsigned selector) {
+    ColorUtils cu;
+    return cu.color(mToggle ? 0xffff0000 : 0xff00ff00);
+  }
+
+  Bool checkRipcord() {
+    EventWindow ew;
+    if (mRipcordTimer.countAlarm())
+      mRipcord = true;
+
+    // Pull ngb rip
+    if (!mRipcord) {
+      for (SN sn = 1u; sn <= 8u; ++sn) {
+        if (!ew.isAccessible(sn)) continue;
+        Atom & a = ew[sn];
+        if (a as Self) {
+          if (a.mRipcord) {
+            mRipcord = true;
+            break;
+          }
+        }
+      }
+    }
+
+    // Push our rip
+    if (mRipcord) {
+      for (SN sn = 1u; sn <= 40u; ++sn) {
+        if (!ew.isAccessible(sn)) continue;
+        Atom & a = ew[sn];
+        if (a as Self) {
+          a.mRipcord = true;
+        }
+      }
+      // and punch out
+      ew[0] = Empty.instanceof;
+      return true;
+    }
+    return false;
+  }
+
+  Void behave() {
+    mToggle = !mToggle; // Show liveness
+    if (checkRipcord()) return;
+
+    if (mRoot) rootBehave();
+    else armBehave();
+  }
+
+  Void rootBehave() {
+    EventWindow ew;
+    if (!mNWSEArm) { // Need init
+      for (SN sn = 5u; sn <= 8u; ++sn) {
+        C2D pos = ew.getCoord(sn);
+        Xplit a;
+        a.mRoot = false;
+        a.mNWSEArm = (pos.x * pos.y) > 0;
+        a.mPosition = 1u; // 0:neg, 1:center, 2:pos
+        ew[sn] = a.atomof;
+      }
+      mNWSEArm = true;          // flag we initted
+    } else {                    // already initted
+      for (SN sn = 5u; sn <= 8u; ++sn) {
+        C2D pos = ew.getCoord(sn);
+        if (ew[pos] is Xplit) return;
+      }
+      ew[0] = Empty.instanceof; // Done when all arms done
+    }
+  }
+
+  Void armBehave() {  
+    Unsigned hcCount;
+    Unsigned hcSN;
+
+    Unsigned axisAvailCount;
+    SN axisAvailSN[41];
+    Int offsetAvail[41];
+
+    Unsigned axisHCCount;
+    SN axisHCSN[41];
+
+    EventWindow ew;
+    Random random;
+    Int min, max;
+    which (mPosition) {
+      case cPSN_NEG: { min =  0; max = 1; }
+      case cPSN_CTR: { min = -1; max = 1; }
+      case cPSN_POS: { min = -1; max = 0; }
+    }
+
+    Int mul = mNWSEArm ? -1 : 1;
+
+    for (SN sn = 1u; sn < 41u; ++sn) {
+      if (!ew.isAccessible(sn)) continue;
+
+      C2D c2d = ew.getCoord(sn);
+      Int offset = mul * c2d.x + c2d.y;
+      Bool onAxis = min <= offset && offset <= max;
+
+      Atom & a = ew[sn];
+
+      if (onAxis) {
+
+        //// Collect all axis empties and QHC for fast spread
+        if (a is Empty || a is QHardCell) {
+          axisAvailSN[axisAvailCount] = sn;
+          offsetAvail[axisAvailCount] = offset;
+          ++axisAvailCount;
+        }
+
+        //// Done with onaxis
+        continue;
+      }
+
+      //// Scan for any off-axis QHC to support us
+      if (a as QHardCell) {
+        if (random.oneIn(++hcCount))
+          hcSN = sn;
+      }
+    }
+
+    //// If no off-axis QHC, we are done
+    if (hcCount == 0u) {
+      ew[0] = Empty.instanceof;
+      return;
+    }
+
+    //// Otherwise spread fast if possible
+    for (Unsigned n = 0u; n < axisAvailCount; ++n) {
+      SN sn = axisAvailSN[n];
+      Int offset = offsetAvail[n];
+      Self new = self;
+      print("ZONG");
+      print(n);
+      print(sn);
+      print("mP+of->newmP");
+      Int mpos = (Int) mPosition - 1;
+      Int npos = mpos + offset;
+
+      print(mpos);
+      print(offset);
+      print(npos);
+      new.mPosition = (Position) (npos + 1);
+      print((Unsigned) new.mPosition);
+      ew[sn] = new.atomof;
+    }
+  }
+}
+
