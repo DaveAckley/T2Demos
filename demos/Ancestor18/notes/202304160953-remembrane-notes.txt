@@ -1,0 +1,7219 @@
+{518}  -*-  mode: text; fill-column: 50;  -*-
+[0:
+
+Sun Apr 16 09:53:15 2023 OK, in a desperate
+attempt to get going again, we're here in
+Ancestor16 trying to get a higher-accuracy
+inter-cellular signaling system based on
+'antennae'.
+
+Carrying in some notes from last night:
+
+    quark DiamondEdge {
+    Unsigned(4) mCornerDists[2];
+    Unsigned(4) mHopsToEdge;
+    Unsigned(2) mOpenDir;
+    Unsigned(4) mTag;
+    Bool mValid;
+    }
+
+    element DiamondEdgeAntenna {
+    DiamondEdge mTransmit;
+    DiamondEdge mReceive;
+    Usigned(4) mMaxEdgeHops;
+    }
+
+    EdgeHG spawns DiamondEdgeAntenna
+
+    DiamondEdgeAntenna
+     - grows to mMaxEdgeHops
+     - tracks upstream or decays
+     - propagates mTransmit outward
+     - chooses and propagates mReceive inward
+     - fights with other DiamondEdgeAntenna?
+       = closer to edge has priority
+
+:0]
+[1:
+
+Sun Apr 16 09:55:16 2023 Idea is ditch ICG and let
+these DiamondEdgeAntennae interact with each other
+directly.
+[2:
+
+Sun Apr 16 11:05:24 2023 OK we made a stub element
+Antenna and quark EdgeCoord for what the Antennae
+sends and receives -
+
+  /*__________________________________________________
+  | COMPONENTS of Antenna <75> (48 bits/23 unused):
+  |
+  | Pos	| Bits	| Name	| Type <classid>
+  | 0	| 22	| mTransmitEC	| EdgeCoord <76>
+  | 22	| 22	| mReceiveEC	| EdgeCoord <76>
+  | 44	| 4	| mMaxEdgeHops	| Unsigned(4)
+  | 48	| 0	| super	| UrSelf <0>
+  |___________________________________________________
+
+22 bits a pop for the EdgeCoords is pretty a lot
+but we'll see how it goes.
+
+Let's just damn the torpedoes and start into a
+naive behave() and see how far we can get.
+[3:
+
+Sun Apr 16 11:21:08 2023 So, what are we going to
+be scanning for?
+[4:
+
+Sun Apr 16 13:08:00 2023
+
+Our status:
+
+ - We expect to be spawned with an mOpenDir? So
+   maybe that's 'always' valid and we can just
+   assume/confirm it?
+
+So maybe we can lift mOpenDir out of EdgeCoord and
+let EdgeCoord owners deal with that?
+[5:
+
+Sun Apr 16 13:20:02 2023 Did that; we'll see.
+
+So, back to scanning, given we permanently know
+our mOpenDir direction.
+
+Things of interest:
+ - Other Antenna, that
+   = ourminEHSN: are pointed our way and are lowest edgehops
+   = theirminEHSN: are opposite our way and lowest edgehops
+   = are pointed some other way
+ - Other oriented Di components like EdgeHG or MBase
+ - Any other non-stompable stuff
+
+[6:
+
+Sun Apr 16 18:19:06 2023 And we have some methods
+to map other (in- or out-bound) EdgeCoords into
+our frame of reference, adjusting the edgehops to
+reflect our position vs the source.
+
+:6]
+:5]
+:4]
+:3]
+:2]
+:1]
+[7:
+
+Mon Apr 17 02:33:16 2023 Come on let's start
+scanning! I can't believe how jammed up I've been
+here!
+[8:
+
+Mon Apr 17 08:29:43 2023 OK, well, we're starting
+to scan stuff. We're now finding all of these
+things:
+
+    MinPick diagMinEH; // lowest edge hops going our way on our diagonal
+    MinPick ourMinEH; // lowest edge hops going our way
+    MinPick theirMinEH; // lowest edge hops going their way
+
+    MinPick ourMemb; // Membrane (MBase) going our way
+    MinPick diagMemb; // Membrane going our way on our diagonal
+
+using our nifty new XPick API.
+
+But so far we're not doing anything with any of it.
+[9:
+
+Mon Apr 17 15:46:13 2023 OK so let's have some
+decisions or something.
+
+stabilization:
+ # base case 1
+ if have diagMemb, compute our implied edge
+   hopcount. If that's != our current hopcount,
+   update (and bail?)
+ else
+ # base case 2
+ if ourMemb, check if its diagonal fwd is
+   empty (or stompable, but what would that mean
+   here?). If so, swap there and bail, after
+   computing our implied edge hopcount relative to
+   it. If not, take death shot?
+ else
+ # recursion 1
+ if diagMinEH, compute our implied EH. if it's
+   greater than mMaxEdgeHops, decay, otherwise if
+   it's != our EH, update our EH (and bail?)
+ else
+ # recursion 2
+ if ourMinEH, check if its diagonal fwd is empty
+   or stompable, and update and swap there as in
+   base case 2
+ # base case 3
+ else
+   decay
+
+[10:
+
+Mon Apr 17 16:51:13 2023 Maybe that's it for
+stabilization? Obvious refactorings aside. Oh and
+also we need to propagate outbound EdgeCoords
+somewhere in there.
+
+And there'd be a spawn step somewhere, if we're
+under mMaxEdgeHops.
+
+Then there's act(), where I guess we'll propagate
+theirMinEH if appropriate? And "that's it"?
+
+:10]
+
+:9]
+:8]
+:7]
+[11:
+
+Tue Apr 18 02:10:29 2023 OK so we're stabilizing
+in simple cases now. Let's get some kind of
+spawning going so that we don't have to keep
+setting stuff up by hand?
+[12:
+
+Tue Apr 18 04:21:22 2023 Well, we've got a single
+level of Antenna spawning and mostly managing to
+track the MBases as they move and grow.
+
+Issues already seen include:
+
+ - MTip signals contact warnings for Antenna
+
+ - MBase no longer signals anything on the DEWLine
+
+Can we get multiple levels of Antenna?
+
+:12]
+
+:11]
+[13:
+
+Tue Apr 18 05:44:47 2023 OK some
+progress. Currently working an issue where pairs
+of Aa run away together, because our 'recursion 2'
+case doesn't ensure outMinEH isn't already 'ahead'
+of us.
+
+[14:
+
+Tue Apr 18 06:15:39 2023 OK that seems fixed, and
+a couple other places where it looked like similar
+things might be possible.
+
+:14]
+:13]
+[15:
+
+Tue Apr 18 06:16:04 2023 Now I'm thinking that
+maybe we should still deploy MSensor in some
+context - perhaps and have Antenna suppress it -
+because it takes quite a long time for Aa to
+regrow after a Di growth phase, and at the moment,
+the Di is 'completely' unprotected until that
+happens.
+
+(It's actually still unprotected after it happens
+since the Aa<->DEWLine iface doesn't exist yet,
+but in principle.)
+
+[16:
+
+Tue Apr 18 07:05:22 2023 Oops I seem to've lost my
+MTips entirely. Who was supposed to be spawning
+those?
+[17:
+
+Tue Apr 18 07:07:43 2023 Ah indeed, it's part of
+the MSensor processing.. But now that I'm doing
+'smart foaming' heh, we're not deploying the
+MSensors that would be right next to the would-be
+MTip, so they never get deployed.
+
+Can we redo the smart foaming to be able to foam
+out to MTip-adjacency?[18:
+
+Tue Apr 18 07:33:45 2023 Oops, well: So now we
+foam MBase right up to the corner but we still
+don't get MTips.. because it's MSensors that spawn
+MTips, not MBases.
+
+:18]
+
+:17]
+:16]
+
+:15]
+[19:
+
+Tue Apr 18 12:23:43 2023 Think I'm going to have
+to be willing to grow Antenna even when MBase
+doesn't have plausible dists. Otherwise we end up
+with an Antenna buzz-cut as soon as the grid
+starts moving. Can we somehow avoid growing
+Antennas on bogus MBases though?
+
+:19]
+[20:
+
+Tue Apr 18 12:55:04 2023 What if the MBase
+cornerdists just stay valid after they become
+valid, or are just assumed to be valid? In most
+cases they'll only be off by like one, due to size
+changes, so why are we invalidating the whole
+schmear for 'such a small error'?
+[21:
+
+Wed Apr 19 12:18:10 2023 So I think we mostly did
+that, and it mostly seems fine. Except the code is
+of course a mess.
+
+Maybe we could clean that up just a bit before
+moving on? We did leave mPlausibleDists being used
+in a few places - we didn't delete it, we just
+usually ignore it.
+
+Maybe leave it for now. We need to get some kind
+of DEWLine integration going. Right now the
+daughters aren't moving apart before trying to
+grow, and things get ugly.
+
+[22:
+
+Wed Apr 19 12:47:44 2023 How do EdgeHG and MBase
+get contacts warnings?[23:
+
+Wed Apr 19 12:48:38 2023 So,
+Membrane.scanOuterQuadrant() does a ton of
+complicated crap, but ends up setting 'isDanger'
+true in various ways, including:
+
+ - Any inaccessible site
+ - Anything that isn't
+   = Empty, MTip, Membrane, IntercellularGoo
+
+so partly I expect we need an additional clause
+there for Antenna? That would do something related
+to what happens for ICG?
+[24:
+
+Wed Apr 19 13:00:19 2023 There's method
+DefCon DEWLine.dtm2DefCon(IntercellularGoo.DistToMembrane dtm)
+that maps from ICG distances to DEWLine
+defcons. [25:
+
+Wed Apr 19 13:18:30 2023 Well, made a
+scanOuterQuadrant case for Aa based on the ICG
+case. Trying to build. We'll see.
+[26:
+
+Wed Apr 19 14:24:43 2023 OK, and now that we
+reorganized so that MBase is once again actually
+calling scanOuterQuadrant, we're beginning to get
+some signaling - itches anyway - again.
+
+:26]
+:25]
+
+:24]
+:23]
+
+:22]
+
+:21]
+:20]
+[27:
+
+Thu Apr 20 00:52:40 2023 Do we maybe want Antenna
+to be DEWLine too? Or no? We still have 22 bits in
+Aa, which is enough, though not a ton.
+
+[28:
+
+Thu Apr 20 03:01:02 2023 In a similar vein, what
+shall we do about getting non-opposing Aa to
+register as warnings, or do we? Right now, the
+[29:
+
+Thu Apr 20 04:20:37 2023 Ok, well, stopping for
+now. Current issue is the MBase info just gets
+trashed all the time - by Di growth and by mere Di
+movement - so it barely ever converges. Need some
+kind of way to preserve existing info when the Di
+grid changes.
+
+:29]
+:28]
+
+:27]
+[30:
+
+Thu Apr 20 07:44:23 2023 Well so here's the thing:
+I'm thinking about blowing 2x6 == 12 bits in
+HardCellG for absolute coords.
+
+After I tried so hard for so long to avoid them,
+with the hop counts and the quadrants and
+everything.. After all that..
+
+And here I am, again, turning myself inside out
+trying to recover reasonably accurate 1D
+along-the-perimeter coordinates for multicellular
+alignment. And burning weeks on weeks in the
+efforts, and coming up with sloppy,
+slowly-converging crap as a result.
+
+2x6 == 12 gives us (-32..31 , -32..31) for
+absolute coordinates relative to the root.
+
+Dammit I'm just going to do it.
+[31:
+
+Thu Apr 20 08:22:59 2023 OK have framed out
+HCPoint.ulam costing 12 bits and put one into
+QHardCell. The tightest fit is for RootHardCellG,
+which now has only one bit left:
+
+      /*__________________________________________________
+      | COMPONENTS of RootHardCellG <27> (70 bits/1 unused):
+      |
+      | Pos	| Bits	| Name	| Type <classid>
+      | 0	| 4	| mRootProductivityWatchdog	| XTimer(4,12u,1u) <112>
+      | 4	| 4	| mMovementWatchdog	| XTimer(4,12u,10u) <113>
+      | 8	| 2	| mCmdPhase	| Unsigned(2)
+      | 10	| 10	| mDirs[2]	| Int(5)
+      | 20	| 10	| super	| QHardCellG <167>
+      | 30	| 8	| base	| QDSHopsStg <172>
+      | 38	| 0	| base	| UrSelf <0>
+      | 38	| 0	| base	| DTU <62>
+      | 38	| 8	| base	| DEWLine <151>
+      | 46	| 21	| base	| QHardCell <144>
+      | 67	| 0	| base	| Intender <136>
+      | 67	| 0	| base	| QDSHops <182>
+      | 67	| 3	| base	| QDebugUtils <81>
+      | 70	| 0	| base	| Fail <80>
+      |___________________________________________________
+
+and makes me think we should maybe go for virtual
+HCPoint + HCPointStg right off the bat.. but I
+haven't done it yet.
+
+But maybe I should..[32:
+
+Thu Apr 20 08:39:07 2023 OK, well, made
+HCPointable for the abstract base, and HCPointStg
+for 12 bit instance, and now RootHardCellG
+implements HCPointable directly and
+QHardCellGField inherits from HCPointStg..
+
+Oops, HardCell needs to also I guess.[33:
+
+Thu Apr 20 08:41:36 2023 Going again.[34:
+
+Thu Apr 20 08:51:47 2023 OK back up to 13 free in
+RootHardCelLG.
+
+..but down to only 8 free in DiamondSequencer.
+
+..and only 1 free in EdgeHG woah, but we'll buy a
+bunch back there later..
+
+[35:
+
+Thu Apr 20 08:59:37 2023 So okay, let's try to
+stabilize HCPoint!
+
+[36:
+
+Thu Apr 20 09:19:27 2023 OK, building. I kind of
+wanted HCPoint to spread fast but at the moment
+we're just pulling from upstream, so at most only
+HCPoint change per event.[37:
+
+Thu Apr 20 09:56:35 2023 OK, HCPoint stabilization
+is finally working after my de rigueur utterly
+dippy typoe was found out.
+
+So now each HG/EdgeHG knows where it is pretty
+much all the time. Right now spawning is just
+copying HCPoint, so the spawned HG is assertively
+wrong - off by one - until it has an event.[38:
+
+Thu Apr 20 10:01:43 2023 OK trying
+[39:
+
+Thu Apr 20 10:38:11 2023 OK we appear to be
+pre-initting spawned HG reasonably
+appropriately. Noticed that some new HGs delete
+themselves on their first event, though, because
+(1) they come into existence due to a growth
+event, but (2) sometimes they see an upstream HG
+hasn't gotten the new maxgoals yet, so (3) The new
+guy looks oversized relative to that upstream, so
+they delete themselves. But they get respawned and
+soon enough the upstream gets the news and the
+whole things stabilizes.
+
+[40:
+
+Thu Apr 20 10:40:40 2023 SO. All HG now know their
+absolute position in the Diamond.
+[41:
+
+Thu Apr 20 10:54:08 2023 So one approximately next
+task would be redoing MBase so that it carries the
+inbound information, rather than the outbound. And
+I'm thinking it might be nice to sprout the Aa off
+of EdgeHG instead of MBase - at least, that would
+make it easier to be lower density.
+[42:
+
+Thu Apr 20 23:35:15 2023 OK come on MBase outbound
+let's do it..[43:
+
+Fri Apr 21 04:49:43 2023 Urgh starting unpacking
+#TheChannelProtocol in the fed.
+
+:43]
+
+:42]
+
+:41]
+:40]
+
+:39]
+
+:38]
+
+:37]
+
+  :36]
+
+:35]
+
+:34]
+
+:33]
+
+:32]
+
+:31]
+:30]
+[44:
+
+Fri Apr 21 11:45:05 2023 So, where should be:
+
+ - Aa xfer inbound info to MBase..
+
+wait do we even need MBase? With EdgeHG having
+HCPointStg, EdgeHG can be OutboundCornerDists all
+by itself. And it's already got
+mInboundCornerDists allocated, so inbounds can go
+there. Does Antenna do both directions? It does,
+right?[45:
+
+Fri Apr 21 11:50:43 2023 Yeah, Aa has
+
+  EdgeCoord mTransmitEC;
+  EdgeCoord mReceiveEC;
+
+which each have a QCornerDists and a mHopsToEdge.
+
+So we could stop spawning MB entirely, and just
+start growing Aa from EdgeHG.
+
+:45]
+:44]
+[46:
+
+Fri Apr 21 12:46:01 2023 Should we ditch the
+QCornerDists in favor of EdgeCoords?
+
+ + EdgeCoords are 3D + tag; QCD are 2D
+ - QCD is ready for per-edge use; EC is absolute
+
+[47:
+
+Fri Apr 21 23:40:45 2023
+
+ ~ But, ah, umm, EdgeCoord contains a QCD..
+
+We must have meant 'Should we change EdgeCoord to
+use an HCPoint instead of a QCD?'
+
+:47]
+
+:46]
+[48:
+
+Sat Apr 22 02:02:53 2023 I'm thinking ditch
+cornerdists entirely in favor of HCPoint. Making
+EdgeCoord be something like
+
+    quark EdgeCoord
+      + DTU
+    {
+      HCPoint mHCPoint;
+
+      typedef Unsigned(4) EdgeHops;
+      EdgeHops mHopsToEdge;
+
+      typedef Bits(4) EdgeTag;
+      EdgeTag mEdgeTag;
+
+    }
+
+but then are we happy with mHopsToEdge? That was
+already stressing us as we transferred EdgeCoords
+between xmit and recv EdgeCoords when Aa weren't
+exactly aligned.
+
+    quark EdgeCoord
+      + DTU
+    {
+      HCPoint mHCPoint;
+
+      typedef Unsigned(4) EdgeHops;
+      EdgeHops mHopsToEdge;
+
+      typedef Bits(4) EdgeTag;
+      EdgeTag mEdgeTag;
+
+    }
+
+[49:
+
+Sat Apr 22 12:13:06 2023 OK so if we're going
+HCPoint in EdgeCoord and stuff (which we're
+currently trying to hack together), what do we do
+about the OutboundCornerDists API?
+[50:
+
+Sat Apr 22 14:47:44 2023 Change it to
+EdgeCoordProvider or something?
+
+:50]
+:49]
+:48]
+[51:
+
+Sun Apr 23 00:02:28 2023 OK we're currently
+oversize in EdgeHG
+
+    ./EdgeG.ulam:8:9: ERROR: Trying to exceed allotted bit size (71) for element EdgeHG with 77 bits.
+
+primarily due to
+
+    ./EdgeG.ulam:36:3: NOTE: (18 of 77 bits, at 0) EdgeCoord mInboundEdgeCoord.
+
+. So I think we have to go (back) to the 'use
+MBase' for inbound data, and use EdgeHG only for
+outbound EC.
+
+:51]
+[52:
+
+Sun Apr 23 09:47:07 2023 OK so we're finally
+building successfully again after a huge tear-up
+to get rid of QCornerDists by any means possible.
+
+Now I'm wondering in EdgeHG if we need
+
+  Zone mEdgeZone;                   //< outbound direction
+  Bool mHasZone;                    //< if mEdgeZone is valid
+
+at all since 'we can infer it' from its
+  mHCPoint. [53:
+
+Sun Apr 23 11:15:40 2023 Well tore them out for
+hasEdgeZone() and getEdgeZone(). We shell see.
+
+:53]
+:52]
+[54:
+
+Sun Apr 23 12:04:22 2023 OK things are starting to
+work. Di is growing again anyway.
+
+Issues:
+
+ - 'Corner' Eg is spawning bogus MB out into space
+
+ - Eg is not spawning Aa at all
+[55:
+
+Sun Apr 23 12:16:22 2023 And the HCPoint updating
+is kind of messed up? HCPoints are supposed to be
+in units of pockets but it appears they are
+updating in terms of sites, at least
+sometimes.. Let's look into that now.
+[56:
+
+Sun Apr 23 12:29:30 2023 OK yeah
+stabilizeHCPointOrDie(..) wasn't mapping from
+C2Ds from sites to pockets. So that looks better
+now.
+
+So how about deploying Aa?
+
+:56]
+:55]
+:54]
+[57:
+
+Sun Apr 23 13:01:09 2023 Opps I think we're
+segfaulting mfms.. guessing stack overflow.. but
+it takes awhile.. maybe it's during fin deploy or
+something. Have mfms built with symbols now,
+waiting for haxplosion.[59:
+
+Sun Apr 23 14:09:24 2023 Looks like it was me
+trying to do like
+
+    virtual Bool func(Base& ref) {
+      if (ref as SubclassOfBase)
+        return func(ref);
+    }
+
+and expecting that to call a different method:
+
+    virtual Void func(SubClassOfBase& ref) {
+     ..
+    }
+
+- which does exist - but ending up back at
+
+    virtual Bool func(Base& ref) {
+
+instead. Boom.
+
+I feel like I've run into that before.
+
+:59]
+
+:57]
+[58:
+
+Sun Apr 23 14:09:21 2023 [60:
+
+Sun Apr 23 14:17:48 2023 So we're spawning Aa now,
+and they are spawning off to infty.. because
+mHopsToEdge isn't getting updated down the line?
+Let's take a look.[61:
+
+Sun Apr 23 15:28:37 2023 OK so we're having all
+sorts of issues with U2D3 - our ill-advised C2D
+with an Unsigned(3) coordinate. Have fixed a few
+things but the hits keep coming.
+
+Current thing is we have this
+
+  Bool takeXmitFrom(Atom & a, U2D3 deltahops)
+
+in Antenna, passing U2D3 for a delta, but that's
+nuts because we certainly might be taking from
+something north and/or west of ourselves..
+
+deltahops wants to be C2D, and somewhere we're
+going to have to map from net C2D to openDir +
+U2D3 - because U2D3 can't even make sense without
+a PocketDir to indicate positive displacement.
+
+And we may still run into cases where we're trying
+to move below 0 in a U2D3 net dir - perhaps
+because of reaching back - and we'll have to toss
+that attempt.
+
+So, I guess it's like
+
+    U2D3 mHops = ..
+    C2D abs = u2D3Dir2C2D(mHops,mOpenDir);
+    C2D pdc = ..source of info relative to me..
+    C2D newoffs = abs+pdc;
+    U2D3 rel;
+    if (!c2D2u2d3Dir(newoffs,mOpenDir,rel)) blah
+    mHops = rel;
+
+:61]
+
+:60]
+
+:58]
+[62:
+
+Mon Apr 24 00:53:16 2023 OK so current state is
+the grid's moving and growing again okay, and the
+Eg are not only spawning Aa but also moving them
+during moveEntourage(..) which is kind of nice,
+but the Aa aren't spawning the rest of the
+Antenna.
+[63:
+
+Mon Apr 24 03:00:08 2023 OK made some progress but
+now we're screwing up using 'mZone' as if it was
+relative to the root, but it's not, it's relative
+to the DS. We need to be using hcPoint2Zone(..)
+
+:63]
+
+:62]
+[64:
+
+Mon Apr 24 12:37:12 2023 OK well at long last we
+have things kind of working again in the single
+cell case.
+
+And hey even a little bit is working in
+intercellular signaling, it seems. I see Aa with
+its mTransmitEC going
+ (1,1) -> (2,2) -> (3,3)
+but when it jumps to a ngb's mReceiveEC it's
+ (5,5)
+when we think it should be (4,4). Let's take a
+look at that.[65:
+
+Mon Apr 24 12:54:20 2023 (Looks like existing code
+is just crap from before we got or understood the
+DirOff approach.)
+
+:65]
+
+:64]
+[66:
+
+Mon Apr 24 14:14:54 2023 So in Aa.behavr(), we're
+doing a MinPick diagMinEH, and telling it to min
+over ngb Aa mTransmitEC.mHopsToEdge.length() - but
+that now seems wrong. It's systematically skipping
+the nearest ngb Aa. We think we should min over
+distance from us, right?
+
+:66]
+[67:
+
+Tue Apr 25 01:29:52 2023 OK I need a rethink of
+the Aa behavior. Need to sort out all the steps
+here or I'll just keep moving the bathtub ring.
+
+I think:
+ - We'd like to do both upstream and downstream on
+   each event
+ - But what changes force us to wait?
+   = Growing upstream voids receiving from upstream
+   = But could still do other stuff
+ - What about swapping? Swapping has to end the
+   event. And we don't want to be tricky by doing
+   lots of stuff 'as if' swapped, but saving the
+   actual swap for the end. We want this shit to
+   work. Like today.
+Search Moore ngb for:
+ - possible upstreams (at least one required):
+   = ecpUsDiagUp - Any ECP (including Aa) going our way diago up of us
+   = egaaUsOff - Aa or (preferably) Eg going our way not diago up of us
+ - possible ngbs for IC signals (optional):
+   = egaaThem - Aa or (preferably) Eg going opposite way
+ - possible dest for IC signals (optional):
+   = mbUs - MB going our way
+ - possible downstream Aa (optional)
+   = aaUsDiagDown - Aa only going our way diago down of us (may not be valid)
+
+C2D ourwayc = ..;
+
+TASK: REALIGN
+ If !ecpUsDiagUp.hasPick(), // nothing diago up of us
+   if egaaUsOff.hasPick()   //ECP or Aa
+      && isEmpty(empty = egaaUsOff.getXC2D() + ourwayc) // with Empty down of it,
+   invalidate T&R, swap to empty, return
+   else die (no feasible upstream)
+ else
+[ we have upstream ]
+Atom & ua = ecpUsDiagUp.getXAtom()
+EdgeCoord u
+
+TASK: VALIDATE UPSTREAM
+ If upstream invalid, return maybeDie
+ else
+[ we have valid upstream ]
+
+TASK: XMIT IN
+ takeXmitFrom upstream to us,
+  including us dying if overlength
+[ we have fresh valid upstream ]
+
+TASK: RECV XMIT CROSS
+ if have crossing Aa (egaaThem)
+ take their xmit as our recv
+
+TASK: XMIT OUT
+ if have downstream Aa (aaUsDiagDown)
+   takeXmitFrom us to downstream Aa
+     including it dying if overlength
+
+TASK: RECV IN
+ if have downstream Aa with valid mReEC
+   takeRecvFrom them to us
+
+TASK: RECV OUT
+ if have upstream Aa
+   takeRecvFrom us to them
+ else if have MB going our way
+   takeRecvFrom us to them
+
+TASK: GROW
+ If need downstream and empty downstream,
+  spawn downstream with invalid T&R, continue
+
+
+:67]
+[68:
+
+Tue Apr 25 09:25:57 2023 OK I'm trying to
+implement :67: above - and trying to keep it
+cleanish - and running into confusion about 'going
+our way'. Specifically, there's 'has a matching
+mOpenDir', on the one hand, but there's also
+'providesEdgeCoordFor(..) for mOpenDir'. Which
+isn't quite the same, because MBase provides
+INBOUND ECs for the opposite of its mopendir.
+
+So: Do we need/want 'upstream/downstream'
+instead/in addition to 'inbound/outbound'?
+[69:
+
+Tue Apr 25 09:58:23 2023 Can we rewrite :67: for
+in and out and see if it seems plausible?
+
+ upstream -> has..
+
+I think EdgeCoordProvider might need to
+distinguish in and out? Could that be the missing
+piece?
+
+Go from
+
+  //// EDGECOORDPROVIDER API
+  virtual Bool providesEdgeCoordFor(PocketDir pd, EdgeCoord & ec) ;
+
+to like
+
+  //// EDGECOORDPROVIDER API
+  virtual Bool providesEdgeCoordFor(Bool outboundFrom, PocketDir pd, EdgeCoord & ec) ;
+
+?
+
+Let's look at it..[70:
+
+Tue Apr 25 10:06:12 2023 Well now I'm not
+sure. The existing ECP code has a bunch of stuff
+like isSNUpstreamFor and isC2DUpstreamFor, which
+its providesInboundEdgeCoord(..) uses to
+distinguish whether ECs are inbound or outbound.
+
+But the core service there
+
+  Bool providesInboundEdgeCoord(PocketDir tome, EdgeCoord & qcd) {
+
+does basically
+
+  return providesEdgeCoordFor(oppositePocketDir(tome), d)
+
+[71:
+
+Tue Apr 25 10:10:57 2023 Looks like
+isSNUpstreamFor and isC2DUpstreamFor have only
+ECP-internal callers..
+
+So if we 'rationalized' ECP how might it look?
+
+  //// EDGECOORDPROVIDER API
+  virtual Bool providesEdgeCoordFor(Bool outboundFrom, PocketDir pd, EdgeCoord & ec) ;
+
+  //// EDGECOORDPROVIDER SERVICES
+  Bool providesOutboundEdgeCoordFor(PocketDir pd, EdgeCoord & ec) {
+    return providesEdgeCoordFor(true, pd, ec);
+  }
+
+  Bool providesInboundEdgeCoordFor(PocketDir pd, EdgeCoord & ec) {
+    return providesEdgeCoordFor(false, pd, ec);
+  }
+
+can't be that simple.. Can we find callers?
+[72:
+
+Tue Apr 25 10:22:37 2023
+
+ - FishBodProbe.handleRequestProbeCD would want inbound..
+ - FishProbe.tryProbeRequest would want inbound too?
+ - Antenna ECP API would be more restrictive in the
+   obvious way.
+ - Antenna.takeXmitFrom would do.. what do we
+   think there?
+   = For one thing, we don't want to do Aa
+     separately..
+[73:
+
+Tue Apr 25 10:37:20 2023 Well I have an 11am call
+today, but after, what say we just do this and see
+where the chips fall.
+
+[74:
+
+Tue Apr 25 13:24:57 2023 Well, have another thing
+at 3pm but let's get started here.
+[75:
+
+Tue Apr 25 14:37:39 2023 3pm got pushed to 4:30
+doh. Got the ECP API redo roughed in to buildable;
+now back to trying to implement :67: with the new
+stuff.
+[76:
+
+Tue Apr 25 14:45:39 2023 And I guess our first win
+is we can ditch the hideous
+
+      Bool aaoreg = a is Antenna || a is EdgeHG;
+
+because now by using like
+
+        if (a.providesOutboundEdgeCoordFor(mOpenDir, tmpec)) { // going our way..
+
+the MBase will exclude itself, because it only
+provides inbound.[77:
+
+Tue Apr 25 14:47:15 2023 OK, so now we're up to
+crossing signals from outbound ngb to inbound us,
+and it seems that
+
+        // - possible ngbs for IC signals (optional):
+        if (a.providesOutboundEdgeCoordFor(oppositePocketDir(mOpenDir), tmpec)) { // going opposite way..
+          egaaThem.update(sn,egmin);
+ ..
+
+might be plausible..
+
+So now 'all' we need is mbUs?
+[78:
+
+Tue Apr 25 14:53:45 2023 Maybe so. Seems like our
+Moore ngb scan is done?[79:
+
+Tue Apr 25 15:17:35 2023 OK so the latter part of
+:67: remains to be implemented but it looks like
+we're back to working about as well as we were
+before - outbound signals are crossing antennas
+and becoming inbound, and they propagate inbound
+to the second Aa segment.. but they never reach
+into the first Aa segment or to the nearby MB.
+
+:79]
+
+:78]
+:77]
+
+:76]
+:75]
+:74]
+
+:73]
+:72]
+:71]
+
+:70]
+
+:69]
+:68]
+[80:
+
+Wed Apr 26 05:17:09 2023 Umm did :67: manage to
+skip crossing xmit to recv on opposing Aa? Do we
+have a minpick for it?[81:
+
+Wed Apr 26 05:18:26 2023 Yes we made 'egaaThem' in
+honor of MST3K and akop.. do we ever use it?[82:
+
+Wed Apr 26 05:19:00 2023 No we doh don't.
+
+:82]
+
+:81]
+
+:80]
+[83:
+
+Wed Apr 26 07:42:28 2023 OK, so the Aa signaling
+is getting pretty plausible. It saturates out at
+7s which isn't a lot, and we don't have anything
+plausibly using the inbound info, so we'll just
+have to see.
+
+:83]
+[84:
+
+Wed Apr 26 07:58:02 2023 What if we had a
+'broadcast down' function that *wasn't* expected
+to start from the root necessarily? Like we could
+broadcast to all/most/part of an edge by injecting
+off-center toward that edge.
+
+[85:
+
+Wed Apr 26 08:00:10 2023 (Hmm seems like our
+probes are just batching up around the
+edge. Guessing we haven't updated them
+yet. FishBodProbes they are. Mostly mSignal 0u
+(cFBDS_PROBECD) but I saw a 2 (cFBDS_DROP) as
+well.)
+
+:85]
+
+:84]
+[86:
+
+Wed Apr 26 13:19:43 2023 OK actually trying to
+debug some Fish stuff again finally. On the NW, we
+have a FishFin deploying immediately, inside the
+parent, and I see 'why' but I don't understand the
+reason for the code:
+
+    if (p.mCornerHops[it.mBondedSide] + 1u>=
+        p.mCornerMaxHopsGoal[it.mBondedSide]) {
+      mD&&pR("FFSX13 READY TO GO?");
+      it.mStateIdx = it.cSIDX_DEPLOY; // MOVING ON
+      return true;
+
+In the current case we have
+
+  it.mBondedSide = 1
+  mCornerHops[it.mBondedSide] = 13
+  mCornerMaxHopsGoal[it.mBondedSide] = 14
+
+which seems completely right for the edge of the
+body.. so we move to deploy.. but we haven't
+EXFIL'd at all?[87:
+
+Wed Apr 26 13:24:13 2023 Oh doh deploy IS when we
+do walkies. So this part is fine.[88:
+
+Wed Apr 26 13:25:44 2023 Buut why does it sprout
+an RG on the immediate next step?[89:
+
+Wed Apr 26 13:27:11 2023 Ah I got it: Because Aa
+wasn't FishFin.stompable(..). So FF scanned all
+the way out its open diag and found nowhere it
+could go. Immediately deploying at that point
+doesn't seem extremely wise, though..
+
+OK we weren't returning if we fall through the
+walkies attempt..
+
+:89]
+
+:88]
+
+:87]
+
+:86]
+[90:
+
+Wed Apr 26 14:27:26 2023 OK next issue is
+EdgeCoord.needRotate(Bool) has been de-implemented
+and we're calling it again. Here's what it looked
+like in Ancestor15 QCornerDists:
+
+      Bool needRotate(Bool cw) {
+        Unsigned sideerr = (mCornerDists[0] + mCornerDists[1])/5u;
+        return
+          (mPlausibleDists &&
+           ((cw && (mCornerDists[0] > mCornerDists[1]+sideerr)) ||
+            ((!cw && (mCornerDists[0]+sideerr < mCornerDists[1])))));
+      }
+
+So now we need an analog for EdgeCoord.
+
+  /** \returns true if \c cw is true and we're
+      closer to anticw corner, or if \c cw is
+      false and we're closer to cw corner.
+      \return false otherwise (including if we're
+      not valid)
+   */
+
+  Bool needRotate(Bool cw) {
+  }
+
+So how do we compute dist to cw vs acw corner? Can
+we even do it just based on an EC?
+
+I guess maybe we could infer from the signs of the
+EC dims?
+
+  Unsigned maxgoalhops = abs(.x) + abs(.y) + 1u;
+  Zone zone;
+  if (!hcPoint2Zone(mInboundEC.mEdgePos,zone)) return false; // invalid or len 0
+  PocketDir pd;
+  if (!zone2PocketDir(zone, pd)) return false; // on axis instead of in quadrant
+  // pd is the relevant edge
+
+Now we need dists from mEdgePos.x,.y to the
+'corners of pd'? This will be some axialdir
+breakdown?
+
+  AxialDir had, vad;
+  axialDirsBorderingQuad(pd, had, vad);
+  C2D hof, vof;
+  hof = axialDir2C2D(had);
+  vof = axialDir2C2D(vad);
+
+So wait.
+[91:
+
+Wed Apr 26 14:54:08 2023 So do we even want to be
+messing with cw and acw here? Vs doing something
+directly in terms of ADs or whatever? Ancestor15
+does the needRotate cw and acw, but then uses that
+to map to vertical/horizontal stuff.
+
+What if we try to come in fresh here, and answer
+some questions like this:
+
+ Given ECs ec1 and ec2, how far is the center of
+ ec1 from the center of ec2? Express your answer
+ in terms of center-to-center C2D.
+
+and we want that answer to converge on like
+  C2D target = pocketDir2C2D(pd)*3 or *4 or
+something, and we can take deviations from that to
+decide which way(s) to advise root.
+
+ C2D error = target-current;
+ MinPick pickWantMove;
+ Int slop = 1; // 0 for tightest attempted tracking
+ if (error.x < -slop)     pickWantMove.update(4u,0u,-error.x);
+ else if (error.x > slop) pickWantMove.update(1u,0u,error.x);
+ if (error.y < -slop)     pickWantMove.update(3u,0u,-error.y);
+ else if (error.y > slop) pickWantMove.update(2u,0u,error.y);
+
+ if (pickWantMove.hasPick()) {
+   ..advise root.. ?
+ }
+[92:
+
+Wed Apr 26 15:11:55 2023 Which all seems fairly
+plausible for center-to-center, but c-to-c does
+also feel pretty limiting. What if we want fin
+edge center to be at 75% of bod edge center? Then
+we're right back into cw and acw? We only got away
+from it because center doesn't care?
+
+From an EC we should be able to get absolute
+coords of its corners. But which order do we list
+the corner coords?
+[93:
+
+Wed Apr 26 15:34:18 2023 Ugh. And here's another
+thing: EdgeCoords are pretty inherently tied to an
+edge - mHopsToEdge doesn't make sense without
+having an edge in hand. So maybe it could be
+cleaner to deal with that first? Whatever that
+means.. considering we have two Di with opposing
+pocketdirs involved. gah.
+
+[94:
+
+Wed Apr 26 16:06:33 2023 Really the situation is
+between one edgecoord and the one site containing
+that EC. And we'd like to map from that EC to a
+C2D expressing where we'd like the site to be
+relative to where it is.
+
+But that involves at least two more pieces of
+information: The desired inter-Di gap, and the
+desired position along the edge implied by the EC.
+
+So what is the EC+site core, before applying those
+additional desires? The two corners of the other
+Di, expressed in absolute coords relative to the
+site. From them we can find the coord of any
+desired percentage along that edge, and then take
+a perpendical from there for the desired distance,
+and that's the target.
+
+And 'the perpendicular' is just
+pocketDir2C2D(ecdir)*desireddistance.
+
+[95:
+
+Wed Apr 26 16:31:59 2023 So how do we move forward
+here? Let's try to find the cw and acw corners
+after all?[96:
+
+Wed Apr 26 16:36:06 2023 What do we get if we
+multiply the mEdgePos by the
+pocketDir2C2D(mOpenDir)?
+
+examples
+ mEP (-1,-3)   mOD 2 : (1,1)   mEP*mODc (-1,-3)
+     (8,6)         0  (-1,-1)           (-8,-6)
+     (-3,1)        1  (1,-1)            (-3,-1)
+     (1,-3)        3  (-1,1)            (-1,-3)
+
+so that's what we get.
+
+How do we get 'the corners' from an EC? We need to
+multiply by (3,3) or something, right, to map from
+pockets to (notional) site coords?
+
+ mEP (1,-3)  mOD 1 (1,-1)  xy -1   cw (4,0)  acw (0,-4)
+     (3,11)      2 (1,1)       1   cw (0,14) acw (14,0)
+     (1,3)       2 (1,1)       1   cw (0,4)  acw (4,0)
+     (-1,3)      3 (-1,1)     -1   cw (-4,0) acw (0,4)
+     (-3,-1)     0 (-1,-1)     1   cw (0,4)  acw (-4,0)
+
+if xy < 0 cw = (x*s,0), acw = (0,y*s)
+if xy > 0 cw = (0,y*s), acw = (x*s,0)
+
+well that's not utterly horrible is it?
+
+:96]
+
+:95]
+
+:94]
+
+:93]
+:92]
+:91]
+
+:90]
+[97:
+
+Thu Apr 27 11:41:21 2023 OK, so we have rehacked
+far enough to have 4 bits/dim for DirOff instead
+of 3, so we can represent up to a (15,15) gap
+between Di edges.
+
+The main issue I'm looking at now is how the hell
+is the 'end user' of this gap info - e.g., the
+FishFin controller - supposed to make any use of
+it? The FF is sitting near Di center, to advise
+the root, but the EC is relative to the Di edge.
+
+[98:
+
+Thu Apr 27 11:59:49 2023 So, QProbeStg included
+mDest, which is labelled as the "give-up point,
+relative to starting point", and which appears to
+indicate - at least in FishBodProbe returns -
+which pocket the probe was in when it decided to
+return.
+
+In the ProbeCD case, that means we could, in
+principle anyway, map from mProbedEdgeCoord and
+mDest to some default notion of center-center
+intercellular distance. With all the usuals
+caveats - Assuming a fully relaxed grid and that
+nothing's changed and etc etc.
+
+Is there a more compact, re-relativized, form that
+would express the most-plausibly useful
+information in some fashion? Want to know
+
+ - is there a ngb in PocketDir pd
+ - size of pd ngb
+ - pos of pd as frac of our pd edge
+ - gap from our pd edge to ngb opp(pd) edge
+
+That's assuming we want to evaluate our options at
+the center.
+
+If we took a 'subsidiarity' approach - which we're
+supposed to hey right? - we might want to know:
+
+ - which way(s) would PocketDir pd like us to move
+ - and how urgently
+
+with options like
+ - don't care (no ngb in pd)
+ - dx and dy ?
+
+examples
+
+ (x)     don't care
+ (0,0)   perfect where we are
+ (-3,0)  really want W
+ (1,-2)  would like N twice as much as E
+
+hmm. maybe do fully unpacked?
+
+ [0,0,0,0]  perfect where we are NSEW
+ [1,1,1,1]  happy moving any direction
+ [1,1,1,0]  would like anything but W
+ [0,3,2,0]  really want S or else E
+
+4x2b == 8b signal?
+
+and if we wanted to change fin position we'd have
+to broadcast that
+
+..hmm what about not polling but just sending
+signals bottom up when we have something to say?
+
+..could signals merge in the fabric? That could be
+cool, and really help avoid crowding at the root.
+
+Maybe (4x2b)x2 for likes and dislikes?
+ +[0,0,0,0] -[0,0,0,0]  nothing's good or bad to me
+ +[1,1,1,1] -[0,0,0,0]  NSEW is good, nothing's bad
+ +[0,0,0,0] -[1,1,1,1]  moving is bad
+ +[1,0,0,0] -[0,1,0,0]  N is good, S is bad, EW whatever
+ +[1,0,0,0] -[1,1,0,0]  N is good and bad, S is bad
+ +[3,0,0,0] -[0,2,2,2]  N is really good, SEW is very bad
+
+or just Int(2) x 4 ?
+ -2 : Unset
+ -1 : bad
+  0 : don't care
+  1 : good
+
+but then how do we merge? We're thinking
+presenting conflicting signals could be useful?
+
+or Bool [2] x 4 for good and bad? and we merge
+signals by OR-ing up?
+
+ [00,00,00,00]  nothing's good or bad to me
+ [10,10,10,10]  NSEW is good, nothing's bad
+ [01,01,01,01]  moving is bad
+ [10,01,00,00]  N is good, S is bad, EW whatever
+ [11,01,00,00]  N is good and bad, S is bad
+
+ [10,01,01,01]x  N is {really} good, SEW is {very} bad
+
+so no emphasis there which is sad. The more
+continuous analog would be Unsigned(2) x 8 and
+merge by maxing?
+
+ [00,00,00,00]  nothing's good or bad to me
+ [10,10,10,10]  NSEW is good, nothing's bad
+ [01,01,01,01]  moving is bad
+ [10,01,00,00]  N is good, S is bad, EW whatever
+ [11,01,00,00]  N is good and bad, S is bad
+ [30,02,02,02]  N is really good, SEW is very bad
+
+Kinda liking that. Liking the merging-in-fabric,
+mainly; that feels stigmergically right. 16b but
+it would be replacing a 20b EC in probes..
+
+[99:
+
+Thu Apr 27 13:33:59 2023 So the idea would be MB's
+would emit these things on a timer or whenever
+things changed or whenever they could or whatever,
+and they'd climb to the root, without tracking
+their own position or origin or anything. And
+whenever they saw others of themselves they
+merge.
+
+And the controller holds one of these things? In
+fact perhaps the things could autonomously merge
+into the controller?
+
+And the controller would consult its thing during
+adviseRoot, and would reset its thing after it
+used it, or on a timer for backup.
+
+"And that's all there is to it" ?
+
+[100:
+
+Thu Apr 27 13:43:34 2023 And how, exactly, does MB
+convert mInboundEC into one of these things? Or
+does Eg do it (or both)? MB and EC would have to
+look at each other no matter what, since EC
+fixes the current Di and MB fixes the ngb Di.
+
+Suppose we have Eg do it. What's its bit budget
+now? [101:
+
+Thu Apr 27 14:00:36 2023 Eg 16 unused, vs 34
+unused for MB. But MB is spawned by Eg, so it
+would need to be configured by Eg, so Eg would
+kind of need to know whatever MB needs anyway.
+
+So let's say Eg.
+
+//// EMIT STANCE
+Bool EdgeHG.emitStance(EdgeHGState & ehs) {
+ if (ehs.mStatus != cSTATUS_OK) return false;
+
+ EdgeCoord usec;
+ if (!providesOutboundEdgeCoordFor(mOpenDir, usec)) return false;
+ if (!usec.isValid()) return false;
+
+ /// FIND POCKET EMPTY
+ // check interior pocket for occupants - how?
+ SN emptysn = ehs.??;
+
+ /// FIND MB
+ EventWindow ew;
+ MinPick mbpick;
+  if (!ew.isAccessible(sn)) continue;
+  Atom & a = ew[sn];
+  if (a is Empty)
+    emppick.update(sn);
+  else if (a as MBase) {
+   if (a.mInboundEC.isValid())
+    mbpick.update(sn);
+  }
+ }
+ if (!mbpick.hasPick()) return false;
+
+ /// INIT STANCE
+ MBase & mb = (MBase&) ew[mpick.getIdx()];
+ Stance stance;
+ if (!stance.init(usec, mb.mInboundEC)) return false;
+
+ /// DEPLOY STANCE
+ ew[emptysn] = stance.atomof;
+ return true;
+}
+
+:101]
+
+:100]
+
+:99]
+:98]
+
+:97]
+[102:
+
+Thu Apr 27 17:05:18 2023 Break for drinks. Current
+status: Need to test FIND MB in EdgeHG.emitStance(..),
+then implement DiamondStance.init(EC,EC)..
+[103:
+
+Fri Apr 28 00:34:35 2023 Okay, FIND MB is
+plausible; DiamondStance.init(..) is a stub.
+
+:103]
+
+:102]
+[104:
+
+Fri Apr 28 02:05:15 2023 OK so we've framed out
+DiamondStance a bit and we need dunhdunhdunn an
+algorithm.
+
+We could infer a C2D Di center from any EC, yes?
+(1) C2D baseCtr = ec.mEdgePos * (3,3) // (-3,-3)?
+(2) C2D offset = pocketDir2C2D(inferPD(ec)) * mHopsToEdge
+return baseCtr + offset; // or -, etc
+
+returns position of center of EC diamond relative
+to EC source.
+
+[105:
+
+Fri Apr 28 08:34:59 2023 OK building a simplified
+inferCenterAndSize after the first attempt just
+explained my ignorance to me..
+
+:105]
+
+:104]
+[106:
+
+Fri Apr 28 09:07:43 2023 OK,
+DiamondStance.chooseStance(..)'s use of
+inferCenterAndSize(..) is looking pretty good,
+except it either needs to be told the offset
+between ourec and themec, or one of them needs to
+be modified before the call, or one of the results
+needs to be modified after the call.
+
+:106]
+[107:
+
+Fri Apr 28 11:29:56 2023 Well we're down to
+
+    mD&&pR("XXX WRITE MORE ME");
+
+in DiamondStance -
+
+    Bool chooseStance(EdgeCoord ourec, EdgeCoord themec, C2D themc) {
+
+and we have plausible values for
+
+    C2D ctrus, ctrthem;
+    Unsigned sizus, sizthem;
+
+and how are we going to turn them into 'good' and
+'bad' opinions on moving NSEW?
+
+Could we have an 'ideal position' specification?
+Specified how? In terms of gap? In terms of %ages
+of sizes?
+
+Could we let each side specify a desired position
+for the other side, and like add the two resulting
+errors?
+
+Or just each 'us' specifies a desired position for
+the 'other' and that determines the stance on our
+side. That seems like the obvious way to get our
+desired 'cocktail party asymmetry' into things.
+
+So for example:
+
+  FishFin (on attachment edge) wants its 50% point
+  to align with an other's (say) 50% point, with
+  an edge-to-edge gap of say 6 manhattan.
+
+  FishBod (on attachment edge) wants its 50% point
+  to align with an other's 50% point, with an
+  edge-to-edge gap of 6 or 8 (switchable)
+  manhattan. That's the (switchable) propulsive
+  force.
+
+  FishFin or FishBod (on non-attachment edge)
+  wants to be no closer than say 12 manhattan to
+  anything.
+
+So how do we compute any of those?
+
+Given:
+
+    C2D ctrus, ctrthem;
+    Unsigned sizus, sizthem;
+
+    PocketDir uspd = ..; // edge opendir
+    C2D uspdc = pocketDir2C2D(uspd);
+
+    PocketDir thempd = ..; // edge opendir
+    C2D thempdc = pocketDir2C2D(thempd);
+
+FF 50% attachment point
+(1) Bool isAttachmentEdge(PocketDir pd)
+(2) C2D ffpt50 = ctrus+pdc*(sizus*3u)-1 //or the like
+
+Ngb's 50% point
+(3) C2D ngb50 = ctrthem+pdc*(sizus*3u)-1 //or the like
+
+Error
+(4) C2D gap = uspdc*3; // (3,3) -> 6 manhattan
+(5) C2D ourperf = ffpt50+gap
+(6) C2D ngberr = ffpt50-ngb50 // <0 -> ngb too S or E
+[108:
+
+Fri Apr 28 12:13:43 2023 Something like that?
+[109:
+
+Fri Apr 28 12:51:02 2023 So, where do we inject
+the customization for FF vs FB?
+
+ - Deploy subclasses of Eg? FinE vs BodE? But then
+   all HG have to know which/what to create.
+
+ - Some kind of state bit configuration in Eg? Eg
+   has 16 bits ATM, could have like a 4 or 5b
+   selector if we wanted. But still, HG would have
+   to know what selector to deploy.
+
+ - Maybe have a flood configuration step, where
+   the controller blasts the edge config to all
+   the edges?
+
+   = Or maybe only selected Eg get this info? So
+     different edges of the same Di could have
+     different configs? Is this the route to our
+     'gap junctions'?
+
+[110:
+
+Fri Apr 28 13:14:17 2023 Well I think we should
+lean into junctions. So maybe the 'selector' would
+be a 'junction type', which indirectly determines
+desired gaps, rather than directly some gap
+thing.
+
+Where, in particular, the junction type might
+specify how many Eg ngbs should be part of the
+junction. So converting a single Eg to the
+appropriate junction type should be enough to seed
+the whole junction.
+
+[111:
+
+Fri Apr 28 16:15:46 2023 OK so I'm thinking let's
+do a minimal the junction thing. We'll have the
+controller send out 'junction deploys' every so
+often, instead of polling, and they'll route to
+edge and confirm or change the Eg there to the
+selected type.
+
+We'll have separate junction types for fishfin ->
+fishbod and fishbod -> fishfin.
+
+The junction will spread Eg to Eg along the edge
+according to its type
+
+ FF2FB: 100% of edge
+ FB2FF: central 50% of edge
+
+..maybe higher junction numbers will trump lower
+ones if there's a conflict along an edge?
+subsumption architecture? rather than some kind of
+programmable priority or whatever, maybe..
+
+[112:
+
+Fri Apr 28 16:32:09 2023 So then, one of the
+things the Junction API does is implement
+QDiamondStance, so FF2FB and FB2FF specify their
+stance desires that way.
+
+And default Egs (with junction #0) will just not
+participate in this whole game (probably, or could
+do some default signalling.)
+[113:
+
+Fri Apr 28 16:52:41 2023 And that would finally be
+enough to emit a foggen stance and start dealing
+with all that.
+
+And now it's Friday-before-T2sday evening. Yikes.
+
+:113]
+
+
+:112]
+:111]
+
+:110]
+
+:109]
+
+:108]
+:107]
+[114:
+
+Fri Apr 28 23:38:30 2023 So, if a Junction is
+going to be distinguished by a JIndex or
+something, and nothing else, it's like the
+Intender/Intention APIs, and the Junction is the
+Intention. [115:
+
+Sat Apr 29 00:22:41 2023 So then what's the analog
+to Intender? Junction/Junctor? :) Build a Junctor
+to express the semantics of a Junction?[116:
+
+Sat Apr 29 00:25:37 2023 Aand of course 'junctor'
+already exists - apparently it's an olde tyme
+analog phone switch circuit!
+
+"Definition: junctor. In a telephone junction box,
+a small section of twisted wire pair that is used
+to attach incoming lines with outgoing lines."
+
+Fuck it let's use it! Incoming and outgoing
+inter-Diamond commmunications! Let's say
+
+   Intender  : Junctor
+:: Intention : Junction
+
+:116]
+
+:115]
+
+:114]
+[117:
+
+Sat Apr 29 01:19:15 2023 So umm one slight issue
+here: Adjacent Eg can't see each other, in
+general, so how will a junction "spread Eg to Eg
+along the edge"?
+
+"The obvious" thing would be to have the 'base' of
+the junction be not on the edge but in the Hg
+interior, shallower or deeper depending on how
+small or big the junction is supposed to be, and
+have all the downstream Hg pick up that junction
+type until reaching whatever edge section is
+bounded by the right triangle from the junction
+base.
+
+Or,,, we could try passing Junctor info through
+the MBase? MB has 34 bits available; just saying.
+
+MBase could just pick up some kind of Junctor code
+representing a Junction classid from its nearest
+Eg ngb, and it would then be visible to ngbing
+Egs.
+
+The 'junction triangle' seems much righter -
+although it eats a lot of area we might want in
+the future - but let's go with the MB-lateral for
+now.
+
+:117]
+[118:
+
+Sat Apr 29 09:40:33 2023 OK so the yeesh new pile
+of classes we just made are supposed to relate to
+each other and old stuff like:
+
+ - an EdgeHG is a Junctor and a
+   JunctionIndexProviderStg
+
+ - an MBase is a JunctionIndexProviderStg that
+   copies the getJunctionIndex() of its nearest
+   EdgeHG.
+
+ - a Junction is a transient that can configure a
+   DiamondStance.
+
+ - a DiamondStance is an element that implements
+   QDiamondStance
+
+:118]
+[119:
+
+Sat Apr 29 14:07:50 2023 OK well we barfed up an
+absurd collection of classes in Junction.ulam but
+we're building again.. And reaching into
+Junctor.activateJunction(..) and getting to the
+"WRITE ME" portion of that show.. Let's watch it
+once with debugging and hope that reminds/inspires
+us where we are.
+
+:119]
+[120:
+
+Sat Apr 29 15:17:07 2023 OK now we're in
+Junction.configureStance(..) and trying to figure
+out what's next. Maybe we want Junction subclasses
+to override configureStance
+
+:120]
+[121:
+
+Sat Apr 29 16:11:23 2023 OK we've gotten as far as
+building and dishing to a Junction to configure a
+DiamondStance, but the Junction is always a
+NullJunction because all our Eg's have
+mJunctionIndex == 0u because there's nobody to set
+them to anything else..
+
+:121]
+[122:
+
+Sat Apr 29 20:15:07 2023 OK so one of the things a
+Junction has to tell us is whether any given Eg is
+supposed to be in the junction or not. How is that
+going to work?
+
+  virtual Bool isInJunction(EdgeCoord ec) {
+    if (!ec.isValid()) return false;
+    Unsigned size = ec.diamondSize();
+
+  }
+
+[123:
+
+Sat Apr 29 20:30:58 2023 But something like that
+implies the junction size depends only on the Di
+on this side. What about having a junction match
+the ngb edge?
+
+Well and wait: If the Junction's been configured,
+it will know both ECs. But this Junction's
+absolutely not initted in this context, right? We
+just wicked it up based on an MBase JunctionIndex.
+
+[124:
+
+Sat Apr 29 20:33:49 2023 Buuuhuut we are in an
+EdgeHG method (updateJunction), and we are handed
+an EdgeHGState & arg, which I bet is configured.
+
+So maybe
+
+  virtual Bool isInJunction(EdgeHGState & ehs) {
+
+[125:
+
+Sat Apr 29 20:54:01 2023 ..but EdgeHGState doesn't
+have junction config info. *Junction* has junction
+config info[126:
+
+Sat Apr 29 21:00:24 2023 OK I'm thinking
+'actJunction' is the wrong place to be doing
+this. Or: emitStance is a wrong name for the thing
+that's building and configuring our current
+junction.
+
+:126]
+
+:125]
+:124]
+
+:123]
+:122]
+[127:
+
+Sun Apr 30 06:18:16 2023 OK and we took this long
+to get to the oso obvious problem with the
+"MB-assisted lateral junction grow" - it pretty
+much all gets wiped out every time the Di grows.
+
+Which goes pretty much directly back to the "the
+Di has shape authority" design decision of way
+back. The membrane - such as it is - just isn't
+very real or stable, so it's poor at carrying
+diversified state.
+
+Whereas if we did the "more complicated" 'junction
+triangle', the anchor for the junction is embedded
+in the matrix and flows out to the edge, with the
+result that Di growth will lead, at most, to an
+increase in the size of the junction, unless and
+until the junction anchor moves.
+
+[128:
+
+Sun Apr 30 06:31:51 2023 Aside from the complete
+lack of time I have to get any of this working in
+the next two days, I'm once again worried about
+trying to pack everything into the grid itself,
+rather than in the pockets. One trick pony climbs
+tree to get to Alpha Centauri, runs out of bits.
+
+:128]
+
+:127]
+[129:
+
+Sun Apr 30 09:59:22 2023 So okay we're going to
+try for "interior junction anchors" with
+stabilization.
+
+Let's say we'll have 1b for 'anchor' and 3b for
+'junction index', and the idea is that junction
+indices will flow downhill only from anchors.
+
+The initial intention is that anchors will be
+deployed in the quadrants (even zones) and not the
+axials (odd zones) but I guess we'll flow downhill
+whichever.
+
+[130:
+
+Sun Apr 30 12:09:42 2023 Hmm, here's a bit of an
+issue with the "flow downhill from anchor" scheme:
+If the anchor is not actually the Di root, which
+it (usually) won't be, the typical field HG has
+two possible 'minUpHops' ngb, but of which only
+one might have a junction index.
+
+Like this:
+           HG3  HG2  HG1  RG0
+                ^
+                |
+           HG4  xx3->AN2  HG1
+                ^
+                |
+           HG5  yy4->AN3  HG2
+
+
+if xx picks AN2 as minUp, it sees the junction
+index, but if it picks HG2, it doesn't.. And then
+yy could pick xx and the miss can spread.
+
+What is the fix for this? Lean on the ugh HCPoint
+coords? Prefer to stay in zone? Could that do
+it?[131:
+
+Sun Apr 30 12:26:09 2023 No that's mDSZone; we
+don't have a root zone. (But yes we could infer it
+from mHCPoint..)
+
+[132:
+
+Sun Apr 30 12:35:22 2023 So how could we break
+ties to favor the behavior we want? Even can we?
+
+If it was like this:
+
+           HG3  HG2  HG1  RG0
+
+
+           HG4  NA3  HG2  HG1
+                ^
+                |
+           HG5  xx4->AN3  HG2
+                ^
+                |
+           HG6  yy5->AN4  HG3
+
+
+then NA3 and AN3 are completely symmetric wrt the
+root, right?
+
+I guess we should scan for ourselves in
+stabilizeJunctionIndex, rather than relying on
+hc3.minuphops..
+
+or we could have HC3State break minuphops ties
+towards JIP anchors.. if they're both anchors then
+we want them to fight. Actually no I guess it
+would be break ties toward largest JI value,
+whether it's an anchor or not.[133:
+
+Sun Apr 30 13:39:03 2023 OK, HC3State and
+HC3NgbState are now breaking minuphops ties based
+on maxjunctionindex, and nothing seems to be
+immediately broken, and we now have the
+junctionindex anchor working as we imagined it.
+[134:
+
+Sun Apr 30 16:53:30 2023
+
+ - Junctions: Missing pieces
+[140: DONE  :140]   (1) configure diamond stance
+[143: DONE  :143]   (2) release diamond stance
+[149: DONE  :149]   (3) reduce diamond stances
+   (4) controllers act on diamond stances
+   (5) controllers deploy junction anchors
+   (6) the demo
+
+[135:
+
+Sun Apr 30 17:08:57 2023 (1) Configure diamond stance
+
+pretend we know target % and gap
+come up with C2D steps to perfect
+then for each dir WNSE and each dim XY
+  C2D gap = ..; // vect to perfect from here
+  C2D adc = axialDir2C2D(dir);
+  Int d = adc.dot(gap) // select dim and maybe negate
+ d > 5 g[dir]=3
+ d > 2 g[dir]=2
+ d > 0 g[dir]=1
+ d < -5 b[dir]=3
+ d < -2 b[dir]=2
+ d < 0  b[dir]=1
+
+[136:
+
+Sun Apr 30 17:55:53 2023 Well I'm far from
+convinced that will work, but it looks
+implementable. (2) seems pretty obvious, just have
+to figure out where all this is taking place. (3)
+is okay as long as we can remember how to move and
+scan the pockets. For (4), we're thinking of
+making controllers act like a stance merge sink?
+So everything flows into it and it flushes them
+whenever it gets called to adviseRoot? Or it
+doesn't flush them and just let's the merge
+protocol do that however it does?
+
+And how will that work?
+
+IF THERE'S ANOTHER STANCE UPSTREAM OF US:
+ if oneIn(4) replace
+ else maxIn
+
+ if oddsOf(2u,distance) maxIn
+ else replace // we are newer
+
+[137:
+
+Sun Apr 30 20:30:44 2023
+
+(4) controllers act on diamond stances
+
+We assume stances merge all the way into
+controllers, so rootAdvise just goes as before,
+but using the internal current stance.
+
+(5) controllers deploy junction anchors
+
+as part of deploying the fins, I guess.
+
+then 'for purposes of the demo' they don't deploy
+anything else - no polling, nothing.
+[138:
+
+Mon May  1 06:09:11 2023 Well it appears maybe we
+have something like a plausible DiamondStance -
+
+    20230501060734-42288: 254AEPS [ECC7F8A7]MSG: print: "GBJCFGSTN13STANCE"
+    20230501060734-42289: 254AEPS [ECC7F8A7]MSG: (
+     C2D(
+     x=-3/0xFFFD,
+     y=-9/0xFFF7
+    )
+
+the current 'final error': we want to go west but
+mostly north.
+
+    20230501060734-42290: 254AEPS [ECC7F8A7]MSG: (Di) DiamondStance
+     :3938FC461081F80000000000
+    (
+     QStance(
+     mCares=[0]=2/0x2,[1]=0,[2]=3/0x3,[3]=0,[4]=0,[5]=2/0x2,[6]=0,[7]=1,
+>>           W+        W-    N+        N-    S+    S-        E+    E-
+     )PocketChain(
+     mDSType=0,
+     mArrived=false,
+     )QDebugUtils(
+     mD=false,
+     )Segment(
+     mPocketPtrs=[0]=7/0x7,[1]=7/0x7
+    )
+
+[139:
+
+Mon May  1 06:12:26 2023 So we can claim piece (1)
+of :134:?[141:
+
+Mon May  1 06:12:47 2023 OK.
+[142:
+
+Mon May  1 10:41:12 2023 OK so, after a nap, we
+have deployed a plausible looking DiamondStance.
+[144:
+
+Mon May  1 10:58:36 2023 So okay; how can we get
+these DiSts to reduce towards the root with as few
+code builds as possible.. (Here barely 25 hours to
+air..)
+
+QProbes climb the gradient, right?[145:
+
+Mon May  1 11:00:33 2023 Well, they head for a
+specific dest. Who does a more generic
+uphops-climb? FinKill?[146:
+
+Mon May  1 11:01:37 2023 FinKill : Injector.. What
+does Injector do?[147:
+
+Mon May  1 11:09:23 2023 Well, it does walkies and
+then climbs hops to the root, at which point it
+calls the Injector API method Bool
+foundRootAt(..). Which, by default, wipes out
+itself and the root.
+
+But it has nothing letting us get our hands on
+randos encountered along the way, for purposes of
+stance reductions.. So sigh let's steal
+doRootHunter and go go go.
+[148:
+
+Mon May  1 13:02:38 2023 OK so it looks like we
+have DiSts mergeing their way up to the root. And
+since they do merge, the crowding doesn't seem too
+bad, even in the SE where the loader's trying to
+deploy the ancestor.[150:
+
+Mon May  1 13:06:07 2023 Hmm, I see an Eg emitting
+DiSt even though there's no other Di in range..
+
+..It's because the MB next to it is still claiming
+an mInboundEc, so the Eg is going on that.[151:
+
+Mon May  1 13:10:07 2023 So, Antenna sets
+mb.mInboundEC if the Aa.mReceiveEC is valid. Which
+in this case it appears not to be.[152:
+
+Mon May  1 13:11:41 2023 So who invalidates
+mb.mInboundEC? [153:
+
+Mon May  1 13:12:26 2023 I see this in the Aa
+code:
+
+    } /* else upecp.mReceiveEC.invalidate(); // Do we want to destroy signal super fast? */
+
+but that's not directly the mb.mInboundEC
+[154:
+
+Mon May  1 13:13:49 2023 I can't see mInboundEC
+getting reset anywhere! Does it just live until
+the next grow? Let's try a quick stateless decay
+in MB.behave..[155:
+
+Mon May  1 13:48:39 2023 OK, MB inbound info is
+aging out and now we see the DiSt flux dying away
+after intercellular contact is fully lost.
+
+So I think now we actually are up to
+
+   (4) controllers act on diamond stances
+
+so that's about FishBod and FishFin.
+[156:
+
+Mon May  1 13:56:53 2023 OK just got far enough to
+see fins deployed 'naturally' and they are
+crapping out because EdgeCoord.needRotate(..) has
+been deimplemented.
+
+So we're not supposed to be using that any more,
+right? Where's it get called?[157:
+
+Mon May  1 14:09:20 2023 It's called in
+FishFin.adviseRoot(..) which is kind of pretty
+much our next stop anyway. So:
+
+(4a) Get FishFin to sink DiSts
+(4b) Get FishFin to age out its DiSt
+(4c) Get FishFin to look at its DiSt during
+     adviseRoot.
+
+[158:
+
+Mon May  1 14:11:23 2023 OK FF currently has only
+8b left. And a QStance is 16b. Will FF still need
+that 20b mParentEC? What's that doing?[159:
+
+Mon May  1 14:13:35 2023 It's where the probe
+returns store their info, and it's used only by
+the needRotate stuff. So we'll ditch mParentEC and
+inherit from QStance? How does DiamondStance
+decide who to merge with?[160:
+
+Mon May  1 14:16:33 2023 It looks for (element)
+DiamondStances specifically.
+
+[161:
+
+Mon May  1 15:15:13 2023 OK so we need a way to
+trigger fin formation and such without waiting for
+ancestor code to get there.[162:
+
+Mon May  1 15:26:28 2023 But for the moment, can
+we just slug something based on QDiamondStance
+into the place we just tore out the needRotate,
+and see what happens?[163:
+
+Mon May  1 15:38:36 2023 OK we're making
+
+ Bool FishFin.adviseFromStance()
+
+and what are we going to do?
+
+Scan through the dirs and pick among
+non-bad, weighted by their good? I guess try
+that. [164:
+
+Mon May  1 16:00:23 2023 OK now we're waiting for
+the controllers to deploy via the ancestor again.
+
+:164]
+
+:163]
+
+:162]
+
+:161]
+
+:160]
+
+:159]
+
+:158]
+
+:157]
+
+:156]
+:155]
+
+  :154]
+
+:153]
+
+:152]
+
+:151]
+
+:150]
+
+:148]
+
+:147]
+
+:146]
+
+:145]
+
+:144]
+:142]
+
+:141]
+
+:139]
+:138]
+:137]
+:136]
+:135]
+:134]
+
+:133]
+
+:132]
+
+:131]
+
+:130]
+
+:129]
+[165:
+
+Mon May  1 16:08:30 2023 Ah just caught a thing
+I'd been wondering about for a while. The ancestor
+code that runs in the mother after SendLoop is:
+
+     cINS_WAIT_FOR_EMPTYREG,      // MO: WT WAIT FOR REPLY
+     cINS_PAYLOAD11,              // MO: DELIVER PAYLOAD 2
+     cINS_DESTROY_ENDPOINT,       // MO: KL ERASE MOTHER
+
+and the payload11 instruction is the one that
+deploys the fishbod controller in DS red.  In
+turn, the FB starts out by migrating to its final
+position SW of RG.
+
+But, it turns out it's possible for the ancestor
+code to execute cINS_DESTROY_ENDPOINT before the
+FB clears the DS pocket, and it gets killed!
+
+[166:
+
+Mon May  1 16:15:31 2023 So for now let's not kill
+Red in cINS_DESTROY_ENDPOINT..
+
+:166]
+
+:165]
+[167:
+
+Mon May  1 16:37:51 2023 Dammit I've made an
+infinite loop somewhere that crops up once the
+FishFin controller gets cranked up.[168:
+
+Mon May  1 16:39:39 2023 I've got it. Was doing
+this:
+
+    for (AxialDir ad = cW; ad <= cE; ++ad) {
+ ..
+
+which is a classic trap. It has to be something
+like
+
+    for (Unsigned i = cW; i <= cE; ++i) {
+      AxialDir ad = (AxialDir) i;
+ ..
+
+instead, because an AxialDir (an Unsigned(2)) can
+never be greater than cE (which == 3u).
+
+Doh. Building again.
+
+:168]
+
+:167]
+[169:
+
+Sat May  6 02:51:17 2023 Starting into Ancestor17
+for post-T2sup3139.
+
+TODO
+ - Summarize where we are
+ - Summarize what's working
+ - Summarize what's obviously broken
+   = If fin gets too close to bod it
+     loses the fact its too close and keeps going
+   = Fins don't set up junction anchors
+   = Still get HC3 deadlocks in collision
+     situations - what about using HCPoint coords
+     to detect collisions and have say the smaller
+     lose?
+[293: DONE  :293]   = Di tips are pretty unprotected.
+[291: DONE:291]     - Could we have double Aa's on tip Eg?
+[292: kind of, given DEWLine
+DONE:292]     - How about orthogonal Aa signals contact?
+       Just that much could help a lot.
+ - Consider workflow changes to reduce pain
+   = Separable logging streams?
+   = Incremental compilation?
+
+:169]
+[170:
+
+Sat May  6 10:04:06 2023 Could Aa have a 'signal
+contact' Bool for such occasions? That would flow
+toward the cell only, and cause a contact warning
+in the mOpenDir when it arrives at the Eg?[173:
+
+Sat May  6 12:24:07 2023 We're getting close to
+having that working and we're already wishing it
+was more than a Bool, depending on distance.. Aa
+has plenty of bits for a single DefCon instead of
+a Bool..
+
+:173]
+[171:
+
+Sat May  6 10:12:13 2023 Could we maybe in fact
+just do this right now? Aa's got 22b to burn.
+[172:
+
+Sat May  6 12:18:17 2023 Well a stupid stupid bug
+cost an extra hour at least, there.
+
+Pop Quiz! What's wrong with code like this:
+
+    for (SN sn = 1u; sn <= 41u; ++sn) {
+      if (!ew.isAccessible(sn)) continue;
+  ..stuff..
+
+Answer: Well, nothing - the code works fine.
+
+But if you change it to code like this:
+
+    Bool anycontacts = false;
+    for (SN sn = 1u; sn <= 41u; ++sn) {
+      if (!anycontacts && isContact(sn))
+        anycontacts = true;
+
+      if (!ew.isAccessible(sn)) continue;
+  ..stuff..
+
+then you'll mysteriously find that anycontacts is
+always true no matter WTFF you do.
+
+Because the code wants to be this:
+
+    Bool anycontacts = false;
+    for (SN sn = 1u; sn < 41u; ++sn) {
+      if (!anycontacts && isContact(sn))
+        anycontacts = true;
+
+      if (!ew.isAccessible(sn)) continue;
+  ..stuff..
+
+Doh.
+
+:172]
+:171]
+:170]
+[174:
+
+Sun May  7 12:25:16 2023 OK, so I've been redoing
+stuff so that two Aa, rather than zero, sprout
+from corner Egs. It's starting to work, but we're
+having troubles that the corner Eg are now
+signaling on all three AxialDirs surrounding the
+corner.. but we think they should only signal on
+the central AD of that corner.
+
+Let's see how that's doing. Do we have both Aa
+push and Eg pull to deal with?[175:
+
+Sun May  7 12:38:25 2023 We have
+Aa.getAntennaWarnings(), which does both ADs.
+
+That's (now) used by
+QHC.stabilizeContactWarnings(), which currently
+doesn't have any special case for corners..
+
+:175]
+
+:174]
+[176:
+
+Mon May  8 01:10:14 2023 So futzed around fixing
+small stuff as I saw them; stuff is better here
+and there.
+
+ - mReceiveEC gets invalidated quicker when it
+   seems it should
+
+ - The two-Aa's-from-corners seems to be working,
+   and only signaling on the center AD more or
+   less appropriately.
+
+ - Pushed min settled hops up to 5 in another
+   likely futile effort to banish HG deadlocks.
+[177:
+
+Mon May  8 02:07:24 2023 Also
+
+ - QHC.stabilizeContactWarnings now checks for Aa
+   and Membrane going our way before taking
+   contact detections. That may help reduce the
+   get-too-close-then-crash-together problems
+   we've been seeing.
+
+:177]
+:176]
+[178:
+
+Mon May  8 08:10:36 2023 Well so I started a
+largish ({{6G4}}) run a few hours ago, with four
+or five feesh (still set up manually wrt
+junctions), and at this point only two of them are
+still mobile. Fin crashes, despite all efforts,
+remain the biggest problem.
+
+I'm thinking I should spend a little time making a
+higher-level reporting system specifically to log
+motion decisions, so that we could get more
+visibility into that process without having
+debugging turned on (put 'Log Motion Decisions'
+under a parameter instead.)
+
+We'd maybe extend DiamondController.adviseRoot(..)
+to provide a ByteStreamWriter&, and have advisers
+add whatever little codes they wanted?
+
+:178]
+[179:
+
+Mon May  8 23:59:22 2023 OK so we're looking at
+our new "motion decision logging" output and
+seeing a variety of interesting things. Currently
+looking at this:
+
+    20230508235839-3543: 1703AEPS [65397647]MSG: @(70,71) of [1,1]:
+    20230508235839-3544: 1703AEPS [65397647]MSG: FBhdZ7WT,[FBafs:(w3-2 n2-2 s3-1 e3-2)->3]/aR.
+
+which is from the (only) FishBod controller (FB),
+which is heading west (hdZ7WT), and which has just
+chosen to go south (->3) - advised by its stance
+(FBafs), which has -2's for WNE but only -1 for S.
+
+But in this case the FB is also quite close to its
+SE fish fin, so much so that going S is going to
+leave less than 3 hops-to-edge between the cell
+walls. This is just the kind of thing I've been
+trying to get it to avoid, here.
+
+The superficially-obvious change here, it would
+seem, would be don't move at all if all options
+are negative? -1 is supposed to be "only a hint"
+though, not a veto..
+
+[182:
+
+Tue May  9 00:31:47 2023 Well, let's proceed and
+see how things unfold from here.[183:
+
+Tue May  9 00:33:46 2023 Ugh. The FB move S
+propagation hasn't come close to the FB SE edge,
+but the FF off that edge has already gone N:
+
+    20230509003258-3547: 1757AEPS [65397647]MSG: @(100,101) of [1,1]:
+    20230509003258-3548: 1757AEPS [65397647]MSG: [FFafs:(w1-1 n2-0 s1-1 e2-0)->2]/aR.
+
+which is going to make things a lot worse..
+[184:
+
+Tue May  9 00:36:36 2023 Aw no and the FB chooses
+S again:
+
+    20230509003525-3551: 1776AEPS [65397647]MSG: @(70,72) of [1,1]:
+    20230509003525-3552: 1776AEPS [65397647]MSG: FBhdZ7WT,[FBafs:(w3-2 n2-2 s3-1 e3-2)->3]/aR.
+
+?? WE ARE FUCKED.
+
+So, did we reset the stance in the FB after the
+previous afs? Let's double check that.[185:
+
+Tue May  9 00:38:29 2023 It sure looks like we
+did:
+
+        dcr.printf("[FBafs:");
+        reportDiamondStance(dcr);
+        dcr.printf("->%d]",movesn);
+
+        resetStance(); // only use once?
+
+
+:185]
+
+:184]
+:183]
+
+:182]
+[180:
+
+Tue May  9 00:08:22 2023 I also note that the
+DiamondStances inbound to the root from the SE
+junction make a variety of claims. From the oldest
+(near the root) to the newest (near the edge), I
+see:
+
+2333/3132  (I think this is a multiple junction merged result)
+3020/0102 aka (w3-0 n2-0 s0-1 e0-2) aka "W or N please"
+1000/0000
+1010/0000
+1000/0000
+1000/0000
+1000/0000
+2010/0001
+
+[181:
+
+Tue May  9 00:25:59 2023 Which goes to the general
+issue of latency and loop stability. It all makes
+me think that maybe, for multicellularity, we
+might ought to abandon pipelined movement and have
+all moves, at least in effect, go stable to the
+edge before advancing.
+
+(I just yesterday (?) pushed cMIN_DOWN_SETTLED
+from 4u to 5u. Maybe should go farther or flip all
+the cards..)
+
+[186:
+
+Tue May  9 00:42:15 2023 But first off, all this
+seems to really advocated for
+
+ IF YOU HAVE NOTHING GOOD TO DO,
+ NOTHING IS WHAT YOU SHOULD DO
+
+which, for example, will allow more time for FB
+move propagation to settle. Let's see if we can
+change just that much and see what happens.[187:
+
+Tue May  9 00:46:23 2023 Well, changing
+
+      if (mCares[badidx] > 1u || mCares[badidx] > mCares[goodidx])
+        continue; // call it a veto
+to
+      if (mCares[badidx] > 0u) continue; // call it a veto
+
+we shall see.[189: Tue May  9 00:53:10 2023
+(Changed in FishFin too.)  :189]
+
+[188:
+
+Tue May  9 00:48:49 2023 (And indeed, for the
+record, we had a cell crash between FB and SE FF,
+despite FF's too-little-too-late attempt to get
+away by heading S:
+
+    20230509004755-3555: 1825AEPS [65397647]MSG: @(100,100) of [1,1]:
+    20230509004755-3556: 1825AEPS [65397647]MSG: [FFafs:(w0-0 n1-1 s2-0 e1-0)->3]/aR.
+
+followed shortly by
+
+    20230509004800-3564: 1847AEPS [65397647]MSG: FAIL in [1,1] site [88,100]: UNFM12 BAD newc
+    20230509004800-3565: 1847AEPS [65397647]MSG: T[1,1]@S[88,100]: behave() failed at /data/ackley/PART4/code/D/T2Demos/demos/Ancestor17/code/.gen/src/../include/Uq_10104Fail10_native.tcc:42: DESCRIBED_FAILURE (site type 0xFFF0)
+    20230509004800-3566: 1847AEPS [65397647]MSG: BACKTRACE  ->  0: MFM::Uq_10104Fail10<MFM::EventConfig<MFM::Site<MFM::P3AtomConfig>, 4> >::Uf_4fail(MFM::UlamContext<MFM::EventConfig<MFM::Site<MFM::P3AtomConfig>, 4> > const&, MFM::UlamRef<MFM::EventConfig<MFM::Site<MFM::P3AtomConfig>, 4> >&, MFM::Ui_Uq_r10109210ByteStream10<MFM::EventConfig<MFM::Site<MFM::P3AtomConfig>, 4> >&) const + 0x184
+ ..
+
+as the HG invariants were broken..
+
+:188]
+
+:187]
+
+:186]
+:181]
+
+:180]
+
+:179]
+[190:
+
+Tue May  9 01:12:28 2023 Going again.
+
+:190]
+[191:
+
+Tue May  9 01:31:30 2023 OK I like this a little:
+
+    20230509013046-3667: 2218AEPS [B1FC7557]MSG: @(64,75) of [2,1]:
+    20230509013046-3668: 2218AEPS [B1FC7557]MSG: FBhdZ5ST,(w2-1 n2-1 s2-1 e2-1)Xdc[2 2 0 2](FB:MAD->sn3[MOVE])/aR.
+
+where it breaks down like:
+
+    fishbod
+    |
+    | heading
+    | south
+    | |      stance shows all bads are non-0
+    | |      |
+    | |      |                    so no afs move
+    | |      |                    |
+    | |      |                    |but defcons say
+    | |      |                    ||
+    | |      |                    ||      no contacts south
+    | |      |                    ||      |
+    | |      |                    ||      |    so FB moves S (sn3)
+    | |      |                    ||      |    |
+    FBhdZ5ST,(w2-1 n2-1 s2-1 e2-1)Xdc[2 2 0 2](FB:MAD->sn3[MOVE])/aR.
+
+
+Although you could argue whether afs should have
+blocked free will in this case.
+
+Maybe block free will if any stance bads are 2 or
+more? If 1s are the worst, allow free will, as in
+this case? We'll see.
+[192:
+
+Tue May  9 01:45:00 2023 Here we have a -2
+
+    20230509014418-3675: 2305AEPS [B1FC7557]MSG: @(64,76) of [2,1]:
+    20230509014418-3676: 2305AEPS [B1FC7557]MSG: FBhdZ5ST,(w2-1 n2-2 s3-1 e2-1)Xdc[2 2 0 2](FB:MAD->sn3[MOVE])/aR.
+
+in the stance. This would become a hold rather
+than a S with that idea. Good? Bad? S doesn't look
+terrible in the current situation.
+
+Problem is that -2 stance is for N, which the dcs
+don't like either, so forcing hold isn't so great
+maybe.. It's all about believing that we can
+violate -1s..
+
+[193:
+
+Tue May  9 01:53:24 2023 FB running away from the
+FFs a bit here:
+
+    20230509015255-3769: 3279AEPS [B1FC7557]MSG: @(65,85) of [2,1]:
+    20230509015255-3770: 3279AEPS [B1FC7557]MSG: FBhdZ5ST,(w2-1 n2-2 s3-1 e2-1)Xdc[2 2 0 2](FB:MAD->sn3[MOVE])/aR.
+
+though we're not critical yet.
+
+Maybe we want afs to consider dcs itself?
+
+[194:
+
+Tue May  9 01:57:14 2023 Something different
+here. S-bound FB heads W:
+
+    20230509015639-3797: 3603AEPS [B1FC7557]MSG: @(65,88) of [2,1]:
+    20230509015639-3798: 3603AEPS [B1FC7557]MSG: FBhdZ5ST,(w2-1 n2-2 s3-1 e2-1)Xdc[1 2 2 2](FB:MAD->sn1[MOVE])/aR.
+
+(and again would have done nothing under the -2
+kill-free-will regime.)
+
+[195:
+
+Tue May  9 02:00:33 2023 Well it heads back E a
+bit later:
+
+    20230509020004-3815: 3836AEPS [B1FC7557]MSG: @(64,89) of [2,1]:
+    20230509020004-3816: 3836AEPS [B1FC7557]MSG: FBhdZ5ST,(w2-1 n2-2 s3-1 e2-1)Xdc[2 2 0 1](FB:MAD->sn4[MOVE])/aR.
+
+[196:
+
+Tue May  9 02:04:13 2023 Here's a weird one:
+
+    20230509020329-3873: 4463AEPS [B1FC7557]MSG: @(65,95) of [2,1]:
+    20230509020329-3874: 4463AEPS [B1FC7557]MSG: FBhdZ5ST,(w2-1 n2-2 s3-1 e2-1)Xdc[2 2 0 1]RGstddc[2 2 0 1]SN3.
+
+For some reason FB:MAD didn't go?
+
+:196]
+
+:195]
+
+:194]
+
+:193]
+
+:192]
+:191]
+[197:
+
+Tue May  9 02:18:57 2023 OK building
+again. Learned quite a bit reasonably quickly from
+our new motion decision logging, yay!
+[198:
+
+Tue May  9 02:34:53 2023 Ugh my change in HCPoint
+updating broke motion.. building again.
+[199:
+
+Tue May  9 03:12:23 2023 Seeing a possible issue:
+If FB or FF finds the stance all negative, it
+doesn't resetStance, so it can metaloop on free
+will or freeze.
+
+Changed to resetStance whether we 'use' it or not;
+building again.
+
+[200:
+
+Tue May  9 03:45:31 2023 That seems to've helped
+significantly. It's looking pretty good so far,
+with the soundbound FB approaching halfway off its
+starting tile. Interested to see what if anything
+changes when the FB root and controller are in the
+ITC slow zone.[201:
+
+Tue May  9 03:52:16 2023 OK, the E-W Di axis is
+dead center in an ITC now.[202:
+
+Tue May  9 03:54:43 2023 Seems like the passage
+went fine.. Now the question is what happens when
+the fins hit the ITC..[203:
+
+Tue May  9 03:58:51 2023 Leading edges of the fins
+into the ITC.. So far so good..[204:
+
+Tue May  9 04:01:09 2023 FFs on axis through the
+ITC.. Still tracking.[205:
+
+Tue May  9 04:03:01 2023 Trailing edges of FB and
+both FF in the ITC now. Still tracking, straight
+and true.. [206:
+
+Tue May  9 04:05:50 2023 I'd say everybody's just
+about clear of the ITC (that I was focusing on;
+there's another one the FB is still straddling)
+and everything is still looking good. Think it's
+about time to try a movie run..[207:
+
+Tue May  9 04:11:50 2023 OK so I put some Wall in
+off the SW edge of the FB to see how it would
+handle it, and the emerging answer seems to be
+"Not very well." In particular, even though the SW
+FB Eg appears to be using JunctionIndex 2, it's
+not generating any stances to reflect the
+now-extremely-close patch of W. So the afs stuff
+doesn't take that into consideration. If the afs
+stuff chooses free will, the dcs will recognize
+it, but there's no essential reason for afs to do
+that.. [208:
+
+Tue May  9 04:16:20 2023 Well, I took out some W
+to give it a chance so we didn't die.. but we're
+still heading into trouble.[209:
+
+Tue May  9 04:19:09 2023 Cleared out the W
+entirely. But we're going to hit EoU pretty
+soon.. [210:
+
+Tue May  9 04:20:07 2023 Maybe we should check dcs
+for emergency situations before going to
+adviseRoot? [211:
+
+Tue May  9 04:24:11 2023 And now the FB has
+smashed its S tip off against the EoU.[212:
+
+Tue May  9 04:25:26 2023 Gonna surgically remove
+the fins and see what happens, I guess.[213:
+
+Tue May  9 04:29:40 2023 Well, I had to do some
+cosmetic Hg surgery as well, but it's managed to
+pull free and heal up its S tip. Could this
+ancient traveller actually get fertile after all
+this time?[214:
+
+Tue May  9 04:32:35 2023 Well it's still
+growing.. Up to mxhp15 now.[215:
+
+Tue May  9 04:41:08 2023 Birth![216:
+
+Tue May  9 05:17:03 2023 Movie running.[217:
+
+Tue May  9 12:17:02 2023 Well, only one feesh left
+swimming in the movie from like five or so at the
+outset.. but most of the dead died when they hit
+the wall, which is expected. One feesh died in
+open water, though, and it's a little hard to be
+sure due to the timelapse, but it does appear that
+it suffered a fin grounding right around the time
+the fins were crossing an ITC. So I think our
+grounding odds are much lower but still
+noticeably significantly non-zero.
+
+:217]
+
+:216]
+
+:215]
+
+:214]
+
+:213]
+
+:212]
+
+:211]
+
+:210]
+
+:209]
+
+:208]
+
+:207]
+
+:206]
+
+:205]
+
+:204]
+
+:203]
+
+:202]
+
+:201]
+
+:200]
+
+:199]
+
+:198]
+:197]
+[218:
+
+Tue May  9 23:58:50 2023 So. Restate position.
+
+ - We are pretty close to robust on fin
+   tracking. Going to kick min settled down even
+   higher though I think.
+
+ - We need a major rethink on junction
+   initialization and maintenance.
+
+ - Can we reintroduce EdgeTag in EC so ngbs can
+   have a clue who they're talking to?
+   = So detached fins can easily decay for one
+     example?
+   = How big is the junction type?
+     - 3b. Could we make a 3b EdgeTag, as a test?
+       Let's see where we're tight.
+[222:
+
+Wed May 10 00:53:23 2023 Well let's run with that
+a bit. Let's get Aa picking up the junction type
+from Eg..[223:
+
+Wed May 10 09:41:41 2023 OK so we're transceiving
+JunctionIndex's between Dis via ECs. Currently
+have min settled down at 8 (jumped from 5).[224:
+
+Wed May 10 10:20:48 2023 So. How are we going to
+deal with junction types?
+
+ - How to deploy them
+   = Have a single junction index for an entire
+     cell?
+   = Have an API mapping from zone to
+     JunctionIndex?
+   = Declare the Moore ngb of HCPoints around the
+     root to all be Junction anchors representing
+     the interests of the corresponding
+     edge/corner
+     - Have some kind of short-range delivery
+       particle to configure the junction
+       anchors. Or have the key ngbs poll the
+       controller to find out what they're
+       supposed to be. As geometric locations,
+       they'll know who they are.
+     - Could push them out to +-2 range to clear
+       the DS and such. But we're thinking it's
+       better to delay all this until the center
+       DS moves on anyway.[227: But the current
+       code doesn't wait nearly that long, so..   :227]
+
+ - How to maintain them [225: Wed May 10 11:21:36
+   2023 Have them poll for a controller if 0u or
+   every so often   :225]
+ - How to communicate with them[226: Wed May 10
+   11:23:51 2023 Some HCPoint-to-HCPoint carrier?
+   Running on the driving lanes again?
+
+   :226]
+
+:224]
+
+:223]
+
+:222]
+[219:
+
+Wed May 10 00:32:41 2023 Well it actually built!
+What do the Aa and Eg budgets look like?
+
+  | COMPONENTS of Antenna <78> (57 bits/14 unused):
+
+  | COMPONENTS of EdgeHG <91> (59 bits/12 unused):
+
+[220:
+
+Wed May 10 00:37:40 2023 Not to forget
+
+  | COMPONENTS of DiamondSequencer <33> (67 bits/4 unused):
+
+  | COMPONENTS of RootHardCellG <27> (62 bits/9 unused):
+
+  | COMPONENTS of LXWait <69> (65 bits/6 unused):
+
+and
+
+  | COMPONENTS of FishBod <208> (70 bits/1 unused):
+
+[221:
+
+Wed May 10 00:40:52 2023 and
+
+  | COMPONENTS of HardCell <28> (71 bits/0 unused):
+
+  | COMPONENTS of LXUArm <66> (71 bits/0 unused):
+
+but I don't think any of those contain an EC so
+they're not our fault right now.
+
+:221]
+
+:220]
+
+ :219]
+
+:218]
+[228:
+
+Wed May 10 11:48:08 2023 If it was a CellTypeIndex
+instead of JunctionTypeIndex it 'could' specify
+junction types for all the edges at once.[229:
+
+Wed May 10 15:50:34 2023 Suppose we do
+JunctionIndex but have some structure over that
+like so junction types will be like FB->FF, so one
+can tell both the source type and intended
+counterparty from the junction index.
+
+In the FF and FB cases we could still distribute
+the same value to the whole cell, but if we think
+only a little further ahead, to a multicellular
+'worm' or whatever, we'd want a 'fore' and 'aft'
+junctions so they could chain up. So we'd be
+facing the "distributing junctions per edge"
+question again.
+
+We really do, I think, want that Moore ngb "body
+model" near the Di center. Suppose we:
+
+ - Deferred fin development until after the center
+   code loop is killed.
+
+ - Add some code that deploys around the center to
+   become the body model??? How about that? Then
+   they can be fully configured with junction
+   types and custom functions and so on, that act
+   as quadrant and axis controllers for the Di.
+
+   = A pocket chain loop like:
+
+
+        .   .   .   .   .   .   .
+             QM> AQ> AQ> QM
+                          v
+        .   .   .   .   .   .   .
+              ^          AQ
+             AQ           v
+        .   .   .   RG  .   .   .
+              ^  FB      AQ
+             AQ           v
+        .   .   .   .   .   .   .
+              ^  <AQ <AQ <QM
+             QM
+        .   .   .   .   .   .   .
+
+
+[230:
+
+Thu May 11 00:11:44 2023 Or maybe make that more
+like this:
+
+        .   .   .   .   .   .   .
+             QM> EC> EC> QM
+                          v
+        .   .   .   .   .   .   .
+              ^          EC
+             EC           v
+        .   .   .   RG  .   .   .
+              ^  FB      EC
+             EC           v
+        .   .   .   .   .   .   .
+              ^  <EC <EC <QM
+             QM
+        .   .   .   .   .   .   .
+
+
+so there's slack to roll the loop as a way to
+change a Di orientation. Or an in-between option
+with both quadrant and axial models:
+
+
+        .   .   .   .   .   .   .
+             QM> EC> AM> QM
+             LA      HD   v RA
+        .   .   .   .   .   .   .
+              ^          EC
+             EC           v
+        .   .   .   RG  .   .   .
+              ^  FB      EC
+             EC           v
+        .   .   .   .   .   .   .
+              ^  <EC <EC <QM
+             QM           RL
+        .   .LL .   .   .   .   .
+
+
+or something, with an axial Head model and Left
+and Right Arm and Leg quadrant models - and enough
+EC that the whole loop could roll CW or ACW as
+desired.
+
+So suppose we could stick a sequence (QMLA, AMHD, QMRA,
+QMRL, QMLL) somewhere in the ancestor, and express
+it as the last step of moving the genome out of
+the center.
+
+[231:
+
+Thu May 11 02:04:45 2023 Could build an arm
+looping back to self and then inject into that
+loop while consuming the code.
+
+[232:
+
+Thu May 11 03:26:54 2023
+
+        .   .   .   .   .   .   .
+                     SL
+
+        .   .   .   DS  .   .   .
+
+                      PC PC  PC   ..
+        .   .   .   RG  .   .   .
+                      PC
+
+        .   .   .   .   .   .   .
+                      PC ..
+
+        .   .   .   .   .   .   .
+
+
+
+        .   .   .   .   .   .   .
+                     SL
+             a2  a1
+        .   .   .   DS  .   .   .
+
+             a3  a8   PC PC  PC   ..
+        .   .   .   RG  .   .   .
+                      PC
+             a4  a7
+        .   .   .   .   .   .   .
+                      PC ..
+             a5  a6
+        .   .   .   .   .   .   .
+
+
+[233:
+
+Thu May 11 03:33:11 2023 Hard to go around RG when
+the genome still exists. What if it was a single
+'wormhead' that carried its whole pattern, and
+dragged the actual code behind it? So we could
+arrange to have the old stuff relinquish its space
+just as we're coming back around and needing it.
+
+[234:
+
+Thu May 11 03:43:38 2023 We should have a 'tail
+cap' that we can put on a pocketchain that mostly
+does nothing except consume ECs upstream of
+it. That's how we break a loop, by sticking a TC
+body down from the loop head, and then repeatedly
+replacing the head with a downbound EC until the
+loop is gone. So an SL could do that.
+
+:234]
+
+:233]
+
+:232]
+
+:231]
+
+  :230]
+
+:229]
+
+:228]
+[235:
+
+Thu May 11 08:46:19 2023 Well how do we move
+forward, here? Well, what could the Ancestor look
+like?
+
+Maybe this part
+
+    cINS_UMOVE_MOTHER10,          // MO: UA BUILD 1ST ARM
+    cINS_PAYLOAD11,               // MO: DELIVER PAYLOAD 2
+    cINS_SEND_LOOP10,             // MO: SL SEND CODE
+     cINS_WAIT_FOR_EMPTYREG,      // MO: WT WAIT FOR REPLY
+     cINS_DESTROY_ENDPOINT_NR,    // MO: KL ERASE MOTHER
+
+    cINS_MK2_RECV_LOOP,           // LD: RL#2 RECEIVE CODE
+
+could become like
+
+    cINS_UMOVE_MOTHER10,          // MO: UA BUILD 1ST ARM
+    cINS_SEND_LOOP10,             // MO: SL SEND CODE
+     cINS_WAIT_FOR_EMPTYREG,      // MO: WT WAIT FOR REPLY
+     cINS_SEND_LOOP12,            // MO: SL SEND BODY MODEL
+      cINS_DESTROY_ENDPOINT_NR,   // MO: KL ERASE REMAINING MOTHER LOOP
+     cINS_MK5_DEPLOY_HEAD_MODEL,  // MO: .. INIT LOOP
+     cINS_DEPLOY_1CQ_MODEL,       // MO: .. 1ST QUADRANT CLOCKWISE
+     cINS_DEPLOY_2CQ_MODEL,       // MO: .. 2ND QUADRANT CLOCKWISE
+     cINS_DEPLOY_3CQ_MODEL,       // MO: .. 3RD QUADRANT CLOCKWISE
+     cINS_MK5_DEPLOY_4CQ_MODEL,   // MO: .. 4TH QUADRANT CLOCKWISE
+
+    cINS_MK2_RECV_LOOP,           // LD: RL#2 RECEIVE CODE
+
+[236:
+
+Thu May 11 09:25:28 2023 Where
+cINS_MK5_DEPLOY_HEAD_MODEL would be this new thing
+that would do SwapWorm growing according to some
+internal encoded pattern. What's the state of
+SwapWorm, in this codebase, at the moment?
+
+[237:
+
+Thu May 11 09:39:02 2023 SwapWormHC3 is an element
+built directly on Codon (and TQDSControlStg). It
+currently has only 8b available - largely because
+of the 36b it's spending on two SW3Packet's
+.. that a standalone 'head' would not need.
+
+So if we took back those 36b and instead did
+
+  AxialDir mProgram[16]; // 16x2b == 32b
+  typedef Unsigned(4) PC;
+  PC mCurrentInstruction; // +4b  36b
+  PC mLastInstruction;    // +4b  40b
+
+or did
+
+  typedef Unsigned(2) Cmd;
+  constant Cmd cCMD_FWD = 0u;
+  constant Cmd cCMD_LFT = 1u;
+  constant Cmd cCMD_RGT = 2u;
+  constant Cmd cCMD_END = 3u;
+  Cmd mProgram[17];  // 17x2b == 34b
+  AxialDir mHeading; // +2b == 36b
+
+and we'd shift the program forward and fill with
+END as we went. Or
+
+  constant Cmd cCMD_NOP = 0u;
+  constant Cmd cCMD_FWD = 1u;
+  constant Cmd cCMD_LFT = 2u;
+  constant Cmd cCMD_RGT = 3u;
+
+and NOP out from the front as we go.
+
+There'd have to be some way for the thing to know
+it was supposed to be executing.. Perhaps like if
+it has no upstream, it's code, otherwise it's
+data?
+[238:
+
+Thu May 11 10:02:33 2023 And the program we might
+have it run would be like
+ .mHeading = cW,
+ .mProgram = { F, F, L, F, F, F, L, F, F, F, L, F, F, F, L, F },
+           //  0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f
+which would 'draw' something like
+
+            10sd
+            3  c
+            4  b
+            5789
+
+and use up all that code space. But is that the
+size we were thinking of, for the body model?
+..Maybe it was -
+
+           . . . . .
+            1 0 s d
+           . . D . .
+            3     c
+           . . R . .
+            4     b
+           . . . . .
+            5 7 8 9
+           . . . . .
+
+[239:
+
+Thu May 11 10:15:14 2023 I guess once the head
+runs out of code it just sits there, but perhaps
+it announces it's done somehow? Or it waits until
+there's a non-EC behind it, and then turns into a
+downbound EC and swaps with it?
+
+[240:
+
+Thu May 11 10:28:44 2023 Well, this thing seems
+pretty fun and doable so maybe we should just give
+it a try to get us going again back along the
+germline. And it seems it would be a much faster
+way to deploy all sorts of arms, with a little bit
+of extra machinery to deploy DS and such.
+
+Let's call this LXNanoArm (NA), have we used that
+in this timeline?[241:
+
+Thu May 11 10:39:30 2023 Seems no 'nano' at all
+yet.. Here we go.
+
+:241]
+
+:240]
+
+:239]
+
+:238]
+
+:237]
+
+:236]
+:235]
+[242:
+
+Thu May 11 11:01:06 2023 OK we have a stub NanoArm
+building okay:
+
+  /*__________________________________________________
+  | COMPONENTS of NanoArm <255> (63 bits/8 unused):
+  |
+  | Pos	| Bits	| Name	| Type <classid>
+  | 0	| 34	| mProgram[17]	| Unsigned(2)
+  | 34	| 2	| mHeading	| Unsigned(2)
+  | 36	| 0	| super	| Codon <102>
+  | 36	| 15	| base	| TQDSControlStg <169>
+  | 51	| 0	| base	| UrSelf <0>
+  | 51	| 0	| base	| DTU <66>
+  | 51	| 0	| base	| D1Pocketable <93>
+  | 51	| 0	| base	| Intender <144>
+  | 51	| 3	| base	| PocketChain <103>
+  | 54	| 0	| base	| PocketChainTQ <252>
+  | 54	| 3	| base	| QDebugUtils <83>
+  | 57	| 6	| base	| Segment <25>
+  | 63	| 0	| base	| Sequenceable <146>
+  | 63	| 0	| base	| TQDSControl <153>
+  | 63	| 0	| base	| Fail <82>
+  |___________________________________________________
+
+Looks like we could push up to 21 insns if we
+wanted to burn it all. This is self-consuming
+code and we're going to do the shift thing, so we
+don't need a program counter of any size, just a
+heading.
+
+:242]
+[243:
+
+Thu May 11 11:10:24 2023 OK so the behavior during
+act(..) is like what:
+
+ - if we have an upstream, diffuse
+
+ - We are head. Examine mProgram[0]. If Self.cEP
+   return actFinal(..).
+
+ - Our program execution is incomplete. Return
+   tryExecute(..)
+
+And Bool tryExecute(..) is like
+
+ while (mProgram[0] != cEP) {
+   Cmd cur = mProgram[0];
+   which (cur) {
+   case cTL: { mHeading = adjacentAxialDir(mHeading,false); advance(); }
+   case cTR: { mHeading = adjacentAxialDir(mHeading,true); advance(); }
+   case cGF: { return tryGoForward(); }
+   }
+ }
+
+
+:243]
+[244:
+
+Thu May 11 13:26:20 2023 OK, have made some
+progress here. Have NanoArm laying down a
+plausible path of ECs behind it.. but the ECs are
+evaporating I think because there's nothing
+anchoring them. [245:
+
+Thu May 11 13:30:21 2023 Yes,
+PocketChain.actMovingSeg(..) tosses temp cDS_UP
+and cDS_DOWN segments when they get to the end of
+their assigned direction. Maybe if NA is making
+its first EC it should set it dumb?[246:
+
+Thu May 11 14:14:05 2023 Ah, it's
+EmptyCodon.stabilize(..) that's deliberately
+making any non-temp EC into a random direction
+temp. Do we really need to do that? Let's see what
+breaks without that..[247:
+
+Thu May 11 14:46:50 2023 Well, nothing obvious has
+broken.. and it does make the NA behavior I was
+hoping to see happen..
+
+[248:
+
+Thu May 11 23:09:46 2023 So okay, let's say we
+sort of have NanoArm (NA) working in a minimal
+fashion. Question: Would an SL work feeding into a
+growing NA? How could we best test that? Seems
+like it really should, hunh.[249:
+
+Thu May 11 23:19:15 2023 So I guess really what we
+want is for NA to be LX so that it can execute,
+and have that mean that it puts a copy of itself
+in some other pocket and then rolls IX.
+
+Who is it that typically prevents 'standard'
+free-space behave() semantics from happening when
+in a DSP?[250:
+
+Thu May 11 23:28:59 2023 Well not sure, but the
+existing NA grows just fine when started in a
+DSP. We still have 8b in NA so we could add two
+bits saying where we want to deploy the copy when
+we execute.
+
+Let's give it a try.[251:
+
+Thu May 11 23:43:54 2023 OK so NA is now LX and I
+see NA.perform getting called when in the IX.
+
+TODO
+[252: Fri May 12 00:31:23 2023
+DONE :252] - Implement NA.perform(..) to deploy and roll
+
+[254: Fri May 12 03:46:32 2023
+DONE :254] - Implement NA.actFinal(..) to wait for non-EC
+   down then swap with that and decay to EC down
+
+[253: Fri May 12 00:31:37 2023
+DONE :253] - Configure an NA to replace cINS_UMOVE_MOTHER10
+   in the Ancestor as a test
+
+:251]
+
+:250]
+
+:249]
+
+:248]
+
+:247]
+
+:246]
+
+:245]
+
+:244]
+[255:
+
+Fri May 12 03:46:42 2023 So I've replaced the
+opening UA with an NA and it's lightning fast, and
+the SL just pumps the codons in behind as the arm
+is growing; very cool.
+
+Only problem is we don't get a DS deployed, so the
+RL arrives at the end with nothing to invoke it.
+
+Could maybe have a 'naked' RL deploy the DS
+itself? Think about it after sleep.
+
+:255]
+[256:
+
+Fri May 12 09:29:00 2023 OK I'm on a weird case
+that's forcing me to swap PocketChain rule
+processing stuff back into my brain. Specifically,
+we're looking at a case where ChainRule_SPREAD11,
+which is advertised as:
+
+/** CHAINRULE: SPREAD11: EC -> [X] -> Y  ==>  X -> [EC] -> Y */
+
+and it's firing entirely plausibly given that
+description, in a situation like this:
+
+   RM > UA > ..         EC2> UA > ..
+   ^              ==>   ^
+   EC2                  RM
+
+but as it happens, EC2 is in a DSP, and ripping
+the EC out of there without updating the
+mDirStatusMap screws up the DS
+
+..ahh I see it: We just deployed this DS, and the
+local HC3's mDSHops gradients haven't stabilized
+around it, so the ChainRule stuff isn't
+recognizing that this EC2 is in fact in a DSP. We
+need some kind of delay after auto deploying the
+DS.
+
+:256]
+[257:
+
+Fri May 12 10:42:42 2023 Trying to convert the
+second UArm into a NanoArm but running into
+another issue: When that second NA is being
+shipped - supposedly as 'data' - from MO to LD,
+when it reaches the LD DS, it activates and starts
+growing right there, instead of getting tucked
+away in the LD program loop as intended.
+
+Because its conditions for 'activating' is just
+being at the head of a pocketchain, and when it
+arrives at the LD DS, that's what it is.
+
+My first thought was to not activate when we're
+head of a chain in a DSP, but that would mean the
+original first-deployed NA could never start up,
+because it begins in a DSP.
+
+And saying that makes raises the ultrahack idea:
+Only activate in a DSP if you are both head and
+tail.. That would distinguish the two cases.
+
+[258:
+
+Fri May 12 10:50:45 2023 I do foresee another
+problem, though: The LD -> RD arm takes two
+NAs. If we put the second NA after the LD -> RD
+SL, as I was planning, won't it get consumed
+building the arm, and fail to end up in the copied
+code?
+
+Right now, the NanoArm has no ability to send
+a copy of itself down an existing arm, to pick up
+execution once it reaches the end. We were
+counting on the SL to do that. But the SL thinks
+its sending the loop as data, once..
+
+What does SL do if the first thing it ships 'as
+data' doesn't have a label? If it just ships it
+anyway and continues to look for a label, we could
+be okay.[259:
+
+Fri May 12 10:57:18 2023 Right now it appears that
+LXSendLoop will fail if the first codon it ships
+does not implement QLabelMark. But it seems that:
+(1) We could just keep shipping until we find a
+    starting mark, and
+(2) NanoArm currently does not implement
+    QLabelMark.
+[260:
+
+Fri May 12 11:01:21 2023 OK, I think I changed SL
+to allow unlabeled codons to ship before a label
+is seen, and then SL will keep rolling until it
+re-sees whatever label it first encounters,
+whether that's the first codon shipped or not.
+[261:
+
+Fri May 12 11:45:27 2023 Progress, but now I think
+the issue is the second SL (from LD) is stopping
+too soon.. Why is that? I think there may also be
+an issue with the RL waiting for its own tag,
+instead of following the SL style of waiting for a
+tag and then going until that tag repeats. We'll
+see.
+[262:
+
+Fri May 12 11:50:10 2023 Urgh I think it's a
+bigger problem: The SL mHeadCount specifies how
+many instruction to skip forward from the SL,
+before starting to ship.. but it ALSO specifies
+how far to back up relative to the second
+appearance of the acquired label - and those two
+operations will only arrive at the same place if
+the labeled insn is indeed first after the head
+insns. [263:
+
+Fri May 12 11:55:43 2023 Well, LXSendLoop has 27b
+available.. We could just:
+
+(1) Skip mHeadCount at the front
+(2) Ship til label (incrementing mLabelCount)
+(3) Ship til label repeats
+(4) Roll back decrementing mLabelCount
+(5) Roll back further decrementing mHeadCount
+(6) End SL and regrip
+
+
+[264:
+
+Fri May 12 12:17:22 2023 Have biz for the next few
+hours but then pick up with that.[265:
+
+Fri May 12 13:17:23 2023 What if we didn't even
+have an mHeadCount? What if we just counted insns
+between the SL and the label acquisition, and then
+backed up over all of them after seeing the label
+again? That would mean we couldn't have any
+labeled insns in the head, though, which could be
+an aggravating restriction - say if we wanted to
+nest another SL in the postbuffer.
+
+Or we could just have mSkipForward, which skips
+forward from the SL (delaying label acquisition),
+and mSkipBackward, which skips backward from the
+second appearance of the acquired label. And we
+could reuse mInsnsProcessed as the counter for
+both of those operations.
+[266:
+
+Fri May 12 15:16:43 2023 OK back to it.
+
+:266]
+:265]
+
+:264]
+:263]
+
+:262]
+:261]
+:260]
+
+:259]
+
+:258]
+
+:257]
+[267:
+
+Fri May 12 20:35:45 2023 OK we just got to see the
+first NanoArm-based attempt at the full life cycle
+up through diamond cutting.
+
+And it failed.
+
+Because the NanoArm was so fast, it grew right
+beyond what was going to be the edge of the right
+daughter, into the dying mother.
+
+And then got chopped off when the RD gradient and
+cell membrane finally got established.
+
+Sweet. Nothing exceeds like excess.
+
+I think maybe an okay solution would be to have
+PocketHC3 or whatever check that the range of hops
+is no greater than two across all accessible
+HC3. And declare the pocket BENT or something on
+excessive range. That way, I think, the NA
+wouldn't be able to outrun the daughter/new mother
+hop gradient construction.
+[268:
+
+Sat May 13 00:06:01 2023 OK, it took a bit more
+than just hopRange <= 2u, because it's not enough
+to know that OUR pocket is plausible - we need to
+know if our DESTINATION pocket is plausible. And
+we can never see all the corners of that
+destination pocket.
+
+So now PocketHC3 will report BENT on any of these
+conditions (in addition to actual bends):
+
+ (1) maxcornerhops - mincornerhops > 2u
+ (2) maxgoalhops != mingoalhops
+ (3) shouldBeEdge != isEdge on any corner
+
+and (3) in particular seemed to help a lot.. HG
+converting into Eg happens pretty late, once
+things are all settled, so it seems like a pretty
+good proxy for 'believable grid'.
+
+:268]
+:267]
+[269:
+
+Sat May 13 00:22:48 2023 And here's another issue
+that just popped up: With NA construction arms,
+the SL is stuffing codons into the back of the
+wire, typically, long before the arm is
+complete.
+
+That means it will be common for the arm to fill,
+and the SL will have to block waiting for more
+space at the back of the arm. Which is fine as far
+as it goes, but SL uses cDSTATUS_TEMP to request
+an EC at the back of the arm - and until such an
+EC becomes available, the SL is no longer
+runnable.
+
+And we just saw is the mRootProductivityWatchdog
+timer firing and killing a Di that had absolutely
+nothing wrong with it except it was hemmed in and
+hadn't yet grown big enough for arm construction
+to complete and start delivering codons.
+
+With the UA construction arms, the SL didn't even
+begin until the arm was complete, so there's a
+reasonable expectation of progress.
+
+Now, we could rewrite or all configuration of SL
+to poll for ECs rather than lock the DS demanding
+one. Kind of sad but
+
+(1) I can see the argument either way, and
+(2) We really did want to be able to 'wait for our
+    moment' a pretty long time..
+
+[270:
+
+Sat May 13 02:03:28 2023 Well, I made LXSend.
+
+  Bool mPollForECs = false;     //< otherwise lock processor waiting for them
+
+and it seemed to be working, but now it's locking
+up with the first RL never leaving the REG DSP.
+
+Which is kind of what I thought would happen
+before I tried it. Not sure why it seemed to work
+at first.
+
+Slowing down the mRootProductivityWatchdog
+timer, urgh.
+
+:270]
+
+:269]
+[271:
+
+Sat May 13 03:09:10 2023 OK another issue: Aa
+currently doesn't given contact warnings for nonus
+Aa if the Aa is anchored on a corner. And that's
+really bad, because we need exactly them to signal
+to get the kids apart right after diamond cutting.
+
+:271][272:
+
+Sat May 13 05:10:23 2023 So the first NA is still
+getting clipped sometimes in the RD during diamond
+cutting. As often as not, I'd say.
+[273:
+
+Sun May 14 13:53:24 2023 This is still coming
+up. What should we do?[274:
+
+Sun May 14 13:56:48 2023 Well we're doing a lot of
+waiting now already. Is there anything else
+NanoArm could check? Or: Could it survive being in
+an open pocket? Why couldn't it try to wait it out
+for a while? Why is it dying?
+
+I guess the usual story is it doesn't die until
+the Di does grow?[275:
+
+Sun May 14 14:02:52 2023 Doesn't look that way
+here; Na head checks out after a while with no Di
+growth. Watchdog?[276:
+
+Sun May 14 14:04:39 2023 Don't think so. Only
+thing in the log file around the right time is
+
+    20230514133314-3551: 4302AEPS [79525807]MSG: print: "vvv DYING vvv"
+    20230514133314-3552: 4302AEPS [79525807]MSG: print: "PocketChain: Too open pocket"
+    20230514133314-3553: 4302AEPS [79525807]MSG: @(80,57) of [1,1]: (NA) (NanoArm(mDeployToUnit=0,mProgram=[0]=0,[1]=0,[2]=3,[3]=3,[4]=3,[5]=3,[6]=3,[7]=3,[8]=3,[9]=3,[10]=3,[11]=3,[12]=3,[13]=3,[14]=3,[15]=3,[16]=3,mHeading=0,)TQDSControlStg(mTQMapCommand=0xF,mTQMapValue=0x1,mECsGood=false,mLockedDown=true,mMaxDSHopsValue=6,)PocketChain(mDSType=0,mArrived=false,)QDebugUtils(mD=false,)Segment(mPocketPtrs=[0]=7,[1]=4)
+    20230514133314-3554: 4302AEPS [79525807]MSG: print: "^^^ PocketChain.die ^^^"
+
+which happens when
+
+        if (p.mCoordCount < 3u) {
+
+[277:
+
+Sun May 14 14:11:57 2023 Well, I'm trying blocking
+on p.mCoordCount == 2u, instead of dying. Looking
+at the video, it appears that the dying happens
+when the pinned Na head gets moved down during a
+Di move S, which could, I think, leave it only
+seeing two HC3 until the move is finished.
+
+[278:
+
+Mon May 15 00:55:04 2023 OK now we're blocking on
+p.mCoordCount == 1u as well as 2u, and only dying
+"Too open pocket" when p.mCoordCount == 0u, and
+(1) that seems not to break anything, but
+(2) it doesn't solve the 'exuberant NanoArm'
+    problem fully either.
+
+So I've got an exact example sitting in mfms now
+and, in the 'before' configuration, all the
+following seems to be true:
+
+minhopscorner of na's pocket:
+is HG
+ .mUpHops == 6
+ .mMaxHops == 9
+ .mHCPoint == (-5,-1)
+
+maxhopscorner of na's pocket:
+is Eg
+ .mUpHops == 8
+ .mMaxHops == 9
+ .mHCPoint == (3,-2) << STILL IN MOTHER'S COORDS!
+
+direction na moves: W (-1,0)
+
+[279:
+
+Mon May 15 01:11:36 2023 Well just that much tells
+me a couple things.
+
+(1) We should invalidate mHCPoint when we change
+    up/max hops, right?
+(2) We should (continue to) focus on minhopscorner
+    for making decisions even about edge-related
+    matters.
+
+[280:
+
+Mon May 15 01:30:58 2023 So, an easier but
+aggravating-to-watch fix would be to say:
+
+ NA is blocked if its minhopscorner
+    .mUpHops + 3u >= .mMaxHops
+
+which will keep it from moving anywhere near a
+(stable) edge.
+
+A more-code fix would be to say
+
+ NA is blocked in the above condition, UNLESS
+ it's moving past the minhopscorner
+
+[281:
+
+Mon May 15 02:03:15 2023 Aand I guess 'moving
+past' would mean.. ..maybe
+
+ (min.mHCPoint + movec).length() < min.mHCPoint.length()
+
+or something like that?
+
+ .mHCPoint == (-5,-1)
+
+W (-1,0)      (-6,-1) NO
+N (0,-1)      (-5,-2) NO
+S (0,1)       (-5,0)  YES
+E (1,0)       (-4,-1) YES
+
+:281]
+
+:280]
+
+:279]
+:278]
+
+:277]
+
+:276]
+
+:275]
+
+:274]
+
+:273]
+Could we have a Wait that waited for mhops AND
+some settled downs? Or just a wait for
+'stability'?
+
+:272]
+[282:
+
+Fri May 19 02:33:30 2023 Well, we have A17215
+running on the T2s so they have something
+potentially interesting to do, but also I ran into
+two T2 fuckups to document:
+
+ - One tile had run out of disk space due to
+   /var/log/daemon.log.1 and /var/log/syslog.1
+
+   Deleting daemon.log.1 got things going again,
+   but wondering how best to automate that.
+
+ - Another tile had managed to avoid installing
+   the new d3 physics cdm, while also managing to
+   update all its slot tags and stuff such that
+   cdm was convinced it was updated.
+
+   Had to delete /cdm/tags/slotd3-install-tag.dat
+   and /cdm/physics/slotd3-installed-libcue.so,
+   and xCDM, to get that fixed up.
+
+   And wondering how to double check the -install
+   info instead of trusting it enough that that
+   could happen. During install, put a checksum of
+   *-libcue.so into *-install-tag.dat? Not sure.
+
+:282][283:
+
+Fri May 19 03:22:03 2023 But there's an Ancestor17
+issue I want to deal with more urgently: We really
+need Aa to only issue defcons in directions where
+the Aa actually sees some blocker in a direct line
+to itself in the proposed direction of motion.
+
+So that like:
+
+              -----------------------
+              |
+              |   \N,W    /N
+              |    \     /
+              |     \   /
+                     \ /
+                      .
+
+
+the NE-bound Aa signals N but not E but the
+NW-bound Aa does N and W.
+
+Right now the NE Aa seems to be signaling N and W
+and it's messing things up in the tiny
+tiles..[284:
+
+Fri May 19 03:37:41 2023 OK the problem is we only
+allocated 2b for Aa.mContactDetection, but we'd
+need Aa to have a full 8b DEWLine to do it right.
+
+But I'm not awake enough to tear into that now.
+[285:
+
+Fri May 19 14:41:55 2023 OK, got past a bunch of
+busywork and stuff; let's take a shot at this:
+
+  Aa Gets A DEWLine.
+
+[286:
+
+Fri May 19 15:53:09 2023 So I've got the DEWLine
+in there and partially hooked up.. Current status
+is need to redo (part of) the doBehave() ew search.
+[287:
+
+Mon May 22 22:51:30 2023 OK, jeez lost a lot of
+time. Camera-ready shipped for ALIFE23 anway.
+
+And little clue how to push into Aa.. [288:
+
+Mon May 22 23:34:53 2023 I wonder if we could use
+like four maxpicks to assess the worst defcons in
+each direction. We're already using a bunch of
+xpicks in the ew iteration.
+
+[289:
+
+Mon May 22 23:38:11 2023 OK come on. Standing
+start. What do we want Aa to notice in the world?
+
+ - Upstream (going our way) EdgeCoordProviders on
+   our diagonal
+   -> take mTransmitEC
+
+..well there's kind of a lot of cases. Let's try
+to zoom in just on defcon stuff.
+
+Let's say we have a predicate isBlocker(SN) or
+something.
+
+ DEWLineC tmpdc;
+ AxialDir openads[2];
+ axialDirsBorderingQuad(mOpenDir, openads[0], openads[1]);
+ C2D adcs[2];
+ for (Unsigned i = 0u; i < 2u; ++i)
+   adcs[i] =
+
+ DefCon rank = signalDC();
+ for (sn in ew[1..]) {
+   C2D snc = ew.getCoord(sn);
+   if (isBlocker(sn)) {
+     if (snc.x * snc.y == 0) { // on axis
+       for (Unsigned d = 0u; d < 2u; ++d) { // for relevant ads
+         if ((snc*adcs[d]).length() > 0) { // if blocker on axis
+           tmpdc.maxDC(openads[d],rank); // signal on axis
+         }
+       }
+     }
+   }
+   ..other scanning..
+ }
+[290:
+
+Tue May 23 22:57:39 2023 OK, well, the redone Aa
+seems to be signaling defcons in a more focused
+and plausible way. Going to call that done
+unless/until I see problems in it going forward.
+
+So I think we're at pop pop pop. Is there any
+to-do I can clear above?
+[294:
+
+Tue May 23 23:01:31 2023 Well, claimed a couple
+things from way back in :169:.
+
+But I think we are at
+
+TODO
+
+[336: Thu May 25 16:37:41 2023
+DONE :336] - Get to a "Body Model" implemented as a loop
+   around the MO root, to contain four "Edge
+   Model"s plus some ECs.
+
+[337:
+DONE :337] - Possibly have a "Head Model" or "Heading Model"
+   on the loop as well.
+
+[338:
+DONE :338] - Have the Model atoms be part of the ancestor,
+   that somehow deploy after killing the MO code.
+
+Let's see just that much shall we?
+
+:294]
+:290]
+:289]
+
+:288]
+
+:287]
+:286]
+:285]
+:284]
+
+:283]
+[295:
+
+Tue May 23 23:11:38 2023 Going to trying changing
+the Ancestor so the second arm crosses the Di one
+pocket higher, so there's more clearance around
+the MO.[296:
+
+Tue May 23 23:23:44 2023 First build on
+that. Still only using 10/17 insns in second NA
+while crossing the Di.[297:
+
+Tue May 23 23:40:08 2023 Waiting for the second
+arm to deploy..
+
+But wondering this:
+ - The 'righter' way to do multicellularity is to
+   intervene at cell division time, and just have
+   the previously 'independent' daughters continue
+   to interact after the split.
+
+(revised 2nd arm looks good..)
+
+ - But with the current plan, if the body model
+   doesn't deploy until after the MO->LD copy,
+   then the body model won't be deployed in the
+   new MOs, so how will they know they're supposed
+   to interact?
+
+ - It seems like we'd need some single atom that
+   could be configured, and would deploy
+   immediately somehow, as a stub for the full
+   body model to deploy later.
+
+[298:
+
+Tue May 23 23:47:27 2023 Could we deploy something
+to the SW of RG? Is that sufficiently out of the
+way during initial operations?
+
+I guess that could naturally be this "Head Model"
+we mentioned? It's really more a multicellular
+position model or "tissue type" or
+something. "Cell Model" maybe.
+
+Anyway, then at the end of MO->LD, when we would
+have torn down everything around MO but its RG, we
+would instead [300:
+
+Wed May 24 00:12:32 2023 feed the rest of the body
+model to the Cell Model, then kill the rest of the
+genome and the DS?
+
+Seems like it would be 'cleaner' ho-ho to deploy
+the whole body model to say SW of RG at the
+outset, and then have it opportunistically decide
+to surround the root once the existing MO
+tear-down completes.
+
+[301:
+
+Wed May 24 00:19:01 2023 Yah should probably plan
+to go that way. Suppose the Body Model Prelude was
+like
+
+ NanoArm to build a little loop
+ SendLoop to send a small segment down that loop
+ CellModel followed by edge models
+
+[302:
+
+Wed May 24 00:34:34 2023 Could we have an option
+for NanoArm to automatically deploy a SL behind
+itself? Is there even 1b left in the NA
+budget?[303:
+
+Wed May 24 00:35:37 2023 There appears to be 6b
+left in NA, how did that happen! Doesn't that mean
+we could have had mProgram[20] instead of
+[17]?[304:
+
+Wed May 24 00:41:06 2023 So in the current
+Ancestor, we have three instances of NA, two of
+which are followed by SL. The two SLs differ
+slightly:
+
+  .mSkipInsnsFront = 2u,
+  .mSkipInsnsBack = 2u,
+
+vs
+
+  .mSkipInsnsFront = 1u,
+  .mSkipInsnsBack = 2u,  // One extra insn gets consumed
+
+and those are Unsigned(4)s in SL.
+[306:
+
+Wed May 24 00:56:37 2023 But this is a cheap hack
+at this point. We should just see if we really
+can't afford the Body Model Prelude unpacked
+first.
+
+Something like:
+
+local constant NanoArm
+  cINS_NANOARM_DEPLOYMODEL0 = {
+    .mDSType = DTU.cDS_NORM,
+    .mDeployToUnit = DTU.cPUNIT_BLU, // (since SL assumes that)
+    .mHeading = DTU.cW,  // start out heading west
+    .mProgram = {
+      NanoArm.cGF, //  0 (-1, 0)W
+      NanoArm.cTL, //  1 (-1, 0)S
+      NanoArm.cGF, //  2 (-1, 1)S
+      NanoArm.cGF, //  3 (-1, 2)S
+      NanoArm.cGF, //  4 (-1, 3)S
+      NanoArm.cGF, //  5 (-1, 4)S
+      NanoArm.cTL, //  6 (-1, 4)E
+      NanoArm.cGF, //  7 ( 0, 4)E
+      NanoArm.cTL, //  8 ( 0, 4)N
+      NanoArm.cGF, //  9 ( 0, 3)N
+      NanoArm.cGF, // 10 ( 0, 2)N
+      NanoArm.cEP, // 11 END
+  },
+};
+
+which if I didn't fuck it up makes something like:
+
+       .    .    .    .
+        vEC  <EC
+       .    .    DS   .
+        vEC
+       .    .    RG   .
+        vEC   NA
+       .    .    .    .
+        vEC  ^EC
+       .    .    .    .
+        >EC  ^EC
+       .    .    .    .
+
+[308:
+
+Wed May 24 02:45:57 2023 And then behind that we
+want an SL, and behind that we want a MK5
+CellModel (stub), followed by four EdgeModel
+(stubs) the last one of which carries MK5.
+
+And we want to see that deploy (and then sit there
+with the tail clogging up BLU).
+[310:
+
+Wed May 24 02:55:31 2023 Then we need to figure
+out how the CellModel closes the loop and detaches
+from the DS.[319:
+
+Thu May 25 03:02:35 2023 OK, saw the body model
+loop get started up, and CM+EMs got sent into it.
+
+Now building again so CM tries to push down any
+temps that appear downstream of it, so the EMs
+will compact up against the CM.
+
+Thinking maybe the labeled EM, knowing he's the
+tail end Charlie, could be the one to create the
+loop with the CM, and kill the remaining loop
+behind it.[320:
+
+Thu May 25 03:34:06 2023 Looks like when the SL
+regrips at the end it's leaving the MK5 EdgeModel
+in the XEQ DSP? Do we need an .mSkipInsnsBack = 1
+or something?[321:
+
+Thu May 25 03:56:09 2023 OK, made
+.mSkipInsnsAfter, and now we're getting to the
+original NA arm before the Body Model Prelude code
+ends.
+
+Unfortunately, that NA starts off trying to kill
+BLU, which at the moment is trying to kill the
+body model because we haven't implemented it yet.
+
+But progress. Nap time.
+[322:
+
+Thu May 25 08:58:41 2023 So, was thinking we
+should stick a WT, for BLU to be empty, at the end
+of the prelude. Could we do that? At the cost of
+yet another insn of course.[323:
+
+Thu May 25 09:06:30 2023 Wow even had the exact
+insn already available - cINS_WAIT_FOR_EMPTYREG.
+This might be the first exact duplicate in the
+code even?
+
+[324:
+
+Thu May 25 09:33:56 2023 And no matter what, I
+think, we're going to have to make an opportunity
+for germline modification, here, so that
+subsequent daughters are aware of their positions
+in the developmental sequence?
+
+Right? Unless that could be epigenetic? Well, it
+could be both. Have a split count in the prelude
+but also have things triggered by context. Maybe.
+Gotta earn our way there. For now let's try for a
+"cell number" concept in the prelude.
+[325:
+
+Thu May 25 09:48:00 2023 Well we have to rework it
+somehow, it seems. Right now we're starting the
+prelude with two 'standard' insns:
+
+    // BEGIN BODY MODEL PRELUDE
+    cINS_NANOARM_DEPLOYMODEL10,   // MO: NA BUILD BODY MODEL LOOP
+    cINS_SEND_LOOP_MODEL10,       // MO: SL SEND BODY MODEL
+    cINS_MK5_CELLMODEL10,         // MO: CM#5 CELL MODEL
+ ..
+
+and the CellModel never executes on the germline,
+so it can't modify itself. But if we put it first
+or second, it won't get copied by the SL.
+
+Maybe put it second, and have it copy itself to
+the BLU arm, and have the SL copy the rest? Like
+
+    cINS_NANOARM_DEPLOYMODEL10,   // MO: NA BUILD BODY MODEL LOOP
+    cINS_CELLMODEL10,             // MO: CM CELL MODEL
+    cINS_SEND_LOOP_MODEL10,       // MO: SL SEND REST OF MODEL
+    cINS_MK5_EDGEMODEL10,         // MO: EM#5 EDGE MODEL 1
+    cINS_EDGEMODEL11,             // MO: EM EDGE MODEL 2
+    cINS_EDGEMODEL12,             // MO: EM EDGE MODEL 3
+    cINS_EDGEMODEL13,             // MO: EM EDGE MODEL 4
+    cINS_MK5_WAIT_FOR_MODEL,      // MO: WT#5 WAIT TIL BLU CLEAR
+
+That could work, right?
+
+[326:
+
+Thu May 25 09:55:26 2023 We also need to
+distinguish LD and RD, though, and the CellModel
+won't be in position to do that on the fly. So
+that would want to be epigenetic. How would we
+want to do that? Reintroduce the DS grip change?
+(What's the status on that, actually?)
+[327:
+
+Thu May 25 10:36:24 2023 OK trying a build on that
+prelude redo.. Made
+
+  typedef Unsigned(5) CellSequence;
+  CellSequence mCellSequence;
+
+in CellModel, so we can have up to 32 cells in our
+multicellular body plan. That could happen..
+[328:
+
+Thu May 25 10:52:03 2023 OK so the copied CM
+[329:
+
+Thu May 25 16:16:39 2023 OK so we've now seen the
+MO body model fully deploy, detach from DS, and
+for the (was 1st now) 2nd MO->LD contruction arm
+to pass by and go about its business.
+
+And now the MO loop has been torn down and we do
+indeed have a stub body model loop, six atoms
+large, sitting to the SW of RG.[330:
+
+Thu May 25 16:21:27 2023 And I guess now we're
+watching to see how the stub gets torn down when
+the MO splits. We have no code for that but It
+Should Just Work right?
+[332:
+
+Thu May 25 16:26:43 2023 Wellll, it allllllmost
+worked :).. Everything cleaned up except the
+!mFront CM is currently embedded in the LD.. I
+sort of think that'll clean up when the LD grows;
+we shall see.[333:
+
+Thu May 25 16:28:58 2023 Oh! And I didn't even see
+that the body models had deployed successfully in
+LD and RD!
+
+..And they both think they're mCellSequence 2 and
+there's no mCellSequence 0 to be seen anywhere
+because it split. And I suspect neither of these
+new MOs are going to grow any more, because
+they're at mMaxHops 9u so I expect their CMs will
+suppress further growth. So they're just going to
+bounce around, with the LD having a rogue CM
+embedded near its eastern tip?
+
+(Ooh I was wrong, the CM rogue DOES have
+mCellSequence 0, because it's a vestige of MO.)
+[334:
+
+Thu May 25 16:36:24 2023 Oh fudge the rogue CM
+disappeared somewhere along the way but I missed
+seeing that. No obvious failure sign in the log.
+
+[341:
+
+Thu May 25 16:42:12 2023 And hmm, the RD is now at
+mMaxHops 11u, which we were thinking wasn't
+supposed to be possible given the CM in the SW
+pocket of the RG. Could it be that adviseRoot(..)
+might not have been able to see the CM at some
+point, and it went ahead on its own? Let's check
+that.. [342:
+
+Thu May 25 16:47:36 2023 Hmm this is a bit of a
+bummer. To be confident there's no
+DiamondController around, before RG takes
+basically any action, it needs to be sure there's
+no inaccessible sites in ANY of its
+pockets. Unless we pass some kind of law saying
+DCs are only reliable in certain pockets (like the
+SW..)
+[343:
+
+Fri May 26 00:58:01 2023 Well that turned out not
+so badly, it seemed. At least everything still
+seems to be working. We'd kind of expect things to
+be relaxed before RG can act safely anyway, right?
+
+
+:343]
+
+:342]
+
+:341]
+
+:334]
+:333]
+
+:332]
+
+[331:
+
+Thu May 25 16:24:46 2023
+
+(SLOGAN:
+IT'S ALWAYS WISE
+TO RANDOMIZE )
+
+:331]
+
+:330]
+
+:329]
+
+:328]
+:327]
+:326]
+
+:325]
+:324]
+
+:323]
+
+:322]
+:321]
+
+:320]
+
+:319]
+
+:310]
+:308]
+:306]
+:304]
+
+:303]
+
+:302]
+
+:301]
+
+:300]
+
+[299:
+
+Wed May 24 00:11:59 2023 (Building again after
+changing Aa.isBlocker(..) to say no on same-dir Aa)
+
+:299]
+:298]
+
+:297]
+
+:296]
+
+:295]
+[305:
+
+Wed May 24 00:55:46 2023 (Building again after
+adding mPocketGood[..] to D1PocketableState and
+trying to allow NA to head away from an edge even
+if not all pockets are good..)
+
+:305]
+[307:
+
+Wed May 24 02:43:18 2023 (Building again to tweak
+the LD->RD raised cross so that it zig-zags down
+as well as up, since we're seeing it blocked
+against the edge on the right sometimes.. and
+we've got insns to burn..)
+[309:
+
+Wed May 24 02:55:01 2023 (Looks like the extra zig
+zag is going its job.)
+
+:309]
+:307]
+[311:
+
+Wed May 24 09:07:15 2023 So I think I'd like to
+get A17219 this onto the T2s so we could compare
+and contrast it with the A17215 that's running
+there now.. in particular, before tearing it all
+up for the Cell Model stuff.
+[312:
+
+Wed May 24 09:32:35 2023 OK A17219 is building on
+the keymaster and we've moved to A17220 here.
+
+:312]
+:311]
+[313:
+
+Thu May 25 00:24:16 2023 What about deploying a
+suppressor that ties up an LD DSP and keeps the LD
+DS from cycling (successfully), but the suppressor
+has a watchdog so unless it receives frequent
+enough "keep suppressing" signals, it will
+eventually erase itself and the replication
+sequence will continue.
+
+[314:
+
+Thu May 25 01:41:20 2023 Just cleaning up the disk
+on t2slap.. These latest changes to camera
+settings -- brightening the image a bit, mainly --
+seem to have really increased the daily disk
+budget.. [315:
+
+Thu May 25 01:43:12 2023 The session/230 images
+appear to be running around 3.5MB each now.. That
+would mean we're now over 60GB/day rather than ~50
+back in 226..
+
+:315]
+
+:314]
+:313]
+[316:
+
+Thu May 25 01:46:57 2023 OK come on restate
+subgoals:
+
+ - What we said in ~:308: above:
+
+[340: DONE  :340] - Demo a stub BODY MODEL PRELUDE
+[317:
+
+Thu May 25 01:50:09 2023 OK we stuffed
+cINS_NANOARM_DEPLOYMODEL0 into Ancestor.ulam. We
+also need some model stubs.
+
+[318:
+
+Thu May 25 01:53:13 2023 OK trying for
+QBodyModel.ulam. What are we basing on?
+PocketChain? Codon? LX?
+
+:318]
+:317]
+:316]
+[335:
+
+Thu May 25 16:37:14 2023 So, can we claim any
+to-do, here? Feels like there should be
+something..
+[339:
+
+Thu May 25 16:38:20 2023 Ahhh, claimed three back
+in :294: above.
+
+:339]
+:335]
+[344:
+
+Fri May 26 01:00:19 2023 So, where are we here?
+[345:
+
+Fri May 26 02:10:21 2023 Urgh, sidetracked. More
+
+TODO
+
+ - Think of ways to distinguish LD from RD in cell
+   sequence.[346:
+[366:
+DONE :366]   = How about if the diamond cutters carry cell
+     sequence#'s? That's good, right? Because
+     - They move separately from the center, where
+       the body model is, to the LD and RD DSs
+     - When they get there, the daughter CM is
+       close (but not in) the XEQ DSP.[347:
+       Fri May 26 02:17:32 2023
+     - Hmm and if the cutter fails to deliver the
+       # somehow, the daughter thinks it's #0 and
+       starts from scratch? "Failsafe" vs
+       cancerous..  :347]
+
+:346]
+
+ - Think of ways for
+
+:345]
+:344]
+[348:
+
+Fri May 26 02:18:41 2023 OK, so, yes, we need to
+integrate the body model with the diamond cutting
+process in several ways:
+
+[390: Thu Jun  1 00:03:12 2023
+DONE :390] - Have CM control the actual timing of the cut
+
+[391:
+DONE :391] - Have XD carry seq#s and/or other somatic config
+
+[392:
+DONE :392] - Have the body model loop clean itself up after
+   split released.
+
+[349:
+
+Fri May 26 02:28:10 2023 Seq# isn't really going
+to work, linearly, though, is it? These things are
+still running in parallel, even if they're
+(destined to be) coordinated. It'll need to be a
+bitmap like the barcode, we think, yes?
+
+And we could have some "developmental table" -- in
+the physics, at least for the foreseeable -- that
+maps from barcode to cell properties.. whatever
+they turn out to be.
+
+ - target size/scale
+ - affinity direction
+ - connectivity?
+
+What if we imagined a 'nervous system' running
+through the cells, that basically amounted to
+routing information between cells? With info like
+
+ - Who is upstream for sensorimotor integration?
+ - Who is upstream for birth/death decisions?
+
+It could be priorities for all edges, rather than
+a single upstream direction.
+
+:349]
+
+:348]
+[350:
+
+Sat May 27 00:33:42 2023 OK, so let's
+operationalize the CellModel -> DiamondCutter
+flow. For starters, let's review XD.
+
+ - element XCutDiamond : DiamondCutter
+
+ - quark DiamondCutter : D1Pocketable
+   = Pretty low-level!
+   = Three intentions:
+     - DiamondCutter
+       FindOldRoot, SeedNewRoot, DeleteOldRoot
+
+
+[351:
+
+Sat May 27 00:59:08 2023 I guess do we want
+subsumption? If CM is nowhere to be found, do we
+have XD act as it does now?
+
+Perhaps it would be good to have CM vacuum up the
+inbound XDs as it sees them, both for signal
+integration and for default mode suppression.[389:
+
+Thu Jun  1 00:02:05 2023 (We didn't do that
+because it was better to keep the XD around to
+hold their spaces so we could reploy them.)
+
+:389]
+
+[352:
+
+Sat May 27 01:09:24 2023 Well can we here get some
+
+TODO
+
+ - Have DiamondCutterBase.rootAdjacent(..) try to
+   head for HCPoint (-1,1) specifically, rather
+   than (0,0)
+
+[362:
+DONE :362] - Have DiamondCutterFindOldRoot go passive if it
+   sees CM
+
+[363: done and then
+UNDONE :363] - Have CM record XD arrivals.
+
+[364:
+DONE :364] - Have CM do the work of deployRootSeeds(..)
+
+[365:
+DONE :365] - Add a CellSequence to XD
+
+[353:
+
+Sat May 27 11:28:27 2023 OK trying to implement
+some of these.. Questions arising..
+
+ - Once XD reaches a daughter, how exactly does
+   the DiSequence its carrying get deployed?
+
+I guess the idea is we will NOT modify the
+germline on the fly, when DiModel is deploying
+itself?
+
+Or.. wait, is it when DiModel is deploying itself,
+it will look for the 'epigenetic' results of the
+XD arrival from before and use that to pick up the
+disequence info?
+
+And where exactly are we going to put that
+epigenetic info? We want it in a DSP, right? [354:
+
+Sat May 27 11:40:51 2023 Specifically in GRN, I
+think? To the NE while DM is running in WHT in the
+SE?
+
+Aand is it in fact an XD that's sitting there? So,
+XD SeedNewRoot, instead of doing
+
+       = when can see DS and HG south of DS, convert
+         HG south of DS to a configured root and erase
+         self
+
+will do something more like
+
+       = when can see DS and HG south of DS, convert
+         HG south of DS to a configured root, adopt
+         intention 3, and move to NE of DS
+
+intention 3 being DiamondCutterConfigureDiModel or
+something.
+
+[355:
+
+Sun May 28 02:01:39 2023 OK so trying to have
+DiModel collect XDs until it's seen one from both
+sides, but realizing that the arriving XDs are
+actually anonymous wrt LD vs RD.. So all we can
+really do is count to 2 and then go.. Or even
+perhaps timeout and go with 1, if we dare..
+[356:
+
+Sun May 28 23:40:21 2023 OK, so we've got DM
+configuring XD.mDeliveredDiSequences and sending
+the XDs off. We've got those XDs creating the LD
+and RD roots.
+
+We still need:
+
+[357: Mon May 29 02:16:00 2023
+DONE :357] - Those XDs hang around in DSP we think RED, so
+   the next-gen DM can pick up the DiSeq
+
+[360: Mon May 29 05:56:57 2023
+DONE :360] - The MO DM needs to kill the MO root since we
+   have no remaining central XD to do it.
+[359:
+
+[361:
+DONE :361] - The deployed DM needs to pick up the XD
+   DiSequence info and erase the XD
+
+:359]
+:356]
+:355]
+:354]
+
+:353]
+:352]
+
+:351]
+
+:350]
+[358:
+
+Mon May 29 02:16:09 2023 OK it seems that keeping
+the XDs around in RED isn't killing anything
+immediately.
+
+:358]
+[367:
+
+Mon May 29 05:58:10 2023 OK just claimed a bunch
+of to-dos - we finally see the first daughters DMs
+getting non-zero mDiSequence's, via XDs from the
+MO DM. 1st LD got 2, 1st RD got 3. Which I think
+will allow them both to go MO..
+[368:
+
+Mon May 29 10:45:42 2023 Well, let it go with a
+movie and at ~125KAEPS ~/MFMS-TMP/20230529062936/
+is showing way too many Dis so something went
+wrong.. [369:
+
+Mon May 29 10:50:06 2023 Hmm I'm thinking
+overflow, despite ulam's saturating arithmetic,
+because I used Bits and shifting..[370:
+
+Mon May 29 13:06:21 2023 OK, I think we're back to
+the two-splits-only demo, except the LD of the LD
+is going to split a third time because its DiSeq
+is 4u and the code was stopping at > 4u (but now
+it's > 3u).
+
+So we need to think forward a bit more I think,
+on 'fleshing out', so to speak, the BodyModel.
+
+ - Can we get the DM loop to encircle the RG?
+   To look something like:
+
+       .    .    .    .    .    .
+
+
+       .    .    .    .    .    .
+              DM  <DM
+             vEM   EM
+       .    .    RG   .    .    .
+             EM>  EM^
+
+       .    .    .    .    .    .
+
+   Maybe? Looks pretty tight
+
+   Or something like this?
+
+       .    .    .    .    .    .
+
+        vEM  <DM  <DM  <EM
+       .    .    .    .    .    .
+
+        vEC             ^EC
+       .    .    RG   .    .    .
+
+        vEC             ^EC
+       .    .    .    .    .    .
+
+        >EM  >EC  >EC  ^EM
+       .    .    .    .    .    .
+
+
+And I guess the point is to get each EM into the
+quadrant of its corresponding edge. Wait so how
+about like this:
+
+       .    .    .    .    .    .
+
+             vDM  <DM
+       .    .    .    .    .    .
+             vEM  ^EM
+
+       .    .    RG   .    .    .
+
+             >EM  ^EM
+       .    .    .    .    .    .
+
+? Ah but then the DMs can't talk to the RG, that's
+the problem with that. Would need like:
+
+
+       .    .    .    .    .    .
+
+             vEM  <EM
+       .    .    .    .    .    .
+             vDM  ^DM
+
+       .    .    RG   .    .    .
+
+             >EM  ^EM
+       .    .    .    .    .    .
+
+
+which is certainly possible but isn't what we've
+got so far.
+[371:
+
+Mon May 29 13:27:52 2023 Though that makes me
+worry about having two DMs next to RG - because
+then adviseRoot(..) might delegate to either of
+them. But we don't have to have two DMs if that's
+a problem.
+
+:371]
+
+:370]
+
+:369]
+
+:368]
+:367]
+[372:
+
+Mon May 29 13:44:26 2023 I really think we have a
+problem in TQDSControl.chainError. The
+PatchRule.evaluate(..) call is described thusly:
+
+    Int dp = evaluate(ps,prpb); // returns delta penalty
+
+but it seems like target quadrant violations end
+up being in effect absolute rather than a delta.
+
+I don't have a smoking gun for it yet though.
+
+Right now we're dealing with a locked-down LD that
+has no ECs in it so it can't roll. TQSDControl is
+saying mLockedDown==true but also mECsGood==true
+and I see places where it certainly looks like
+PatchRule_CREATEECPAIR could match, but it never
+seems to be happening..[373:
+
+Mon May 29 14:05:01 2023 OK so it's because
+mLockedDown -> getTQDSLockedDown() is super
+strict:
+
+      if (a as TQDSControl) {            // Check if locked down
+        mD&&pR("UPTCH14");
+        if (a.getTQDSLockedDown()) return false; // No rules at the patch
+        mD&&pR("D1UPTCH15");
+      }
+    }
+
+    PatchRules pr;
+    pr.takeDebug(hc);
+    return pr.tryRandomRule(ps);
+
+so we never try any patch rules. Could we make
+that more like we thought it was - with like some
+kind of per-rule flag, or a separate array for
+okay-during-lockdown rules?
+
+How many rules are okay during lockdown, anyway?
+We're thinking anything that cannot change
+maxdshops or tq error c/should be okay?
+
+PatchRule_PAIRROLLDOWN
+PatchRule_PAIRROLLUP
+PatchRule_CREATEECPAIR
+PatchRule_DELETEECPAIR
+
+[374:
+
+Mon May 29 14:12:08 2023 Well that looks like a
+pretty useful smattering of rules! Let's try
+making them legal during lockdown and see how it
+goes.
+
+:374]
+
+:373]
+
+:372]
+[375:
+
+Mon May 29 15:02:30 2023 So this claim that
+evaluate does or should return delta penalty is
+way fucked up. TQDSControl.errorFromDSHops(..) for
+example, returns a positive (penalty) value
+most of the time, and there's never - as far as I
+can tell - any 'before' calls to cancel that out.
+
+So as it stands now, I don't see how we can flat
+out ban accepting moves with some penalty..
+[376:
+
+Mon May 29 16:21:09 2023 OK have an issue with the
+DM overriding the XD default mode: It's possible
+for one XD to see the other XD without also seeing
+the DM - at which point that XD pulls the
+old-fashioned trigger and sends the XDs out
+without their DiSeqs from the DM.
+
+Maybe say the XDs have to be SE or SW of RG before
+the default mode can go? In this case, they're NW
+and NE, making it easy to not see the DM.
+
+I still don't think that would be completely
+reliable though. If you have to see all of RG's SW
+pocket, maybe, but that feels pretty hacky.
+[377:
+
+Mon May 29 22:57:34 2023 Well, the current scheme
+- requiring that XD see HCPoint(-1,1) - seems like
+it's vulnerable to deadlock. At least, the run I
+left going is at 78KAEPS and the third split
+hasn't happened.. We need 'rootAdjacent' to dither
+harder or something.
+
+[378:
+
+Tue May 30 01:10:11 2023 Well I changed
+XD.act(..) to have a 20% chance of trying to move
+even when rootAdjacent(..) returns true, and so
+far we haven't see any more lockups at the
+split.
+
+But then, we've only seen three splits, because
+the Body Model Prelude seems to be kind of
+working.
+
+So, ah, let's say it's time for some
+multicellularity, newly and again. I think of X
+and Big Di:
+
+       / \     / \
+      /   \   /   \
+      \   /   \   /
+       \ / / \ \ /
+          /   \
+          \   /
+       / \ \ / / \
+      /   \   /   \
+      \   /   \   /
+       \ /     \ /
+
+
+
+           / \
+          /   \
+          \   /
+       / \ \ / / \
+      /   \   /   \
+      \   /   \   /
+   / \ \ / / \ \ / / \
+  /   \   /   \   /   \
+  \   /   \   /   \   /
+   \ / / \ \ / / \ \ /
+      /   \   /   \
+      \   /   \   /
+       \ / / \ \ /
+          /   \
+          \   /
+           \ /
+
+[379:
+
+Tue May 30 01:17:34 2023 Actually maybe we should
+start with Little Di
+
+           / \
+          /   \
+          \   /
+       / \ \ / / \
+      /   \   /   \
+      \   /   \   /
+       \ / / \ \ /
+          /   \
+          \   /
+           \ /
+
+
+And how do we notate the devo process?
+
+   1
+
+   |
+   v
+
+ 2   3
+
+   |
+   v
+
+   5
+ 4   7
+   6
+
+And we can use the 2*k and 2*k+1 'heap'
+indexing for representing split kids.
+
+We always start with #1
+#1 splits into #2 (LD) and #3 (RD),
+#2 splits into #4 and #5, and so on.
+
+[380:
+
+Tue May 30 01:36:00 2023 That gets the logical
+desendant relations but not the physical spatial
+relocations. Like, when 2 splits into 4 and 5 it's
+going to be
+
+ 2   3
+
+   |
+   v
+
+4  5  3
+
+   |
+   v
+
+   5
+4     3
+
+
+:380]
+
+:379]
+
+:378]
+
+:377]
+
+:376]
+
+:375]
+[381:
+
+Tue May 30 03:46:48 2023 If we're going to stay
+with the latest changes - and we're not really
+sure how to undo them without losing lots of good
+stuff - I think we're going to have to revisit
+LXRemapLoop. Because
+
+1. We had a case where it saw maxhops 8 and locked
+   down, but a race led to maxhops going back to 9
+   before the lock got there, and the LD genome
+   was lost in the cut.
+
+2. It seems to often be taking a much longer time
+   to get to maxhops 8 in the current regime, and
+   it's a drag to slog through.
+
+I'm thinking of a little timed state machine for
+RM, that needs to see 8 & locked down for a
+significant length of time before moving on, and
+when it sees >8 it randomly cycles between states
+like:
+(A) mECsGood == true
+    mLockedDown == false
+(B) mECsGood == false
+    mLockedDown == false
+
+(C) mECsGood == true
+    mLockedDown == true
+
+with rules like:
+ if A or B and maxhops <= 8:
+   ->C and reset timer
+ if A and oneIn(100u)
+   -> B
+ if B and oneIn(500u)
+   -> A
+ if C and maxhops > 8
+   -> A
+ if C and maxhops <= 8 and time expires
+   -> insn done
+
+with the intention that we'll mostly try to
+squeeze out ECs and get small (B), but every so
+often we'll go the other way and get floppy to
+shake things loose, before going back to
+squeezing. And we have to be in C consecutively
+long enough to believe the lockdown has reached
+the whole loop and back.
+
+:381]
+[382:
+
+Tue May 30 06:42:28 2023 So okay, we've raised the
+body model maxhops to 13, and now it appears that
+(three out of four anyway) Dis have moved their
+genome to the LD, pretty much clearing the
+center.[383:
+
+Tue May 30 06:49:07 2023 (OK now all four Dis have
+moved their loops.)
+
+:383]
+
+:382]
+[384:
+
+Tue May 30 12:12:59 2023 So, about time to move
+the flag, but we are really about facing fleshing
+out the body model, here.
+
+:384]
+[385:
+
+Wed May 31 01:15:31 2023 OK set up again.
+
+On the T2 matrix, session 230 ended with a power
+outage.
+
+:385]
+[386:
+
+Wed May 31 04:24:29 2023
+
+What can we say about this?
+
+   1
+
+   |
+   v
+
+ 2   3
+
+   |
+   v
+
+   5
+ 4   7
+   6
+
+
+1: NW:0,NE:0,SW:0,SE:0 (all clear)
+2: NW:3,NE:0,SW:0,SE:0
+3: NW:0,NE:0,SW:0,SE:2
+
+
+So we're saying something like
+
+  / \                     NW NE SW SE
+  \1/                   1. 0, 0, 0, 0
+
+   |
+   v
+
+   / \ / \              2. 0, 3, 0, 0
+   \2/ \3/              3. 0, 0, 2, 0
+
+
+   |
+   v
+
+
+
+    / \                 2. 0, 3, 0, 0
+ / \\3/                 3. 0, 0, 2, 0
+ \2/
+
+          |
+          v
+                        4. 0, 6, 0, 5
+            / \ / \     5. 4, 7
+     / \ / \\6/ \7/
+     \4/ \5/
+
+          |
+          v
+
+       / \  / \
+       \4/ \\6// \
+         \5/   \7/
+
+          |
+          v
+
+         / \
+       / \6// \
+       \4/ \\7/
+         \5/
+
+
+
+
+
+            / \
+     / \ / \\3/
+     \4/ \5/
+
+            / \ / \
+     / \ / \\6/ \7/
+
+            / \ / \
+     / \ / \\6/ \7/
+     \4/ \5/
+
+
+l    \4/ \5/
+
+
+
+
+:386]
+[387:
+
+Wed May 31 05:37:06 2023 OK, so, I tried expanding
+EdgeCoord.EdgeTag to be DiModel.DiSequence, but
+that overflows the Aa:
+
+    ./Antenna.ulam:5:9: ERROR: Trying to exceed allotted bit size (71) for element Antenna with 73 bits.
+
+we could cut DiSequence to Unsigned(6) instead of
+8, but it makes me wonder if we'd be better off
+doing another mapping there anyway. If we go with
+exact DiSequences we'll have less of a shot at the
+frog-eye-on-frog-butt and so on. So maybe we stay
+with
+ JunctionIndexProvider:
+  typedef Unsigned(3) JunctionIndex;
+and
+ EdgeCoord:
+  typedef JunctionIndexProvider.JunctionIndex EdgeTag;
+
+and have the Di and Edge Models do the mapping
+somehow..
+
+:387]
+[388:
+
+Wed May 31 23:43:47 2023 OK so obviously the first
+multicellular creature is not Little Di but Slash:
+
+           / \
+          /   \
+          \ 3 /
+       / \ \ /
+      /   \
+      \ 2 /
+       \ /
+
+and possibly its lil buddy Backslash:
+
+           / \
+          /   \
+          \ 2 /
+           \ / / \
+              /   \
+              \ 3 /
+               \ /
+
+:388]
+[393:
+
+Thu Jun  1 00:04:08 2023 So, to do Slash, we want
+the DiModel and EdgeModels to deploy
+JunctionIndexProviders to make 2SE and 3NW attract
+somehow.
+
+Actually come on: Let's take a minute to think
+about migrating the Body Model to surround RG. How
+can we do that?
+
+Could we somehow stick another NA into the BMP, to
+deploy after MO decays?[394:
+
+Thu Jun  1 00:19:01 2023 Maybe instead of the
+second DM we could have an NA in there?
+
+We're currently deployed like this:
+
+       .    .    .    .    .    .
+
+
+       .    .    DS   .    .    .
+
+                        stuff
+       .    .    RG   .    .    .
+         DM> DMv
+                        stuff
+       .    .    .    .    .    .
+        EM^  EMv
+
+       .    .    .    .    .    .
+        EM^  EM<
+
+       .    .    .    .    .    .
+
+
+and we're wondering if that could be instead like
+this
+
+
+       .    .    .    .    .    .
+
+
+       .    .    DS   .    .    .
+
+                        stuff
+       .    .    RG   .    .    .
+         NA> DMv
+                        stuff
+       .    .    .    .    .    .
+        EM^  EMv
+
+       .    .    .    .    .    .
+        EM^  EM<
+
+       .    .    .    .    .    .
+
+
+which would start to deploy like this:
+
+
+       .    .    .    .    .    .
+
+
+       .    .    .    .    .    .
+
+
+       .    .    RG   .    .    .
+         DM  NAv
+
+       .    .    .    .    .    .
+        EM^  EMv
+
+       .    .    .    .    .    .
+        EM^  EM<
+
+       .    .    .    .    .    .
+
+
+and continue maybe something like this:
+
+
+       .    .    .    .    .    .
+
+
+       .    .    .    .    .    .
+
+             ECv   EC<
+       .    .    RG   .    .    .
+         DM  ECv
+                   EC^
+       .    .    .    .    .    .
+        EM^  EMv
+                   NA^
+       .    .    .    .    .    .
+        EM^  EM<
+
+       .    .    .    .    .    .
+
+
+and eventually flush to like this
+
+
+       .    .    .    .    .    .
+
+
+       .    .    .    .    .    .
+
+             EMv   EM<
+       .    .    RG   .    .    .
+             EMv
+                   EM^
+       .    .    .    .    .    .
+             DM
+                   NA^
+       .    .    .    .    .    .
+
+
+       .    .    .    .    .    .
+
+
+[395:
+
+Thu Jun  1 01:37:54 2023 It would really help if
+we could get the body model down to four atoms
+instead of five. Does 'head' or whatever really
+have to be that special?[396:
+
+Thu Jun  1 04:58:50 2023 Maybe 'head' could just
+be a flag set on one Edge. Or a zone held in
+common maybe.
+
+And motion, if any, could always be toward the
+head (except in emergency) so contact warnings
+will tend to have smaller round-trip latency.
+
+:396]
+
+:395]
+
+:394]
+
+:393]
+[397:
+
+Thu Jun  1 05:19:06 2023 What if we have a RNGO
+oscillator around the body model, flipping at the
+'head',
+
+:397]
+[398:
+
+Thu Jun  1 11:25:47 2023 So thinking earlier, what
+about if there was no official head among the
+EdgeModels, but instead, whichever EM gets an
+event checks if an action was needed (based on its
+own info) and possible (based on the RG) and if so
+just makes (meaning 'initiates') that move.
+
+:398]
+[399:
+
+Thu Jun  1 11:48:55 2023 Well I'm thinking we
+should just go 'headless', and deal with however
+that turns out to work in the EMs. Let's change
+the BMP.
+[400:
+
+Thu Jun  1 11:50:34 2023 Do we take this moment to
+rename EdgeModel to DiNgbModel or something?[401:
+
+Thu Jun  1 12:01:48 2023 For starters let's
+
+(1) rename DM to EM,
+(2) Make everything be EM, and
+(3) add a mIsDM flag or mIsHead or something to
+    distinguish a 'head'-EM for purposes of devo
+    or whatever.
+[402:
+
+Thu Jun  1 14:11:28 2023 OK we've got a tight
+four-atom EM loop configured SW of RG. Remaining
+issue is when the SL discharges we're running the
+last EM rather than the WT. Oh but we can
+configure that in the SL now, right? Is
+
+  .mSkipInsnsBack = 1u,
+
+what we want?[403:
+
+Thu Jun  1 14:14:13 2023 No I think it's
+
+  .mSkipInsnsAfter = 1u,
+
+we want.
+[404:
+
+Thu Jun  1 14:27:26 2023 OK that's working now and
+we're back to deploying the MO->LD arm..[405:
+
+Thu Jun  1 14:28:51 2023 Wouldn't it be nice we we
+could reconfigure the BM loop using PatchRule
+moves? Like this:
+       .    .    .    .    .    .
+
+
+       .    .    RG   .    .    .
+        EM>  EMv
+
+       .    .    .    .    .    .
+        EM^  EM<
+
+       .    .    .    .    .    .
+to this:
+       .    .    .    .    .    .
+        EM>  EMv
+
+       .    .    RG   .    .    .
+        EC^  ECv
+
+       .    .    .    .    .    .
+        EM^  EM<
+
+       .    .    .    .    .    .
+to this:
+       .    .    .    .    .    .
+        EM>  EMv
+
+       .    .    RG   .    .    .
+        EM^  EM<
+
+       .    .    .    .    .    .
+
+
+       .    .    .    .    .    .
+to this:
+       .    .    .    .    .    .
+        EM>   EC>  EMv
+
+       .    .    RG   .    .    .
+        EM^  EC<   EM<
+
+       .    .    .    .    .    .
+
+
+       .    .    .    .    .    .
+to this:
+       .    .    .    .    .    .
+              EM>  EMv
+
+       .    .    RG   .    .    .
+             EM^   EM<
+
+       .    .    .    .    .    .
+
+
+       .    .    .    .    .    .
+
+[406:
+
+Thu Jun  1 14:34:18 2023 It's a lot of steps
+though isn't it?
+
+:406]
+:405]
+
+:404]
+
+:403]
+
+:402]
+:401]
+
+:400]
+:399]
+[407:
+
+Thu Jun  1 14:54:08 2023 Now another theory could
+be just leave the BM where it is. Especially with
+it so small and all.. The EM that's SW of RG is
+the only one that will get adviseRoot calls so
+that asymmetry is enforced.
+
+Buut if we're expecting to deploy
+JunctionIndexProviders and reduce edge signals,
+we're going to need access to the NE quadrant of
+RG (for example), which none of the BM currently
+has.
+
+Could we not actually close the loop in the
+initial deployment? Leave it U-shaped, and then
+grow and connect later?
+
+When IS later, by the way? How does EM.mIsHead
+know to start the 2nd stage deploy?
+
+Hmm. Realest clue is when the DS checks out.. Ah -
+which EM can detect just by watching its pocket's
+mDSHops. When that goes above 5u, say, we can
+deploy.
+
+[408:
+
+Thu Jun  1 15:15:59 2023 OK. Let's try for
+
+[409: Thu Jun  1 15:51:50 2023
+DONE :409] - Leave loop unconnected, just LK behind
+
+ - When mDSHops > 5u, trigger 2nd deploy
+
+:408]
+
+:407]
+[410:
+
+Fri Jun  2 00:18:53 2023 OK we just caught a
+failure where the LD loop suddenly decayed shortly
+after releasing the XD, and the underlying causes
+turn out to be
+
+(1) XD.couldMovePP(..) will allow XD to be the
+    third atom of a pocket, and
+
+(2) QHC.moveEntourage(..) will absolutely
+    overwrite pocket contents if more than two
+    atoms are in the pocket.
+
+[411:
+
+Fri Jun  2 00:21:30 2023 I think we should try to
+change (1) instead of (2), there. We were and are
+worried about XD getting hung up moving through
+double-density code loops. And we ARE still
+worried about that.. not having A* equivalent to
+work around such thickets.. What ABOUT blocking
+instead of overwriting in (2)?
+[412:
+
+Fri Jun  2 00:59:38 2023 Well that looked like
+miles of bad road and inappropriate layer
+crossing, so I got rid of triple-occupancy in the
+XD moving, and we're running that now to
+recondition our eyeballs to the problem.
+
+I'm wondering if we could get the XD's to always
+climb the MO hops gradient on the north side, to
+avoid the tangles in the south. We'd have to
+eventually unconstrain the XD when it got close
+enough to MO root..
+
+So the rule could be, like, if mHops > 3u, say,
+then head north if hcpoint.y <= 0, otherwise carry
+on citizen.[413:
+
+Fri Jun  2 01:10:18 2023 Yeah the LD-origin XD
+gets completely snarled in the code loop. The
+RD-origin XD cleared quickly. And the
+inbound-to-MO passage isn't even the biggest issue
+- it's the LD/RD return where the jitter matters
+the most.
+
+So let's try to implement mHops > 3 -> hcpoint.y >
+0 rule, in a fashion that works in both
+directions. (Not clear how to release the
+constraint on the return path, though - there's no
+LD/RD RG yet, so it would have to be based on
+dshops? But that needs to not interfere on the
+inbound passage. Not obvious.)
+
+[414:
+
+Fri Jun  2 01:14:54 2023 Also, I note here: Both
+XDs packed themselves in with the head EM, for
+three-in-a-pocket again there. We shouldn't be
+allowing that.
+
+:414]
+
+:413]
+
+:412]
+:411]
+
+:410]
+[415:
+
+Fri Jun  2 02:54:07 2023 OK, so things are working
+a bit better now, I think. XDs still dither around
+but now they try to stay above the equator, and
+they don't seem to be jamming up too badly,
+despite denying them three-in-a-pocket.
+
+I think basically it's time to try getting edges
+to stick together again. Which is an
+easy-to-want-to-avoid area of dynamics that have a
+lot of painful memories. We shall see.
+
+So. We have a BM per PocketDir, now. So we could
+configure JunctionIndexProviders, according to
+some mapping from mDiSequence. And see all the
+chaos that brings.
+
+Now, if we imagine the EM loop as a shared
+resource, we could think about sending queries
+around the ring to find out what edge
+configuration we wanted, rather than assuming it's
+directly PocketDir-mapped.
+
+Although here on countdown-to-T2sday-Friday, it's
+hard to imagine why we'd do that except to delay
+facing pain.
+
+Come on. Buck up.
+
+So, for Slash, the junctions would be like:
+
+1 -> 2, 3
+
+so
+
+     3
+  2
+
+so
+2:NE center on 3
+3:SW center on 2
+
+[416:
+
+Fri Jun  2 03:06:51 2023 Let's review how
+JunctionIndexProviders et al are supposed to
+work. [417:
+
+Fri Jun  2 03:15:58 2023 So ATM the
+JunctionIndexProvider stuff is all hardcoded, like
+
+      //// JunctionIndexProvider SERVICES
+      virtual ClassId getJunctionClassFromIndex(JunctionIndex jidx) {
+        which (jidx) {
+        case cJUNCTION_INDEX_NULL: { return NullJunction.classidof; }
+        case cJUNCTION_INDEX_FISHFIN2FISHBOD: { return FishFin2FishBodJunction.classidof; }
+        case cJUNCTION_INDEX_FISHBOD2FISHFIN: { return FishBod2FishFinJunction.classidof; }
+        otherwise: { fail(__FILE__,__LINE__,"Unknown JunctionIndex"); }
+
+so at the very least we'd need to decide what
+"kinds" of Junctions Slash and buddies will be
+using.
+
+Choices
+(1) Symmetric: StandardEdgeJunction on both sides
+(2) Asymmetric: LeadJunction mating with
+    FollowJunction or something
+
+Let's try to be symmetric, and pack what
+asymmetries we end up wanting inside as state..
+
+StandardEdgeJunction
+ mOpenDir
+ mDiSequenceToBind
+ mTrackingDistance
+
+Let's try to rough one up based on FishBod2FishFinJunction.
+
+:417]
+
+:416]
+
+
+:415]
+[418:
+
+Fri Jun  2 04:09:40 2023 Oh and here's an issue:
+If we have multiple DiamondControllers around RG,
+and we pick one, and it chooses not to advise,
+then RG goes ahead with default behavior.. even if
+the DC we picked happened to be an EdgeModel with
+mIsHead false..
+
+We need to extend the API with like
+DC.canAdvise(..) to see what the choices are.[419:
+
+Fri Jun  2 04:54:41 2023 OK we added
+
+  //// DiamondController API
+  virtual Bool couldAdvise(RootHardCellG & root,
+                           QHardCellState & qcs)
+
+and are running again; take a while to get there
+since we're still doing two splits at the moment,
+as if we were doing Little Di..[420:
+
+Fri Jun  2 04:56:41 2023 OK and we just watched LD
+get completely slaughtered because its XD got
+stuck behind the loop and never created the LD
+RG.
+[421:
+
+Fri Jun  2 10:11:06 2023 OK, I think we're having
+XD cruise at .y == -1 or less and so far things
+seem okay.
+
+:421]
+:420]
+
+:419]
+
+:418]
+[422:
+
+Fri Jun  2 10:12:34 2023 Have to have the EMs set
+junction anchors. Here we go. [423:
+
+Fri Jun  2 10:25:16 2023 OK, we're trying to make
+EMS.actCheckJunction(..), and so now we need to
+know if and what kind of junction to anchor.. Did
+we already make stg for that? No we're supposed to
+derive it from the mDiSequence, right? Plus our
+own quadrant I guess, assuming we're not going to
+have these things rotate as a matter of symmetry.
+[424:
+
+Fri Jun  2 10:41:32 2023 Aand where exactly is
+this (DiSequence, PocketDir) -> JunctionIndex map
+going to be stored? Is it all physics, or not?
+
+ATM, for what it's worth, EM has 15b available, so
+there's 60b if we wanted them.
+
+And for Little Di, which we still appear to be
+heading toward despite claiming we should begin
+with Slash, the mappings we'd want are like:
+
+all 'standard edge junction's, I guess
+
+ (4,SE):(5,NW)
+ (5,NE):(7,SW)
+ (6,SE):(7,NW)
+ (6,SW):(4,NE)
+
+and assuming we're sticking to matching opposite
+edges, that boils down to
+
+ (4,NE/SW,6)
+ (5,NE/SW,7)
+ (4,SE/NW,5)
+ (6,SE/NW,7)
+
+and if we stick with
+
+  typedef Unsigned(8) DiSequence; // Room for seven generations + leading 1
+
+that's 8+8+2 == 18b per rule
+so four rules is 72b and we're over for biology.
+
+6b for DiSequence could fit..
+
+Now if it wasn't a full map, but was instead
+indexed by the EM, then we 'only' need to store
+four DiSeq per EM for array of edges, but that's
+still too big.
+
+[425:
+
+Fri Jun  2 11:48:28 2023 Right now, we still have
+
+  typedef Unsigned(3) JunctionIndex;
+
+in JunctionIndexProvider. If we said something
+like evens matched odds, or matching jdxs add to
+7u, or whatever.. or equal jdxs match and 0u means
+open.. then it could be 4x3 == 12b per EM for an
+edge map. So Little Di could be like:
+
+DiSeq  NW NE SE SW
+ 4      0  1  3  0
+ 5      3  2  0  0
+ 6      0  0  4  1
+ 7      4  0  0  2
+
+and I guess we could go 'full devo' with
+ 1      0  0  0  0
+ 2      0  5  0  0
+ 3      0  0  0  5
+
+Do we need a unique EdgeTag there for 2:3? 2 is
+going to become 4&5, 3 -> 6&7.. Could we reuse 1
+there?
+
+DiSeq  NW NE SE SW
+ 2      0  1  0  0
+ 3      0  0  0  1
+
+[426:
+
+Fri Jun  2 12:05:19 2023 Could these tags, or
+something like them, be.. movement instructions?
+
+I'm thinking again about how to break symmetry to
+get from this
+
+       / \   / \
+      /   \ /   \
+      \ 2 / \ 3 /
+       \ /   \ /
+
+to this
+           / \
+          /   \
+          \ 3 /
+       / \ \ /
+      /   \
+      \ 2 /
+       \ /
+
+Unless maybe we're supposed to be fine because we
+have corner Aas now and they'll receive edge tags
+tip-to-tip? How does the EG report that up?[427:
+
+Fri Jun  2 12:11:52 2023 Oh yeah, EG doesn't
+report that up - MBase does. And there's no corner
+MB.. [428:
+
+Fri Jun  2 12:14:19 2023 Not exactly following how
+MB adjacent to corners are picking up their
+mInboundEC, though.
+
+:428]
+
+:427]
+
+
+:426]
+
+:425]
+
+
+:424]
+
+:423]
+
+:422]
+[429:
+
+Fri Jun  2 13:08:04 2023 Well, for today's Little
+Di anyway, lets just do physics. Let's add some
+EdgeModel API, perhaps like:
+
+ JunctionIndex getJunctionIndexForEdge(DiSequence diseq, PocketDir edge)
+
+:429]
+[430:
+
+Fri Jun  2 16:49:21 2023 OK a first partial cut is
+running. Issues so far:
+
+ - Only the mIsHead LittleDi ever shows as
+   mIsDeployed
+
+ - Ditto the mDiSequence: The non-head LDs all
+   show mDiSequence == 1u which means they'll try
+   to deploy junction anchors incorrectly.
+
+:430]
+[431:
+
+Sat Jun  3 01:59:36 2023 OK caught an XD
+triple-occupancy case due to couldMovePP not
+treating inaccessible sites as a veto. Bad code,
+but good catch.
+
+:431]
+[432:
+
+Sat Jun  3 02:05:25 2023 Do we have to set
+mIsDeployed on the mIsHead LD so early? It would
+be better to wait until the head 'reads' the
+delivered DiSeq from the XD ..but there might not
+be an XD, so we'd have to time out on that? Leave
+it for now. I guess it's like a fetus looking like
+a fish for a while, and so on.
+
+[433:
+
+Sat Jun  3 02:35:57 2023 Hmm how come I can't find
+the LD/RD initial size asymmetry now? I just had a
+partially busted run that lost the RD, and then
+the LD->MO grew and split into touching LD and RD
+with maxgoals of 10 each. Wasn't RD supposed to be
+9?
+
+Now I did miss some stuff so possibly RD grew
+quickly and that was the problem.. but then now I
+can't find the code that's supposed to create the
+asymmetry..
+
+[434:
+
+Sat Jun  3 04:43:22 2023 OK we've finally reached
+a point where we're failing on new DiSeq and tag
+stuff.
+
+We have LittleDi with its BodyPlan:
+
+    element LittleDi : EdgeModel
+    {
+      typedef BodyPlanStg(7u) LittleDiBodyPlan;
+      constant LittleDiBodyPlan cLITTLEDI_BODYPLAN = {
+        .mEdgeTagMap = {
+          { .mEdgeTagArray = { 0u, 0u, 0u, 0u } }, // 1
+          { .mEdgeTagArray = { 0u, 5u, 0u, 0u } }, // 2
+          { .mEdgeTagArray = { 0u, 0u, 0u, 5u } }, // 3
+          { .mEdgeTagArray = { 0u, 1u, 3u, 0u } }, // 4
+          { .mEdgeTagArray = { 3u, 2u, 0u, 0u } }, // 5
+          { .mEdgeTagArray = { 0u, 0u, 4u, 1u } }, // 6
+          { .mEdgeTagArray = { 4u, 0u, 0u, 2u } }, // 7
+        }
+      };
+ ..
+
+which is mapping from DiSeq 1..7 to a NW NE SE SW
+array of arbtrary small tags, which are supposed
+to match up across Di edges.
+
+But somebody here is taking those tags and
+sticking them in mJunctionIndex of HG's
+JunctionIndexProviderStg, where they are not in
+fact arbitrary but are supposed to map to
+JunctionIndex subclasses. Which they don't, so
+Eg's eventually blow up with like:
+
+    Junction.ulam:99: Unknown JunctionIndex
+    20230603044039-3471: 5382AEPS [E7F51907]MSG: T[0,0]@S[84,67]: behave() failed at /data/ackley/PART4/code/D/T2Demos/demos/Ancestor17/code/.gen/src/../include/Uq_10104Fail10_native.tcc:42: DESCRIBED_FAILURE (site type 0x0007)
+    20230603044039-3472: 5382AEPS [E7F51907]MSG: BACKTRACE  ->  0: MFM::Uq_10104Fail10<MFM::EventConfig<MFM::Site<MFM::P3AtomConfig>, 4> >::Uf_4fail(MFM::UlamContext<MFM::EventConfig<MFM::Site<MFM::P3AtomConfig>, 4> > const&, MFM::UlamRef<MFM::EventConfig<MFM::Site<MFM::P3AtomConfig>, 4> >&, MFM::Ui_Uq_r10109210ByteStream10<MFM::EventConfig<MFM::Site<MFM::P3AtomConfig>, 4> >&) const + 0x184
+     ->  1: (null) + 0xF8465472
+     ->  2: MFM::Uq_10109221JunctionIndexProvider10<MFM::EventConfig<MFM::Site<MFM::P3AtomConfig>, 4> >::Uf_9225getJunctionClassFromIndex(MFM::UlamContext<MFM::EventConfig<MFM::Site<MFM::P3AtomConfig>, 4> > const&, MFM::UlamRef<MFM::EventConfig<MFM::Site<MFM::P3AtomConfig>, 4> >&, MFM::Ui_Ut_10131u<MFM::EventConfig<MFM::Site<MFM::P3AtomConfig>, 4> >&) + 0x149
+     ->  3: MFM::Uq_10139214IndexedJunctor10<MFM::EventConfig<MFM::Site<MFM::P3AtomConfig>, 4> >::Uf_9216getJunctionClass(MFM::UlamContext<MFM::EventConfig<MFM::Site<MFM::P3AtomConfig>, 4> > const&, MFM::UlamRef<MFM::EventConfig<MFM::Site<MFM::P3AtomConfig>, 4> >&) + 0xBF
+     ->  4: MFM::Uq_10137Junctor10<MFM::EventConfig<MFM::Site<MFM::P3AtomConfig>, 4> >::Uf_9214createJunction(MFM::UlamContext<MFM::EventConfig<MFM::Site<MFM::P3AtomConfig>, 4> > const&, MFM::UlamRef<MFM::EventConfig<MFM::Site<MFM::P3AtomConfig>, 4> >&, MFM::Ui_Un_r10440969211BitStorageT11102321u44096<MFM::EventConfig<MFM::Site<MFM::P3AtomConfig>, 4> >&) const + 0xEC
+     ->  5: MFM::Ue_102596EdgeHG10<MFM::EventConfig<MFM::Site<MFM::P3AtomConfig>, 4> >::Uf_9211actJunction(MFM::UlamContext<MFM::EventConfig<MFM::Site<MFM::P3AtomConfig>, 4> > const&, MFM::UlamRef<MFM::EventConfig<MFM::Site<MFM::P3AtomConfig>, 4> >&, MFM::Ui_Un_r10422859211EdgeHGState10<MFM::EventConfig<MFM::Site<MFM::P3AtomConfig>, 4> >&, MFM::Ui_Ut_10121u<MFM::EventConfig<MFM::Site<MFM::P3AtomConfig>, 4> >&) const + 0x1A2A
+
+and what do we want to be saying about that?[435:
+
+Sat Jun  3 04:56:29 2023 A
+JunctionIndexProviderStg is currently 4 bits
+
+      | 0	| 3	| mJunctionIndex	| Unsigned(3)
+      | 3	| 1	| mIsJunctionIndexAnchor	| Bool
+
+Maybe we could change it to like
+
+  Bool(1) mIsJunctionIndexAnchor
+  Unsigned(3) mEdgeTag
+
+with the interpretation that mEdgeTag==0 means 'no
+junction', and otherwise use StandardJunction for
+everything?
+
+Could we try this out with a smallish hack in
+  EG?[436:
+
+Sat Jun  3 05:21:55 2023 Well, so far have just
+changed like this
+
+    JunctionBuffer jb;
+    //    Junction & junc = createJunction(jb);
+    ////XXX Sat Jun  3 05:18:26 2023 MAKE ALL JUNCTIONS STANDARD JUNCTIONS
+    Junction & junc = createJunction(jb,StandardEdgeJunction.classidof);
+
+but we need also, eventually, to do something with
+the edge tag.. But building again.
+
+:436]
+
+:435]
+
+:434]
+
+:433]
+
+:432]
+[437:
+
+Sat Jun  3 07:01:52 2023 Well okay, some
+progress. We've got DiSeq 4 to the NW of DiSeq 5,
+and all eight of their edges seem to be configured
+correctly according to cLITTLEDI_BODYPLAN,
+something like this:
+
+       / \
+       \4/
+          / \
+          \5/
+
+
+..with a gap between them because they're not
+touching and showing no inclination to move toward
+each other. That's up next, but nap time now.[438:
+
+Sat Jun  3 11:46:39 2023 OK so come on come on
+come on for the mystery tour. Let's
+
+TODO
+
+ - Review how DiamondStance signaling is supposed
+   to work
+
+:438]
+
+:437]
+[439:
+
+Sat Jun  3 11:54:36 2023 OK, so once an 'edge sees
+another edge' - for some definitions - it starts
+generating DiamondStances.
+
+Eg's, specifically, generate Di, during
+act(..)->actJunction(..).
+
+In particular, Eg.actJunction searches the pocket
+opposite its mOpenDir, checking for emptys and
+existing Dis.
+
+It also searches the Moore neighborhood for an MB
+with a valid inbound EC.
+
+Then it makes a StandardEdgeJunction (always,
+ATM).
+
+Then it inits and configues that junction using
+the Eg's own HCP, the MB's inbound EC, and the
+position of the MB relative to the Eg.
+
+Then the junction configures a DiamondStance. How
+Does That Work?[440:
+
+Sat Jun  3 12:03:06 2023 By default
+Junction.configureStance does nothing..[441:
+
+Sat Jun  3 12:04:11 2023 But GapBasedJunction -
+which is a base of StandardEdgeJunction - which
+does do stuff. It computes a bunch of C2Ds leading
+up to like
+
+    C2D desiredus2themgap = uspd*((C2D.Coord) (gp.mEdgeToEdgeManhattan/2u));
+    C2D finalerror = us2themgap - desiredus2themgap; // er<0 w/n, er>0 e/s
+
+and then does
+
+    stance.setStanceFromError(finalerror);
+
+which does
+
+      Void setStanceFromError(C2D error) {
+        // x<0 want w x>0 want e
+        // y<0 want n y>0 want s
+        Int x = error.x;
+        Int y = error.y;
+
+        setDim(x,0u,6u);
+        setDim(y,2u,4u);
+      }
+
+which sets the stance's mCares[..], containing
+desirable and undesirable directions to move based
+on the x and y components of the final error.
+
+So.
+
+Nothing in that path seems to mention either
+Eg.mJunctionIndex or MB.mInboundEC.mEdgeTag. Or
+did it, in all those C2D computations?
+
+Let's annotate GapBasedJunction.configureStance a
+bit deeper. 
+
+    C2D uspd = pocketDir2C2D(mOpenDir);
+
+unit vec of Eg opendir
+
+    C2D usedgectr = mUsCenterC2D+uspd*((C2D.Coord) ((mUsSize-1u)*3u/2u));
+
+The coord of the center of our edge (?) determined
+by the center and size of our Di.  mUsCenterC2D
+and mUsSize are built from EC.inferCenterAndSize(..)
+
+    C2D thempd = pocketDir2C2D(oppositePocketDir(mOpenDir));
+    C2D themedgectr = mThemCenterC2D+thempd*((C2D.Coord) ((mThemSize-1u)*3u/2u));
+
+and the same for their edge, built in
+configureJunction based on the inbound EC. 
+
+    C2D us2themgap = themedgectr - usedgectr;
+
+the offset from the center of their edge to the
+center or our edge.
+
+    GapParameters gp;
+    if (!getDesiredGapParameters(gp)) return true;
+
+initing gp via the GapBasedJunction API, which for
+StandardEdgeJunction specifies
+
+    gp.mFracCWUs = 50u;
+    gp.mFracCWThem = 50u;
+    gp.mEdgeToEdgeManhattan = 12u;
+
+of which, we believe only mEdgeToEdgeManhattan is
+currently considered.
+
+    C2D desiredus2themgap = uspd*((C2D.Coord) (gp.mEdgeToEdgeManhattan/2u));
+
+the 'perfect' gap between us and them, indeed
+based on mEdgeToEdgeManhattan.
+
+    C2D finalerror = us2themgap - desiredus2themgap; // er<0 w/n, er>0 e/s
+
+and then to
+
+    C2D finalerror = us2themgap - desiredus2themgap; // er<0 w/n, er>0 e/s
+
+[443:
+
+Sat Jun  3 12:43:12 2023 So okay, that's the
+review. And, indeed, there's no tag awareness any
+place in it, but it seems like GapParameters is
+the place for it.
+
+So one question is how much further does data have
+to move, to bring together our edge tag, their
+edge tag, and our GapParmeters?[444:
+
+Sat Jun  3 12:47:12 2023 Right now it appears
+there is no configuration of GapParameters at all
+- they are output-only (supposedly based only on
+the Junction subtype, except we're using
+StandardEdgeJunction for everything now.)
+
+At the very least, we'd like to have different
+target mEdgeToEdgeManhattan values for matching vs
+non-matching tags/junction types.
+
+Beyond that, it would be nice if we could specify
+additional information:
+
+ - What to do if there's no far side edge at all
+
+ - Which actual direction to prefer (rather than
+   just 'away') when there's a mismatching tag.
+
+[445:
+
+Sat Jun  3 12:59:16 2023 So, where did we last
+leave the tag info, here?[446:
+
+Sat Jun  3 13:00:02 2023 We got to configureStance
+from EdgeG.actJunction. And in there, we had
+
+    EdgeCoord usec;
+and
+    EdgeCoord ourec;
+(hmm)
+
+and
+
+    mb.mInboundEC
+
+which could have been
+
+    EdgeCoord themec = mb.mInboundEC;
+
+So, what's the usec/ourec distinction there?
+
+ - ourec is 'made from scratch' via
+
+        ourec.mEdgePos = getHCPoint();
+        ourec.mHopsToEdge.set(0,0);
+
+while usec is made via
+
+        if (!providesOutboundEdgeCoordFor(opendir, usec)) return false;
+        if (!usec.isValid()) return false;
+
+and appears to have tag info in it:
+
+    20230603130357-42099: 119176AEPS [A04FDC47]MSG: print: "EHEMSTa10"
+    20230603130357-42100: 119176AEPS [A04FDC47]MSG: (
+     EdgeCoord(
+     mEdgePos=(
+       C2DT<6u>(
+       x=8/0x8,
+       y=-4/0x3C
+      ),
+     mHopsToEdge=(
+       C2DTU<4u>(
+       x=0,
+       y=0
+      ),
+     mEdgeTag=1
+    )
+
+(but be otherwise equal to ourec. ourec is looking
+increasingly like a mistake.)
+
+themec aka mb.mInboundEC also has tag information
+in it (though in the case ATM there is no tag over
+there so mEdgeTag == 0u is correct.)
+
+So in fact, we're going to configureJunction with
+
+    if (!junc.configureJunction(ourec, mb.mInboundEC, mbc)) {
+
+and if it was instead
+
+    EdgeCoord themec = mb.mInboundEC;
+    if (!junc.configureJunction(usec, themec, mbc)) {
+
+then both tags would be available. And in turn,
+
+      Bool configureJunction(EdgeCoord ourec, EdgeCoord themec, C2D themc) {
+        mD&&pR("CFGJUNI10");
+
+        mUsEC = ourec;
+        mThemEC = themec;
+        mThemC2D = themc;
+
+stashes the ECs in data members - so
+GapBasedJunction.configureStance absolutely can
+refer to them if it wants to.
+
+[447:
+
+Sat Jun  3 13:14:36 2023 So. We could add more dms
+to GapParameters to declare our desires for
+matching and non-matching tags. Or we could just
+override with StandardEdgeJunction.configureStance
+and have it just do whatever we think we want. Or
+both. [448:
+
+Sat Jun  3 13:19:13 2023 Well, let's override of
+course, for more cuttenpaist and less attempt to
+pre-guess the design.[449:
+
+Sat Jun  3 13:20:59 2023 OK but even if we do that
+we have to have something to compute, here. And
+maybe that would be just as easy to say in
+GapParameters, or even easier..[450:
+
+Sat Jun  3 13:22:49 2023 Now in
+StandardEdgeJunction.getDesiredGapParameters.
+
+Cases:
+
+ - mUsEC.mEdgeTag != 0u && mUsEC.mEdgeTag == mThemEC.mEdgeTag
+   -> set mEdgeToEdgeManhattan to like 10 or 12
+
+ - mUsEC.mEdgeTag != mThemEC.mEdgeTag
+   -> set mEdgeToEdgeManhattan to like 20 or something
+
+and that's it, in the minimal case?
+[451:
+
+Sat Jun  3 14:33:02 2023 OK so we have a first
+cut at edge tag awareness in
+StandardEdgeJunction.getDesiredGapParameters(..) -
+be at distance 12u if the tags are non-zero and
+match, otherwise be at 20u (which we imagine is
+beyond contact range.)
+
+But we don't yet have anything to handle the case
+when there is no 'them', so we don't know if the
+cells are even going to be in range of each other
+by the time the EMs actually configure the
+junction anchors.
+[452:
+
+Sat Jun  3 15:03:51 2023 As we get closer to
+Junctions maybe starting to work again, I'm
+increasingly worried about the time period from
+new MO to body model deployment. It's a
+potentially quite long period of time, and, at the
+moment, we have no BodyPlan-specific way of
+controlling Di actions during all of it.
+
+And no real plan for how to do that better.. [453:
+
+Sat Jun  3 15:20:23 2023 Could we configure
+anchors immediately, based on the XD incoming to
+the daughters?
+
+[454:
+
+Sat Jun  3 17:49:32 2023 Breaking for cook after
+insto-fixed ish.
+
+Still wondering if inbound XD could configure the
+anchors - probably after the split. Which would at
+the least take a lot of pressure off the EMs - if
+not make them nearly redundant.
+
+:454]
+
+:453]
+
+:452]
+
+:451]
+:450]
+
+:449]
+
+:448]
+
+:447]
+
+:446]
+
+:445]
+
+:444]
+
+:443]
+
+[442:
+Sat Jun  3 12:40:33 2023 ( Here's a title: THE FAT-FINGERED GOD )
+
+:442]
+
+:441]
+
+:440]
+
+:439]
+[455:
+
+Sun Jun  4 02:23:52 2023 So we're facing a
+compiler bug here, apparently having something to
+do with referencing a base of an atom that
+straggles the 64 bit boundary.
+
+:455]
+[456:
+
+Sun Jun  4 08:15:04 2023 Trying to get my
+pre-saved proto-Slash organism to sync up is
+both-tagged-5 edges.. Still running into troubles
+though; in this case with them drifting out of
+contact.
+
+So far, there's no mechanism to cause configured
+edges to head in their mOpenDir if they see
+nothing, so once the Dis separate it takes luck
+for them ever to try again.
+
+[457:
+
+Sun Jun  4 11:33:53 2023 OK so lots of edge2edge
+issues, including:
+
+[458: Mon Jun  5 00:08:18 2023 Now have
+EdgeModel.adviseRoot(..) making 'emergency moves
+against damage' and seems effective so
+
+DONE :458] - LittleDi.adviseRoot(..), at least, doesn't seem
+   to be considering the RG's DEWLine. Which in
+   the current situation is signaling damage in
+   the S but the advice is to go S anyway.
+
+[459: Mon Jun  5 00:13:47 2023 Now have
+GapBasedJunction.configureStance(..) considering
+mThemEC.mHopsToEdge and adding level 3 avoid
+response if min(abs(x),abs(y)) is under 4u. Also
+seems to be working okay as far as I can tell, so
+
+DONE :459] - Doing the center2center alignment isn't enough
+   when the centers are far apart. There needs to
+   be sensitivity to the perpendicular distance
+   between the edges. Which may possibly be
+   bounded by considering
+   min(inbound.hopstoedge.x, inbound.hopstoedge.y)
+   as a perpendicular proxy. If that's maybe <=
+   4u, it's time to start backing away if
+   possible. 
+  
+
+:457]
+
+:456]
+[460:
+
+Mon Jun  5 00:16:35 2023 Have now made
+MCSlash.ulam to focus on the two cell case, and
+shifted away from LittleDi so far.
+
+:460]
+[461:
+
+Mon Jun  5 03:10:19 2023 Just had another deadlock
+where the first RD grew too soon, almost
+immediately after the split, and tied up
+tip-to-tip with the LD. Isn't there some easy way
+to delay such things, in all the hustle and bustle
+of splitting?[462:
+
+Mon Jun  5 03:15:30 2023 Well, we do have this
+'obvious' bit
+
+        newroot.mCmdPhase = newroot.cCMD_STOP;      // START OUT STOPPED
+
+when XD is configuring the new root. Seems
+innocuous but CMD_STOP is the prelude to
+growing in RootHardCellG
+
+        case cCMD_STOP: {
+          /// ROOM TO GROW?
+
+Suppose we start out moving?[463:
+
+Mon Jun  5 03:58:10 2023 That may be helping. At
+least the first go looked nice.
+
+:463]
+:462]
+:461][464:
+
+Mon Jun  5 04:04:13 2023 So how do we get to the
+BodyPlan from a Junction?[465:
+
+Mon Jun  5 05:02:30 2023 And, we cannot: It's a
+unit error, plus a space-time locality
+violation. The junction knows about EdgeTags,
+which are now (once again) arbitrary tags that do
+not identify the body plan uniquely.
+
+So to apply a default vector from the body plan,
+that would have to be done near the root, during
+adviseFromStance (that exists, right?)
+[466:
+
+Mon Jun  5 11:04:40 2023 OK so we've been watching
+DiSeq#2 and #3 navigating by their default vectors
+and it was looking fairly plausible.. and it got
+them to the point of engaging based on stance.
+
+And the thing that's now bugging me the most is
+that the NE edge of DiSeq#2 doesn't have a junctor
+yet, so it's advertising EdgeTag 0 instead of ET5
+that DiSeq#3's SW is properly showing.
+
+And that's happening because #2's MCSlash Body
+Model isn't fully deployed yet, so there's no MC/
+that can reach the NE quadrant to set the anchor.
+[467:
+
+Mon Jun  5 11:20:05 2023 Another present concern
+is that - although #3 has now reached its mature
+size (13u), #2 still has not, and it's not growing
+very quickly because all its advice is soaking up
+a lot of its movement opportunities.
+
+I feel like the body plan ought to be able to
+specify size dependencies and trigger GROW events
+itself, or stimulate them, somehow.
+
+Right now the only way we get #2 to grow, in
+MC-land, is by getting so far from #3 it can't see
+it at all, and that's a risk every time it
+happens.
+
+[468:
+
+Mon Jun  5 11:32:56 2023 OK so #2 finally reached
+its teens (: and it's most of the way through
+copying MO->LD, at which point the Body Model loop
+should be able to deploy fully and #2 NE will
+start advertising ET5.
+
+..But at the moment #2 and #3 are out of
+communications again :(
+
+[469:
+
+Mon Jun  5 11:35:24 2023 There goes the MO genome.
+[470:
+
+Mon Jun  5 11:35:56 2023 And now the Body Model
+has migrated and #2 is advertising ET5 to the NE.
+
+If only #2 and #3 every manage to see each other
+again..
+
+[471:
+
+Mon Jun  5 11:37:46 2023 Still out of touch. And
+#2 and #3 are almost halfway past each other, at
+which point the default vector will send them
+farther apart rather than closer.
+
+Still have a chance here though.
+
+But we need to think about sending signals or
+something to deploy the anchors before the MO->LD
+shift has completed.
+[472:
+
+Mon Jun  5 11:42:50 2023 OK now: #2 and #3 have
+seen each other and are signalling ET5-to-ET5 ("I
+read you 5 by 5" :). If my dreams come true #2 and
+#3 should now lock onto each other and stabilize
+the "full MC/" body.
+
+[473:
+
+Mon Jun  5 11:45:34 2023 But, now they've fallen
+apart again, and are running on default vectors.
+
+[474:
+
+Mon Jun  5 11:46:07 2023 And now they're talking
+again! [475:
+
+Mon Jun  5 11:47:58 2023 In and out.. out again
+now. There should be "emergency stay in contact"
+rules once we're seeing matching tags.
+
+:475]
+
+:474]
+
+:473]
+
+:472]
+
+:471]
+
+:470]
+
+:469]
+:468]
+
+:467]
+
+:466]
+:465]
+
+:464]
+[476:
+
+Mon Jun  5 12:07:56 2023 OK we just lost the #2 RD
+program loop, with no obvious logging to explain
+why. It's suspicious that the first sign in the
+log is about an undeployed EdgeModel instance
+
+    20230605120722-41320: 35156AEPS [663FF4A7]MSG: MCS<>(w2-3 n3-1 s2-3 e3-1)[MCSafs][EMxm:->4]/aR.
+    20230605120730-41321: 35210AEPS [663FF4A7]MSG: print: "vvv DYING vvv"
+    20230605120730-41322: 35210AEPS [663FF4A7]MSG: print: "PocketChain:>MATE_UNSURE"
+    20230605120730-41323: 35210AEPS [663FF4A7]MSG: @(68,89) of [1,1]: (LD) (EdgeModel(mDiSequence=1,mEventCounter=0,mMOKiller=false,mIsHead=false,mIsTail=true,mIsDeployed=false,)TQDSControlStg(mTQMapCommand=0x4,mTQMapValue=0x4,mECsGood=true,mLockedDown=false,mMaxDSHopsValue=4,)QStance(mCares=[0]=3,[1]=1,[2]=3,[3]=3,[4]=3,[5]=2,[6]=2,[7]=3,)QLabelMark(mLabel=0x5,)PocketChain(mDSType=1,mArrived=false,)QDebugUtils(mD=false,)Segment(mPocketPtrs=[0]=0,[1]=1)
+    20230605120730-41324: 35210AEPS [663FF4A7]MSG: print: "^^^ PocketChain.die ^^^"
+
+which is bogusly labeled "LD" instead of "MS"
+because of cuttenpasta but I have little doubt
+that's an undeployed MCSlash in the RD program
+loop freaking out probably because of a passing
+DiamondStance.
+
+I do note it's got mPocketPtrs=[0]=0,[1]=1,
+with the =0 meaning it was in a double-density
+pocket. 
+[477:
+
+Mon Jun  5 12:24:17 2023 OK, so this
+
+    20230605120730-41322: 35210AEPS [663FF4A7]MSG: print: "PocketChain:>MATE_UNSURE"
+
+is reported by PocketChainState.observe(..)
+
+        Segment.MateStatus ms = qc.findMates(self);
+        mD&&pR("QchObs12");
+        mD&&pR(ms);
+        if (ms > cMATE_UNSURE) {
+          return qc.die("PocketChain:>MATE_UNSURE");
+
+when findMates had serious troubles. The official
+values above cMATE_UNSURE are:
+
+  constant MateStatus cMATE_UNSURE  = 2u; //< At least one mate missing but some sites inaccessible
+  constant MateStatus cMATE_MISSING = 3u; //< At least one mate is definitely missing
+  constant MateStatus cMATE_WRONG   = 4u; //< At least one mate is inconsistent with us
+  constant MateStatus cMATE_UNINIT  = 5u; //< findMates hasn't run yet
+
+and that leaves us thinking that this report is
+too late - that some other atom (guessing an
+upstream MS) checked out silently already, and now
+this MS tail is discovering cMATE_MISSING and
+dying appropriately because of that.
+[478:
+
+Mon Jun  5 12:31:30 2023 So yeah, there's also the
+mLabel=0x5 in there, so we can be pretty sure
+we're looking at an instance of
+
+      cINS_MK5_EDGEMODEL_TAIL = {
+        .mDSType = DTU.cDS_NORM,
+        .mLabel = 5u,
+        .mIsTail = true,
+    };
+
+whose upstream and downstream are
+
+        cINS_EDGEMODEL12,             // MO: EM EDGE MODEL 3
+        cINS_MK5_EDGEMODEL_TAIL,      // MO: EM#5 EDGE MODEL 4
+        cINS_WAIT_FOR_MODEL,          // MO: WT WAIT TIL BLU CLEAR
+
+(with
+
+  cINS_EDGEMODEL12 = {
+    .mDSType = DTU.cDS_NORM,
+
+just being a generic MC instance.)
+
+
+:478]
+
+:477]
+:476]
+[479:
+
+Sat Jun 17 14:52:25 2023 Moved to
+Ancestor18. Let's clear the decks here. WTH are
+we? [480:
+
+Sat Jun 17 14:58:23 2023 And our current build
+time on nubiga is ...
+
+    [274.507] ## Create MFZ package
+
+or 4.57 mins.
+
+:480]
+
+:479]
+[481:
+
+Sat Jun 17 15:04:47 2023 So, once again, where are
+we here? Let's review to-do.
+
+I know we've got a few fundamental problems:
+
+ - We want to control Diamond operations from the
+   Body Model Prelude, but that doesn't deploy
+   until after the MO->LD copy. We have no real
+   plan for this, except a vague idea of somehow
+   scattering individual edge controllers farther
+   out during the BPM execution
+
+[482:
+
+Sat Jun 17 15:25:42 2023 It starts to come back to
+me.. If we just got the HC3 anchors set up (at
+(1,1), (1,-1), (-1,-1), and (-1,1)), that would go
+a long way to getting Dis into position for each
+other even without the 'mature' control of
+whatever bodyplan is in use.
+
+If we had an(other sigh special) element that
+exploded out to those corners and initted them, as
+the first atom of the BMP, things could be better?
+[483:
+
+Sat Jun 17 15:29:35 2023 How would such an atom
+interact with the (rest of the) bodyplan?[484:
+
+Sat Jun 17 15:33:39 2023 Well, MCSlash currently
+has only one intention, and it has precisely 1b
+left in the bit budget. We could blow it on a
+second intention and have that intention be like
+Johnny MCSlash-seed.
+
+But that wouldn't help with the background drift.
+
+Or we could have a different element that we
+loaded up with the appropriate .mEdgeTagArray from
+the appropriate BodyPlan, and (copies of) it would
+configure the anchors. Maybe we should try that
+just to get off the dime here.
+
+[485:
+
+Sat Jun 17 15:47:22 2023 Now are we saying that
+MCSlash is going to create and deploy these new
+AnchorConfig's? [486:
+
+Sat Jun 17 16:09:44 2023 So for review: MCSlash
+configures junctions in
+QBodyModel.actCheckJunction(..) as follows:
+
+ (1) Uses D1Pocketable.getHCMinMax(..) to find the
+     max HCPoint corner around its pocket
+ (2) Checks if the Atom & at the max is a
+     JunctionIndexProviderStg
+ (3) If so, figures out the opendir from the maxc,
+     then gets the DiSeqInfo associated with its
+     diseq
+ (4) From there it gets the appropriate EdgeTag
+     and either sets the junctionIndex, or clears
+     its anchor status (if the edge tag is 0).
+
+So, in particular,
+
+(0) anchors get configured opportunistically by
+    neighboring QBodyModel atoms
+(1) they don't have to be the lead MCSlash
+(2) they assume they're 'in tight' in a root
+    pocket, so anchor points are always at max
+    corners. 
+
+Could we use FishProbes or the like to deliver
+diseqs to anchors? FP travel on the driving lanes,
+right? [487:
+
+Sat Jun 17 16:29:59 2023 Actually looks like
+QProbe spawn go via pockets, if QProbe.goOut(..)
+is the governing dynamics.
+[488:
+
+Sat Jun 17 16:31:45 2023 Seems like it's the
+modern DiamondStances that use the driving lances.
+
+So I think we could make an element that would
+carry the whole appropriate .mEdgeTagArray, and
+would visit and configure all four anchor points
+and then erase itself. And we could have the lead
+QBodyModel deploy it first thing somehow.
+
+[489:
+
+Sat Jun 17 16:36:11 2023 Need to break for cooking
+but that seems like a piece of a plan. It doesn't
+deal with the drift problem.. but step by step.
+[490:
+
+Sat Jun 17 23:32:08 2023 OK, so, perhaps we could
+deploy this new 'configurator' when the edge model
+'head' reaches the end of the NA - which should be
+the first time the EM has no upstream?
+
+And how does it know not to keep redeploying the
+configurator? [491:
+
+Sun Jun 18 09:02:37 2023 Well here's the thing: I
+think I need to change the game more significantly
+than I have been considering here so far. Like
+what about a flood of some configuring atom right
+after the split completes?
+
+Or come on, screw it, put a DiSeq inside each
+HG. And/or have DiSeqs be cross-species building
+blocks, instead of arbitrary to a lineage, and
+have everybody know what to do about each one.
+[492:
+
+Sun Jun 18 09:24:32 2023 HG has 12b which is a
+fair bit more space than I remembered it having.
+
+EdgeModel.DiSequence is 8b. EdgeModel currently
+also has a Unsigned(9) mEventCounter just to delay
+killing the root, but I'm also wondering about
+making a little TimeBomb type atom to do that
+instead, so EdgeModel could reclaim 9b and decay
+into a TimeBomb instead.
+
+[493:
+
+Sun Jun 18 10:00:15 2023 But so what and so what?
+How do we spend those bits?
+
+What if we could leave the EM loop where it is, in
+the SW quadrant? Meaning that whatever it was
+supposed to do, it could do it from there. And
+what if we could advance the developmental program
+by rolling the EM loop forward under certain
+conditions?
+
+But how does a SW quadrant loop get DiamondStance
+info from the NE (and SE) quadrants? Does
+DiamondStance just climb mDSHops and hope for the
+best? [494:
+
+Sun Jun 18 10:06:26 2023 DiamondStance has 40b
+available; it's tiny. We could add a fixed offset
+to them, so they try to hillclimb toward HCPoint
+(-1,1) rather than mHops 0.
+
+I'm still thinking about some kind of
+'configuration flood' at the start, to reach the
+anchors.
+
+Actually, could the anchors reroute
+DiamondStances? 
+
+:494]
+
+:493]
+
+:492]
+:491]
+
+:490]
+:489]
+
+:488]
+:487]
+
+:486]
+
+:485]
+
+:484]
+
+:483]
+:482]
+:481]
+[495:
+
+Mon Jun 19 02:38:35 2023 OK come on if we're going
+to cheat let's cheat big and try to bring this
+fucker home. How much of our MC comms can we pack
+into the HG? Well, how much do we have?
+
+ - JunctionTypes (outbound)
+ - DiamondStances (inbound)
+ - Drift parameters (root local?)
+
+And how much space do they take?
+
+ - Junction types: 4b
+      | COMPONENTS of JunctionIndexProviderStg <218> (4 bits/60 unused): 
+      | Pos	| Bits	| Name	| Type <classid>
+      | 0	| 3	| mJunctionIndex	| Unsigned(3)
+      | 3	| 1	| mIsJunctionIndexAnchor	| Bool
+..    | 4	| 0	| base	| Fail <90>
+
+ - DiamondStance: 16b for a QStance, mainly
+      | COMPONENTS of DiamondStance <212> (31 bits/40 unused): 
+      | Pos	| Bits	| Name	| Type <classid>
+      | 0	| 3	| mDogsLife	| XTimer(3,6u,2u) <123>
+..    | 3	| 16	| base	| QStance <213>
+..    | 19	| 3	| base	| PocketChain <111>
+..    | 22	| 3	| base	| QDebugUtils <91>
+      | 25	| 6	| base	| Segment <26>
+..    | 31	| 0	| base	| Fail <90>
+
+And what's HG looking like at the moment?
+
+      | COMPONENTS of HardCellG <34> (59 bits/12 unused): 
+      | 
+      | Pos	| Bits	| Name	| Type <classid>
+      | 0	| 5	| super	| QHardCellGField <202>
+      | 5	| 8	| base	| QDSHopsStg <198>
+      | 13	| 0	| base	| UrSelf <0>
+      | 13	| 0	| base	| DTU <74>
+      | 13	| 8	| base	| DEWLine <89>
+      | 21	| 9	| base	| QHardCell <161>
+      | 30	| 0	| base	| HCPointable <160>
+      | 30	| 12	| base	| HCPointStg <228>
+      | 42	| 10	| base	| QHardCellG <193>
+      | 52	| 0	| base	| Intender <153>
+      | 52	| 0	| base	| JunctionIndexProvider <206>
+      | 52	| 4	| base	| JunctionIndexProviderStg <218>
+      | 56	| 0	| base	| QDSHops <208>
+      | 56	| 3	| base	| QDebugUtils <91>
+      | 59	| 0	| base	| Fail <90>
+
+Now, if we were serious about tearing shit up, we
+could ditch HopCount, which takes 5b (somewhere)
+and derive it from HCPoint the 12b HCPointStg.
+[496:
+
+Mon Jun 19 03:05:48 2023 I guess HopCount is in
+QHardCellGField.. which also appears to be an
+HCPointStg.. so could we mabe just dig for mUpHops
+refs and turn them into HCPointable calls? Like ha
+easy?[497:
+
+Mon Jun 19 04:19:46 2023 Well, took a look at the
+22 hits for mUpHops, and most of them aren't
+problematic.
+
+ - LXSomatic (and FishFin) has some constant atoms
+   that set .mUpHops for some reason. That would
+   need to be understood.
+
+ - Several of the hits are false positives from
+   the mUpHops array in PatchState.
+
+ - All the setUpHops(..) calls need to be examined
+   too. 
+
+:497]
+
+:496]
+:495]
+[498:
+
+Mon Jun 19 08:58:27 2023 OK, so, in a desperate
+attempt to get myself moving again here, I've
+emptied out the code/ dir and started trying to
+find the minimal set of .ulam files that will
+build together. And I got to these:
+
+    QDebugUtils.ulam XPick.ulam HCPoint.ulam C2DTU.ulam DTU.ulam
+
+which build without error in 13 seconds using -j 0
+
+[499:
+
+Mon Jun 19 09:11:10 2023 Now I'd like to build up
+to HardCellG.ulam, redoing stuff involving UpHops
+as we go.. What's next on that path I wonder?
+[500:
+
+Mon Jun 19 09:18:01 2023 Added
+
+  Intender.ulam
+  Intention.ulam
+
+still builds. (In 18s).
+[501:
+
+Mon Jun 19 09:22:09 2023 OK, now I'm going to try
+to remove Sequenceable from existence entirely,
+since it has never added anything we've used.
+
+Well maybe not quite yet, since we have to build
+up to PocketChainTQ before we can kill
+Sequenceable..
+
+PocketChain needs Segment + TQDSControl.
+
+Now TQDSControl was implicated in a bad design
+decision on my part, with the TQDSControlNull idea
+potentially causing the wrong overload to be
+found. Never really got the smoking gun, but can
+we bring TQDSControl in without bringing in
+TQDSControlNull or TQDSControlDefault?
+
+[502:
+
+Mon Jun 19 09:37:12 2023 So now we're hitting a
+real hairball. Allegedly 'low-level' stuff like
+PocketHC3.ulam, needed for the allegedly
+'low-level' D1PocketableState, refers to pretty
+damn 'high-level' QHardCell and EdgeG.
+
+Not sure if there's any stopping point between
+here and everything..
+
+And PocketHC3 wants to refer to that stuff to
+derive convenience values for use later. I guess
+the 'right'er way to do it would be have a virtual
+initialization stack for PocketHC3 to call, so
+that when we got to 'higher level' stuff we'd add
+additional overrides to PocketHC3 initialization
+to derive them.
+
+Well here we go with the hairball, I guess. We'll
+see if there's another stopping point..
+[503:
+
+Mon Jun 19 10:05:35 2023 Now PocketHC3 wants
+PocketQuadrant, of which I had forgotten its
+existence. Are we really using it for anything?
+[504:
+
+Mon Jun 19 10:07:47 2023 LoopOps.ulam mentions
+it. Are we using LoopOps for anything?[505:
+
+Mon Jun 19 10:08:25 2023 Well QBodyModel is using
+it too - 
+
+    Unsigned mindshops = p.mPocketQuadrant.mMinDSHops;
+
+but is that the only source of min ds hops?[506:
+
+Mon Jun 19 10:10:01 2023 For example, we see
+
+    ./HC3State.ulam 16:  Unsigned minDSHops;
+
+[507:
+
+Mon Jun 19 10:10:54 2023 Well I'm afraid I don't
+have the strength to keep trying to cut
+here. Bringing in PocketQuadrant.ulam.
+
+[508:
+
+Mon Jun 19 11:17:09 2023 Well, not there yet, but
+the hairball tugging is starting to slow
+down.. Currently at
+
+Antenna.ulam
+C2DTU.ulam
+ChainRule.ulam
+Codon.ulam
+D1Pocketable.ulam
+D1SNs.ulam
+DEWLine.ulam
+DTU.ulam
+DiamondController.ulam
+DiamondCutter.ulam
+DiamondSequencer.ulam
+DiamondSequencerState.ulam
+DiamondStance.ulam
+EdgeCoordProvider.ulam
+EdgeG.ulam
+EmptyCodon.ulam
+HC3NgbState.ulam
+HC3State.ulam
+HCPoint.ulam
+HardCellG.ulam
+Intender.ulam
+Intention.ulam
+Junction.ulam
+LX.ulam
+LoopKiller.ulam
+MBase.ulam
+Membrane.ulam
+NanoArm.ulam
+Parms.ulam
+PatchRule.ulam
+PatchRules.ulam
+PatchState.ulam
+PocketChain.ulam
+PocketHC3.ulam
+PocketQuadrant.ulam
+QBodyModel.ulam
+QDSHops.ulam
+QDebugUtils.ulam
+QHardCell.ulam
+RectIterator.ulam
+RootHardCellG.ulam
+SW3Cmdr.ulam
+SW3Packet.ulam
+SeedLoop.ulam
+Segment.ulam
+SwapWormHC3.ulam
+TQDSControl.ulam
+XPick.ulam
+
+[509:
+
+Mon Jun 19 11:38:26 2023 Wow, we're building
+again; we've reached the end of one big hairball
+anyway.
+
+And we still have like >40 .ulam files in
+code-snapshot/ instead of code/!
+
+On the other hand, one of those files is S.ulam,
+and another one is Ancestor.ulam.. So we've got a
+ways to go.[510:
+
+Mon Jun 19 11:54:36 2023 Well S.ulam wanted a
+bunch of stuff including Loader, and Loader wanted
+Ancestor, so heeeeere we go again.
+[511:
+
+Mon Jun 19 13:17:20 2023 Well, we're running
+ancestor code again, apparently successfully, and
+we still have like ~30 .ulam files sitting in
+code-snapshot? That's not terrible..[512:
+
+Mon Jun 19 13:31:30 2023 OK, but it seems
+something has changed in the matrix, because the
+initially deployed MCSlash seems to be getting
+stuck in the blue DSP.
+
+Its type is cDS_NORM which seems right, and BLU's
+dirstatus is 1, which is 'need temp down', which
+seems right..
+[513:
+
+Mon Jun 19 13:37:42 2023 Humm I turned on mD
+debugging but hitting the MS with the wand reports
+nothing? [514:
+
+Mon Jun 19 13:39:01 2023 Gah is it because we
+ditched Sequenceable.ulam?? It did have
+
+      @Override
+      virtual ClassId getIntentionClass() { return SequenceableState.classidof; }
+
+      Void behave() {
+        pursueIntention();
+      }
+
+in it..
+
+[515:
+
+Mon Jun 19 13:43:40 2023 I bet that was it;
+building again. I bet that was also why mfms
+seemed to be running so wicked fast.[516:
+
+Mon Jun 19 13:47:51 2023 Well, MS is now working
+as expected again.. but things are still running
+pretty fast..
+[517:
+
+Mon Jun 19 14:05:47 2023 OK so things all seem to
+be working, through the first split and the kid
+MS's picking up their particular diseqs from the
+XDs. 
+
+:517]
+
+:516]
+
+:515]
+
+:514]
+
+:513]
+:512]
+
+:511]
+:510]
+
+:509]
+:508]
+
+:507]
+:506]
+
+:505]
+
+:504]
+
+:503]
+:502]
+
+:501]
+
+:500]
+:499]
+:498]
