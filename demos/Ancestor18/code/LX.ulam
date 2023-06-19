@@ -151,13 +151,6 @@ element LXMarker : LX + QLabelMark + TQDSControlStg {
       
       if ((mPUMap & cm) != 0u) {
         Bool ret = pui.setTQDSControl(mTQDSControl);
-        /*
-        bsl.printf("setCCD(%s,%x%x) up=%d\n",
-                   getProcUnitName(pu),
-                   mChainControlData.mTQMap,
-                   mChainControlData.mSRMap,
-                   ret);
-        */
       }
     }
 
@@ -213,16 +206,6 @@ element LXReset : LX + QLabelMark {
   LXSource mRetryCount;
 }
 
-/** \symbol Ir
-element I_LXReset : CodonInserter + Fail {
-  AtomUtils au;
-  @Override
-  virtual ElementType getCodonTypeToInsert() {
-    return (ElementType) au.getType(LXReset.instanceof);
-  }
-}
- */
-
 /** \symbol KD
     \color #f60
  */
@@ -272,12 +255,6 @@ element LXCommandDS : LX + SW3Cmdr + DTU + Fail + TQDSControlStg {
     EventWindow ew;
     
     return false;
-
-    /*
-    markCurrentInstructionForRotation(dss, 0u);
-    mD&&pR("LXCMDS10");
-    return true;
-    */
   }
 
   //// CODON API

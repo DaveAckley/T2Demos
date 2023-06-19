@@ -20,11 +20,6 @@ transient PRPocket + DTU + QDebugUtils + Fail {
     if (!(c is EmptyCodon)) return false;
 
     // assume somebody wants to occupy this EC
-    /*
-    ps.print("PRPISEC10UPHOPS");
-    if (ps.nearUpHopsEdge(p)) // so avoid the outer rim (XXX test)
-      return false;
-    */
 
     ps.pR("PRPISEC11");
     Bool inDSP = ps.isInDSP(p);

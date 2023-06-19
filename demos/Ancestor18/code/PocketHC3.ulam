@@ -24,11 +24,6 @@ transient PocketHC3 + DTU + QDebugUtils + Fail {
   Bool mCornerZoneValid[PocketDir.maxof+1]; // 0 W, 1 N, 2 E, 3 S
   QDSHopsStg mCornerQDSHopsStg[PocketDir.maxof+1]; // 0 W, 1 N, 2 E, 3 S
   
-  /*
-  PocketDir mMinDSHopsCorner; XXX use mPocketQuadrant.mMinDSHops?
-  Unsigned mInferredDSHops;
-  */
-
   PocketQuadrant mPocketQuadrant;
 
   typedef Int(16) Bound;

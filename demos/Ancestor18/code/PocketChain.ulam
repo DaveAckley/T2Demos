@@ -107,10 +107,6 @@ transient PocketChainState : SegmentState + Fail {
     PocketChain & qc = (PocketChain &) in;
     if (qc.propagateChainControls(self)) return true;
 
-    /* only gradients left are the chain controls
-    if (qc.updateGradients(self)) return true;
-    */
-
     mD&&pR("QchStab11");
     return false;
   }
@@ -135,11 +131,6 @@ transient PocketChainState : SegmentState + Fail {
 quark PocketChain : Segment + TQDSControlSettable + Fail {
   //  TQDSControl mTQDSControl;     //< target quadrant and dshops information
 
-  /* DEPRECATED WITH PREJUDICE
-  ChainControlUp mChainControlUp;        // control signals from body up
-  ChainControlDown mChainControlDown;    // control signals from body down
-  */
-
   DriveStatusCode mDSType = cDS_DUMB;
   Bool mArrived;                //< true when we've had an event after moving
 
@@ -159,7 +150,7 @@ quark PocketChain : Segment + TQDSControlSettable + Fail {
       // cDS_NORM
       ARGB head = cu.color(0xff0000cc);
       ARGB tail = cu.color(0xff00cc00);
-      return cu.between(tail, head, 100u/**mSegsDown/cMAX_SEG*/);
+      return cu.between(tail, head, 100u);
     }
     return super.getColor(selector);
   }
@@ -277,14 +268,6 @@ quark PocketChain : Segment + TQDSControlSettable + Fail {
       case cPP_EAST:  { siz.set(bl,bs); pos.set(cSHIFT,-bs/2); }
     }
     ARGB oncol = getColor(0xff00ff00u);
-    /*
-    mD&&pR("DPAR11");
-    mD&&pR(towardSide);
-    mD&&pR(bl);
-    mD&&pR(bs);
-    mD&&pR(siz);
-    mD&&pR(pos);
-    */
     drawable.fillRectangle(pos, siz, oncol);
     return true;
   }
@@ -304,21 +287,11 @@ quark PocketChain : Segment + TQDSControlSettable + Fail {
     return true;
   }
 
-  /*
-  virtual Bool chainOp(PocketChainState & ds) {
-    return false;
-  }
-  */
-
   /** Assuming self is inDSP
    */
   Void doDSPSwapOut(PocketChainState & pcs, Self & other, SN destsn) {
     // Spread our DSP-is-root control info to swappee
     other.copyTQDSControlFrom(self);
-    /*
-    other.mChainControlUp = mChainControlUp;
-    other.mChainControlDown = mChainControlDown;
-    */
     swapPocketPtrs(other);
     doSwap(pcs,destsn);
   }
@@ -709,14 +682,6 @@ quark PocketChain : Segment + TQDSControlSettable + Fail {
         mD&&pR("tGoM210");
         self.mDSType = cDS_DOWN; // We're a new temp
         mD&&pR("XXCHAINCONTROLCHECKHERE 15");
-        //        Unsigned pres = copy.mSegsDown;
-        //        Unsigned prec = copy.mTempsDown;
-        //        ++copy.mTempsDown;      // Preupdate them for that
-        //        Unsigned posts = copy.mSegsDown;
-        //        Unsigned postc = copy.mTempsDown;
-
-        //        if (pres != posts || postc != prec + 1u)
-        //          fail("THIS CANNOT HAPPEN RIGHT?");
       }
       mD&&pR("tGoM211");
 
@@ -800,18 +765,6 @@ quark PocketChain : Segment + TQDSControlSettable + Fail {
 }
 
 quark PocketChainTQ : PocketChain {
-  /*
-  PocketDir mTargetQuadrant;
-
-  //// PocketChainTQ SERVICES
-  @Override
-  virtual Void copySegAndPChain(PocketChain & from) {
-    super.copySegAndPChain(from);
-    if (from as Self) {
-      mTargetQuadrant = from.mTargetQuadrant;
-    } else fail(__FILE__,__LINE__);
-  }
-  */
 
 }
 

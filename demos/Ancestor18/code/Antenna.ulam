@@ -118,10 +118,6 @@ element Antenna
     mD&&pR("TXMF10");
     mD&&pR(a);
     mD&&pR(deltahops);
-    /*
-    if (a as QDebugUtils)
-      a.takeDebug(self);
-    */
 
     if (a as Antenna) { // Handle Antenna separately (instead of as OBCDists) to do recv also
       mD&&pR("TXMF14");

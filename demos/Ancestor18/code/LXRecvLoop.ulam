@@ -66,10 +66,6 @@ element LXRecvLoop : LX + QLabelMark + TQDSControlStg {
 
   RecvPhase mRecvPhase = cRP_INIT;
 
-  /* Unclear this is a good idea as is
-  TQDSControl mTQDSInboundConfig; //< Optional specific configuration for all inbound codons
-  */
-
   //// LX API
   @Override
   virtual Bool perform(DiamondSequencerState & dss) {
@@ -207,13 +203,6 @@ element LXRecvLoop : LX + QLabelMark + TQDSControlStg {
       ccopy.copySegAndPChain(oec); // pick up ptrs from existingZ
       ccopy.mDSType = cDS_NORM;    // it's totally normal BTW
 
-      /*
-      if (!mTQDSInboundConfig.isDefaultTQDS()) {
-        TQDSControl & tqr = ccopy;
-        tqr = mTQDSInboundConfig;
-      }
-      */
-
       ew[osn] = copy;            // then stash it
       //// WE HAVE STASHED THE INBOUND COPY
 
@@ -222,14 +211,6 @@ element LXRecvLoop : LX + QLabelMark + TQDSControlStg {
         if (labelMatch(ccopy)) {
           //// WE DID JUST STASH THE FINAL CODON.
           
-          /*
-          //// TURN ON DSMIN
-          Atom & a = ew[osn];
-          if (a as TQDSControl)
-            a.setMinDSHopsCommand(true);       // XYZZY to tighten up the received loop
-          //// DSMIN IS ON
-          */
-
           markDSPForRotationForward(dss, 0u, cPUNIT_OUT); // roll out to first insn after IR
           mRecvPhase = cRP_FINISH; // Move on to final phase
           return true;

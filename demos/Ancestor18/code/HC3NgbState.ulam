@@ -207,8 +207,7 @@ transient HC3NgbState + DTU + QDebugUtils {
         // any 'non-self' except Foam means 'blockage'
 
         if (!(a is QHardCell || a is Empty ||
-              a is Membrane || /*a is MTip ||*/
-              /*a is IntercellularGoo ||*/ a is Antenna)) {
+              a is Membrane || a is Antenna)) {
           mFoundBlockage = true;
           continue;
         }

@@ -82,37 +82,7 @@ quark Membrane : D1Pocketable + DEWLine + DTU {
           continue;
         }
         mD&&pR("MESOQ15");
-        /*
-        if (a as MTip) {
-          mD&&pR("MESOQ16");
-          mD&&pR(a);
-          if (!a.mAxisBound) continue;
-          mD&&pR("MESOQ17");
-          if (!mDirBound) continue;
-          mD&&pR("MESOQ18");
-          PocketDir d1, d2;
-          a.dirsOf(a.mHorizonAxis,d1,d2);
-          mD&&pR("MESOQ19");
-          mD&&pR(d1);
-          mD&&pR(d2);
 
-          if (d1 == mOpenDir || d2 == mOpenDir) {
-            mD&&pR("MESOQ210");
-            Unsigned theirRank = a.sourceRank();
-            mD&&pR(theirRank);
-            if (theirRank > ourRank) { // Higher rank, pick up their warnings
-              mD&&pR("MESOQ211");
-              ++lowerranks;
-              mergeDCs(a);
-              mD&&pR("MESOQ212POST");
-              mD&&pR(self);
-            }
-            continue;
-          }
-          mD&&pR("MESOQ213");
-          // ELSE DANGEROUS MTIP
-        }
-        */
         mD&&pR("MESOQ214");
         if (a as Membrane) {
           mD&&pR("MESOQ215");
@@ -204,18 +174,6 @@ quark Membrane : D1Pocketable + DEWLine + DTU {
     }
     mD&&pR("MESOQ219");
 
-    /*
-    if (false) { // XXX TRY NO ICG
-    // Maybe seed goo
-    if (empcount > 0u && random.oneIn(isDanger ? 20u : 50u)) {
-      ew[empsn] = IntercellularGoo.instanceof;
-      empcount = 0u; // We took the empty
-      mD&&pR("MESOQ221");
-      mD&&pR(empsn);
-    }
-    }
-    */
-
     if (isDanger) {
       mD&&pR("MESOQ220");
 
@@ -239,14 +197,6 @@ quark Membrane : D1Pocketable + DEWLine + DTU {
       }
       mD&&pR("MESOQ225");
 
-      /* maybe signaling on both is a worse idea than neither..
-      if (!signalled) { // Otherwise signal on both
-        DirIdx d1, d2;
-        axesOf(mOpenDir, d1, d2);
-        maxDC(d1,ourdc);
-        maxDC(d2,ourdc);
-      }
-      */
     }
     mD&&pR("MESOQ226");
     mD&&pR(lowerranks);
@@ -282,15 +232,6 @@ quark Membrane : D1Pocketable + DEWLine + DTU {
 
   C2D axisOf(AxialDir di) {
     return axialDir2C2D(di);
-    /*
-    which (di) {
-    case cW: { return C2D.instanceof(-1,0); }
-    case cN: { return C2D.instanceof(0,+1); }
-    case cS: { return C2D.instanceof(0,-1); }
-    case cE: { return C2D.instanceof(+1,0); }
-    }
-    return C2D.instanceof; // Not reached
-    */
   }
 
   

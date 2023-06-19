@@ -162,31 +162,6 @@ transient PatchState + DTU + QDebugUtils + Fail {
         mD&&pR(getPocketDirName(pd));
         //        mSegmentSNs[pd].print(self);
         mSegmentSNs[pd].add(sn);
-        /*
-        if (random.oneIn(++mSegmentCount[pd])) {
-          mD&&pR("PCHS14SEG11");
-          mD&&pR(getPocketDirName(pd));
-          mD&&pR(sn);
-          mD&&pR(mPCount);
-
-          mSegmentSN[pd] = sn;
-
-          //// IS THIS A PICKABLE POCKETABLE?
-          if (random.oneIn(++mPCount)) {
-            mD&&pR("PCHS14SEG11PICKIT");
-            mPSN = sn;
-            mPSNPocket = pd;
-            mD&&pR(mPCount);
-            mD&&pR(mPSN);
-            mD&&pR(getPocketDirName(mPSNPocket));
-            //// THIS POCKETABLE HAS BEEN PICKED (FOR NOW)
-          }
-          
-          mD&&pR(getPocketDirName(pd));
-          mD&&pR(mSegmentCount[pd]);
-          mD&&pR(mSegmentSN[pd]);
-        }
-        */
       }
       //// QUADRANT STATS ARE UPDATED.
     }

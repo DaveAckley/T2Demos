@@ -55,53 +55,6 @@ element EdgeHG : QHardCellGField
   @Override
   virtual ClassId getIntentionClass() { return EdgeHGState.classidof; }
 
-  /* NOT NEEDED BECAUSE WE'RE DOING 'ANCHORS'
-
-Bool updateJunctor(Junction & junc, EdgeHGState & ehs) {
-    mD&&pR("EHUPJ10");
-    mD&&pR(self);
-    mD&&pR(ehs);
-
-    EventWindow ew;
-    // See if MB ngb has junction that applies to us
-    
-    MinPick mbpick;
-    for (SN sn = 1u; sn < 41u; ++sn) {
-      if (!ew.isAccessible(sn)) continue;
-      Atom & a = ew[sn];
-      C2D ac = ew.getCoord(sn);
-      Unsigned aclen = ac.length();
-      if (a as MBase) {
-        if (!a.mDirBound || a.mOpenDir != junc.mOpenDir) continue; // not our mb
-        if (aclen <= 2u) continue;                           // too our mb
-        // mb ready and our dir but not adjacent
-        mbpick.update(sn);
-      }
-    }
-
-    if (mbpick.hasPick()) {
-      MBase & mb = (MBase&) mbpick.getIdxAtom();
-      Unsigned jidx = mb.getJunctionIndex();
-      Unsigned ourjidx = getJunctionIndex();
-      if (jidx != ourjidx) {
-
-        ClassId jid = mb.getJunctionClassFromIndex((JunctionIndexProvider.JunctionIndex) jidx);
-        mD&&pR("EHUPJ11");
-        mD&&pR(mb);
-
-        // Make a junction of the type mb says
-        JunctionBuffer jb;
-        Junction & mbj = createJunction(jb, jid);
-        mD&&pR("EHUPJ12");
-        mD&&pR(mbj);
-
-        mD&&pR("EHUPJ13XXXXXWRITEME"); // DOES MBJ WANT MY SITE?
-        return false;
-      }
-    }
-    return false;
-  }*/
-
   //// EdgeHG SERVICES
   Bool actJunction(EdgeHGState & ehs, PocketDir opendir) {
 
@@ -151,17 +104,6 @@ Bool updateJunctor(Junction & junc, EdgeHGState & ehs) {
     mD&&pR(sites);
     mD&&pR(emppick);
     mD&&pR(stancepick);
-
-    // keep going whether emppick stancepick or not
-    //    if (!emppick.hasPick() || stancepick.hasPick())
-    //      return false;             // no room or already working
-    // (or could merge into stancepick?)
-
-    /*
-    SN empsn = (SN) emppick.getIdx();
-    mD&&pR("EHEMST13");
-    mD&&pR(empsn);
-    */
 
     //// FIND MB
     MinPick mbpick;

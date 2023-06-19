@@ -577,16 +577,6 @@ transient QHardCellState : Intention + DTU + QDebugUtils + Fail {
     } else {
       mD&&pR("QHCUP221");
       //// I AM TAIL
-      /// XXX HACK RE-SEARCH MOORE NGB
-      /*
-      Unsigned baseCount;
-      for (SN sn = 5u; sn <= 8u; ++sn) {
-        if (!ew.isAccessible(sn)) continue;
-        if (ew[sn] is MBase) 
-          ++baseCount;
-      }
-      if (baseCount < 2u) 
-      */
       if (qc as EdgeHG) { // Let's do smart foaming if we can
         PocketDir opendir;
         Unsigned foamed = 0u;
@@ -638,11 +628,6 @@ transient QHardCellState : Intention + DTU + QDebugUtils + Fail {
       mD&&pR("QHCUP223");
       
       ByteStreamLogger bsl;
-      /*      bsl.printf("msd %d, mtd %d, myu %d, mxh %d\n",
-                 mysettleddowns,
-                 mytotaldowns,
-                 hcs.myuphops,
-                 hcs.maxhop);*/
       return block(); // NOT SETTLED DOWN ENOUGH TO MOVE
     }
     //// I HAVE AT LEAST cMIN_DOWN_SETTLED DOWN ALIGNMENT OR TO TAIL
@@ -685,20 +670,6 @@ transient QHardCellState : Intention + DTU + QDebugUtils + Fail {
 
     /// I AM NOT BLOCKED: upstate IS EMPTY (OR INACCESSIBLE)
 
-    /*
-    ///// Fri Jun  2 00:29:31 2023
-    ///// ARE THERE MORE THAN TWO ATOMS IN EITHER FORWARD POCKET?
-    {
-      AxialDir ad = (AxialDir) (upstate - 1u); // which way we want to go
-      PocketDir adjpd[2];
-      pocketDirsBorderingAxialDir(ad,adjpd[0],adjpd[1]);
-      for (Unsigned i = 0u; i < 2u; ++i) {
-        WRITE ME OR KILL ME?
-      }
-      
-    }
-    */
-
     //// I AM GOING TO FOGGEN MOVE. I WILL NOT REMAIN SETTLED.
     resetSettledDownHops(hc, hc3);
     mD&&pR("QHCUP228");
@@ -727,30 +698,6 @@ transient QHardCellState : Intention + DTU + QDebugUtils + Fail {
     //// WE INITTED PATCH STATE
 
     mD&&pR("QSUPTC11");
-    /*
-    {
-      mD&&pR("EIQ10");
-      Int terr = 0;
-      for (Unsigned i = cQUAD_NW; i <= cQUAD_SW; ++i) {
-        PocketDir pd = (PocketDir) i;
-        mD&&pR("EIQ11");
-        mD&&pR(getPocketDirName(pd));
-        Int qerr = mPatchState.errorInQuad(pd);
-        mD&&pR("EIQ12");
-        mD&&pR(getPocketDirName(pd));
-        mD&&pR(qerr);
-        terr += qerr;
-      }
-      if (terr > 0) {
-        Bool dbg = isDebugOutputEnabled();
-        setDebugOutputEnabled(true);
-        mD&&pR("EIQ1TOTALERRORINPATCH");
-        mD&&pR(terr);
-        mD&&pR();
-        //        setDebugOutputEnabled(dbg);
-      }
-    }
-    */
 
     //// IS THERE A POCKETABLE TO UPDATE?
     if (mPatchState.mPCount > 0u) {

@@ -98,38 +98,6 @@ quark TQDSControl + DTU {
 
 }
 
-/*
-quark TQDSControlNull : TQDSControl {
-  @Override virtual TQMap getTQDSTQMapCommand() { return 0u; }
-  @Override virtual TQMap getTQDSTQMapValue() { return 0u; }
-  @Override virtual Bool getTQDSECsGood() { return false; }
-  @Override virtual Bool getTQDSLockedDown() { return false; }
-  @Override virtual HopCount getTQDSMaxDSHopsValue() { return 0u; }
-
-  //// IGNORE ATTEMPTS TO SET
-  @Override virtual Void setTQDSTQMapCommand(TQMap cmd) { }
-  @Override virtual Void setTQDSTQMapValue(TQMap val) { }
-  @Override virtual Void setTQDSECsGood(Bool ecs) {  }
-  @Override virtual Void setTQDSLockedDown(Bool lock) { }
-  @Override virtual Void setTQDSMaxDSHopsValue(HopCount dsh) { }
-}
-
-quark TQDSControlDefault : TQDSControl + Fail {
-  @Override virtual TQMap getTQDSTQMapCommand() { return 0u; }
-  @Override virtual TQMap getTQDSTQMapValue() { return 0u; }
-  @Override virtual Bool getTQDSECsGood() { return false; }
-  @Override virtual Bool getTQDSLockedDown() { return false; }
-  @Override virtual HopCount getTQDSMaxDSHopsValue() { return 0u; }
-
-  //// FAIL ON ATTEMPT TO SET NON-DEFAULT VALUES
-  @Override virtual Void setTQDSTQMapCommand(TQMap cmd) {      if (cmd != 0u) fail(__FILE__,__LINE__); }
-  @Override virtual Void setTQDSTQMapValue(TQMap val) {        if (val != 0u) fail(__FILE__,__LINE__); }
-  @Override virtual Void setTQDSECsGood(Bool ecs) {                  if (ecs) fail(__FILE__,__LINE__); }
-  @Override virtual Void setTQDSLockedDown(Bool lock) {             if (lock) fail(__FILE__,__LINE__); }
-  @Override virtual Void setTQDSMaxDSHopsValue(HopCount dsh) { if (dsh != 0u) fail(__FILE__,__LINE__); }
-}*/
-
-
 quark TQDSControlStg : TQDSControlSettable {
   TQMap mTQMapCommand = 0xf; //< currently acceptable target quadrants; default: all
   TQMap mTQMapValue = 0x0;   //< currently occupied target quadrants; default: all
@@ -152,8 +120,6 @@ quark TQDSControlStg : TQDSControlSettable {
   @Override virtual Void setTQDSMaxDSHopsValue(HopCount dsh) { mMaxDSHopsValue = dsh; }
 
 }
-
-
 
 /** Flip the mLockedDown in all dist 1 TQDS
     \symbol QT

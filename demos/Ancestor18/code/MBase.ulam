@@ -138,18 +138,6 @@ element MBase : Membrane
       mD&&pR("MBBEH13POCK");
       mD&&pR(p);
 
-      /* XXX unfinished - it needs to make a dogleg move not a diago
-      /// If status okay, we might have been buried by a growth spurt
-      if (p.mStatus == PocketHC3.cSTATUS_OK) {
-        C2D newc = pocketDir2C2D(mOpenDir)*(C2D.Coord) 2;
-        EventWindow ew;
-        if (ew.isAccessible(newc) && ew[newc] is Empty) { // shortcut!
-          ew.swap(C2D.instanceof, newc);
-          return;
-        }
-      }
-      */
-
       if (p.mStatus == PocketHC3.cSTATUS_BENT) {
         if (mDecayTimer.countAlarm()) return die();
         return; //block
@@ -157,7 +145,6 @@ element MBase : Membrane
       mD&&pR("MBBEH14");
       if (p.mStatus == PocketHC3.cSTATUS_EDGE) {
         // just die if on edge.. we're spawning so fast now anyway..
-        /*if (mDecayTimer.countAlarm())*/ return die();
         //        return; //block
       }
       mD&&pR("MBBEH15");
@@ -225,7 +212,7 @@ element MBase : Membrane
         Atom & a = ew[sn];
         if (a as MBase) ++mbcount;
         else if (a as QHardCellGField) { // Seeing an HG field that
-          if (a is EdgeHG/* || a is MTip*/) ++ehgcount;   // isn't EdgeHG (or MTip) is bad
+          if (a is EdgeHG) ++ehgcount;   // isn't EdgeHG (or MTip) is bad
           else ++hgcount;
         }
       }
@@ -245,142 +232,12 @@ element MBase : Membrane
     mD&&pR(self);
 
     //// SPAWN ANTENNAE
-    /*
-    if (false) {
-      if (mDirBound) {
-        EventWindow ew;
-        Unsigned antc = 0u;
-        for (SN sn = 1u; sn <= 8u; ++sn) {
-          if (ew.isAccessible(sn) && ew[sn] is Antenna) {
-            ++antc;
-            break;
-          }
-        }
-        if (antc == 0u) {
-          C2D adjc = pocketDir2C2D(mOpenDir);
-          if (ew.isAccessible(adjc) && ew[adjc] is Empty) {
-            Antenna aa;
-            aa.mOpenDir = mOpenDir;
-            aa.mMaxEdgeHops = 6u; // XXX PROGRAM CTL
-            ew[adjc] = aa.atomof;
-          }
-        }
-      }
-      return; // NO SENSOR SPAWNING
-    }
-    */
 
-    // Slow and ungainly sensor seeding
-    if (false /*sensorcount == 0u*/) { // XXX DON'T SEED MSENSORS
-      // Signal contact if we can't see any sensors!
-      mD&&pR("MBBEH215");
-      AxialDir d1, d2;
-      axesOf(mOpenDir,d1,d2);
-      mD&&pR(d1);
-      mD&&pR(d2);
-      mD&&pR("MBBEH216");
-      DefCon dc = signalDC();
-      mD&&pR(dc);
-      maxDC(d1,dc);
-      mD&&pR(dc);
-      maxDC(d2,dc);
-      mD&&pR(dc);
-      mD&&pR("MBBEH217");
-
-      if (oneIn(8u)) { 
-        mD&&pR("MBBEH218");
-      
-        SN maybe = (SN) between(5u,24u/*12u*/);
-        if (ew.isAccessible(maybe)) {
-          if (ew[maybe] is Empty) {
-            C2D mc = ew.getCoord(maybe);
-            if (inQuadrant(mc,mOpenDir)) {
-              mD&&pR("MBBEH219");
-              /*
-              MSensor seed;
-              seed.mOpenDir = mOpenDir;
-              seed.mDirBound = true;
-              mD&&pR(seed);
-              ew[maybe] = seed.atomof;
-              */
-            }
-          }
-        }
-      }
-    }
   }
 
   Void updateCornerDistances() {
     if (!mDirBound) return; // too soon
-    // XXX DEIMPLEMENTED
-    /*
-    Bool uninit = mQCD.mCornerDists[0] == 0u && mQCD.mCornerDists[1] == 0u;
-
-    C2D dirc = pocketDir2C2D(mOpenDir); // len 2 vec to world
-
-    EventWindow ew;
-    Bool ngbSeen[2] = {false, false};
-    Unsigned maxhops = 0u;
-    for (SN sn = 1u; sn < 41u; ++sn) {
-      if (!ew.isAccessible(sn)) continue;
-      Atom & a = ew[sn];
-      if (a as QHardCell) {
-        Unsigned amaxhops = a.getMaxHopsGoal();
-        if (amaxhops > maxhops) maxhops = amaxhops;
-      }
-      if (!(a is MBase)) continue;
-
-      // - Scan for mDirBound MB ngbs with same mOpenDir
-      MBase & ngb = (MBase&) a;
-      if (!ngb.mDirBound) continue;
-      if (ngb.mOpenDir != mOpenDir) continue;
-
-      // - If dist 1 or 3 skip
-      C2D c = ew.getCoord(sn);
-      Unsigned d = c.length();
-      if (d==1u || d==3u) {
-        ngbSeen[0] = ngbSeen[1] = true; // but use big hammer to avoid decaying?
-        continue;
-      }
-
-      // - If ngb onaxis with us, skip
-      if (c.x == 0 || c.y == 0) 
-        continue;
-
-      //   = else ngb is r==cw or r==acw of us
-      Bool cw = c.y*dirc.x > c.x*dirc.y;
-      Unsigned r = cw ? 0u : 1u;
-
-      // - If dist 2, 
-      //   = set our dist[r] to theirs and
-      if (d==2u) {
-        mQCD.mCornerDists[r] = ngb.mQCD.mCornerDists[r];
-        ngbSeen[r] = true;  //..and say we've seen that dir
-      }
-
-      // - if dist 4
-      //   = with highish odds, converge our dist[r] to
-      //     their dist[r]+1 and set ngbseen[r] == true
-      if (d==4u) {
-        ngbSeen[r] = true;
-        Int delta = (ngb.mQCD.mCornerDists[r] + 1) - (Int) mQCD.mCornerDists[r];
-        if (delta != 0 && oddsOf(2,3))
-          if (delta > 0) ++mQCD.mCornerDists[r];
-          else --mQCD.mCornerDists[r];
-      }
-    }
-
-    //After the scan, for each r,
-    // - if ngbseen[r], skip
-    // - with lowish odds, converge our dist[r] to 0
-    for (Unsigned r = 0u; r < 2u; ++r) {
-      if (!ngbSeen[r] && mQCD.mCornerDists[r] > 0u && oddsOf(1,10))
-        --mQCD.mCornerDists[r];
-    }
-
-    /// Declare plausibility
-    mQCD.mPlausibleDists = maxhops > 0u && mQCD.mCornerDists[0] + mQCD.mCornerDists[1] + 3u > maxhops;
-    */
+    // DEIMPLEMENTED
   }
 }
 

@@ -132,8 +132,6 @@ transient ChainRule + ChainTypes + QDebugUtils + Fail {
   /** Apply this rule's transformation, given that \c pat matched producing \c mat */
   virtual Void apply(PocketChainState & ss, ChainPattern pat, ChainMatches mat) ; 
 
-
-
   //// CHAINRULE SERVICES
 
   Bool performPCS(PocketChainState & ss) {
@@ -144,13 +142,6 @@ transient ChainRule + ChainTypes + QDebugUtils + Fail {
     apply(ss, pat, mat);
     return true;
   }
-
-  /*
-  typedef Unary(2) MatchCodeResult;
-  constant MatchCodeResult cMCR_UNREACHABLE = 0u;
-  constant MatchCodeResult cMCR_NOMATCH = 1u;
-  constant MatchCodeResult cMCR_MATCH = 2u;
-  */
 
 }
 
@@ -195,11 +186,6 @@ transient ChainRule_INSERT : ChainRule {
 }
 
 element InsertZONG : XTimer(3u,6u,4u) + DTU + QDebugUtils + Fail {
-
-  /*
-  @Override
-  Unsigned getIntentionClass() { Fail f; f. fail(__FILE__,__LINE__); return 0u; }
-  */
 
   EventWindow ew;
   Random random;
@@ -723,17 +709,6 @@ transient ChainRule_ALLEMPTY : ChainRule {
     EmptyCodon & ec1 = (EmptyCodon&) ew[mat[1]];
     ec1.mCrowdWeight -= 3;
 
-    /* DISRUPTING EC CHAINS CONSIDERED NET HARMFUL
-    /// IF ALL THREE ECS ARE SAME DIR AND ONE END IS IN DSP, FLIP OTHER END
-    EmptyCodon & ec0 = (EmptyCodon&) ew[mat[0]];
-    EmptyCodon & ec2 = (EmptyCodon&) ew[mat[2]];
-    DriveStatusCode all = ec0.mDSType;
-    if (all == ec1.mDSType && all == ec2.mDSType) {
-      DriveStatusCode opp = (all == cDS_DOWN) ? cDS_UP : cDS_DOWN;
-      if (ss.isInDSP(0)) ec2.mDSType = opp;
-      else if (ss.isInDSP(2)) ec0.mDSType = opp;
-    }
-    */
   }
 
   //// ChainRule_ALLEMPTY SERVICES
@@ -802,15 +777,6 @@ transient ChainRule_CROWDGROW : ChainRule {
 
   @Override
   virtual Void apply(PocketChainState & ss, ChainPattern pat, ChainMatches mat) {
-    /*
-    EmptyCodon & ec = (EmptyCodon&) ew[mat[1]];
-    Sh*peSh*fter sf;
-    sf.copySegAndPChain(ec);
-
-    ShSfISide1 it;
-    it.adopt(sf);
-    ew[mat[1]] = sf.atomof;
-    */
   }
 
   //// ChainRule_CROWDGROW SERVICES

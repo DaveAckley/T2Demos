@@ -132,10 +132,6 @@ transient CodonState : PocketChainState + Fail + DTU {
           if (u.isTemp()) { // upstream is T?
             mD&&pR("CdnStab12101010"); // yes
             u.setDSType(u.cDS_DOWN);  // ensure it's a D now
-            /*
-            c.swapPocketPtrs(u);      // Exchange ptrs
-            c.doSwap(self,upsn);      // then make the swap
-            */
             c.doDSPSwapOut(self, u, upsn);
             return true;              // we moved (but stay in UPWD)
           }
@@ -168,10 +164,6 @@ transient CodonState : PocketChainState + Fail + DTU {
               mD&&pR("CdnStab12101110"); // let's mix it up
               if (norm)                 // If down is norm, mission accomplished
                 ds.setQuadrantIdle(mQuadrant);     // So set our quadrant idle
-              /*
-                c.swapPocketPtrs(d);      // Exchange ptrs
-                c.doSwap(self,dnsn);      // and make the swap
-              */
               c.doDSPSwapOut(self, d, dnsn);
 
               return true;              // we moved
@@ -232,9 +224,6 @@ transient CodonState : PocketChainState + Fail + DTU {
             if (d.isTemp()) { // downstream is T?
               mD&&pR("CdnStab12111010"); // yes
               d.setDSType(d.cDS_UP);    // ensure it's a U now
-              /*            c.swapPocketPtrs(d);      // Exchange ptrs
-                            c.doSwap(self,dnsn);      // make the swap
-              */
               c.doDSPSwapOut(self, d, dnsn);
               
               return true;              // we moved (but stay in UPWD)
@@ -265,10 +254,6 @@ transient CodonState : PocketChainState + Fail + DTU {
             if (u.isRealMobile()) {  // and if upstream is X (i.e., mobile nontempT)
               mD&&pR("CdnStab12111110"); // yes
               ds.setQuadrantIdle(mQuadrant);         // Set our quadrant idle
-              /*
-                c.swapPocketPtrs(u);      // Exchange ptrs
-                c.doSwap(self,upsn);      // and make the swap
-              */
               c.doDSPSwapOut(self, u, upsn);
               
               return true;              // we moved
@@ -338,12 +323,6 @@ transient CodonState : PocketChainState + Fail + DTU {
         ew[0] = ec.atomof;       // Make the change
         return true;             // we changed
       }
-
-      /* DON'T WANT THIS
-      // (3) if reachable layout is   [X] -> U
-      //     switch to                [F] -> X
-      //     and set _IDLE
-      */
 
       // WANT THIS INSTEAD: (SEND TEMPS DOWN AROUND LOOP)
       // (3) if reachable layout is   [X] -> U
@@ -429,57 +408,13 @@ transient CodonState : PocketChainState + Fail + DTU {
     }
 
     return false; /// XXXX DO NO CHAIN ALTERATIONS HERE
-    
-    /*
-    //// IS DOWNSTREAM A TEMP?
-    SN downsn = self.mEWSNMate[Segment.cBODY_DOWN];
-    if (downsn == 0u) return c.diffuse(self); // No mate??
-
-    Atom & a = ew[downsn];
-    if (a as PocketChain) {
-      if (a.mDSType != c.cDS_DOWN &&
-          a.mDSType != c.cDS_UP) return true; // mate not temp XX WAS true
-    } else return c.diffuse(self);             // mate not qchain??
-    //// DOWNSTREAM IS A TEMP.
-
-    PocketChain & qd = (PocketChain&) a;
-    if (random.oneIn(15u)) {
-      /// GO FOR GROW!
-      Sh*peSh*fter g;
-      if (c as PocketChainTQ) { //// XXXXX DISGUSTOHACKHERE
-        g.mTargetQuadrant = c.mTargetQuadrant;
-      }
-
-      g.copySegAndPChain(qd);
-      g.mDSType = Demo.cDS_NORM;
-
-      if (true) { // XXX ALL GROW FOR NOW
-        ShSfISide1 it;
-        it.adopt(g);
-      } else {
-        ShSfIWormHead it;
-        g.mAction = true;  // You are H*
-        it.adopt(g);
-      }
-
-      ew[downsn] = g.atomof;
-      return c.diffuse(self);
-    }
-
-    return true;                // And block subclass act
-    */
   }
 
   Bool freeStab(Codon & c) { //< Chain self-management away from all DS
     mD&&pR("FRSTB10");
     // Check rules:
     /// First: Priority rules
-    /* Deprecated in favor of field rules
-    {
-      ChainRule_CROWDGROW rule;
-      if (rule.performPCS(self)) return true;
-    }
-    */
+    // Deprecated in favor of field rules
     mD&&pR("FRSTB11");
     {
       ChainRule_RELAXEMPTY rule;

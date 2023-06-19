@@ -42,18 +42,6 @@ transient LoaderState : CodonState {
         ++ld.mNextInstruction;
         return true;
       }
-      /*
-      /// EC TO BOTH SIDES OF ME?
-      ChainRule_LOADER_LOAD cr;
-      ChainRuleMatcher crm114;
-      cr.takeDebug(self);
-      crm114.takeDebug(self);
-      if (crm114.tryRule(self,cr)) {
-        mD&&pR("LDRST13");
-        //        ++ld.mNextInstruction;
-        return true;
-      }
-      */
 
       mD&&pR("LDRST14");
     } else { // PROGRAM LOADED
@@ -101,30 +89,6 @@ transient ChainRule_LOADER_LOAD : ChainRule_GENL_ALONE {
     up.swapPocketPtrs(newc);
     mD&&pR("CR_LDRL_WAD12INC-newc");
     mD&&pR(newc);
-    /*
-    mD&&pR("CR_LDRL_WAD12INC-newc.ccu");
-    mD&&pR(newc.mChainControlUp);
-    mD&&pR("CR_LDRL_WAD12INC-init");
-    newc.mChainControlUp.init(ccu);
-    mD&&pR("CR_LDRL_WAD12IND-newc.ccu");
-    mD&&pR(newc.mChainControlUp);
-    mD&&pR("CR_LDRL_WAD12IND-ld.ccu");
-    mD&&pR(ld.mChainControlUp);
-    mD&&pR("CR_LDRL_WAD12IND-newc");
-    mD&&pR(newc);
-    mD&&pR("CR_LDRL_WAD12INE-init");
-    newc.mChainControlDown.init(ccd);
-    mD&&pR("CR_LDRL_WAD12INE-newc.ccd");
-    mD&&pR(newc.mChainControlDown);
-    mD&&pR("CR_LDRL_WAD12INE-newc.ccu");
-    mD&&pR(newc.mChainControlUp);
-    mD&&pR("CR_LDRL_WAD12INE-newc");
-    mD&&pR(newc);
-    mD&&pR("CR_LDRL_WAD12INE-ld.ccd");
-    mD&&pR(ld.mChainControlDown);
-    mD&&pR("CR_LDRL_WAD12INE-ld.ccu");
-    mD&&pR(ld.mChainControlUp);
-    */
     mD&&pR("CR_LDRL_WAD12INF-a");
     mD&&pR(a);
     mD&&pR("CR_LDRL_WAD12INF-newc");
@@ -133,12 +97,6 @@ transient ChainRule_LOADER_LOAD : ChainRule_GENL_ALONE {
     mD&&pR("ZONGBONG");
     ++ld.mNextInstruction;
     mD&&pR(ld);
-    /*
-    Codon & x  = (Codon&) ew[mat[1]];
-    Codon & ec  = (Codon&) ew[mat[2]];
-    ec.swapPocketPtrs(x);
-    ew.swap(mat[1],mat[2]);
-    */
   }
 
 }

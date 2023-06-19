@@ -34,21 +34,6 @@ transient HC3State + DTU + QDebugUtils {
     { .x =  3, .y = 0 },           // 3: E
   };
 
-  /*
-  Bool getQuadrantIterator(NgbRels & rels, PocketDir pd, RectIterator & ri) {
-    constant Unsigned cW = 0u, cN = 1u, cS = 2u, cE = 3u;
-    Unsigned s1,s2;
-    which (pd) {
-      case cQUAD_NW: { s1 = cW; s2 = cN; }
-      case cQUAD_NE: { s1 = cE; s2 = cN; }
-      case cQUAD_SE: { s1 = cE; s2 = cS; }
-      case cQUAD_SW: { s1 = cW; s2 = cS; }
-      otherwise: { Fail f; f.fail(__FILE__,__LINE__); }
-    }
-    
-  }
-  */
-
   Unsigned getFoamCount() {
     Unsigned ret = 0u;
     for (Unsigned i = 0u; i < 4u; ++i) 
@@ -92,13 +77,6 @@ transient HC3State + DTU + QDebugUtils {
       }
     }
     { Fail f; f.fail(__FILE__,__LINE__); }
-    /* WRITE ME
-      
-    if (off.x == 0 && ngb[0]) ds[0] = true;
-    if (off.y == 0 && ngb[1]) ds[1] = true;
-    mD&&pR(ds[0]);
-    mD&&pR(ds[1]);
-                                         */
   }
 
   Void updateOnDSAxes(OnDSAxes & ds, C2D off, OnDSAxes ngb) {

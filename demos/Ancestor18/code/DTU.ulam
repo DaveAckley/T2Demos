@@ -293,30 +293,6 @@ quark DTU {
     if (x >= cXZONE_CT) return false;
     return zone2PocketDir((Zone) x, pd);
   }
-  /*
-    if (ad1 < ad2) { AxialDir t = ad1; ad1 = ad2; ad2 = t; }
-    // ad1 != cW
-    du.print("AXD2PD11");
-    du.print(ad1);
-    du.print(ad2);
-
-    if (adjacentAxialDir(ad1, false) == ad2) {
-      du.print("AXD2PD12");
-      Zone z = (Zone) (axialDir2Zone(ad1)+1u); // ET->NE, ST->SE, NT->NW
-      du.print(z);
-      if (!zone2PocketDir(z,pd)) { Fail f; f.fail(__FILE__,__LINE__); }
-      return true;
-    }
-    if (adjacentAxialDir(ad1, true) == ad2) { // WT->SW only case left
-      du.print("AXD2PD13");
-      du.print(ad1);
-      pd = cQUAD_NW;
-      return true;
-    }
-    du.print("AXD2PD14");
-    return false;
-  }
-  */
 
   OnDSAxes xzone2OnDSAxes(XZone val) {
     OnDSAxes r;
@@ -680,43 +656,9 @@ quark DTU {
   constant TQMap cTQ_SE = 1u << cQUAD_SE; // 4u
   constant TQMap cTQ_SW = 1u << cQUAD_SW; // 8u
 
-  /*
-  typedef Unsigned(2) SizeRange;
-  constant SizeRange cSZRG_S = 0u; //< small
-  constant SizeRange cSZRG_M = 1u; //< medium
-  constant SizeRange cSZRG_L = 2u; //< large
-  constant SizeRange cSZRG_X = 3u; //< extra large / rest
-
-  typedef Unsigned SizeRangeLimits[SizeRange.maxof + 2u];
-  constant SizeRangeLimits cSR_LIMITS = { // as a function of distance from edge
-    0u,
-    2u, // >= 0, < 2 -> _S
-    3u, // >= 2, < 3 -> _M
-    5u, // >= 3, < 5 -> _L
-    Int.maxof // >= 5 -> The Professor And Mary Ann
-  };
-
-  typedef Bits(4) ASRMap; //< Allowable Size Range Map
-  
-  constant ASRMap cASR_S = 1u << cSZRG_S;
-  constant ASRMap cASR_M = 1u << cSZRG_M;
-  constant ASRMap cASR_L = 1u << cSZRG_L;
-  constant ASRMap cASR_X = 1u << cSZRG_X;
-  */
-
   // Big and little numbers that don't include Int.minof
   constant Int cMAX_FLAG =  2000000000;
   constant Int cMIN_FLAG = -2000000000;
-
-  /*
-  Bool hcPoint2QCornerDists(HCPoint hc, QCornerDists & qcd) {
-    if (hc.x == 0 || hc.x == 0)
-      return false;
-    Fail f;
-    f.fail(__FILE__,__LINE__); // XXX
-    
-  }
-  */
 
   //////
   typedef C2DTU(4u) DirOff;

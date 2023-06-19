@@ -3,36 +3,6 @@ local typedef MCSlash SPECIES;
 
 local constant LXMarker.Mark cMAX_MARK = (LXMarker.Mark) Unsigned(LXMarker.Mark.sizeof).maxof;
 
-/*
-local constant LXKill
-  cINS_MK1_RESET_MOTHER = {
-  .mDSType = DTU.cDS_NORM,
-  .mLabel = 0x1,
-  .mPocketsToKill = { true, true, true, false}, // kill BGR !W
-  .mPocketsToInit = { false, false, true, false}, // init R (tie up space)
-};
-*/
-
-/*
-local constant LXUArm
-  cINS_UMOVE_MOTHER10 = {
-  .mProgram = {
-    DTU.cUOP_AGWT, // 0: go w -1
-    DTU.cUOP_AGWT, // 1: go w -2
-    DTU.cUOP_AGWT, // 2: go w -3
-    DTU.cUOP_AGWT, // 3: go w -4
-    DTU.cUOP_AGWT, // 4: go w -5
-    DTU.cUOP_AGWT, // 5: go w -6
-    DTU.cUOP_AGWT, // 6: go w -7
-    DTU.cUOP_AGWT, // 7: go w -8
-    DTU.cUOP_ADDA, // 8: deploy new mother DS anticlockwise
-    DTU.cUOP_LAEC, // 9: E-become all ECs
-    DTU.cUOP_LEOP, // 10: end of program
-  },
-  .mDSType = DTU.cDS_NORM,
-};
-*/
-
 local constant NanoArm
   cINS_NANOARM_MOTHER10 = {
     .mDSType = DTU.cDS_NORM,
@@ -98,110 +68,6 @@ local constant NanoArm
   },
 };
 
-/*
-      NanoArm.cGF, //  7 (19,-1)E
-      NanoArm.cTR, //  6 (19,-1)S
-      NanoArm.cGF, //  6 (19, 0)S
-
-      NanoArm.cGF, // 0 go e -16
-      NanoArm.cGF, // 1 go e -17
-      NanoArm.cGF, // 2 go e -18
-      NanoArm.cGF, // 3 go e -19
-      NanoArm.cTR, // 4 face s
-      NanoArm.cGF, // 5 go s
-      NanoArm.cEP, // 6 done
-
-      NanoArm.cGF, // 3 go e -2
-      NanoArm.cGF, // 4 go e -3
-      NanoArm.cGF, // 5 go e -4
-      NanoArm.cGF, // 6 go e -5
-      NanoArm.cGF, // 7 go e -6
-      NanoArm.cGF, // 8 go e -7
-      NanoArm.cGF, // 9 go e -8
-      NanoArm.cGF, // a go e -9
-      NanoArm.cGF, // b go e -10
-      NanoArm.cGF, // c go e -11
-      NanoArm.cGF, // d go e -12
-      NanoArm.cGF, // e go e -13
-      NanoArm.cGF, // f go e -14
-      NanoArm.cGF, // g go e -15
-*/
-
-/*
-local constant LXBioCtorArm
-  cINS_MOVE_MOTHER11 = {
-  .mProgram = {
-    DTU.cBOC_AGWT, // 0: go w -7
-    DTU.cBOC_AGWT, // 1: go w -8
-    DTU.cBOC_ADDA, // 2: deploy new mother DS anticlockwise
-    DTU.cBOC_LAEC, // 3: E-become all ECs
-    DTU.cBOC_LEOP, // 4: end of program
-  },
-  .mDSType = DTU.cDS_NORM,
-};
-*/
-
-/*
-local constant LXUArm
-  cINS_USEED_DAUGHTER10 = {
-  .mProgram = {
-    DTU.cUOP_AGNT, // 0: go n
-    DTU.cUOP_AGET, // 1: go e -1
-    DTU.cUOP_AGET, // 2: go e -2
-    DTU.cUOP_AGET, // 3: go e -3
-    DTU.cUOP_AGET, // 4: go e -4
-    DTU.cUOP_AGET, // 5: go e -5
-    DTU.cUOP_AGET, // 6: go e -6
-    DTU.cUOP_AGET, // 7: go e -7
-    DTU.cUOP_AGET, // 8: go e -8
-    DTU.cUOP_AGET, // 9: go e -9
-    DTU.cUOP_AGET, // 10: go e -10
-
-  },
-  .mDSType = DTU.cDS_NORM,
-};
-*/
-
-/*
-local constant LXUArm
-  cINS_USEED_DAUGHTER11 = {
-  .mProgram = {
-    DTU.cUOP_AGET, // 0: go e -11
-    DTU.cUOP_AGET, // 1: go e -12
-    DTU.cUOP_AGET, // 2: go e -13
-    DTU.cUOP_AGET, // 3: go e -14
-    DTU.cUOP_AGET, // 4: go e -15
-    DTU.cUOP_AGET, // 5: go e -16
-    DTU.cUOP_AGET, // 6: go e -17
-    DTU.cUOP_AGET, // 7: go e -18
-    DTU.cUOP_AGET, // 8: go e -19
-    DTU.cUOP_AGST, // 9: go s
-    DTU.cUOP_ADDC, // 10: deploy daughter DS clockwise
-  },
-  .mDSType = DTU.cDS_NORM,
-};
-*/
-
-/*
-local constant LXUArm
-  cINS_USEED_DAUGHTER12 = {
-  .mProgram = {
-    DTU.cUOP_LAEC, // 0: E-become all ECs
-    DTU.cUOP_LEOP, // 1: end
-  },
-  .mDSType = DTU.cDS_NORM,
-};
-*/
-
-/*
-local constant LXBioCtorArm
-  cINS_SEED_DAUGHTER13 = {
-  .mProgram = {
-  },
-  .mDSType = DTU.cDS_NORM,
-};
-*/
-
 local constant LXSendLoop
   cINS_SEND_LOOP10 = {
   .mDSType = DTU.cDS_NORM,
@@ -255,15 +121,6 @@ local constant LXWait
   .mOperand = 18u,             // ..lss than 18
 };
 
-/*
-local constant LXWait
-  cINS_WAIT_SHRINK = {
-  .mDSType = DTU.cDS_NORM,
-  .mTest = LXWait.cTST_TQDSGTR, // wait while TQDS max dshops..
-  .mOperand = 8u,             // ..gtr than 8
-};
-*/
-
 local constant LXKill
   cINS_DESTROY_ENDPOINT_NR = {
   .mDSType = DTU.cDS_NORM,
@@ -289,17 +146,6 @@ local constant LXRecvLoop
   .mDSPD = DTU.cQUAD_SW,
 };
 
-/*
-local constant LXRemapLoop
-  cINS_MK4_RESHAPE_CODE = {
-  .mDSType = DTU.cDS_NORM,
-  .mConfigTQMap = 0x6,    // allow target quad NE (1<<1) | SE (1<<2)
-  .mLabel = 4u,
-  .mConfigMaxDSHops = 8u, // block while maxds > 8 (on 9 dest size)
-  //  .mConfigMaxDSHops = 7u, // block while maxds > 7 (on 9 dest size)
-};
-*/
-
 local constant LXRemapLoop
   cINS_RESHAPE_CODE8SE = {
   .mDSType = DTU.cDS_NORM,
@@ -317,109 +163,6 @@ local constant LXReleaseDiamondCutter
   cINS_RELEASE_CUTTER = {
   .mDSType = DTU.cDS_NORM,
 };
-
-
-/*
-local constant LXCommandDS cINS_REGRIP_MOTHER = {
-  .mDSType = DTU.cDS_NORM, .mPacket = { .mCmd = DTU.cSW3C_GRIPDS, .mArg = 0xDA }
-};
-*/
-
-/*
-local constant LXDo
-  cINS_INIT_OUTBOUND_COPY = {
-  .mDSType = DTU.cDS_NORM,
-  .mStoredPU = DTU.cPUNIT_OUT
-};
-*/
-
-/*
-local constant LXCopy
-  cINS_COPY_OUTBOUND = {
-  .mDSType = DTU.cDS_NORM,
-  .mLabel = 8u, // XXX
-  .mSrcPU = DTU.cPUNIT_OUT,
-  .mDstPU = DTU.cPUNIT_REG
-};
-*/
-
-/*
-local constant LXCopy
-  cINS_XFER_OUTBOUND = {
-  .mDSType = DTU.cDS_NORM,
-  .mLabel = 0xF0, // XXX
-  .mConsume = true,
-  .mSrcPU = DTU.cPUNIT_OUT,
-  .mDstPU = DTU.cPUNIT_REG
-};
-*/
-
-/*
-local constant DaughterLoader
-  cINS_INIT_DAUGHTER_INBOUND10 = {
-  .mDSType = DTU.cDS_NORM,
-  .mLabel = 0xf1, // XXX
-  .mHeadCount = 1u,             // XXX NEED AN ARGUMENT FOR THAT
-  .mConsumeOriginal = false,
-};
-*/
-
-/*
-local constant DaughterLoader
-  cINS_INIT_DAUGHTER_INBOUND11 = {
-  .mDSType = DTU.cDS_NORM,
-  .mLabel = 0xf2, // XXX
-  .mConsumeOriginal = true,
-};
-*/
-
-/*
-local constant LXCopy
-  cINS_COPY_INBOUND = {
-  .mDSType = DTU.cDS_NORM,
-  .mLabel = 0u, // XXX
-  .mSrcPU = DTU.cPUNIT_OUT,
-  .mDstPU = DTU.cPUNIT_REG
-};
-*/
-
-/*
-local constant LXMarker
-  cINS_LAST_MARK = {
-  .mDSType = DTU.cDS_NORM,
-  .mLabel = cMARK_ILABEL,
-  .mUpMap = 0x8, // set up chain on INS
-  .mDownMap = 0x8, // set down chain on INS
-  .mHalt = true,  // hang on this LX indefinitely
-  .mChainControlData = {
-    .mTQMap = 0x6, // expand to allow target quad NE (1<<1) (+ SE (1<<2))
-    .mSRMap = 0xc, // tighten allowable edge clearance (only _L and _XL)
-  },
-}; 
-*/
-
-/*
-local constant LXBioCtorArm
-  cINS_PAYLOAD10 = {
-  .mProgram = {
-    DTU.cBOC_AGNT, // 0: go n -1
-    DTU.cBOC_AGNT, // 1: go n -2
-    DTU.cBOC_AGNT, // 2: go n -3
-    DTU.cBOC_AGWT, // 3: go w -1
-    DTU.cBOC_AGWT, // 4: go w -2
-    DTU.cBOC_ADDA, // 5: drop ds anticlockwise
-    DTU.cBOC_LAEC, // 6: all ECs
-  },
-  .mDSType = DTU.cDS_NORM,
-};
-*/
-
-/*
-local constant LXPayload11
-  cINS_PAYLOAD11 = {
-  .mDSType = DTU.cDS_NORM,
-};
-*/
 
 //////////// BEGIN BODY MODEL PRELUDE DEFINITIONS
 local constant NanoArm
@@ -469,12 +212,6 @@ local constant SPECIES
   cINS_EDGEMODEL12 = {
     .mDSType = DTU.cDS_NORM,
 };
-/*
-local constant SPECIES
-  cINS_EDGEMODEL13 = {
-    .mDSType = DTU.cDS_NORM,
-};
-*/
 
 local constant LXWait
   cINS_WAIT_FOR_MODEL = {

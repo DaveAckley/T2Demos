@@ -260,14 +260,6 @@ transient EdgeModelState : CodonState
 
                   mD&&pR("CMSA216");
 
-                  /* SAVE THIS FOR LATER
-                  // Reconnect to east!
-                  ea.mPocketPtrs[cBODY_UP] = cPP_WEST;
-                  cm.mPocketPtrs[cBODY_DOWN] = cPP_EAST;
-                  mD&&pR(ea);
-                  mD&&pR(cm);
-                  */
-
                   // Kill north!
                   LoopKiller lk;
                   lk.copySegAndPChain(na);

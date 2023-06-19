@@ -89,39 +89,9 @@ quark QHardCellG : QHardCell
 
   HopCount mSettledDownHops = 0u;
 
-  //  typedef NChan NColor[3];
-  //  NColor mColor;
-
-  /*
-  Super.ContactWarnings mContactWarnings;
-  @Override
-  virtual ContactWarnings getContactWarnings() {
-    return mContactWarnings;
-  }
-  @Override
-  virtual Void setContactWarnings(ContactWarnings cw) {
-    mContactWarnings = cw;
-  }
-  */
-
-  /*
-  Void mutateColor() {
-    Random random;
-    for (Unsigned i = 0u; i < mColor.lengthof; ++i) {
-      Int delta = random.between(-3,3);
-      mColor[i] = (NChan) (mColor[i] + delta);
-    }
-  }
-  */
-
   ARGB baseColor() {
     ColorUtils cu;
     return cu.color(0xff808080); // ?
-    /*
-    return cu.color((ASCII) (mColor[0]*12*2 + 70),
-                    (ASCII) (mColor[1]*12*2 + 70),
-                    (ASCII) (mColor[2]*12*2 + 70));
-    */
   }
 
   constant Unsigned cXZONE_COLOR[XZone.maxof+1u] = {
@@ -222,15 +192,6 @@ quark QHardCellG : QHardCell
 
   Void behave() {
     pursueIntention();
-    /*
-    ByteStreamLogger bsl;
-    if (!update()) return;
-    */
-    /*
-    bsl.printf("al %d una %d\n",
-               hcs.mAlignedCount,
-               hcs.mUnalignedCount);
-    */
   }
 }
 

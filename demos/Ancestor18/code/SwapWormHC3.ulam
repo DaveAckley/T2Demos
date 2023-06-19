@@ -73,28 +73,6 @@ transient SwapWormHC3State : CodonState {
       s3.mDownSignal = su.mDownSignal;
     }
 
-    /*
-    if (isHead()) {
-      mD&&pR("SW3S13");
-      SW3Packet pkt = (SW3Packet) s3.mUpSignal;
-      if (pkt.mCmdStatus == pkt.cCMST_DO) {
-        pkt.mCmdStatus = pkt.cCMST_TRYING;
-        s3.mUpSignal = (SwapWormHC3.Signal) pkt;
-        mD&&pR("SW3S1311");
-      }
-    }
-
-    if (isTail()) {
-      mD&&pR("SW3S15");
-      SW3Packet pkt = (SW3Packet) s3.mDownSignal;
-      if (pkt.mCmdStatus == pkt.cCMST_DO) {
-        pkt.mCmdStatus = pkt.cCMST_TRYING;
-        s3.mDownSignal = (SwapWormHC3.Signal) pkt;
-        mD&&pR("SW3S1511");
-      }
-    }
-    */
-
     mD&&pR("SW3S16");
     mD&&pR(s3);
 
@@ -190,11 +168,6 @@ element SwapWormHC3 : Codon + TQDSControlStg {
     mD&&pR("aDSW11");
 
     mD&&pR("hUSg11");
-    /*
-    SW3Packet pkt = (SW3Packet) mDownSignal;
-    mD&&pR(pkt);
-    if (pkt.execute(s3s, self, false)) return true;
-    */
     return false;
   }
 

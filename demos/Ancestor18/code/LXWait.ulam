@@ -174,32 +174,6 @@ element LXWait : LX + QLabelMark + Fail + TQDSControlStg {
       }
     }
 
-    /*
-    if (mTest >= cTST_FROLBLU && mTest <= cTST_BROLRED) {
-      ProcUnit pu;
-      Bool fwd;
-      which (mTest) {
-        case cTST_FROLBLU: { fwd = true;  pu = cPUNIT_REG; }
-        case cTST_BROLBLU: { fwd = false; pu = cPUNIT_REG; }
-        case cTST_FROLGRN: { fwd = true;  pu = cPUNIT_INP; }
-        case cTST_BROLGRN: { fwd = false; pu = cPUNIT_INP; }
-        case cTST_FROLRED: { fwd = true;  pu = cPUNIT_OUT; }
-        case cTST_BROLRED: { fwd = false; pu = cPUNIT_OUT; }
-      }
-      ProcUnitInfo & pui = dss.getPUInfo(pu); // get info
-      SN codonsn = pui.mCodonSN;
-      if (ew.isAccessible(codonsn)) {
-        Atom & a = ew[codonsn];
-        if (a as QLabelMark) {
-          if (a.getLabel() == mOperand)
-            return false;       // Found our target
-        }
-      }
-      markDSPForRotationForward(dss, 0u, pu); // otherwise keep looking
-      return true;                            // and don't quit
-    }
-    */
-
     if (mTest == cTST_HOPLSS) {
       QHardCell & qhc = (QHardCell&) ew[0]; // Really DiamondSequencer
       return qhc.getMaxHopsGoal() < mOperand; // wait if less
