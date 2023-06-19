@@ -1,0 +1,649 @@
+transient CodonState : PocketChainState + Fail + DTU {
+
+  //// CODONSTATE SERVICES
+  Bool hasDS() { return mDSseqc.length() != 0u; }
+
+  DiamondSequencer & getDS() {
+    if (!hasDS()) fail(__FILE__,__LINE__);
+    EventWindow ew;
+    DiamondSequencer & ds = (DiamondSequencer&) ew[mDSseqc];
+    return ds;
+  }
+
+  C2D mDSseqc;         //< If !=(0,0), location of DS
+  Bool mInQuadrant;    //< true if we found our mQuadrant
+  PocketDir mQuadrant; //< If mInQuadrant, our loc relative to mDSseqc
+  QProcUnitMap.ProcUnit mOurPU; //< If mInQuadrant, our ProcUnit
+  QDirStatusMap.ProcStatus mOurPS; //< If mInQuadrant, our ProcStatus
+
+  typedef Unary(3) ExecutionContext;
+  constant ExecutionContext cEXCT_FREE = 0u; //< Free, not in quadrant we manage our own chain
+  constant ExecutionContext cEXCT_ACTV = 1u; //< In quadrant & active, we are code, we do our special thing
+  constant ExecutionContext cEXCT_PASV = 2u; //< In quadrant & passive, we are data, we shuffle as directed
+  ExecutionContext mExecutionContext = cEXCT_FREE;
+
+  @Override
+  virtual Bool init(Intender & in) {
+
+    mD&&pR("CDST10");
+    if (super.init(in)) // If true we might be dead (from PocketChain)
+      return true;        
+    mD&&pR("CDST11");
+    Codon & c = (Codon&) in;
+    mD&&pR("CDST12");
+
+    // Find execution context if any
+    mDSseqc = c.chooseSequencer(mPocket);
+
+    if (mDSseqc.length() == 0u)
+      return false; //< with mInQuadrant false and mExecutionContext = cEXCT_FREE
+
+    EventWindow ew;
+    DiamondSequencer & ds = (DiamondSequencer&) ew[mDSseqc];
+
+    // Find our quadrant relative to ds
+    mInQuadrant = ds.mProcUnitMap.pocketDirFromCorner(mDSseqc, mQuadrant);
+    mD&&pR("CDST13");
+    mD&&pR(mInQuadrant);
+
+    if (mInQuadrant) {
+
+      // Find the function of our quadrant
+      mOurPU = ds.mProcUnitMap.procUnitInQuadrant(mQuadrant);
+
+      // Find the status of our quadrant
+      mOurPS = ds.mDirStatusMap.statusFromQuadrant(mQuadrant);
+
+      if (mOurPU != QProcUnitMap.cPUNIT_XEQ ||
+          mOurPS != QDirStatusMap.cDSTATUS_IDLE)
+        mExecutionContext = cEXCT_PASV;
+      else
+        mExecutionContext = cEXCT_ACTV;
+
+      mD&&pR("CDST14");
+      mD&&pR((Unsigned) mExecutionContext);
+    }
+
+    // Successfully initted
+    mD&&pR(self);
+
+    mD&&pR("CDST15");
+    return false;
+  }
+
+  @Override
+  virtual Bool stabilize(Intender & in) {
+    if (super.stabilize(in)) return true;
+ 
+    mD&&pR("CdnStab10");
+    mD&&pR((Unsigned) mExecutionContext);
+
+    Codon & c = (Codon&) in;
+
+    if (mExecutionContext == cEXCT_FREE)    // If we are free, self-managed chain,
+      return freeStab(c);        // Go deal with that
+
+    mD&&pR("CdnStab11");
+    if (mDSseqc.length() == 0u)
+      return false; //< XXXX??
+
+    mD&&pR("CdnStab12");
+    EventWindow ew;
+    DiamondSequencer & ds = (DiamondSequencer&) ew[mDSseqc];
+
+    // XXX DS PROCSTATUS ACTIONS HERE:
+    /// (1) CHECK OUR PROCSTATUS
+    if (mExecutionContext == cEXCT_ACTV) {
+      mD&&pR("CdnStab12ACTV10");
+      // Ugh, special case for EC
+      if (c as EmptyCodon) {
+        mD&&pR("CdnStab12ACTV11");
+        //XXX UNCLEAR?        if (c.ensureMobile()) return true;
+      }
+      mD&&pR("CdnStab12ACTV12");
+      return false;
+    }
+
+    mD&&pR("CdnStab13");
+    if (mExecutionContext != cEXCT_PASV) {Fail f; f.fail(__FILE__,__LINE__);}
+
+    mD&&pR("CdnStab14");
+    mD&&pR(mOurPS);
+    
+    //// DO CASES
+
+    if (mOurPS == QDirStatusMap.cDSTATUS_UPWD) {
+      // FOR cDSTATUS_UPWD: //< Needs roll toward body up (temp down)
+
+      mD&&pR("CdnStab15");
+      SN upsn = self.mEWSNMate[Segment.cBODY_UP];
+      // DON'T DO THIS HERE      if (upsn == 0u || !ew.isAccessible(upsn)) { Fail f; f.fail(__FILE__,__LINE__); }
+
+      // (1) if reachable layout is   T -> [X]
+      //     switch to                X -> [D]
+      //     and stay in UPWD
+
+      if ((upsn != 0u && ew.isAccessible(upsn)) && // CHECK HERE INSTEAD
+          c.isRealMobile()) { // if [X]
+        Atom & u = ew[upsn];
+        if (u as PocketChain) {
+          mD&&pR("CdnStab121010");
+          mD&&pR(u.mDSType);
+          if (u.isTemp()) { // upstream is T?
+            mD&&pR("CdnStab12101010"); // yes
+            u.setDSType(u.cDS_DOWN);  // ensure it's a D now
+            /*
+            c.swapPocketPtrs(u);      // Exchange ptrs
+            c.doSwap(self,upsn);      // then make the swap
+            */
+            c.doDSPSwapOut(self, u, upsn);
+            return true;              // we moved (but stay in UPWD)
+          }
+          // u is pocketchain but not temp:
+          // fall through to additional cases
+        } else {
+          mD&&pR("upsn not PocketChain?");
+          mD&&pR(u);
+          { Fail f; f.fail(__FILE__,__LINE__); }
+        }
+      }
+
+      // (2) if reachable layout is        [D] -> X
+      //     switch to                     [X] -> D
+      //     and set _IDLE
+
+      if (c.mDSType == c.cDS_DOWN) { // if [D]
+        mD&&pR("CdnStab16");
+        SN dnsn = self.mEWSNMate[Segment.cBODY_DOWN];
+        // DON'T DO THIS HERE         if (dnsn == 0u || !ew.isAccessible(dnsn)) { Fail f; f.fail(__FILE__,__LINE__); }
+        if (dnsn != 0u && ew.isAccessible(dnsn)) {
+          Atom & d = ew[dnsn];
+          if (d as PocketChain) {
+            mD&&pR("CdnStab121011");
+            mD&&pR(d.mDSType);
+            Bool norm = d.isRealMobile();
+            Bool temp = d.isTemp();
+            Random random;
+            if (norm || (temp && random.oneIn(10))) {  // and if downstream is X (i.e., mobile nontemp)
+              mD&&pR("CdnStab12101110"); // let's mix it up
+              if (norm)                 // If down is norm, mission accomplished
+                ds.setQuadrantIdle(mQuadrant);     // So set our quadrant idle
+              /*
+                c.swapPocketPtrs(d);      // Exchange ptrs
+                c.doSwap(self,dnsn);      // and make the swap
+              */
+              c.doDSPSwapOut(self, d, dnsn);
+
+              return true;              // we moved
+            }
+          }
+        }
+      }
+      
+      // (3) if reachable layout is        [X] -> U
+      //     switch to                     [X] -> D
+      //     and stay in UPWD
+      if (c.isReal() ||        // if [X] (mobile or immobile non-temp),
+          c.mDSType == cDS_DOWN) {// also if we're down, spread downness 
+        mD&&pR("CdnStab17");
+        SN dnsn = self.mEWSNMate[Segment.cBODY_DOWN];
+        if (dnsn != 0u && ew.isAccessible(dnsn)) {
+          Atom & d = ew[dnsn];
+          if (d as PocketChain) {
+            if (d.mDSType == d.cDS_UP) {    // and if downstream is U
+              d.mDSType = d.cDS_DOWN;       // set downstream to D (buh-bye now)
+              return true;                  // and stay in UPWD
+            }
+          }
+        }
+      }
+
+      // (4) if reachable layout is        [U]  ???
+      //     switch to DNWD                [D]  ???
+
+      if (c.mDSType == c.cDS_UP) { // if [U]
+        mD&&pR("CdnStab18");
+        c.mDSType = c.cDS_DOWN;
+        return false;            // we changed something.. but?
+      }
+
+      //// END OF UPWD CASES
+    }
+    else if (mOurPS == QDirStatusMap.cDSTATUS_DNWD) {
+      mD&&pR("CdnStab19");
+
+      // FOR cDSTATUS_DNWD; //< Needs roll toward body down (temp up)
+
+      mD&&pR("CdnStab1211");
+      SN dnsn = self.mEWSNMate[Segment.cBODY_DOWN];
+      //      if (dnsn == 0u || !ew.isAccessible(dnsn)) { Fail f; f.fail(__FILE__,__LINE__);}
+      if (dnsn != 0u && ew.isAccessible(dnsn)) {
+
+        // (1) if reachable layout is        [X] -> T
+        //     switch to                     [U] -> X
+        //     and stay in DNWD
+
+        if (c.isRealMobile()) { // if [X]
+          mD&&pR("CdnStab210");
+          Atom & d = ew[dnsn];
+          if (d as PocketChain) {
+            mD&&pR("CdnStab121110");
+            mD&&pR(d.mDSType);
+            if (d.isTemp()) { // downstream is T?
+              mD&&pR("CdnStab12111010"); // yes
+              d.setDSType(d.cDS_UP);    // ensure it's a U now
+              /*            c.swapPocketPtrs(d);      // Exchange ptrs
+                            c.doSwap(self,dnsn);      // make the swap
+              */
+              c.doDSPSwapOut(self, d, dnsn);
+              
+              return true;              // we moved (but stay in UPWD)
+            }
+            // down is pocketchain but not temp:
+            // fall through to additional cases
+          } else {
+            mD&&pR("dnsn not PocketChain?");
+            mD&&pR(d);
+            { Fail f; f.fail(__FILE__,__LINE__); }
+          }
+        }
+      }
+
+      // (2) if reachable layout is   X -> [U]
+      //     switch to                U -> [X]
+      //     and set _IDLE
+
+      if (c.mDSType == c.cDS_UP) { // if [U]
+        mD&&pR("CdnStab211");
+        SN upsn = self.mEWSNMate[Segment.cBODY_UP];
+        //        if (upsn == 0u || !ew.isAccessible(upsn)) { Fail f; f.fail(__FILE__,__LINE__); }
+        if (upsn != 0u && ew.isAccessible(upsn)) {
+          Atom & u = ew[upsn];
+          if (u as PocketChain) {
+            mD&&pR("CdnStab121111");
+            mD&&pR(u.mDSType);
+            if (u.isRealMobile()) {  // and if upstream is X (i.e., mobile nontempT)
+              mD&&pR("CdnStab12111110"); // yes
+              ds.setQuadrantIdle(mQuadrant);         // Set our quadrant idle
+              /*
+                c.swapPocketPtrs(u);      // Exchange ptrs
+                c.doSwap(self,upsn);      // and make the swap
+              */
+              c.doDSPSwapOut(self, u, upsn);
+              
+              return true;              // we moved
+            } ////Sat Mar 18 15:22:42 2023 ADDING CASE TO TURN AROUND UPSTREAM DOWNS
+            else if (u.mDSType == cDS_DOWN) {
+              mD&&pR("CdnStabMAR1810"); // New tag
+              u.mDSType = cDS_UP;
+              return true;
+            }
+          }
+        }
+      }
+
+      // (3) if reachable layout is   D -> [X]
+      //     switch to                U -> [X]
+      //     and stay in DNWD
+      if (c.isReal()) {                   // if [X] (i.e., mobile or immobile nontemp)
+        mD&&pR("CdnStab212");
+
+        SN upsn = self.mEWSNMate[Segment.cBODY_UP];
+        //        if (upsn == 0u || !ew.isAccessible(upsn)) { Fail f; f.fail(__FILE__,__LINE__); }
+        if (upsn != 0u && ew.isAccessible(upsn)) {
+          Atom & u = ew[upsn];
+          if (u as PocketChain) {
+            if (u.mDSType == u.cDS_DOWN) {  // and if upstream is D
+              u.mDSType = u.cDS_UP;         // set upstream to U (buh-bye now)
+              return true;                  // and stay in DNWD
+            }
+          }
+        }
+      }
+
+      // (4) if reachable layout is        [D]  ???
+      //     switch to DNWD                [U]  ???
+
+      if (c.mDSType == c.cDS_DOWN) { // if [D]
+        mD&&pR("CdnStab213");
+
+        c.mDSType = c.cDS_UP;
+        return false;            // we changed something, but..?
+      }
+      //// END OF DNWD CASES
+    }
+    else if (mOurPS == QDirStatusMap.cDSTATUS_TEMP) {
+      // For cDSTATUS_TEMP; //< Needs a temp
+      mD&&pR("CdnStab1212");
+
+      // (1) if reachable layout is   [F]
+      //     set _IDLE
+      if (c as EmptyCodon) {
+        mD&&pR("CdnStab214");
+        ds.setQuadrantIdle(mQuadrant);        // Set our quadrant idle
+        return true;             // we changed procstatus
+      }
+
+      // (2) if reachable layout is   [T]
+      //     switch to                [F]
+      //     set _IDLE
+
+      if (c.isTemp()) {
+        mD&&pR("CdnStab215");
+
+        EmptyCodon ec;
+        ec.copySegAndPChain(c);
+        ec.init();               // Random tag and up or down
+        ds.setQuadrantIdle(mQuadrant);        // Set our quadrant idle
+        ew[0] = ec.atomof;       // Make the change
+        return true;             // we changed
+      }
+
+      /* DON'T WANT THIS
+      // (3) if reachable layout is   [X] -> U
+      //     switch to                [F] -> X
+      //     and set _IDLE
+      */
+
+      // WANT THIS INSTEAD: (SEND TEMPS DOWN AROUND LOOP)
+      // (3) if reachable layout is   [X] -> U
+      //     switch to                [X] -> D
+      //     and stay in TEMP
+
+      if (c.isRealMobile()) { // if [X] (mobile nontemp)
+        mD&&pR("CdnStab216");
+
+        SN dnsn = self.mEWSNMate[Segment.cBODY_DOWN];
+        if (dnsn != 0u && ew.isAccessible(dnsn)) { // Open chain might have no down
+          Atom & d = ew[dnsn];
+          if (d as PocketChain) {
+            if (d.mDSType == d.cDS_UP) {    // and if downstream is U
+              d.mDSType = d.cDS_DOWN;       // change downstream to D
+              return true;
+            }
+          } else {
+            mD&&pR("dnsn not PocketChain?");
+            mD&&pR(d);
+            { Fail f; f.fail(__FILE__,__LINE__); }
+          }
+        }
+      }
+
+      // ONLY HERE DO WE GET A TEMP FROM THE PROPER SIDE
+      // (4) if reachable layout is    D -> [X]
+      //     switch to                 X -> [F]
+      //     and set _IDLE
+      
+      if (c.isRealMobile()) { // if [X]
+        mD&&pR("CdnStab217");
+
+        SN upsn = self.mEWSNMate[Segment.cBODY_UP];
+        if (upsn != 0u && ew.isAccessible(upsn)) { // Open chain might have no up
+          Atom & u = ew[upsn];
+          if (u as PocketChain) {
+            if (u.mDSType == u.cDS_DOWN) {  // and if upstream is D
+              EmptyCodon ec;
+              ec.copySegAndPChain(u);
+              ec.init();
+              ew[upsn] = ec.atomof; // WARNING: u is now a stale ref!
+              PocketChain & u2 = (PocketChain&) ew[upsn];
+              ds.setQuadrantIdle(mQuadrant);        // Set our quadrant idle
+              c.doDSPSwapOut(self, u2, upsn);
+              return true;
+            }
+            // XXX upsn is not down - anything else?
+            // FALL THROUGH
+          } else {
+            mD&&pR("upsn not PocketChain?");
+            mD&&pR(u);
+            { Fail f; f.fail(__FILE__,__LINE__); }
+          }
+        }
+      }
+    }
+    else {
+      mD&&pR("CdnStab1213");
+    }
+
+    mD&&pR("CdnStab1214");
+    mD&&pR(self);
+
+    return false;
+  }
+
+  @Override
+  virtual Bool act(Intender & in) {
+    mD&&pR("CDAC10");
+    if (super.act(in)) return true;
+    
+    mD&&pR("CDAC1010");
+    if (mDSseqc.length() == 0u) // At Codon level, we cannot act without a DS
+      return false;             // but we've changed nothing, so subclasses can go
+
+    mD&&pR("CDAC11");
+    Codon & c = (Codon&) in;
+
+    if (mExecutionContext == cEXCT_ACTV) {       // If executable, leave it to
+      mD&&pR("CDAC11EXECT");
+      return false;                   // subclasses to handle!
+    }
+
+    return false; /// XXXX DO NO CHAIN ALTERATIONS HERE
+    
+    /*
+    //// IS DOWNSTREAM A TEMP?
+    SN downsn = self.mEWSNMate[Segment.cBODY_DOWN];
+    if (downsn == 0u) return c.diffuse(self); // No mate??
+
+    Atom & a = ew[downsn];
+    if (a as PocketChain) {
+      if (a.mDSType != c.cDS_DOWN &&
+          a.mDSType != c.cDS_UP) return true; // mate not temp XX WAS true
+    } else return c.diffuse(self);             // mate not qchain??
+    //// DOWNSTREAM IS A TEMP.
+
+    PocketChain & qd = (PocketChain&) a;
+    if (random.oneIn(15u)) {
+      /// GO FOR GROW!
+      Sh*peSh*fter g;
+      if (c as PocketChainTQ) { //// XXXXX DISGUSTOHACKHERE
+        g.mTargetQuadrant = c.mTargetQuadrant;
+      }
+
+      g.copySegAndPChain(qd);
+      g.mDSType = Demo.cDS_NORM;
+
+      if (true) { // XXX ALL GROW FOR NOW
+        ShSfISide1 it;
+        it.adopt(g);
+      } else {
+        ShSfIWormHead it;
+        g.mAction = true;  // You are H*
+        it.adopt(g);
+      }
+
+      ew[downsn] = g.atomof;
+      return c.diffuse(self);
+    }
+
+    return true;                // And block subclass act
+    */
+  }
+
+  Bool freeStab(Codon & c) { //< Chain self-management away from all DS
+    mD&&pR("FRSTB10");
+    // Check rules:
+    /// First: Priority rules
+    /* Deprecated in favor of field rules
+    {
+      ChainRule_CROWDGROW rule;
+      if (rule.performPCS(self)) return true;
+    }
+    */
+    mD&&pR("FRSTB11");
+    {
+      ChainRule_RELAXEMPTY rule;
+      if (rule.performPCS(self)) return true;
+    }
+
+    {
+      ChainRule_ALLEMPTY rule;
+      if (rule.performPCS(self)) return true;
+    }
+    /// Second: Choice rules
+    mD&&pR("FRSTB12");
+
+    Bool holdbg = isDebugOutputEnabled();
+    //    setDebugOutputEnabled(false); // let's suppress all the rule matching for now
+    ChainRulesFreeStab crfs;
+    Bool ret = false;
+    if (crfs.matchAll(self)) {
+      if (crfs.applyARule(self)) ret = true;
+    }
+    setDebugOutputEnabled(holdbg);
+    mD&&pR("FRSTB13");
+    mD&&pR(ret);
+    return ret;
+  }
+
+}
+
+quark Codon : PocketChainTQ {
+
+  //// Intender API
+  @Override
+  virtual ClassId getIntentionClass() { //< default unless overridden
+    CodonState qcs; // Ensure concrete
+    return qcs.classidof;
+  }
+
+  //// Codon API
+
+  /** optional method to configure default instances */
+  virtual Void init() { /* empty */ }
+
+  //// CODON SERVICES
+
+  /** Return coord of (any) DiamondSequencer or (0,0) if none found */
+  C2D chooseSequencer(PocketHC3 & p) {
+    C2D ret(0,0);
+    if (p.mStatus != PocketHC3.cSTATUS_OK)
+      return ret;
+
+    EventWindow ew;
+    Random random;
+    Unsigned seqcount = 0u;
+
+    for (Unsigned i = 0u; i < p.mCoords.lengthof; ++i) {
+      C2D c = p.mCoords[i];
+      Atom & a = ew[c];
+      if (a as DiamondSequencer) {
+        if (random.oneIn(++seqcount))
+          ret = c;
+      }
+    }
+    return ret;
+  }
+
+  /** Return a hashed shade of blue depending on atomic details */
+  ARGB quotedColor() {
+    AtomUtils au;
+    ColorUtils cu;
+    if (!au.hasAtomof(self)) return cu.color(0xff000000); //black
+    Atom a = self.atomof;
+    Bits(16) b = (Bits(16)) au.getType(a);
+    for (Unsigned i = 0u; i < 71u; i += 8u) {
+      Unsigned len = 8;
+      if (i+len >= 71u) len = 71u-i;
+      Bits f = au.read(a, i, len);
+      b = ((b<<3)|f)^(b>>9);
+    }
+    Unsigned(16) c = (Unsigned(16)) b;
+    constant Unsigned cMIN_BLUE = 32u;
+    constant Unsigned cMAX_BLUE = 256u-32u;
+    constant Unsigned cBLUE_RANGE = cMAX_BLUE-cMIN_BLUE;
+    Unsigned blue = c*cBLUE_RANGE/c.maxof + cMIN_BLUE;
+    typedef ColorUtils.Byte Byte;
+    constant Byte cRED = 16u;
+    constant Byte cGREEN = 16u;
+    ARGB ret = cu.color(cRED, cGREEN, (Byte) blue);
+    return ret;
+  }
+}
+
+transient ChainRulesFreeStab + Fail + ChainTypes + QDebugUtils {
+  ChainRuleMatcher crms[5];
+  ChainRule_SPREAD10 s10;
+  ChainRule_SPREAD11 s11;
+  ChainRule_COMPACT10 c10;
+  ChainRule_COMPACT11 c11;
+  ChainRule_LONEEMPTY l10;
+  ChainRule & getRule(Unsigned i) {
+    if (i >= crms.lengthof) fail(__FILE__,__LINE__);
+    which (i) {
+      case 0u: { return s10; }
+      case 1u: { return s11; }
+      case 2u: { return c10; }
+      case 3u: { return c11; }
+       case 4u:
+      otherwise: {
+        return l10; }
+    }
+  }
+
+  Bool matchAll(PocketChainState & ss) { //< true if anything matched
+    takeDebug(ss);
+
+    mD&&pR("CRFMA10");
+    Bool ret = false;
+    for (Unsigned i = 0u; i < crms.lengthof; ++i) {
+      mD&&pR("CRFMA11");
+      mD&&pR(i);
+      ChainRule & cr = getRule(i);
+      cr.takeDebug(self);
+      crms[i].takeDebug(self);
+      crms[i].match(ss,cr);
+      mD&&pR("CRFMA1110");
+      mD&&pR(cr.ruleName());
+      mD&&pR(i);
+      mD&&pR(crms[i].mMatched);
+      if (crms[i].mMatched) ret = true;
+    }
+    mD&&pR("CRFMA12");
+    mD&&pR(ret);
+    return ret; 
+  }
+
+  Unsigned pickMatch() {
+    mD&&pR("CRFPM10");
+    Unsigned count = 0u;
+    Unsigned pick = Unsigned.maxof;
+    Random random;
+    for (Unsigned i = 0u; i < crms.lengthof; ++i) {
+      ChainRuleMatcher & crm = crms[i];
+      if (crm.mMatched) {
+        if (random.oneIn(++count))
+          pick = i;
+      }
+    }
+    mD&&pR("CRFPM11");
+    mD&&pR(pick);
+    mD&&pR(count);
+    return pick;
+  }
+
+  Bool applyARule(PocketChainState & ss) {
+    mD&&pR("CRFAR10");
+    Unsigned pick = pickMatch();
+    mD&&pR(pick);
+    if (pick >= crms.lengthof) return false;
+    mD&&pR("CRFAR11");
+    ChainRule & cr = getRule(pick);
+    mD&&pR("CRFAR1110");
+    mD&&pR(cr.ruleName());
+    crms[pick].apply(ss,cr);
+    mD&&pR("CRFAR12");
+    return true;
+  }
+
+}

@@ -1,0 +1,454 @@
+/** A class that can define and use a junction
+ */
+quark Junctor
+  + QDebugUtils
+  + Fail
+{
+  typedef ClassUtils.ClassId ClassId;
+
+  //// Junctor API
+  virtual ClassId getJunctionClass() { return NullJunction.classidof; }
+
+  //// Junctor SERVICES
+  Junction & createJunction(JunctionBuffer & jb) {
+    mD&&pR("CJ!!"); // double bang to signal start of junctor processing
+    ClassId cid = getJunctionClass();
+    return createJunction(jb,cid);
+  }
+
+  Junction & createJunction(JunctionBuffer & jb, ClassId cid) {
+    if (cid == 0u) fail(__FILE__,__LINE__,"No junction classid");
+
+    mD&&pR("CJNC10");
+
+    ClassUtils cu;
+    if (!cu.isBase(cid, Junction.classidof))
+      fail(__FILE__,__LINE__,"Not Junction");
+    mD&&pR("CJNCa10");
+    mD&&pR(cu.getClassName(cid,true,true));
+
+    Junction & junction = (Junction&) jb.recast(cid,true);
+    mD&&pR("CJNC11");
+    mD&&pR(junction);
+    return junction;
+  }
+
+  constant Unsigned cMAX_RECAST_SIZE = 4096u;
+  typedef BitStorageT(cMAX_RECAST_SIZE) JunctionBuffer;
+  
+  Bool trueFail(String path, Unsigned line, String msg) {
+    voidFail(path, line, msg);
+    return true; // Not reached
+  }
+  
+  Void voidFail(String path, Unsigned line, String msg) {
+    Fail f;
+    f.fail(path,line,msg);
+  }
+
+}
+
+/** A class that can name a JunctionIndex and declare itself to be an
+    anchor. */
+quark JunctionIndexProvider
+  + Fail
+{
+  typedef ClassUtils.ClassId ClassId;
+
+  typedef Unsigned(3) JunctionIndex;
+  //// JunctionIndexProvider API
+  virtual JunctionIndex getJunctionIndex() ;
+
+  virtual Bool isJunctionIndexAnchor() ;
+
+  constant JunctionIndex cJUNCTION_INDEX_NULL = 0u;
+  constant JunctionIndex cJUNCTION_INDEX_FISHFIN2FISHBOD = 1u;
+  constant JunctionIndex cJUNCTION_INDEX_FISHBOD2FISHFIN = 2u;
+  constant JunctionIndex cJUNCTION_INDEX_STANDARDEDGE = 3u;
+  //// JunctionIndexProvider SERVICES
+  virtual ClassId getJunctionClassFromIndex(JunctionIndex jidx) {
+    which (jidx) {
+    case cJUNCTION_INDEX_NULL: { return NullJunction.classidof; }
+    case cJUNCTION_INDEX_FISHFIN2FISHBOD: { return FishFin2FishBodJunction.classidof; }
+    case cJUNCTION_INDEX_FISHBOD2FISHFIN: { return FishBod2FishFinJunction.classidof; }
+    case cJUNCTION_INDEX_STANDARDEDGE: { return StandardEdgeJunction.classidof; }
+    otherwise: { fail(__FILE__,__LINE__,"Unknown JunctionIndex"); }
+    }
+    return 0u; // NOT REACHED
+  }
+
+  ARGB junctionColorMod(ARGB col) {
+    JunctionIndex ji = getJunctionIndex();
+    Bool isanchor = isJunctionIndexAnchor();
+    return junctionColorMod(col, ji, isanchor);
+  }
+
+  ARGB junctionColorMod(ARGB col, JunctionIndex ji, Bool isanchor) {
+    if (ji == 0u) return col;
+    ColorUtils cu;
+    Bits jic = 0x3f<<4u*(ji-1u); // 0000003f, 0x000003f0, 0x00003f00 .. 3f000000
+    ARGB jarg = cu.color(jic);
+    if (isanchor) jarg = cu.brighter(jarg);
+    col = cu.between(jarg,col,25u); // 25% jarg
+    return col;
+  }
+}
+
+/** A JunctionIndexProvider that allocates space for a modifiable
+    JunctionIndex. */
+quark JunctionIndexProviderStg : JunctionIndexProvider {
+
+  //// JunctionIndexProvider API
+  @Override
+  virtual JunctionIndex getJunctionIndex() {
+    return mJunctionIndex;
+  }
+
+  @Override
+  virtual Bool isJunctionIndexAnchor() {
+    return mIsJunctionIndexAnchor;
+  }
+
+  //// JunctionIndexProviderStg SERVICES
+  Bool setJunctionIndex(JunctionIndex ji) {
+    if (ji != mJunctionIndex) {
+      mJunctionIndex = ji;
+      return true;
+    }
+    return false;
+  }
+
+  Bool setIsJunctionIndexAnchor(Bool isanchor) {
+    if (isanchor != mIsJunctionIndexAnchor) {
+      mIsJunctionIndexAnchor = isanchor;
+      return true;
+    }
+    return false;
+  }
+
+  JunctionIndex mJunctionIndex;
+  Bool mIsJunctionIndexAnchor;
+}
+
+/** A Junctor whose junction type can be referred to by a JunctionIndex */
+quark IndexedJunctor : Junctor
+  + JunctionIndexProvider
+{
+  //// INDEXEDJUNCTION API
+  //  virtual JunctionIndex getJunctionIndex() ;
+
+  //// JUNCTOR API
+  virtual ClassId getJunctionClass() {
+    JunctionIndex jidx = getJunctionIndex();
+    return getJunctionClassFromIndex(jidx);
+  }
+}
+
+/** a class that represents the state of a Junctor, and can configure
+    a DiamondStance to reflect that state */
+transient Junction
+  + DTU + Fail + QDebugUtils
+{
+
+  EdgeCoord mUsEC;
+  EdgeCoord mThemEC;
+  C2D mThemC2D;
+
+  PocketDir mOpenDir;
+  
+  C2D mUsCenterC2D;
+  Unsigned mUsSize;
+
+  C2D mThemCenterC2D;
+  Unsigned mThemSize;
+
+  QHardCellState mQHS;
+
+  //// JUNCTION API
+  virtual Bool init(Junctor & jor, QHardCellState & qhs) {
+    // no super: if (super.init(jor,qhs)) return true;
+    takeDebug(jor);
+    mD&&pR("JNCTINIT10");
+    mD&&pR(jor);
+    mD&&pR(qhs);
+    mQHS = qhs;
+    return false;
+  }
+
+  //XX  virtual Bool action(Junctor & jor, QHardCellState & qhs) { return false; }
+
+  /** \returns true if \c stance was configured in some worthy way (so
+      try to deploy it).
+   */
+  virtual Bool configureStance(DiamondStance & stance) {
+    mD&&pR("CFGSTN10");
+    mD&&pR(mUsEC);
+    mD&&pR(mThemEC);
+    mD&&pR(mThemC2D);
+
+    HC3State & hcs = mQHS.mHC3State;
+    mD&&pR(hcs);
+    if (hcs.minUpHops == Unsigned.maxof) return false; // Nothing to do here
+
+    C2D minc = hcs.minUpHopsC2D;
+    mD&&pR("CFGSTN11");
+    mD&&pR(minc);
+
+    /// ASSESS AND RESPOND TO EMERGENCIES REPORTED ON THE DEWLINE
+    EventWindow ew;
+    MaxPick diffs;
+    Atom & a = ew[minc];
+    if (a as DEWLine) {
+      mD&&pR("CFGSTN12");
+      mD&&pR(a);
+
+      for (Unsigned i = 0u; i < 4u; ++i) {
+        Unsigned o = oppositeAxialDir((AxialDir) i);
+        Unsigned idc = a.mDefCons[i];
+        Unsigned odc = a.mDefCons[o];
+        Unsigned diff = odc - idc; // If opposite big and i small, go i
+        mD&&pR("CFGSTNa12");
+        mD&&pR(i);
+        mD&&pR(idc);
+        mD&&pR(odc);
+        mD&&pR(diff);
+        diffs.update((SN) i,diff);
+      }
+      mD&&pR("CFGSTN13");
+      mD&&pR(diffs);
+      if (diffs.hasPick() && diffs.getX() >= 3u) { // clear and damage opposite
+        mD&&pR("CFGSTNpre14");
+        mD&&pR(stance);
+        stance.resetStance();
+        Unsigned idc = diffs.getIdx();
+        Unsigned odc = oppositeAxialDir((AxialDir) idc);
+        Unsigned posidx = stance.getCaringIdx(true,(AxialDir) idc);
+        Unsigned negidx = stance.getCaringIdx(false,(AxialDir) odc);
+        stance.setDim(10, posidx, negidx);
+        mD&&pR("CFGSTNpost14");
+        mD&&pR(idc);
+        mD&&pR(odc);
+        mD&&pR(posidx);
+        mD&&pR(negidx);
+        mD&&pR(stance);
+        return true;
+      }
+    }
+    mD&&pR("CFGSTN15");
+    return false;
+  }
+
+  //// JUNCTION SERVICES
+  Bool configureJunction(EdgeCoord ourec, EdgeCoord themec, C2D themc) {
+    mD&&pR("CFGJUNI10");
+
+    mUsEC = ourec;
+    mThemEC = themec;
+    mThemC2D = themc;
+    if (!ourec.edgeCoord2PocketDir(mOpenDir))
+      return false;
+
+    mD&&pR("CFGJUNIa10");
+    mD&&pR(mUsEC);
+    mD&&pR(mThemEC);
+    mD&&pR(mThemC2D);
+    mD&&pR(mOpenDir);
+
+    C2D ctrus, ctrthem;
+    Unsigned sizus, sizthem;
+    if (!mUsEC.inferCenterAndSize(ctrus, sizus))
+      return false;
+    mD&&pR("CFGSTN11US");
+    mD&&pR(ctrus);
+    mD&&pR(sizus);
+    if (!mThemEC.inferCenterAndSize(ctrthem, sizthem))
+      return false;
+    mD&&pR("CFGSTN12");
+    mD&&pR(ctrthem);
+
+    ctrthem += mThemC2D; // Include offset from our origin 
+    mD&&pR("CFGSTN13THEM");
+    mD&&pR(ctrthem);
+    mD&&pR(sizthem);
+
+    mUsCenterC2D = ctrus;
+    mUsSize = sizus;
+
+    mThemCenterC2D = ctrthem;
+    mThemSize = sizthem;
+
+    return true; 
+  }
+
+}
+
+transient GapParameters {
+  Unsigned mFracCWUs;
+  Unsigned mFracCWThem;
+  Unsigned mEdgeToEdgeManhattan;
+}
+
+transient GapBasedJunction : Junction {
+  //// QGAPBASEDJUNCTION API
+  virtual Bool getDesiredGapParameters(GapParameters & gp) ;
+
+  //// JUNCTION API
+  virtual Bool configureStance(DiamondStance & stance) {
+    mD&&pR("GBJCFGSTN10");
+    if (super.configureStance(stance)) return true;
+    mD&&pR("GBJCFGSTN11");
+    C2D uspd = pocketDir2C2D(mOpenDir);
+    mD&&pR(uspd);
+
+    /// Check for too close based on themec
+    if (mThemEC.isValid()) {
+      mD&&pR("GBJCFGSTNTC10");
+      C2D off = dirOff2C2D(mThemEC.mHopsToEdge,mOpenDir);
+      Unsigned diag = min(abs(off.x),abs(off.y));
+      mD&&pR(off);
+      mD&&pR(diag);
+      if (diag < 4u) {
+        //// EMERGENCY DI-DI NAVIGATION 
+        mD&&pR("GBJCFGSTNTC11");
+        AxialDir ad[2];
+        axialDirsBorderingQuad(mOpenDir, ad[0], ad[1]);
+        for (Unsigned i = 0u; i < 2u; ++i) {
+          AxialDir bad = ad[i];
+          AxialDir good = oppositeAxialDir(bad);
+          Unsigned bidx = stance.getCaringIdx(false, bad);
+          Unsigned gidx = stance.getCaringIdx(true, good);
+          mD&&pR("GBJCFGSTNTC12");
+          mD&&pR(i);
+          mD&&pR(bad);
+          mD&&pR(good);
+          mD&&pR(bidx);
+          mD&&pR(gidx);
+          stance.mCares[bidx] = 3u;
+          stance.mCares[gidx] = 3u;
+        }
+        mD&&pR("GBJCFGSTNTC13");
+        mD&&pR(stance);
+        return true;
+      }
+
+      C2D usedgectr = mUsCenterC2D+uspd*((C2D.Coord) ((mUsSize-1u)*3u/2u));
+      mD&&pR("GBJCFGSTNz10");
+      mD&&pR(uspd);
+      mD&&pR(usedgectr);
+
+      mD&&pR("GBJCFGSTNa11");
+      C2D thempd = pocketDir2C2D(oppositePocketDir(mOpenDir));
+      C2D themedgectr = mThemCenterC2D+thempd*((C2D.Coord) ((mThemSize-1u)*3u/2u));
+      mD&&pR(thempd);
+      mD&&pR(themedgectr);
+
+      C2D us2themgap = themedgectr - usedgectr;
+      GapParameters gp;
+      if (!getDesiredGapParameters(gp)) return false;
+      mD&&pR("GBJCFGSTNb11");
+      mD&&pR(gp);
+      C2D desiredus2themgap = uspd*((C2D.Coord) (gp.mEdgeToEdgeManhattan/2u));
+      C2D finalerror = us2themgap - desiredus2themgap; // er<0 w/n, er>0 e/s
+      mD&&pR("GBJCFGSTN12CONFGIRUEGAPHERE");
+      mD&&pR(us2themgap);
+      mD&&pR(desiredus2themgap);
+      mD&&pR(finalerror);
+      mD&&pR(gp);
+      mD&&pR(self);
+      stance.setStanceFromError(finalerror);
+      mD&&pR("GBJCFGSTN13STANCE");
+      mD&&pR(finalerror);
+      mD&&pR(stance);
+      return true;
+      
+    }
+    return false;
+  }
+}
+
+
+
+/** \symbol S2
+    \color #4c2
+*/
+element SeedFB2FF + DTU {
+  Void behave() {
+    EventWindow ew;
+    for (SN sn = 1u; sn <= 8u; ++sn) {
+      if (!ew.isAccessible(sn)) continue;
+      Atom & a = ew[sn];
+      if (a as JunctionIndexProviderStg) {
+        Bool isanc = a.isJunctionIndexAnchor();
+        a.setJunctionIndex(isanc ? 0u : 2u);
+        a.setIsJunctionIndexAnchor(!isanc);
+        break;
+      }
+    }
+    ew[0] = Empty.instanceof;
+  }
+}
+
+/** \symbol SF
+    \color #c42
+*/
+element SeedFF2FB + DTU {
+  Void behave() {
+    EventWindow ew;
+    for (SN sn = 1u; sn <= 8u; ++sn) {
+      if (!ew.isAccessible(sn)) continue;
+      Atom & a = ew[sn];
+      if (a as JunctionIndexProviderStg) {
+        Bool isanc = a.isJunctionIndexAnchor();
+        a.setJunctionIndex(isanc ? 0u : 1u); // 1u == FishFin2FishBodJunction
+        a.setIsJunctionIndexAnchor(!isanc);
+        break;
+      }
+    }
+    ew[0] = Empty.instanceof;
+  }
+}
+
+transient NullJunction : Junction { }
+
+transient FishFin2FishBodJunction : GapBasedJunction {
+  @Override virtual Bool getDesiredGapParameters(GapParameters & gp) {
+    gp.mFracCWUs = 50u;
+    gp.mFracCWThem = 50u;
+    gp.mEdgeToEdgeManhattan = 10u;
+    return true;
+  }
+}
+
+transient FishBod2FishFinJunction : GapBasedJunction {
+  @Override virtual Bool getDesiredGapParameters(GapParameters & gp) {
+    gp.mFracCWUs = 50u;
+    gp.mFracCWThem = 50u;
+    gp.mEdgeToEdgeManhattan = 14u;
+    return true;
+  }
+}
+
+transient StandardEdgeJunction : GapBasedJunction {
+  @Override
+  virtual Bool getDesiredGapParameters(GapParameters & gp) {
+    mD&&pR("SEJDESGAP10");
+
+    gp.mFracCWUs = 50u;
+    gp.mFracCWThem = 50u;
+
+    //// DETERMINE EDGE MATCHING STATUS
+    if (!mUsEC.isValid() || !mThemEC.isValid()) // can we match tags?
+      return false;                             // no.
+
+    if (mUsEC.mEdgeTag != 0u &&
+        mUsEC.mEdgeTag == mThemEC.mEdgeTag) 
+      gp.mEdgeToEdgeManhattan = 12u;
+    else
+      gp.mEdgeToEdgeManhattan = 40u;
+
+    mD&&pR(gp);
+    return true;
+  }
+}
+
+

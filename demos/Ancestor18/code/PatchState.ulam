@@ -1,0 +1,223 @@
+transient PatchState + DTU + QDebugUtils + Fail {
+  Bool mValid;                  // true if patch relaxed and all accessible and not weird
+  Bool mComplex[PocketDir.maxof + 1u]; // true if any non-Segment or more than 1 Segment
+
+  Unsigned mDSHops[5u]; // 0..3 pocketdir dshops; 4 ctr dshops
+  Unsigned mUpHops[5u]; // 0..3 pocketdir uphops; 4 ctr uphops
+  Unsigned mMaxUpHops; // at ctr, fwiw
+  Unsigned mMaxDSHopsValueAtCtr; 
+
+  XZone mCenterXZone;  // also at ctr obvs
+
+  Unsigned mNonEmptyCount[PocketDir.maxof + 1u]; 
+
+  D1SNs mEmptySNs[PocketDir.maxof + 1u];
+  D1SNs mSegmentSNs[PocketDir.maxof + 1u];
+
+  Unsigned mPCount;                             // # choosable pocketables in pockets
+  SN mPSN;                                      // chosen pocketable if mPCount > 0
+  PocketDir mPSNPocket;                         // quadrant of mPSN if mPCount > 0
+
+  Bool nearUpHopsEdge(PocketDir p) {
+    Unsigned maxup = 0u;
+    for (Unsigned i = 0u; i < 4u; ++i) {
+      if (mUpHops[p] > maxup) maxup = mUpHops[p];
+    }
+    return maxup >= mMaxUpHops - 2u;
+  }
+
+  Bool mInDSP[PocketDir.maxof + 1u]; // true if pocket in DSP
+
+  Int errorInQuad(PocketDir quad) {
+    mD&&pR("EIQFN10");
+    D1SNs & ds = mSegmentSNs[quad];
+    Int toterr = 0;
+    ds.begin();
+    mD&&pR("EIQFN11");
+    EventWindow ew;
+    while (ds.hasNext()) {
+      SN sn = ds.next();
+      Atom & a = ew[sn];
+      if (!(a is PocketChain)) continue; // ?
+      mD&&pR("EIQFN12");
+      PocketChain & pc = (PocketChain&) a;
+      toterr += errorOfPocketChainInQuad(quad, pc);
+    }
+    return toterr;
+  }
+
+  Int errorOfPocketChainInQuad(PocketDir quad, PocketChain & pc) {
+    return pc.chainError(self, quad);
+  }
+
+  Bool init(QHardCell & qhc) {
+    takeDebug(qhc);
+    mValid = false; // assume the worst
+
+    mD&&pR("PCHS10");
+
+    //// IS THE PATCH CENTER RELAXED?
+    if (!qhc.isRelaxed()) return false; // NO
+    //// THE PATCH CENTER IS RELAXED
+
+    mDSHops[4] = qhc.getDSHops(); // record center dshops
+    mUpHops[4] = qhc.getUpHops(); // record center uphops
+    mMaxUpHops = qhc.getMaxHopsGoal();
+    if (qhc as TQDSControl)
+      mMaxDSHopsValueAtCtr = qhc.getTQDSMaxDSHopsValue();
+    else
+      mMaxDSHopsValueAtCtr = 0u;
+    mCenterXZone = qhc.getDSXZone();
+
+    //// ZONE INITTED?
+    if (mCenterXZone == cXZONE_UN) return false; // NO
+
+    mD&&pR("PCHS10CTRRELAX");
+
+    //// ARE THE PATCH SIDES RELAXED?
+    EventWindow ew;
+
+    for (SN sn = 21u; sn <= 24u; ++sn) { // The SNs with 3s and 0s
+      if (!ew.isAccessible(sn)) return false;
+      Atom & a = ew[sn];
+      if (a as QHardCell) {
+        mDSHops[sn-21u] = a.getDSHops(); // record side dshops
+        mUpHops[sn-21u] = a.getUpHops(); // record side uphops
+
+        //// IS THIS PATCH SIDE RELAXED?
+        if (!a.isRelaxed()) return false; // NO
+        //// THIS PATCH SIDE IS RELAXED
+
+      } else return false;
+    }
+    //// THE PATCH SIDES ARE RELAXED
+    
+    mD&&pR("PCHS10SIDESRELAX");
+
+    //// HAVE WE RECORDED INDSP STATS?
+    Unsigned chops = mDSHops[4];
+    for (Unsigned i = PocketDir.minof; i <= PocketDir.maxof; ++i) {
+      AxialDir had, vad;
+      qhc.axialDirsBorderingQuad((PocketDir) i, had, vad);
+      Unsigned hhops = mDSHops[had], vhops = mDSHops[vad];
+      Bool indsp;
+      if (chops == 0u || hhops == 0u || vhops == 0u) indsp = true;
+      else {
+        Unsigned ones = 0u;
+        if (chops == 1u) ++ones;
+        if (hhops == 1u) ++ones;
+        if (vhops == 1u) ++ones;
+        if (ones > 1u) indsp = true;
+      }
+      mInDSP[i] = indsp;
+      
+    }
+    //// WE HAVE RECORDED INDSP STATS
+
+    mD&&pR("PCHS11");
+    //// WHAT ARE THE STATS AND IS THERE A POCKETABLE TO UPDATE?
+    Random random;
+    mPCount = 0u;
+    mPSN = SN.maxof;
+
+    for (SN sn = 1u; sn < 41u; ++sn) {
+      if (!ew.isAccessible(sn)) // No inaccessibility allowed
+        return false;
+      Atom & a = ew[sn];
+
+      C2D c = ew.getCoord(sn);
+      //// IS C A POCKET COORD?
+      C2D cabs = c.abs();
+      Bool inpock =
+        cabs.x > 0 && cabs.x < 3 &&
+        cabs.y > 0 && cabs.y < 3;
+
+      if (!inpock) {
+        //// C IS NOT A POCKET COORD
+
+        //// IS NON-POCKET COORD ANYTHING BUT EMPTY OR QHC?
+        if (!(a is Empty || a is QHardCell))
+          return false;
+
+        //// C IS EMPTY OR QHC NON-POCKET COORD
+        continue;
+      }
+
+      //      mD&&pR("PCHS12");
+      //// C IS A POCKET COORD
+
+      //// WHAT IS ITS POCKETDIR?
+      PocketDir pd;
+      if (!pocketDirFromCorner(-c,pd)) // -c to get 'from center' view
+        fail(__FILE__,__LINE__);
+
+      mD&&pR("PCHS13");
+
+      //// ARE QUADRANT STATS UPDATED?
+      if (!(a is Empty)) ++mNonEmptyCount[pd];
+      else mEmptySNs[pd].add(sn);
+      
+      if (a as Segment) {
+        mD&&pR("PCHS14SEG");
+        mD&&pR(getPocketDirName(pd));
+        //        mSegmentSNs[pd].print(self);
+        mSegmentSNs[pd].add(sn);
+        /*
+        if (random.oneIn(++mSegmentCount[pd])) {
+          mD&&pR("PCHS14SEG11");
+          mD&&pR(getPocketDirName(pd));
+          mD&&pR(sn);
+          mD&&pR(mPCount);
+
+          mSegmentSN[pd] = sn;
+
+          //// IS THIS A PICKABLE POCKETABLE?
+          if (random.oneIn(++mPCount)) {
+            mD&&pR("PCHS14SEG11PICKIT");
+            mPSN = sn;
+            mPSNPocket = pd;
+            mD&&pR(mPCount);
+            mD&&pR(mPSN);
+            mD&&pR(getPocketDirName(mPSNPocket));
+            //// THIS POCKETABLE HAS BEEN PICKED (FOR NOW)
+          }
+          
+          mD&&pR(getPocketDirName(pd));
+          mD&&pR(mSegmentCount[pd]);
+          mD&&pR(mSegmentSN[pd]);
+        }
+        */
+      }
+      //// QUADRANT STATS ARE UPDATED.
+    }
+
+    //// HAS A PICKABLE POCKETABLE BEEN PICKED?
+    mPCount = 0u;
+    for (Unsigned i = 0u; i < 4u; ++i) {
+      PocketDir pd = (PocketDir) i;
+      D1SNs & d1 = mSegmentSNs[pd];
+      Unsigned segcount = d1.count();
+      if (segcount == 0u) continue;
+      if (random.oddsOf(segcount, mPCount += segcount)) {
+        mD&&pR("PCHS14SEG11PICKIT");
+        mPSN = d1.pick();
+        mPSNPocket = pd;
+        mD&&pR(mPCount);
+        mD&&pR(mPSN);
+        mD&&pR(getPocketDirName(mPSNPocket));
+      }
+    }
+    //// A PICKABLE POCKETABLE HAS BEEN PICKED, IF ANY
+
+    mValid = true;
+    mD&&pR("PCHS14");
+    mD&&pR(self);
+    return true;
+  }
+
+  Bool isInDSP(PocketDir pd) {
+    return mInDSP[pd];
+  }
+
+}
+

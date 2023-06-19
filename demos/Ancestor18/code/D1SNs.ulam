@@ -1,0 +1,69 @@
+/** A struct representing 0-6 SNs
+ */
+transient D1SNs + DTU + Random + Fail {
+  typedef Unsigned(3) SNCount;
+  SNCount mSNCount;
+  SNCount mIdx; // for iteration or to remember pick() result
+
+  constant Unsigned cSN_SLOTS = 6u; // 0u..5u
+  SN mSNs[cSN_SLOTS];
+
+  Void init() {
+    mSNCount = 0u;
+    mIdx = SNCount.maxof;
+  }
+
+  SNCount count() { return mSNCount; }
+
+  SN get(Unsigned idx) {
+    if (idx >= mSNCount) return SN.maxof;
+    return mSNs[idx];
+  }
+
+  SN first() { return get(0u); }
+
+  Void begin() { mIdx = 0u; }
+  Bool hasNext() { return mIdx < mSNCount; }
+  SN next() {
+    if (!hasNext()) fail(__FILE__,__LINE__);
+    return get(mIdx++);
+  }
+
+  Void print(QDebugUtils & qd) {
+    ByteStreamArray1K bsa;
+    print(bsa);
+    qd.pR((ByteStreamReader&) bsa);
+  }
+
+  Void print(ByteStreamWriter & bsa) {
+    bsa.printf("[D1SNs+%d",mSNCount);
+    for (Unsigned i = 0; i < mSNCount; ++i) 
+      bsa.printf(" %d",mSNs[i]);
+    bsa.printf("]");
+  }
+
+  SN pick() {
+    if (mSNCount == 0u) return SN.maxof;
+    if (mIdx == SNCount.maxof)
+      mIdx = (SNCount) between(0,(Int) (mSNCount-1u));
+    return mSNs[mIdx];
+  }
+
+  Bool addNew(SN sn) {
+    if (!contains(sn)) { add(sn); return true; }
+    return false;
+  }
+
+  SNCount add(SN sn) {
+    if (mSNCount < cSN_SLOTS)
+      mSNs[mSNCount++] = sn;
+    return mSNCount;
+  }
+
+  Bool contains(SN sn) {
+    for (SNCount i = SNCount.minof; i < mSNCount; ++i)
+      if (mSNs[i] == sn) return true;
+    return false;
+  }
+}
+

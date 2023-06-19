@@ -1,0 +1,307 @@
+quark Membrane : D1Pocketable + DEWLine + DTU {
+  typedef ClassUtils.ClassId ClassId;
+
+  PocketDir mOpenDir;
+  Bool mDirBound;
+
+  //// UrSelf API
+  @Override
+  virtual Void renderGraphics() {
+    Drawable drawable;
+    if (!drawable.canDraw()) return;
+    super.renderGraphics();
+
+    if (!Parms.cRENDER_MEMBRANE_BOXES) return;
+
+    Unsigned max = maxDCs();
+
+    ColorUtils cu;
+    C2D.Coord size = (C2D.Coord) dcWidth((DefCon) max);
+    ARGB oncol = dcColor((DefCon) max);
+    ARGB col = getColor(2u);
+    C2D siz(size, size);
+    C2D pos(-size/2,-size/2);
+
+    drawable.fillRectangle(pos, siz, col);
+
+    if (mDirBound) {
+      constant C2D.Coord side = Drawable.cUNITS_PER_SITE;
+      constant C2D.Coord halfSide = side/2;
+      constant C2D.Coord thick = 100;
+      constant C2D.Coord len = side;
+
+      C2D pd = pocketDir2C2D(mOpenDir);
+      C2D start(0,0), end = pd * len;
+      ARGB offcol = col;
+      drawable.drawMaskedLine(start, end, oncol, offcol, (Bits) 0x33333333, thick);
+    }
+  }
+
+  //// Membrane SERVICES
+
+  Unsigned scanOuterQuadrant() {
+    mD&&pR("MESOQ10");
+    if (!mDirBound) return 0u;
+
+    AxialDir dis[2];
+    axesOf(mOpenDir, dis[0], dis[1]);
+
+    Unsigned ourRank = sourceRank();
+    mD&&pR(ourRank);
+
+    Unsigned lowerranks = 0u;
+    //// Search outdir quadrant for contacts and warnings
+    mD&&pR("MESOQ11PRE");
+    mD&&pR(self);
+
+    resetDCs();
+
+    mD&&pR("MESOQ11POST");
+    mD&&pR(self);
+
+    Bool isDanger = false;
+    SN sn;
+    C2D c;
+    Unsigned empcount = 0u;
+    SN empsn;
+    Random random;
+    mD&&pR("MESOQ12");
+    for (sn = 1u; !isDanger && sn < 41u; ++sn) {
+      c = ew.getCoord(sn);
+      if (!inQuadrant(c,mOpenDir)) continue;
+      mD&&pR("MESOQ13");
+      mD&&pR(c);
+      if (!ew.isAccessible(sn)) isDanger = true;
+      else {
+        mD&&pR("MESOQ14");
+        Atom & a = ew[sn];
+        if (a is Empty) {
+          mD&&pR("MESOQ14EMP");
+          if (random.oneIn(++empcount)) empsn = sn;
+          mD&&pR(empcount);
+          continue;
+        }
+        mD&&pR("MESOQ15");
+        /*
+        if (a as MTip) {
+          mD&&pR("MESOQ16");
+          mD&&pR(a);
+          if (!a.mAxisBound) continue;
+          mD&&pR("MESOQ17");
+          if (!mDirBound) continue;
+          mD&&pR("MESOQ18");
+          PocketDir d1, d2;
+          a.dirsOf(a.mHorizonAxis,d1,d2);
+          mD&&pR("MESOQ19");
+          mD&&pR(d1);
+          mD&&pR(d2);
+
+          if (d1 == mOpenDir || d2 == mOpenDir) {
+            mD&&pR("MESOQ210");
+            Unsigned theirRank = a.sourceRank();
+            mD&&pR(theirRank);
+            if (theirRank > ourRank) { // Higher rank, pick up their warnings
+              mD&&pR("MESOQ211");
+              ++lowerranks;
+              mergeDCs(a);
+              mD&&pR("MESOQ212POST");
+              mD&&pR(self);
+            }
+            continue;
+          }
+          mD&&pR("MESOQ213");
+          // ELSE DANGEROUS MTIP
+        }
+        */
+        mD&&pR("MESOQ214");
+        if (a as Membrane) {
+          mD&&pR("MESOQ215");
+          Unsigned theirRank = a.sourceRank();
+          mD&&pR(theirRank);
+          // Consider Membrane in matching direction,
+          if (a.mOpenDir == mOpenDir) {
+            mD&&pR("MESOQ216");
+            if (theirRank > ourRank) { // We are lower rank, pick up their warnings
+              mD&&pR("MESOQ217");
+
+              ++lowerranks;
+              mergeDCs(a);
+              mD&&pR("MESOQ217POST");
+              mD&&pR(self);
+            }
+            continue;           // But it's not foreign whatever the rank
+          }
+        }
+        mD&&pR("MESOQ218");
+
+        if (a as EdgeHG) { // Check for opposing Eg
+          mD&&pR("SOQANT230");
+
+          if (a.hasEdgeZone()) {
+            mD&&pR("SOQANT231");
+            Zone zone = a.getEdgeZone();
+            PocketDir pd;
+            if (zone2PocketDir(zone,pd)) {
+              mD&&pR("SOQANT232");
+              if (pd != mOpenDir) { // Any non-us Eg is baaaad
+                for (Unsigned i = 0u; i < 2u; ++i) {
+                  AxialDir di = dis[i];             // for the axes bordering mOpenDir
+                  maxDC(di, cDC_NEAR); // is this too excited?
+                }
+              }
+
+              Self & sa = self;
+              if (sa as MBase) { // But it might be new info for an mbase
+                if (pd == oppositePocketDir(mOpenDir)) { 
+
+                  mD&&pR("SOQANT233");
+                  EdgeCoord themec; // fake up an ec for them
+                  themec.mEdgePos = a.getHCPoint();
+                  themec.mHopsToEdge.set(-c.x,-c.y); // us seen from them
+                  mD&&pR(sa.mInboundEC);
+                  sa.mInboundEC = themec;
+                  mD&&pR(sa.mInboundEC);
+                  continue;
+                }
+              }
+            }
+          }
+        }
+
+        if (a as Antenna) {
+          mD&&pR("SOQANT219a");
+          mD&&pR(c);
+          mD&&pR(a);
+
+          for (Unsigned i = 0u; i < 2u; ++i) {
+            AxialDir di = dis[i];             // for the axes bordering mOpenDir
+
+            if (a.mOpenDir != mOpenDir) {
+              // If not our Aa, signal something
+              maxDC(di, cDC_NEAR); // is this too excited?
+              continue;
+            }
+
+            // it's our antenna
+            if (!a.mReceiveEC.isValid()) // but it's got nothing to say
+              continue;
+
+            mD&&pR("SOQANT219a12");
+            mD&&pR(di);
+            if (!onAxis(c, di)) continue;   // if Aa is on that axis
+            mD&&pR("SOQANT219a13");
+            mD&&pR(mDefCons[di]);
+            maxDC(di, edgeHops2DefCon(a.mReceiveEC.mHopsToEdge));
+            mD&&pR("SOQANT219a15");
+            mD&&pR(mDefCons[di]);
+          }
+          continue;             // done with that Aa anyway
+        }
+        
+        // Foreign membrane or scary strange other!
+        isDanger = true;
+      }
+    }
+    mD&&pR("MESOQ219");
+
+    /*
+    if (false) { // XXX TRY NO ICG
+    // Maybe seed goo
+    if (empcount > 0u && random.oneIn(isDanger ? 20u : 50u)) {
+      ew[empsn] = IntercellularGoo.instanceof;
+      empcount = 0u; // We took the empty
+      mD&&pR("MESOQ221");
+      mD&&pR(empsn);
+    }
+    }
+    */
+
+    if (isDanger) {
+      mD&&pR("MESOQ220");
+
+      mD&&pR("MESOQ222");
+      DefCon ourdc = signalDC();
+      mD&&pR(ourdc);
+      Bool signalled = false;
+      for (Unsigned i = cW; i <= cE; ++i) {
+        AxialDir di = (AxialDir) i;
+        mD&&pR("MESOQ223");
+        mD&&pR(i);
+        if (onAxis(c, di)) { // On axis signals only on that axis
+          mD&&pR("MESOQ224PRE");
+          mD&&pR(self);
+          maxDC(di, ourdc);
+          mD&&pR("MESOQ224POST");
+          mD&&pR(self);
+          signalled = true;
+          break;
+        }
+      }
+      mD&&pR("MESOQ225");
+
+      /* maybe signaling on both is a worse idea than neither..
+      if (!signalled) { // Otherwise signal on both
+        DirIdx d1, d2;
+        axesOf(mOpenDir, d1, d2);
+        maxDC(d1,ourdc);
+        maxDC(d2,ourdc);
+      }
+      */
+    }
+    mD&&pR("MESOQ226");
+    mD&&pR(lowerranks);
+
+    return lowerranks;
+  }
+
+
+  EventWindow ew;
+  Void die() {
+    ew[0] = Empty.instanceof;
+  }
+
+  Bool inQuadrant(C2D c, PocketDir d) {
+    which (d) {
+    case cQUAD_NW: { return c.x <= 0 && c.y <= 0; }
+    case cQUAD_NE: { return c.x >= 0 && c.y <= 0; }
+    case cQUAD_SE: { return c.x >= 0 && c.y >= 0; }
+    case cQUAD_SW: { return c.x <= 0 && c.y >= 0; }
+    }
+    return false; // Not reached
+  }
+
+  Void axesOf(PocketDir d, AxialDir & d1, AxialDir & d2) {
+    which (d) {
+    case cQUAD_NW: { d1 = cW; d2 = cN; }
+    case cQUAD_NE: { d1 = cN; d2 = cE; }
+    case cQUAD_SE: { d1 = cS; d2 = cE; }
+    case cQUAD_SW: { d1 = cW; d2 = cS; }
+    }
+  }
+
+
+  C2D axisOf(AxialDir di) {
+    return axialDir2C2D(di);
+    /*
+    which (di) {
+    case cW: { return C2D.instanceof(-1,0); }
+    case cN: { return C2D.instanceof(0,+1); }
+    case cS: { return C2D.instanceof(0,-1); }
+    case cE: { return C2D.instanceof(+1,0); }
+    }
+    return C2D.instanceof; // Not reached
+    */
+  }
+
+  
+  Bool onAxis(C2D c, AxialDir di) {
+    which (di) {
+    case cW: { return c.x < 0 && c.y == 0; }
+    case cN: { return c.x == 0 && c.y < 0; }
+    case cS: { return c.x == 0 && c.y > 0; }
+    case cE: { return c.x > 0 && c.y == 0; }
+    }
+    return false; // Not reached
+  }
+
+}

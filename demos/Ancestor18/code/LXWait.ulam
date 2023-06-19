@@ -1,0 +1,237 @@
+
+/** Wait as long as condition is true
+
+   \symbol WT
+   \color #da0
+*/
+element LXWait : LX + QLabelMark + Fail + TQDSControlStg {
+  typedef Unsigned(4) Test;
+  constant Test cTST_ZERO =     0u; // wait while operand is zero
+  constant Test cTST_NONZERO =  1u; // wait while operand is non-zero
+  constant Test cTST_EMPTY  =   2u; // wait while pocket is empty
+  constant Test cTST_NONEMPTY = 3u; // wait while pocket is non-empty
+  constant Test cTST_MARKEQ  =  4u; // wait while mark is op
+  constant Test cTST_MARKNE  =  5u; // wait while mark is not op
+  constant Test cTST_HOPLSS =   6u; // wait while mMaxGoalHops < than op
+  constant Test cTST_HOPGTR =   7u; // wait while mMaxGoalHops > than op
+  constant Test cTST_TQDSGTR =  8u; // deploy TQDS and wait while ds > than op
+  constant Test cTST_TQDSLSS =  9u; // deploy TQDS and wait while ds < than op
+  constant Test cTST_UNSTABLE =10u; // wait while not settled to edge
+  Test mTest;
+
+  typedef Unsigned(3) WaitAction; // Possible actions while waiting
+  constant WaitAction cWA_WAIT =  0u; //< just wait
+  constant WaitAction cWA_RFBLU = 1u; //< roll fwd blu
+  constant WaitAction cWA_RFGRN = 2u; //< roll fwd grn
+  constant WaitAction cWA_RFRED = 3u; //< roll fwd red
+  constant WaitAction cWA_RBBLU = 5u; //< roll bkwd blu
+  constant WaitAction cWA_RBGRN = 6u; //< roll bkwd grn
+  constant WaitAction cWA_RBRED = 7u; //< roll bkwd red
+
+  WaitAction mWaitAction = cWA_WAIT; // default action just wait
+
+  typedef ProcUnit DivertTo;       // swap with PU before&after waiting
+  DivertTo mDivertTo = cPUNIT_WHT; // default diversion none
+
+  typedef Unsigned(5) Operand;
+  constant Operand cOPN_PU_REG = 0u; // operand is REG pocket
+  constant Operand cOPN_PU_INP = 1u; // operand is INP pocket
+  constant Operand cOPN_PU_OUT = 2u; // operand is OUT pocket
+  constant Operand cOPN_PU_XEQ = 3u; // operand is XEQ pocket
+  Operand mOperand;
+
+  TQDSControlStg mTQDSConfig;      //< Used by cTST_TQDSGTR & cTST_TQDSLSS
+
+  Bool mInit = false;           //< true if between startup and shutdown
+
+  //// LX API
+  @Override
+  virtual Bool perform(DiamondSequencerState & dss) {
+    mD&&pR("LXWAIT10");
+    if (!mInit) return performStartup(dss);
+    mD&&pR("LXWAIT11");
+    if (performTest(dss)) // if 'wait while' condition is true
+      return performAction(dss);  // do whatever the thing
+    mD&&pR("LXWAIT12");
+    return performShutdown(dss);  // otherwise clean up
+  }
+  
+  Bool performStartup(DiamondSequencerState & dss) {
+    mD&&pR("LXWAITPUP10");
+    if (mDivertTo != cPUNIT_WHT)
+      return performDiversionStartup(dss, mDivertTo);
+    mD&&pR("LXWAITPUP11");
+    // otherwise nothing special to do?
+    mInit = true;
+    return true;
+  }
+
+  Bool performShutdown(DiamondSequencerState & dss) {
+    mD&&pR("LXWAITPDN10");
+    if (mDivertTo != cPUNIT_WHT)
+      return performDiversionShutdown(dss, mDivertTo);
+    mD&&pR("LXWAITPDN11");
+    // otherwise nothing special to do?
+    mInit = false;              // Reset to init state..
+    markCurrentInstructionForRotation(dss, 0u); // ..and move on
+
+    return true;
+  }
+
+  Bool performDiversionStartup(DiamondSequencerState & dss, ProcUnit topu) {
+    /// is topu clear?
+    mD&&pR("LXWAITPDVUP10");
+    Bool killpu = killPU(topu, dss);
+    if (!killpu) return true; // dying in progress
+    mD&&pR("LXWAITPDVUP11");
+    /// topu is clear
+    {
+      ProcUnitInfo & pui = dss.getPUInfo(topu); // get info
+
+      if (!pui.mFound) fail(__FILE__,__LINE__); // ??
+
+      if (pui.mOccupiedSites != 0u || pui.mEmptySN == SN.maxof)
+        fail(__FILE__,__LINE__); // wtf we just killed it
+
+      Atom copy = self.atomof;
+      Self & scopy = (Self&) copy; // Point at copy
+      scopy.mInit = true;          // Copy is initted
+      scopy.mPocketPtrs[cBODY_UP] = cPP_NULL; // Copy is unconnected
+      scopy.mPocketPtrs[cBODY_DOWN] = cPP_NULL; // "
+
+      EventWindow ew;
+      ew[pui.mEmptySN] = copy;  // Deploy self copy
+
+      dss.swapPUs(cPUNIT_WHT,topu); // Regrip!
+    }
+    return true;
+  }
+
+  Bool performDiversionShutdown(DiamondSequencerState & dss, ProcUnit backtopu) {
+    EventWindow ew;
+    mD&&pR("LXWAITPDVDN11");
+    
+    dss.swapPUs(backtopu,cPUNIT_WHT); // Regrip back!
+
+    SN usn = ew.getSiteNumber(self);
+    if (usn == SN.maxof) fail(__FILE__,__LINE__);
+    ew[usn] = Empty.instanceof; // We are done
+
+    return true; //??? ENOUGH?
+  }
+
+  Bool performAction(DiamondSequencerState & dss) {
+    return performGivenAction(dss, mWaitAction);
+  }
+
+  Bool performGivenAction(DiamondSequencerState & dss, WaitAction wa) {
+    if (wa != cWA_WAIT) {
+      ProcUnit pu;
+      ProcStatus dir;
+      if (wa >= cWA_RFBLU && wa <= cWA_RFRED) {
+        pu = (ProcUnit) (wa - cWA_RFBLU + cPUNIT_BLU);
+        dir = cDSTATUS_UPWD;
+      } else if (wa >= cWA_RBBLU && wa <= cWA_RBRED) {
+        pu = (ProcUnit) (wa - cWA_RBBLU + cPUNIT_BLU);
+        dir = cDSTATUS_DNWD;
+      } else fail(__FILE__,__LINE__);
+      markDSPForRotation(dss, 0u, pu, dir); // move on
+    }
+    return true;
+  }
+
+  Bool performTest(DiamondSequencerState & dss) { // Return true iff test is satisfied
+    EventWindow ew;
+    mD&&pR("WTPT10");
+    mD&&pR(mTest);
+    mD&&pR(mOperand);
+
+    if (mTest == cTST_EMPTY ||
+        mTest == cTST_NONEMPTY) {
+
+      if (mOperand <= cOPN_PU_XEQ) {
+        ProcUnitInfo & pui = dss.getPUInfo((ProcUnit) mOperand); // get info
+        if (mTest == cTST_EMPTY) return pui.mOccupiedSites == 0u;
+        return pui.mOccupiedSites != 0u;
+      }
+    }
+
+    {
+      // but what do we do if we don't see a label at all?
+      if (mTest == cTST_MARKEQ ||
+          mTest == cTST_MARKNE) {
+
+        ProcUnitInfo & pui = dss.getPUInfo(mDivertTo); // WHT if not diverted
+        SN codonsn = pui.mCodonSN;
+        if (ew.isAccessible(codonsn)) {
+          Atom & a = ew[codonsn];
+          if (a as QLabelMark) {
+            Bool iseq = (a.getLabel() == mOperand);
+            return iseq == (mTest == cTST_MARKEQ); // true if found as requested
+          }
+        }
+        return mTest == cTST_MARKNE; // if no label, markne is true and markeq is false
+      }
+    }
+
+    /*
+    if (mTest >= cTST_FROLBLU && mTest <= cTST_BROLRED) {
+      ProcUnit pu;
+      Bool fwd;
+      which (mTest) {
+        case cTST_FROLBLU: { fwd = true;  pu = cPUNIT_REG; }
+        case cTST_BROLBLU: { fwd = false; pu = cPUNIT_REG; }
+        case cTST_FROLGRN: { fwd = true;  pu = cPUNIT_INP; }
+        case cTST_BROLGRN: { fwd = false; pu = cPUNIT_INP; }
+        case cTST_FROLRED: { fwd = true;  pu = cPUNIT_OUT; }
+        case cTST_BROLRED: { fwd = false; pu = cPUNIT_OUT; }
+      }
+      ProcUnitInfo & pui = dss.getPUInfo(pu); // get info
+      SN codonsn = pui.mCodonSN;
+      if (ew.isAccessible(codonsn)) {
+        Atom & a = ew[codonsn];
+        if (a as QLabelMark) {
+          if (a.getLabel() == mOperand)
+            return false;       // Found our target
+        }
+      }
+      markDSPForRotationForward(dss, 0u, pu); // otherwise keep looking
+      return true;                            // and don't quit
+    }
+    */
+
+    if (mTest == cTST_HOPLSS) {
+      QHardCell & qhc = (QHardCell&) ew[0]; // Really DiamondSequencer
+      return qhc.getMaxHopsGoal() < mOperand; // wait if less
+    }
+
+    if (mTest == cTST_HOPGTR) {
+      QHardCell & qhc = (QHardCell&) ew[0]; // Really DiamondSequencer
+      return qhc.getMaxHopsGoal() > mOperand; // wait if more
+    }
+
+    if (mTest == cTST_TQDSGTR || mTest == cTST_TQDSLSS) {
+      TQDSControl & me = self;
+      Unsigned val = me.getTQDSMaxDSHopsValue();
+      if (mTest == cTST_TQDSGTR && val > mOperand) return true;
+      if (mTest == cTST_TQDSLSS && val < mOperand) return true;
+
+      return false;
+    }
+
+    if (mTest == cTST_UNSTABLE) {
+      QHardCell & qhc = (QHardCell&) ew[0]; // Really DiamondSequencer
+      return qhc.getMaxHopsGoal() - qhc.getSettledDownHops() > mOperand;
+    }
+
+    // All unimplemented tests return false
+    {
+      ByteStreamLogger bsl;
+      bsl.printf("\n%s:%d: Unimplemented test %d on op %d\n",
+                 __FILE__, __LINE__,
+                 mTest, mOperand);
+      return false;
+    }
+  }
+
+}

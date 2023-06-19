@@ -1,0 +1,193 @@
+quark EdgeCoord
+  + DTU
+{
+  Bool inferCenterAndSize(C2D & center, Unsigned & size) {
+    /* if mEdgePos is (x,y) in pockets, and
+          mHopsToEdge is (u,v) in sites, then
+       sitesToEdge is (u,v)*pocketDir2C2D(inferredpd), and
+       (nominal) center in sites is (-x,-y)*(3,3)-sitesToEdge
+        or (x,y)*(-3,-3)-sitesToEdge
+     */
+
+    if (!isValid()) return false;
+
+    C2D xy;
+    if (!mEdgePos.hcPoint2C2D(xy)) return false; 
+
+    C2D uv = dirOff2C2DRaw(mHopsToEdge); 
+
+    PocketDir pd;
+    if (!edgeCoord2PocketDir(pd)) return false;
+    C2D pdc = pocketDir2C2D(pd);
+
+    C2D sitesToEdge = uv*pdc;
+    C2D ctr = xy*-3 - sitesToEdge;
+
+    Unsigned s = diamondSize();
+
+    center = ctr;
+    size = s;
+
+    return true;
+  }
+
+  Bool isValid() {
+    return mEdgePos.isValid();
+  }
+  Void invalidate() {
+    mEdgePos.unsetHCPoint();
+  }
+  
+  HCPoint mEdgePos = { .x = HCPoint.cHCCoord_UNSET, .y = HCPoint.cHCCoord_UNSET };
+  DirOff mHopsToEdge;
+
+  typedef JunctionIndexProvider.JunctionIndex EdgeTag;
+  EdgeTag mEdgeTag;
+
+  //////
+
+  Unsigned diamondSize() {
+    if (!isValid()) return 0u;
+    return mEdgePos.length() + 1u;
+  }
+
+  Bool edgeCoord2Zone(Zone & zone) { return hcPoint2Zone(mEdgePos, zone); }
+
+  Bool edgeCoord2PocketDir(PocketDir & opendir) {
+    Zone zone;
+    if (!edgeCoord2Zone(zone)) return false;
+    return zone2PocketDir(zone, opendir);
+  }
+
+  /** Find the site coords of the notional corners implied by this EC,
+      if possible. \returns false if the EC is invalid or contains a 0
+      dimension, else \returns true and sets \c corners to the implied
+      clockwise [0] and anticlockwise [1] corners, assuming a fully
+      'relaxed' 3x3 grid spacing, and taking into consideration the \c
+      mHopsToEdge.
+   */
+  Bool edgeCoord2Corners(C2D & cwc, C2D & acwc) {
+    DebugUtils du;
+    du.print("EC2C10");
+    du.print(self);
+    PocketDir opendir;
+    if (!edgeCoord2PocketDir(opendir)) return false;
+    C2D pdc = pocketDir2C2D(opendir);
+    du.print("EC2C11");
+    du.print(opendir);
+    du.print(pdc);
+    Int x = pdc.x;
+    Int y = pdc.y;
+    Int s = (Int) diamondSize() - 1; // want max coord not size
+
+    C2D cw, acw;
+    du.print("EC2C12");
+    du.print(x*y);
+    du.print(s);
+    if (x*y < 0) { cw.set(x*s, 0); acw.set(0, y*s); }
+    else         { cw.set(0,y*s);  acw.set(x*s,0);  }
+    du.print("EC2C13");
+    du.print(cw);
+    du.print(acw);
+
+    C2D toedge = dirOff2C2DRaw(mHopsToEdge); 
+
+    du.print("EC2C14");
+    du.print(toedge);
+
+    toedge *= pdc;                // map to absolute coords
+    C2D p(3,3);                   // nominal pocket size
+
+    du.print("EC2C15");
+    du.print(toedge);
+
+    cwc = cw*p + toedge;
+    acwc = acw*p + toedge;
+
+    du.print("EC2C16");
+    du.print((UrSelf&) cwc);
+    du.print((UrSelf&) acwc);
+
+    return true;
+  }
+
+  /** \returns true if \c cw is true and we're
+      closer to anticw corner, or if \c cw is
+      false and we're closer to cw corner.
+      \return false otherwise (including if we're
+      not valid)
+  */
+  Bool needRotate(Bool dir) {
+    C2D corners[2];
+    if (!edgeCoord2Corners(corners[0],corners[1])) return false;
+    C2D cw = corners[0],acw = corners[1];
+//    if (!edgeCoord2Corners(cw,acw)) return false;
+    {
+      DebugUtils du;
+      du.print("ECPNR10");
+      du.print(self);
+      du.print(cw);
+      du.print(acw);
+    }
+
+    Fail f;
+    f.fail(__FILE__,__LINE__);
+    return false;
+  }
+}
+
+quark EdgeCoordProvider
+  + DTU
+  + QDebugUtils
+{
+  //// EDGECOORDPROVIDER API
+  virtual Bool providesEdgeCoordFor(Bool outboundFrom, PocketDir pd, EdgeCoord & ec) ;
+
+  //// EDGECOORDPROVIDER SERVICES
+
+  Bool providesOutboundEdgeCoordFor(PocketDir pd, EdgeCoord & ec) {
+    return providesEdgeCoordFor(true, pd, ec);
+  }
+
+  Bool providesInboundEdgeCoordFor(PocketDir pd, EdgeCoord & ec) {
+    return providesEdgeCoordFor(false, pd, ec);
+  }
+
+  Bool isSNUpstreamFor(SN sn, PocketDir pd) {
+    mD&&pR("OCDISNU10");
+    EventWindow ew;
+    C2D c = ew.getCoord(sn);
+    mD&&pR(c);
+    mD&&pR(pd);
+    mD&&pR("OCDISNU11");
+    Bool ret = isC2DUpstreamFor(c, pd);
+    mD&&pR("OCDISNU12");
+    mD&&pR(ret);
+    return ret;
+  }
+
+  Bool upstreamPocketDir(SN sn, PocketDir & pd) {
+    EventWindow ew;
+    C2D c = ew.getCoord(sn);
+    return upstreamPocketDir(c,pd);
+  }
+
+  Bool upstreamPocketDir(C2D c, PocketDir & pd) {
+    XZone x = c2D2XZone(c);
+    if (x == cXZONE_CT) return false;
+    return zone2PocketDir((Zone) x, pd);
+  }
+
+  Bool isC2DUpstreamFor(C2D c, PocketDir pd) {
+    mD&&pR("OCDICD10");
+    mD&&pR(c);
+    if (c.x == 0 || c.y == 0) return false; // on-axis is never upstream for pockets
+    mD&&pR("OCDICD11");
+    C2D obc = pocketDir2C2D(pd);
+    Int dp = c.dot(obc);
+    mD&&pR(obc);
+    mD&&pR(dp);
+    return dp < 0;
+  }
+
+}

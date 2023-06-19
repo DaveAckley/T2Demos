@@ -1,0 +1,139 @@
+/** EdgeModel. Represent somatic properties of a diamond edge within a
+    multicellular body.
+ */
+quark EdgeModel : QBodyModel
+  + DiamondController
+{
+  typedef EdgeCoord.EdgeTag EdgeTag;
+
+  //// EdgeModel API
+  virtual Unsigned getMaxSizeForDiSeq(DiSequence diseq) ;
+  virtual DiSequence getMaxEmbodiedDiSeq() ;
+  virtual DiSeqInfo getDiSeqInfo(DiSequence diseq) ;
+
+  virtual DiSequence getChildDiSeq(Bool leftKid) {
+    return (EdgeModel.DiSequence) (mDiSequence*2u + (leftKid ? 0u : 1u));
+  }
+
+  typedef Unsigned(8) DiSequence; // Room for seven generations + leading 1
+  DiSequence mDiSequence = 1u;
+
+  typedef Unsigned(HardCellG.HopCount.sizeof + 4u) EventCounter; // Four bits bigger than HopCount..
+  EventCounter mEventCounter; // For simulating XD's DELETE_OLD_ROOT
+  Bool mMOKiller = false;
+
+  Bool mIsHead = false;      //< true if we're the head of the EM loop
+  Bool mIsTail = false;      //< true if we're the tail of the EM loop
+
+  Bool mIsDeployed = false; //< true if we're deployed out of the germline
+
+  //// Intender API
+  @Override
+  virtual ClassId getIntentionClass() {
+    EdgeModelState s; // Ensure concrete
+    return s.classidof;
+  }
+
+  //// DiamondController API
+  virtual Bool couldAdvise(RootHardCellG & root,
+                          QHardCellState & qcs)
+  {
+    return mIsHead; // only head can advise at this point
+  }
+
+  virtual Bool adviseRoot(RootHardCellG & root,
+                          QHardCellState & qcs,
+                          DCReport & dcr)
+  {
+    mD&&pR(__FILE__,__LINE__);
+    if (!couldAdvise(root,qcs)) fail(__FILE__,__LINE__);
+
+    /// DON'T LET OUT GENERATIONS GROW TOO BIG
+    Unsigned maxsize = getMaxSizeForDiSeq(mDiSequence);
+    if (root.mMaxHops >= maxsize && root.mCmdPhase == root.cCMD_STOP) {
+      root.mCmdPhase = root.cCMD_MOVE; // go back to moving
+      root.resetWatchdog();            // but you get a bye on productivity
+      return true;
+    }
+
+    // Everything else is only when moving
+    if (root.mCmdPhase != root.cCMD_MOVE) return false;
+    
+    //// CONSIDER EMERGENCY MOVES AGAINST DAMAGE
+    {
+      MaxPick dc;
+      for (Unsigned i = 0u; i < 4u; ++i) {
+        dc.update((SN) i, root.mDefCons[i]);
+      }
+      if (!dc.hasPick()) fail(__FILE__,__LINE__);
+      Unsigned idx = dc.getIdx();
+      Unsigned val = dc.getX();
+      if (val >= 3u) {
+        AxialDir dad = (AxialDir) idx;
+        AxialDir oad = oppositeAxialDir(dad);
+        if (root.mDefCons[oad] <= 2u) {
+          dcr.printf("[EMdam%dad]",dad);
+          return executeMove((SN) (oad+1u), root, qcs, dcr);
+        }
+      }
+    }
+
+    return false;
+  }
+
+  Bool executeMove(SN movesn, RootHardCellG & root, QHardCellState & qcs, DCReport & dcr) {
+    dcr.printf("[EMxm:->%d]",movesn);
+
+    HC3State &hcs = qcs.getHC3State();
+    qcs.resetSettledDownHops(root, hcs);
+    root.mMovementWatchdog.reset();
+    root.moveEntourage(qcs,movesn);
+    return true; // yes
+  }
+
+
+  //// LX API
+  virtual Bool perform(DiamondSequencerState & dss) {
+    mD&&pR(__FILE__,__LINE__);
+    if (!mIsHead) return false; // XXX only head executes in DSP, for starters
+
+    //// HAVE WE GOT AN XFER EC TO COPY IT TO?
+    ProcUnitInfo puixfer = dss.getPUInfo(cPUNIT_REG);
+    if (!puixfer.mFound) return false;
+    mD&&pR("CMCPUF14");
+
+    SN xsn = puixfer.mCodonSN;
+    if (xsn == SN.maxof)
+      return false; // ??
+
+    mD&&pR("CMCPUF15");
+    EventWindow ew;
+    Atom & xa = ew[xsn];
+    if (!(xa is EmptyCodon)) {
+      //maybeDemandEC(dss);
+      return false;
+    }
+    //// WE HAVE GOT AN XFER EC TO COPY IT TO.
+
+    mD&&pR("CMCPUF16");
+    Atom acopy = self.atomof;
+    Self & scopy = (Self&) acopy;
+
+    EmptyCodon & xac = (EmptyCodon&) xa;
+    BaseClassUtils bcu;
+    bcu.copySharedData(xa, acopy);
+    scopy.mDSType = cDS_NORM; // need this?
+    scopy.setTQDSLockedDown(true); // let's keep our shape on the wire?
+    scopy.mIsDeployed = true;        // You Are Body Model Now
+    
+    ew[xsn] = acopy;            // Send copy of us
+    markDSPForRotation(dss, 0u, cPUNIT_REG, cDSTATUS_TEMP);  // push it out
+
+    // MODIFY GERMLINE HERE
+    mD&&pR("CMCPUF17XXX GERMLINE??");
+    //    mDiSequence += 2u;        // room for LD + RD somehow..
+    
+    markDSPForRotationForward(dss, 0u, cPUNIT_WHT); // and we are DONE
+    return true;
+  }
+}

@@ -1,0 +1,386 @@
+transient MembraneState : D1PocketableState {
+}
+
+transient MembraneBaseState : MembraneState {
+
+  //// Intention API
+  @Override
+  virtual Bool init(Intender & seg) {
+
+    mD&&pR("MMBST10");
+    if (super.init(seg)) { // Let's have membrane be pretty fragile 
+      mD&&pR("MMBST11");    // so they don't clog things up too ofteno
+      mD&&pR(mPocket.mStatus);
+      mD&&pR("MMBST1110PRESEG");
+      mD&&pR(seg);
+      Membrane & mb = (Membrane&) seg;
+      mD&&pR("MMBST1110PREMEM");
+      mD&&pR(mb);
+      // If we can't init, let's not signal. Does that work for you?
+      mb.resetDCs();
+      mD&&pR("MMBST1110POST");
+      mD&&pR(mb);
+      mD&&pR("MMBST1110POSTSEG");
+      mD&&pR(seg);
+      //      mb.die();
+      return true;
+    }
+    mD&&pR("MMBST12");
+    return false;
+  }
+}
+
+/**
+   \symbol MB
+   \color #f0f
+ */
+element MBase : Membrane
+  + EdgeCoordProvider
+  + JunctionIndexProviderStg
+  + Random
+{
+
+  //// EdgeCoordProvider API
+  @Override
+  virtual Bool providesEdgeCoordFor(Bool outboundFrom, PocketDir ob, EdgeCoord & ec) {
+    if (outboundFrom) return false; // MBase only provides inbounds!
+    if (ob != mOpenDir) return false; // ob always in opendir terms even for inbound ec
+    ec = mInboundEC;
+    return true;
+  }
+  
+  EdgeCoord mInboundEC;
+
+  virtual ClassId getIntentionClass() {
+    return MembraneBaseState.classidof;
+  }
+
+  //// UrSelf API
+  @Override
+  virtual ARGB getColor(Unsigned selector) {
+    ARGB ret = super.getColor(selector);
+    ColorUtils cu;
+    if (maxDCs() == 0u) 
+      ret = cu.dimmer(ret);
+    if (mInboundEC.isValid())       // but having IEC is important
+      ret = cu.brighter(ret);
+    return ret;
+  }    
+
+  @Override
+  virtual Void renderGraphics() {
+    Drawable drawable;
+    if (!drawable.canDraw()) return;
+    super.renderGraphics();
+
+    ColorUtils cu;
+
+    ARGB col = getColor(2u);
+
+    constant C2D.Coord side = Drawable.cUNITS_PER_SITE;
+    constant C2D.Coord halfSide = side/2;
+    constant C2D.Coord thick = 200;
+    constant C2D.Coord len = halfSide;
+
+    // DRAW CROSSING LINE
+    C2D rpd = pocketDir2C2D(rotatePocketDir(mOpenDir,true));
+    C2D start = -rpd*halfSide;
+    C2D end = rpd*halfSide;
+    drawable.drawMaskedLine(start, end, col, col, (Bits) 0xffffffff, thick);
+    
+    // DRAW 'BODY'
+    
+    C2D.Coord size = 300u;
+    if (maxDCs() == 0u) 
+      size -= 100;
+    if (mInboundEC.isValid())       // but having IEC is important
+      size += 150;
+
+    C2D siz(size, size);
+    C2D pos(-size/2,-size/2);
+
+    drawable.fillRectangle(pos, siz, col);
+  }
+
+
+  //// DEWLine API
+  @Override
+  virtual DefCon signalDC() {
+    return cDC_HERE; // MBase signals 'contact'
+  }
+
+  //// Membrane API
+
+  typedef XTimer(3u,4u,1u) DecayTimer;
+  DecayTimer mDecayTimer;
+  
+  Void behave() {
+    mD&&pR("MBBEH10");
+    self.updateCornerDistances();   // let's do this at the top, for clarity?
+
+    Random random;
+    if (mInboundEC.isValid() && random.oneIn(10u)) 
+      mInboundEC.invalidate();  // age out
+    
+    DebugUtils du;
+    MembraneBaseState mbs;
+    PocketHC3 & p = mbs.mPocket;
+    mD&&pR("MBBEH11UNINIT");
+    mD&&pR(mbs);
+    mD&&pR("MBBEH12SELF");
+    mD&&pR(self);
+    
+    if (mbs.init(self)) {
+      mD&&pR("MBBEH13MBS");
+      mD&&pR(mbs);
+      mD&&pR("MBBEH13SELF");
+      mD&&pR(self);
+      mD&&pR("MBBEH13POCK");
+      mD&&pR(p);
+
+      /* XXX unfinished - it needs to make a dogleg move not a diago
+      /// If status okay, we might have been buried by a growth spurt
+      if (p.mStatus == PocketHC3.cSTATUS_OK) {
+        C2D newc = pocketDir2C2D(mOpenDir)*(C2D.Coord) 2;
+        EventWindow ew;
+        if (ew.isAccessible(newc) && ew[newc] is Empty) { // shortcut!
+          ew.swap(C2D.instanceof, newc);
+          return;
+        }
+      }
+      */
+
+      if (p.mStatus == PocketHC3.cSTATUS_BENT) {
+        if (mDecayTimer.countAlarm()) return die();
+        return; //block
+      }
+      mD&&pR("MBBEH14");
+      if (p.mStatus == PocketHC3.cSTATUS_EDGE) {
+        // just die if on edge.. we're spawning so fast now anyway..
+        /*if (mDecayTimer.countAlarm())*/ return die();
+        //        return; //block
+      }
+      mD&&pR("MBBEH15");
+      if (p.mStatus != PocketHC3.cSTATUS_OPEN) {
+        return die();
+      }
+      mD&&pR("MBBEH16");
+    }
+    mD&&pR("MBBEH17");
+    mD&&pR(p.mCoordCount);
+    // Pocket can see just 2 HC3 during movement
+    if (p.mCoordCount == 2u) return; //block
+    if (p.mCoordCount != 3u)
+      if (oneIn(10u)) return die();
+      else return; // block
+
+    {
+      /// If it can see three, two should be edge
+      Unsigned edgec = 0u;
+      for (Unsigned c = 0u; c < p.mCoordCount; ++c) {
+        if (p.mCornerHops[c] + 1u >= p.mCornerMaxHopsGoal[c])
+          ++edgec;
+      }
+      mD&&pR("MBBEH1710");
+      mD&&pR(edgec);
+      if (edgec < 2u && oneIn(10u)) return die();
+      mD&&pR("MBBEH1711");
+    }
+    
+    mD&&pR("MBBEH18");
+
+    /// Find open dir
+    Unsigned opendir = Unsigned.maxof;
+    for (Unsigned i = 0u; i < 4u; ++i) {
+      mD&&pR("MBBEH19");
+      mD&&pR(p.mCoords[i]);
+      if (p.mCoords[i].length() == 0u) { // uninitted
+        opendir = i;
+        mD&&pR(opendir);
+        break;
+      }
+    }
+    mD&&pR("MBBEH210");
+        
+    /// Lock or check open dir
+    if (mDirBound) {
+      mD&&pR("MBBEH211");
+      if (opendir != mOpenDir) return die();
+    } else {
+      mD&&pR("MBBEH212");
+      mOpenDir = (PocketDir) opendir;
+      mDirBound = true;
+    }
+    mD&&pR("MBBEH213");
+    /// We are bound and good
+
+    {
+      //// Too many MBase around? Are we poorly located?
+      Unsigned mbcount = 0u;
+      Unsigned hgcount = 0u;
+      Unsigned ehgcount = 0u;
+      EventWindow ew;
+      for (SN sn = 1u; sn <= 8u; ++sn) {
+        if (!ew.isAccessible(sn)) continue;
+        Atom & a = ew[sn];
+        if (a as MBase) ++mbcount;
+        else if (a as QHardCellGField) { // Seeing an HG field that
+          if (a is EdgeHG/* || a is MTip*/) ++ehgcount;   // isn't EdgeHG (or MTip) is bad
+          else ++hgcount;
+        }
+      }
+      if (mbcount >= 2u && ehgcount == 0u) {
+        // We are a poorly located 3rd MB. Bahyeee
+        ew[0] = Empty.instanceof;
+        return;
+      }
+    }
+    mDecayTimer.reset();
+    mD&&pR("MBBEH214PRE");
+    mD&&pR(self);
+    
+    // do sOQ to get some contact signaling
+    Unsigned sensorcount = scanOuterQuadrant();
+    mD&&pR("MBBEH214POST");
+    mD&&pR(self);
+
+    //// SPAWN ANTENNAE
+    /*
+    if (false) {
+      if (mDirBound) {
+        EventWindow ew;
+        Unsigned antc = 0u;
+        for (SN sn = 1u; sn <= 8u; ++sn) {
+          if (ew.isAccessible(sn) && ew[sn] is Antenna) {
+            ++antc;
+            break;
+          }
+        }
+        if (antc == 0u) {
+          C2D adjc = pocketDir2C2D(mOpenDir);
+          if (ew.isAccessible(adjc) && ew[adjc] is Empty) {
+            Antenna aa;
+            aa.mOpenDir = mOpenDir;
+            aa.mMaxEdgeHops = 6u; // XXX PROGRAM CTL
+            ew[adjc] = aa.atomof;
+          }
+        }
+      }
+      return; // NO SENSOR SPAWNING
+    }
+    */
+
+    // Slow and ungainly sensor seeding
+    if (false /*sensorcount == 0u*/) { // XXX DON'T SEED MSENSORS
+      // Signal contact if we can't see any sensors!
+      mD&&pR("MBBEH215");
+      AxialDir d1, d2;
+      axesOf(mOpenDir,d1,d2);
+      mD&&pR(d1);
+      mD&&pR(d2);
+      mD&&pR("MBBEH216");
+      DefCon dc = signalDC();
+      mD&&pR(dc);
+      maxDC(d1,dc);
+      mD&&pR(dc);
+      maxDC(d2,dc);
+      mD&&pR(dc);
+      mD&&pR("MBBEH217");
+
+      if (oneIn(8u)) { 
+        mD&&pR("MBBEH218");
+      
+        SN maybe = (SN) between(5u,24u/*12u*/);
+        if (ew.isAccessible(maybe)) {
+          if (ew[maybe] is Empty) {
+            C2D mc = ew.getCoord(maybe);
+            if (inQuadrant(mc,mOpenDir)) {
+              mD&&pR("MBBEH219");
+              /*
+              MSensor seed;
+              seed.mOpenDir = mOpenDir;
+              seed.mDirBound = true;
+              mD&&pR(seed);
+              ew[maybe] = seed.atomof;
+              */
+            }
+          }
+        }
+      }
+    }
+  }
+
+  Void updateCornerDistances() {
+    if (!mDirBound) return; // too soon
+    // XXX DEIMPLEMENTED
+    /*
+    Bool uninit = mQCD.mCornerDists[0] == 0u && mQCD.mCornerDists[1] == 0u;
+
+    C2D dirc = pocketDir2C2D(mOpenDir); // len 2 vec to world
+
+    EventWindow ew;
+    Bool ngbSeen[2] = {false, false};
+    Unsigned maxhops = 0u;
+    for (SN sn = 1u; sn < 41u; ++sn) {
+      if (!ew.isAccessible(sn)) continue;
+      Atom & a = ew[sn];
+      if (a as QHardCell) {
+        Unsigned amaxhops = a.getMaxHopsGoal();
+        if (amaxhops > maxhops) maxhops = amaxhops;
+      }
+      if (!(a is MBase)) continue;
+
+      // - Scan for mDirBound MB ngbs with same mOpenDir
+      MBase & ngb = (MBase&) a;
+      if (!ngb.mDirBound) continue;
+      if (ngb.mOpenDir != mOpenDir) continue;
+
+      // - If dist 1 or 3 skip
+      C2D c = ew.getCoord(sn);
+      Unsigned d = c.length();
+      if (d==1u || d==3u) {
+        ngbSeen[0] = ngbSeen[1] = true; // but use big hammer to avoid decaying?
+        continue;
+      }
+
+      // - If ngb onaxis with us, skip
+      if (c.x == 0 || c.y == 0) 
+        continue;
+
+      //   = else ngb is r==cw or r==acw of us
+      Bool cw = c.y*dirc.x > c.x*dirc.y;
+      Unsigned r = cw ? 0u : 1u;
+
+      // - If dist 2, 
+      //   = set our dist[r] to theirs and
+      if (d==2u) {
+        mQCD.mCornerDists[r] = ngb.mQCD.mCornerDists[r];
+        ngbSeen[r] = true;  //..and say we've seen that dir
+      }
+
+      // - if dist 4
+      //   = with highish odds, converge our dist[r] to
+      //     their dist[r]+1 and set ngbseen[r] == true
+      if (d==4u) {
+        ngbSeen[r] = true;
+        Int delta = (ngb.mQCD.mCornerDists[r] + 1) - (Int) mQCD.mCornerDists[r];
+        if (delta != 0 && oddsOf(2,3))
+          if (delta > 0) ++mQCD.mCornerDists[r];
+          else --mQCD.mCornerDists[r];
+      }
+    }
+
+    //After the scan, for each r,
+    // - if ngbseen[r], skip
+    // - with lowish odds, converge our dist[r] to 0
+    for (Unsigned r = 0u; r < 2u; ++r) {
+      if (!ngbSeen[r] && mQCD.mCornerDists[r] > 0u && oddsOf(1,10))
+        --mQCD.mCornerDists[r];
+    }
+
+    /// Declare plausibility
+    mQCD.mPlausibleDists = maxhops > 0u && mQCD.mCornerDists[0] + mQCD.mCornerDists[1] + 3u > maxhops;
+    */
+  }
+}
+

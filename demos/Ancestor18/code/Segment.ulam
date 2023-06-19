@@ -1,0 +1,146 @@
+transient SegmentState : D1PocketableState {
+
+  // inaccess data valid after findMate returns UNSURE
+  Unsigned mInaccessibleInMateDir[Segment.cBODY_DOWN+1u]; 
+
+  // mate data valid after findMate returns OK
+  Segment.MateStatus mMateStatus = cMATE_UNINIT;
+  SN mEWSNSegment; //< SN of thing having mates (usu 0 but maybe not)
+  SN mEWSNMate[Segment.cBODY_DOWN+1u];
+  PocketPtr mPocketWithMate[Segment.cBODY_DOWN+1u] = { Segment.cPP_NULL, Segment.cPP_NULL };
+
+  //// Intention API
+  @Override
+  virtual Bool init(Intender & seg) {
+    mD&&pR("SGST10");
+    if (super.init(seg)) return true;
+    mD&&pR("SGST11");
+    for (Unsigned i = 0u; i < mEWSNMate.lengthof; ++i)
+      mEWSNMate[i] = SN.maxof; // No mate but what we fake for ourselves
+    mMateStatus = cMATE_UNINIT;
+    return false;
+  }
+
+  //// SegmentState SERVICES
+  Segment.MateStatus findMate_(Segment & seg, Segment.BodyDir bd) {
+    PocketPtr ngb = seg.mPocketPtrs[bd];
+
+    mD&&pR("FMTE10");
+    mD&&pR(ngb);
+    if (ngb == Segment.cPP_NULL)
+      return Segment.cMATE_OK;  // happy on my own
+
+    mD&&pR("FMTE11");
+    RectIterator ri;
+    if (!mPocket.initIterator(ri, ngb, true))
+      return Segment.cMATE_POCKET; // Can't iterate that
+
+    mD&&pR("FMTE12");
+    SN matesn;
+    Unsigned matches = 0u;
+    Unsigned inaccess = 0u;
+    while (ri.hasNext() && matches < 2u) {
+      C2D n = ri.next();
+      mD&&pR("FMTE13");
+      mD&&pR(n);
+      if (!ew.isAccessible(n)) { ++inaccess; continue; }
+
+      mD&&pR("FMTE14");
+      Atom & a = ew[n];
+      if (a as Segment) {
+        mD&&pR("FMTE15");
+        if (seg.inMyGroup(a)) {
+          mD&&pR("FMTE16");
+          PocketPtr themp = a.mPocketPtrs[1u-bd];
+          Bool bothHere = themp == 0u && ngb == 0u;
+          Bool opposites = themp == 5u-ngb;
+          if (opposites || bothHere) { // are they pointing back at us?
+            mD&&pR("FMTE17");
+            if (random.oneIn(++matches)) 
+              matesn = ew.getSiteNumber(n);     // good candidate
+          }
+        }
+      }
+    }
+    mD&&pR("FMTE18");
+    mD&&pR(inaccess);
+    mD&&pR(matches);
+    mInaccessibleInMateDir[bd] = inaccess;
+    if (matches == 0u)
+      return (inaccess > 0u) ? Segment.cMATE_UNSURE : Segment.cMATE_MISSING;
+    mD&&pR("FMTE19");
+
+    if (matches > 1u) return Segment.cMATE_WRONG; // Multi pointing at us?
+
+    mD&&pR("FMTE210");
+    // Stash findings
+    mEWSNMate[bd] = matesn;
+    mPocketWithMate[bd] = ngb;
+
+    return Segment.cMATE_OK;
+  }
+}
+
+quark Segment : D1Pocketable {
+
+  typedef PocketPtr PocketPtrs[BodyDir.maxof+1u];
+  PocketPtrs mPocketPtrs  = { Segment.cPP_NULL, Segment.cPP_NULL }; // fwd[0] bck[1] 6 bits total
+
+  //// Segment API
+
+  //// Segment SERVICES
+  Bool diffuseInPocket(SegmentState & ss) {
+    SN empsn = ss.mEmptySNs[cPP_SELF].pick();
+    if (empsn != SN.maxof) {
+      EventWindow ew;
+      ew.swap(0u,empsn);
+      return true;
+    }
+    return false;
+  }
+
+  virtual Void copySegPtrsOnly(Segment & other) {
+      Segment & sg = self;
+      sg = other;
+  }
+
+  Void unilaterallyDetachSegment() {
+    mPocketPtrs[cBODY_UP] = cPP_NULL;
+    mPocketPtrs[cBODY_DOWN] = cPP_NULL;
+  }
+
+  Bool isHead() { return mPocketPtrs[cBODY_UP] == cPP_NULL; }
+  Bool isTail() { return mPocketPtrs[cBODY_DOWN] == cPP_NULL; }
+  Bool isMiddle() { return !isHead() && !isTail(); }
+  Bool isAlone() { return   isHead() &&  isTail(); }
+
+  /** 
+   */
+  MateStatus findMates(SegmentState & ss) {
+    EventWindow ew;
+    DebugUtils du;
+    mD&&pR("FMTS10");
+    if (ss.mMateStatus != cMATE_UNINIT)
+      return ss.mMateStatus;
+
+    MateStatus ret = cMATE_OK; // optimism
+    ss.mEWSNSegment = ew.getSiteNumber(self);
+    mD&&pR(ss.mEWSNSegment);
+    for (Unsigned i = 0u; i < 2u; ++i) {
+      BodyDir bdir = (BodyDir) i;
+      PocketPtr ptr = mPocketPtrs[bdir];
+      mD&&pR("FMTS11");
+      mD&&pR(i);
+      mD&&pR(ptr);
+      if (ptr != cPP_NULL) {
+        MateStatus ms = ss.findMate_(self, bdir);
+        mD&&pR("FMTS12");
+        mD&&pR(ms);
+        if (ms > ret) ret = ms; 
+      }
+    }
+
+    return ss.mMateStatus = ret;
+  }
+
+}

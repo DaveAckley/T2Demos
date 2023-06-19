@@ -1,0 +1,44 @@
+/** Parameters for ALife Challenge Physics.  Default parameter values
+    need to be best for T2 tile use (since they can't be changed
+    there), but may be modified during mfms use for development
+    and debugging.
+
+    \symbol AP
+    \color #0f0
+ */
+element Parms {
+  /** Movement decision reporting enabled
+   */
+  parameter Bool cDCREPORTING_ENABLED = false; // true would spam logs on t2s
+
+  /** Decision reporting includes context
+   */
+  parameter Bool cDCREPORTING_CONTEXT = true; // XXX false;
+
+  /** Render Membrane boxes
+   */
+  parameter Bool cRENDER_MEMBRANE_BOXES = true;
+
+  /** Render PocketChain boxes
+   */
+  parameter Bool cRENDER_POCKETCHAIN_BOXES = true;
+
+  /** Fast-start larger min maxhops
+   */
+  parameter Bool cSEED_HG_LARGE_MIN_MAXHOPS = false;
+
+  /** Use FishBod stance logic
+   */
+  parameter Bool cFISHBOD_USE_STANCE = true;
+
+  /** Use FishFin stance logic
+   */
+  parameter Bool cFISHFIN_USE_STANCE = true;
+
+  /** PatchRules index to debug.
+
+      \range 0..15
+   */
+  parameter Unsigned cPATCHRULES_DEBUG_INDEX = 15u;
+
+}

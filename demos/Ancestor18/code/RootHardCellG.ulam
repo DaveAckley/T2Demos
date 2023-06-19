@@ -1,0 +1,346 @@
+/** RootHardCellG: An anchor point for Growable Low-Density Mobile Grid
+   \symbol RG
+   \color 0x0f0f0f
+ */
+element RootHardCellG : QHardCellG
+  + QDSHopsStg
+{
+
+  //// JunctionIndexProvider API
+  @Override virtual JunctionIndex getJunctionIndex() { return 0u; }
+  @Override virtual Bool isJunctionIndexAnchor() { return true; }
+
+  //// HCPointable API
+  @Override virtual HCPoint getHCPoint() { return HCPoint.instanceof(0,0); }
+  @Override virtual Void setHCPoint(HCPoint pt) {
+    Fail f;
+    f.fail(__FILE__,__LINE__);
+  }
+  
+  constant Unsigned cWDOG_BITS = 4u;
+  constant Unsigned cWDOG_TRIG = 12u;
+  constant Unsigned cWDOG_KSHF = 5u;
+  typedef XTimer(cWDOG_BITS, cWDOG_TRIG, cWDOG_KSHF) HardCellProductivityWatchdog;
+  HardCellProductivityWatchdog mRootProductivityWatchdog;
+
+  constant Unsigned cWDOG_KSHF2 = 10u; // exp 2x slower than productivity dog
+  typedef XTimer(cWDOG_BITS, cWDOG_TRIG, cWDOG_KSHF2) HardCellMovementWatchdog;
+  HardCellMovementWatchdog mMovementWatchdog;
+  
+  //// QHardCell API
+  @Override
+  virtual Bool countWatchdog() { return mRootProductivityWatchdog.countAlarm(); }
+
+  @Override
+  virtual Void resetWatchdog() { mRootProductivityWatchdog.reset(); }
+
+  @Override
+  virtual Void renderGraphics() {
+    Drawable drawable;
+    if (!drawable.canDraw()) return;
+    super.renderGraphics();
+
+    // Looking for a diamond outline
+
+    ColorUtils cu;
+    ARGB oncol = cu.color(0xff000000u);
+    ARGB offcol =  cu.color(0xffffffffu);
+
+    constant C2D.Coord side = Drawable.cUNITS_PER_SITE;
+    constant C2D.Coord halfSide = side/2;
+    constant C2D.Coord thick = 150;
+    /*
+    C2D cPTS[] = {
+      { .x = 0,         .y = -halfSide },
+      { .x = halfSide,  .y = 0         },
+      { .x = 0,         .y = halfSide  },
+      { .x = -halfSide, .y = 0         },
+      { .x = 0,         .y = -halfSide },
+      { .x = halfSide,  .y = 0         },
+    };
+    for (Unsigned i = 0u; i < cPTS.lengthof - 1u; ++i) {
+      drawable.drawMaskedLine(cPTS[i], cPTS[i+1u], oncol, offcol, (Bits) 0xff00ff00, thick);
+    }
+    */
+
+    {
+      C2D a = { .x = 0,         .y = -halfSide };
+      C2D b = { .x = halfSide,  .y = 0         };
+      C2D c = { .x = 0,         .y = halfSide  };
+      C2D d = { .x = -halfSide, .y = 0         };
+      C2D e = { .x = 0,         .y = -halfSide };
+      drawable.drawMaskedLine(a,b, oncol, offcol, (Bits) 0x33333333, thick);
+      drawable.drawMaskedLine(b,c, oncol, offcol, (Bits) 0x33333333, thick);
+      drawable.drawMaskedLine(c,d, oncol, offcol, (Bits) 0x33333333, thick);
+      drawable.drawMaskedLine(d,e, oncol, offcol, (Bits) 0x33333333, thick);
+    }
+  }
+
+  @Override
+  virtual Unsigned getUpHops() { return 0u; }
+  @Override
+  virtual Unsigned getMaxUpHops() { return Unsigned.maxof; } // ??
+  @Override
+  virtual Void setUpHops(Unsigned uphops) { Fail f; f.fail(__FILE__,__LINE__); }
+
+  typedef Unsigned(2) CmdPhase;
+  constant CmdPhase cCMD_MOVE = 0u;
+  constant CmdPhase cCMD_STOP = 1u;
+  constant CmdPhase cCMD_GROW = 2u;
+  constant CmdPhase cCMD_WAIT = 3u;
+  CmdPhase mCmdPhase = cCMD_MOVE;
+
+  Void init() {
+    Random random;
+    mMaxHops = (HopCount) (Parms.cSEED_HG_LARGE_MIN_MAXHOPS ?
+                           12u : 5u); // of (reasonably) min size
+    changeDir(); // and a random dir
+  }
+
+  typedef Int(5) DirSpeed;
+  constant DirSpeed cMAX_NW = DirSpeed.minof + 1;
+  constant DirSpeed cMAX_SE = -cMAX_NW;
+  DirSpeed mDirs[2];
+
+  @Override
+  virtual Bool isRoot() { return true; }
+
+  @Override
+  virtual Bool rootBehave(QHardCellState & qcs) {
+    HC3State &hcs = qcs.getHC3State();
+
+    /// AM I ROOT?
+    if (!isRoot()) return false;
+    /// I AM ROOT.
+    mD&&pR("RHGRB10");
+
+    /// AM I RELAXED?
+    if (!isRelaxed())     // be relaxed before acting
+      return qcs.block(); // to avoid missing a possible DC
+
+    /// ARE ANY OF THE NGBS INCONSISTENT WITH MY HOPS OR GOAL?
+    Unsigned roothops = getUpHops();
+    Unsigned rootmaxgoal = getMaxHopsGoal();
+    EventWindow ew;
+    Random random;
+    for (Unsigned i = 0u; i < hcs.mHC3NgbStates.lengthof; ++i) {
+      HC3NgbState & n = hcs.mHC3NgbStates[i];
+      if (n.hasValidNeighbor()) {
+        Atom & a = ew[n.getNgbC2D()];
+        if (a as QHardCell) {
+          Unsigned ngbhops = a.getUpHops();
+          Unsigned ngbmaxgoal = a.getMaxHopsGoal();
+          if (ngbmaxgoal != rootmaxgoal ||
+              ngbhops != roothops + 1u) {
+            mD&&pR("NGBINCONSISTENTWAIT");
+            return qcs.block(); // better wait
+          }
+        }
+      }
+    }
+    /// ALL OF THE NGBS ARE CONSISTENT WITH MY HOPS OR GOAL.
+
+    /// AM I BLOCKED BY UNSETTLED DOWNSTREAM?
+    Unsigned unsettledDown = getSettledDownHops();
+    Unsigned needSettled = cMIN_DOWN_SETTLED;
+    if (getMaxHopsGoal() <= needSettled)
+      needSettled = getMaxHopsGoal() - 1u;
+
+    if (unsettledDown < needSettled) {
+      return qcs.block(); // we have to wait
+    }
+    /// DOWNSTREAM IS ALIGNED WITH ME SUFFICIENTLY FOR MOVING
+
+    /// FIND A DIAMONDCONTROLLER, IF ANY EXIST
+    Unsigned dccount = 0u;
+    Unsigned dcdist = Unsigned.maxof;
+    SN dcsn;
+    for (SN sn = 1u; sn < 41u; ++sn) {
+      if (!ew.isAccessible(sn)) continue;
+      Atom & a = ew[sn];
+      if (a as DiamondController) {
+        if (!a.couldAdvise(self, qcs))
+          continue;
+        C2D c = ew.getCoord(sn);
+        Unsigned dist = c.length();
+        if (dist < dcdist) {
+          dcdist = dist;
+          dcsn = sn;
+          dccount = 1u;
+        } else if (dist == dcdist && random.oneIn(++dccount)) {
+          dcsn = sn;
+        }
+      }
+    }
+
+    DCReport dcr;
+    if (dccount > 0u) {
+      mD&&pR("RHGRB210");
+      //// DISPATCH TO DIAMONDCONTROLLER
+      DiamondController & dc = (DiamondController&) ew[dcsn];
+      mD&&pR(dc);
+      if (dc.adviseRoot(self, qcs, dcr)) 
+        return dcr.reportDone(true,dcr.printf("/aR."));
+      dcr.printf("[%d:noad]",dcsn);
+      mD&&pR("RHGRB211");
+      //// FALL THROUGH IF NO ADVICE
+    }
+
+    which (mCmdPhase) {
+    case cCMD_MOVE: {
+      /// TRY TO GROW NOW?
+      if (mMaxHops < cMAX_MAX_HOPS &&
+          random.oneIn(5u)) {
+        mCmdPhase = cCMD_STOP;
+        return dcr.reportDone(true,dcr.printf("RG:mxhp%d[CMD_STOP].",mMaxHops)); // YES
+      }
+      /// NOT TRYING TO GROW NOW.
+
+      /// TRY TO MOVE NOW?
+      Unsigned opencount = 0u;
+      SN picksn;
+      for (SN sn = 1u; sn <= 4u; ++sn) {
+        if (mDefCons[sn-1u] == 0u &&
+            ew.isAccessible(sn) && ew[sn] is Empty) {
+          if (random.oneIn(++opencount))
+            picksn = sn;
+        }
+      }
+
+      // Can't move if completely blocked
+      if (opencount == 0u)
+        return false;
+
+      // Only move 10% of time if no warnings.
+      if (opencount == 4u && !random.oneIn(10u))
+        return false;
+
+      dcr.printf("RGstd");
+      dcr.printDefCons(mDefCons);
+      dcr.printf("SN%d",picksn);
+      dcr.reportDone(true);
+
+      qcs.resetSettledDownHops(self, hcs);
+      mMovementWatchdog.reset();
+      moveEntourage(qcs,picksn);
+      return true; // CANNOT SAFELY CALL (eg) done() HERE!
+    }
+    case cCMD_STOP: {
+      /// ROOM TO GROW?
+      if (mMaxHops >= cMAX_MAX_HOPS) {
+        mCmdPhase = cCMD_MOVE; // No
+        return dcr.reportDone(true,dcr.printf("RG:mxHp%d[STOP->MOVE].",mMaxHops)); // YES
+      }
+      /// ROOM TO GROW.
+      /// STABLE TO EDGE?
+      if (unsettledDown < mMaxHops - 1u) {
+        // NO, GIVE UP?
+        if (random.oneIn(8u*mMaxHops)) {
+          mCmdPhase = cCMD_MOVE; // YES
+          dcr.reportDone(true,dcr.printf("RG:uD%d<%d[STOP->MOVE].",
+                                         unsettledDown, mMaxHops-1u));
+        }
+        return true;
+      }
+      /// STABLE TO EDGE.
+      /// ALL CLEAR AROUND?
+      Bool opensky = true;
+      for (Unsigned i = 0u; opensky && i < 4u; ++i) {
+        if (mDefCons[i] != 0u) {
+          opensky = false;
+          break;
+        }
+      }
+      if (!opensky) {
+        /// NOT CLEAR.
+        /// GIVE UP?
+        if (random.oneIn(5u)) {
+          mCmdPhase = cCMD_MOVE; // YES
+          dcr.printDefCons(mDefCons);
+          return dcr.reportDone(true,dcr.printf("RG:!op[STOP->MOVE]."));
+        }
+        return false;
+      }
+      /// ALL CLEAR AROUND.
+      {
+        setSettledDownHops(0u);
+        mMovementWatchdog.reset(); // GROWTH COUNTS AS MOVEMENT YO
+        mCmdPhase = cCMD_GROW;
+
+        ++mMaxHops;
+        dcr.reportDone(true,dcr.printf("RG:GB%d![STOP->GROW].",mMaxHops));
+      }
+      return true;
+    }
+    case cCMD_GROW: {
+      /// STABLE TO EDGE?
+      if (unsettledDown < mMaxHops - 1u) {
+        /// NO. GIVE UP ANYWAY?
+        if (random.oneIn(50u)) {
+          mCmdPhase = cCMD_MOVE; // YES
+          return dcr.reportDone(true,dcr.printf("RG:uD%d[GROW->MOVE].",unsettledDown));
+        }
+        return false;
+      }
+      /// STABLE TO EDGE.
+      mCmdPhase = cCMD_MOVE; // YES
+      return dcr.reportDone(true,dcr.printf("RG:stable[GROW->MOVE]."));
+    }
+    case cCMD_WAIT: {
+      // JUST WAIT INDEFINITELY
+      return true;
+    }
+    }
+    return false;
+  }
+
+  Bool stableToEdge() {
+    return getSettledDownHops() >= mMaxHops - 1u;
+  }
+
+  Void changeDir() {
+    Random random;
+    Bool moving = false;
+    while (!moving) {
+      for (Unsigned i = 0u; i < mDirs.lengthof; ++i) {
+        mDirs[i] = (DirSpeed) random.between(cMAX_NW, cMAX_SE);
+        if (mDirs[i] != 0) moving = true;
+      }
+    }
+  }
+
+  SN updatePick(SN curpick, SN newdir, Unsigned & totwgt, Int newwgt) {
+    Random random;
+    if (newwgt < 0) {
+      newdir += 2u;  // 1=>3, 2=>4
+      newwgt = -newwgt;
+    }
+    Unsigned wgt = (Unsigned) newwgt;
+    totwgt += wgt;
+    if (random.oddsOf(wgt, totwgt))
+      curpick = newdir;
+    return curpick;
+  }
+
+  SN pickDir(Unsigned diffuseOdds) {
+    Random random;
+    Unsigned totw = diffuseOdds;
+    SN curPick = (SN) random.between(1u,4u);
+    /* BE TOTALLY BROWNIAN
+    for (Unsigned i = 0u; i < mDirs.lengthof; ++i) {
+      curPick = updatePick(curPick, (SN) (i+1u), totw, mDirs[i]);
+    }
+    */
+    return curPick;
+  }
+
+  Void behave() {
+    if (mMovementWatchdog.countAlarm()) {
+      DebugUtils du;
+      du.printContext();
+      fail(__FILE__,__LINE__,"MOVEMENT WATCHDOG TIMEOUT");
+      return; // NOT REACHED
+    }
+    super.behave();
+  }
+}

@@ -1,0 +1,165 @@
+transient MCSlashState : EdgeModelState {
+  @Override
+  //// Intention API
+  virtual Bool stabilize(Intender & in) {
+    mD&&pR("MCSISTB10");
+    if (super.stabilize(in)) return true;
+    MCSlash & ld = (MCSlash&) in;
+    if (!ld.mIsHead && ld.mIsDeployed) {
+      if (ld.mPocketPtrs[cBODY_UP] != cPP_NULL) {
+        if (ld.hasCares()) {
+          EventWindow ew;
+          SN upsn = mEWSNMate[cBODY_UP];
+          Atom & a = ew[upsn];
+          
+          if (a as MCSlash) {
+            a.mergeStance(ld);
+            ld.resetStance();
+          }
+        }
+      }
+    }
+    return false;
+  }
+}
+
+/** MCSlash. Representing a demo four-cell multicellular organism.
+
+    \symbol MS
+    \color #5f8
+ */
+element MCSlash : EdgeModel
+  + TQDSControlStg //// XXXXX IF THIS LINE IS COMMENTED OUT THEN PocketChain.ulam:464 WORKS INCORRECTLY IN SOME CIRCUMSTANCES
+  + QDiamondStance
+{
+  //// Intender API
+  virtual ClassId getIntentionClass() {
+    MCSlashState s; // Ensure concrete
+    return s.classidof;
+  }
+
+  //// QDiamondStance API
+  @Override
+  virtual Bool isStanceSink() { return mIsDeployed && mIsHead; } // When I'm in charge I consume all stances that find me
+
+  typedef BodyPlanStg(3u) MCSlashBodyPlan;
+  constant MCSlashBodyPlan cMCSLASH_BODYPLAN = {
+    .mDiSeqInfoMap = {
+      { .mEdgeTags =      // NW  NE  SE  SW
+        { .mEdgeTagArray = { 0u, 0u, 0u, 0u } }, // DiSeq#1 no junctions
+        .mDVec = {.x =-10, .y =  0}},            // DiSeq#1 drift west
+      { .mEdgeTags = {    // NW  NE  SE  SW
+          .mEdgeTagArray = { 0u, 5u, 0u, 0u } }, // DiSeq#2 tag 5 to NE
+        .mDVec = {.x = 20, .y = 10}},            // DiSeq#2 drift NNE
+      { .mEdgeTags = {    // NW  NE  SE  SW
+          .mEdgeTagArray = { 0u, 0u, 0u, 5u } }, // DiSeq#3 tag 5 to SW
+        .mDVec = {.x =-20, .y =-10}},            // DiSeq#3 drift SSW
+    }
+  };
+
+  //// EdgeModel API
+  @Override
+  virtual DiSequence getChildDiSeq(Bool leftKid) {
+    if (mDiSequence == 2u)
+      return leftKid ? 0u : 2u; // LD is new MC/, RD stays part of existing MC/
+    return super.getChildDiSeq(leftKid);
+  }
+
+  @Override
+  virtual Unsigned getMaxSizeForDiSeq(DiSequence diseq) {
+    if (diseq <= 2u) return Unsigned.maxof;
+    return 13u;
+  }
+
+  @Override
+  virtual DiSequence getMaxEmbodiedDiSeq() {
+    return cMCSLASH_BODYPLAN.cDISEQ_COUNT;
+  }
+
+  @Override
+  virtual DiSeqInfo getDiSeqInfo(DiSequence diseq) {
+    MCSlashBodyPlan bp = cMCSLASH_BODYPLAN;
+    return bp.getDiSeqInfo(diseq);
+  }
+
+  virtual Bool adviseRoot(RootHardCellG & root,
+                          QHardCellState & qcs,
+                          DCReport & dcr)
+  {
+    mD&&pR(__FILE__,__LINE__);
+    if (super.adviseRoot(root,qcs,dcr)) return true;
+
+    // Everything else is only when moving
+    if (root.mCmdPhase != root.cCMD_MOVE) return false;
+    
+    if (adviseFromStance(root, qcs, dcr)) return true;
+    return false;
+  }
+
+
+  Bool adviseFromDefault(RootHardCellG & root, QHardCellState & qcs, DCReport & dcr) {
+    Bool old = isDebugOutputEnabled();
+    //    setDebugOutputEnabled(true);
+    mD&&pR("MCSAFDF10");
+    DiSeqInfo info = getDiSeqInfo(mDiSequence);
+    C2D def = info.getDefaultVector();
+    mD&&pR(info);
+    mD&&pR(def);
+    MaxPick dirs;
+    dirs.update((SN) 0u, 1u, 32u); // doing nothing gets 32 votes
+    for (Unsigned i = 0u; i < 4u; ++i) {
+      AxialDir ad = (AxialDir) i;
+      C2D adc = axialDir2C2D(ad);
+      Int len = def.dot(adc);
+      if (len > 0)
+        dirs.update((SN) (ad+1u), 1u, (Unsigned) len); // pick weighted by len
+    }
+    mD&&pR("MCSAFDF12");
+    mD&&pR(dirs);
+
+    if (!dirs.hasPick()) fail(__FILE__,__LINE__);
+    SN movesn = (SN) dirs.getIdx();
+    setDebugOutputEnabled(old);
+    if (movesn > 0u) {
+      dcr.printf("[MCSafdf%d]",movesn);
+      return executeMove(movesn, root, qcs, dcr);
+    }
+    return false;
+  }
+
+  Bool adviseFromStance(RootHardCellG & root, QHardCellState & qcs, DCReport & dcr) {
+    mD&&pR("MCSAFS10");
+    if (!hasCares()) return adviseFromDefault(root,qcs,dcr);
+    mD&&pR("MCSAFS11");
+    MaxPick dirpick;
+    for (Unsigned i = cW; i <= cE; ++i) {
+      AxialDir ad = (AxialDir) i;
+      Unsigned goodidx = 2u*ad, badidx = 2u*ad + 1u;
+      if (mCares[badidx] > 1u) continue; // call it a veto
+      Unsigned votes = mCares[goodidx];
+      if (mCares[badidx] == 0u) ++votes; // Anything unopposed gets a boost
+      dirpick.update(ad+1u,votes); // ad+1 == sn
+    }
+    mD&&pR("MCSAFS12");
+    mD&&pR(dirpick);
+
+    dcr.printf("MCS<>");
+    reportDiamondStance(dcr);
+    resetStance(); // whether we'll 'use' it or not
+    //    reportDiamondStance(dcr);
+
+    if (!dirpick.hasPick()) {
+      dcr.printf("X.");
+      return false;
+    }
+
+    SN movesn = (SN) dirpick.getIdx();
+    mD&&pR("MCSAFS13");
+    mD&&pR(movesn);
+
+    dcr.printf("[MCSafs]");
+    return executeMove(movesn, root, qcs, dcr);
+  }  
+
+}
+

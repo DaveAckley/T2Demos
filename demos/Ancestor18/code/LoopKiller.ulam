@@ -1,0 +1,192 @@
+transient LoopKillState : CodonState {
+
+  //// Intention API
+
+  @Override
+  virtual Bool init(Intender & in) {
+    takeDebug(in);
+
+    mD&&pR("LSKI10");
+    if (super.init(in))
+      return true;
+    mD&&pR("LSKI11");
+    return false;
+  }
+
+  @Override
+  virtual Bool stabilize(Intender & in) {
+    mD&&pR("LSKS10");
+
+    /* LK stabilization:
+       (1) _ROOT dies only when up/down both null
+       (2) _UP (or _DOWN) dies only when up (or down) is null
+       (3) When _UP (or _DOWN) meets a different kf both ptrs go null
+       (4) When _UP (or DOWN) see non-LK up (or down),  
+           blocks if _DUMB, else spreads self up (or down)
+     */
+    LoopKiller & s = (LoopKiller &) in;
+    // CASE (1)
+    if (s.mKillFunc == s.cKLFN_ROOT) {
+      Bool alone = true;
+      Bool block = false;
+      for (Unsigned bd = cBODY_UP; bd <= cBODY_DOWN; ++bd) {
+        Int res = trySpread(s, (BodyDir) bd);
+        if (res != 0) alone = false;
+        if (res < 0) block = true;
+      }
+      if (alone) return die(s);
+      return block;
+    }
+
+    // CASE (2)
+    BodyDir bd = (s.mKillFunc == s.cKLFN_UP) ? cBODY_UP : cBODY_DOWN;
+    if (s.mPocketPtrs[bd] == cPP_NULL)
+      return unlinkAndDie(s);
+
+    // non-null in bd direction
+    SN matesn = mEWSNMate[bd];
+    mD&&pR(matesn);
+    if (matesn == 0u) return false;
+    mD&&pR("LKSTS11");
+    PocketChain & o = (PocketChain&) ew[matesn];  // existing in bdir
+
+    if (o as LoopKiller) {
+      if (o.mKillFunc != s.mKillFunc) {
+        // CASE (3)
+        s.mPocketPtrs[bd] = cPP_NULL;
+        o.mPocketPtrs[1u-bd] = cPP_NULL;
+        return true;
+      }
+      // ngb same as us: block
+      return false;
+    }
+    // ngb is not LoopKiller
+
+    // CASE (4)
+    return trySpread(s, bd) != 0;
+  }
+
+  //// LOOPKILLSTATE SERVICES
+  Bool die(LoopKiller & lk) {
+    EventWindow ew;
+    SN sn = ew.getSiteNumber(lk);
+    if (sn == SN.maxof) fail(__FILE__,__LINE__);
+    ew[sn] = Empty.instanceof;
+    return true;
+  }
+
+  Bool unlinkAndDie(LoopKiller & lk) {
+    EventWindow ew;
+    for (Unsigned bdir = cBODY_UP; bdir <= cBODY_DOWN; ++bdir) {
+      if (lk.mPocketPtrs[bdir] == cPP_NULL) continue;
+      SN matesn = mEWSNMate[bdir];
+      if (matesn == 0u) fail(__FILE__,__LINE__);
+      mD&&pR("LKSTS11");
+      PocketChain & o = (PocketChain&) ew[matesn];  // existing in bdir
+      lk.mPocketPtrs[bdir] = cPP_NULL;
+      o.mPocketPtrs[1u-bdir] = cPP_NULL;
+    }
+    return die(lk);
+  }
+
+  // <0 : block, ==0 : null ngb, >0 : spread
+  Int trySpread(LoopKiller & lk, BodyDir bdir) {
+    EventWindow ew;
+    mD&&pR("LKSTS10");
+    if (lk.mPocketPtrs[bdir] == cPP_NULL)
+      return 0;                 // nothing here
+    SN matesn = mEWSNMate[bdir];
+    mD&&pR(matesn);
+    if (matesn == 0u) fail(__FILE__,__LINE__);
+    mD&&pR("LKSTS11");
+    PocketChain & o = (PocketChain&) ew[matesn];  // existing in bdir
+
+    if (o as LoopKiller) {
+      if (o.mKillFunc == lk.mKillFunc) return -1; // block on same type
+    } else if (o.mDSType == o.cDS_DUMB) {
+      mD&&pR("LKSTS12");       // can't kill non-LKs while they're dumb
+      return -1;              // block on dumb
+    }
+
+    // Spread into them
+    mD&&pR("LKSTS13");
+    Atom a = lk.atomof; // full copy of 'us'
+    LoopKiller & n = (LoopKiller&) a;
+    n.copySegAndPChain(o);      // copy ptrs from existing
+    n.mKillFunc =               // their func implied by dir to them
+      (bdir == cBODY_UP) ? lk.cKLFN_UP : lk.cKLFN_DOWN;
+
+    mD&&pR("LKSTS15");
+    mD&&pR(n);
+    ew[matesn] = n.atomof; // stash modified us
+    return 1;              // We spread
+  }
+}
+
+/** \symbol LK
+    \color #000
+ */
+element LoopKiller : Codon + TQDSControlStg {
+
+  Bool mBlink;
+  typedef Unary(2) KillFunc;
+  constant KillFunc cKLFN_ROOT = 0u; //< I am original anchor, last to go
+  constant KillFunc cKLFN_UP = 1u;   //< I was created body up of root
+  constant KillFunc cKLFN_DOWN = 2u; //< I was created body down of root
+  KillFunc mKillFunc;
+
+  Void initRoot() {
+    mDSType = cDS_DUMB;
+    mKillFunc = cKLFN_ROOT;
+  }
+
+  //// UrSelf API 
+  @Override
+  ARGB getColor(Unsigned selector) {
+    ColorUtils cu;
+    ARGB ret = cu.color(mBlink ? 0xff000000 : 0xffffffff);
+    if (mKillFunc == cKLFN_UP)
+      ret = cu.between(ret, cu.color(0xff00ff00), 80u);
+    else if (mKillFunc == cKLFN_DOWN)
+      ret = cu.between(ret, cu.color(0xffff0000), 80u);
+    return ret;
+  }
+
+  //// Intender API 
+  @Override
+  virtual ClassId getIntentionClass() { return LoopKillState.classidof; }
+
+  Void behave() {
+    mBlink = !mBlink;
+    mDSType = cDS_DUMB; // You can't touch this
+    pursueIntention();
+  }
+}
+
+/** \symbol SK
+    \color #f00
+ */
+element SeedLoopKiller + DTU {
+  EventWindow ew;
+  Random random;
+  Void die() { ew[0] = Empty.instanceof; }
+  Void behave() {
+    SN ksn;
+    Unsigned kcount = 0u;
+    for (SN sn = 1u; sn <= 4u; ++sn) {
+      if (!ew.isAccessible(sn)) return die();
+      Atom & a = ew[sn];
+      if (a as Codon) {
+        if (random.oneIn(++kcount))
+          ksn = sn;
+      }
+    }
+    if (kcount != 1u) return die();
+    Codon & c = (Codon&) ew[ksn];
+    LoopKiller lk;
+    lk.copySegAndPChain(c);
+    lk.initRoot();
+    ew[ksn] = lk.atomof;
+    die();
+  }
+}

@@ -1,0 +1,41 @@
+transient Intention + DTU + QDebugUtils {
+  //// Intention API
+  /** initialize self however necessary, generally without looking at
+      the ew. \return false to continue, true to block */
+  virtual Bool init(Intender & in) {
+    takeDebug(in);
+    mD&&pR("INTINIT10");
+    mD&&pR(in);
+    return false;
+  }
+
+  /** examine the ew and gather information potentially useful for
+      this intention, generally without modifying the ew. \return
+      false to continue, true to block */
+  virtual Bool observe(Intender & in) { return false; }
+
+  /** update circuit levels, gradients, counts, and other generally
+      internal state based on observations. \return false to continue,
+      true to block */
+  virtual Bool stabilize(Intender & in) { return false; }
+
+  /** update the ew and other generally external state
+      opportunistically. \return false to continue, true to block */
+  virtual Bool act(Intender & in) { return false; }
+
+  /** change to this intention, however that desire is represented
+      persistently. \return false if accomplished, true if blocked */
+  virtual Bool adopt(Intender & in) { return false; }
+
+  //// Intention SERVICES
+  Bool pursue(Intender & in) { //< \return false to continue, true to block
+    mD&&pR("SINT10");
+    if (observe(in)) return true;
+    mD&&pR("SINT11");
+    if (stabilize(in)) return true;
+    mD&&pR("SINT12");
+    if (act(in)) return true;
+    mD&&pR("SINT13");
+    return false; // or diffuse?
+  }
+}

@@ -1,0 +1,442 @@
+quark SW3CmdInfo + DTU {
+  typedef Bits(2) BodyDirFlag;
+  typedef BodyDirFlag ExecWant;
+  typedef BodyDirFlag ExecMask;
+
+  typedef Bits(2) ConnectionCode;
+  constant ConnectionCode cCNCOD_UP =   1u<<cBODY_UP;
+  constant ConnectionCode cCNCOD_DOWN = 1u<<cBODY_DOWN;
+  constant ConnectionCode cCNCOD_BOTH = cCNCOD_UP|cCNCOD_DOWN;
+  constant ConnectionCode cCNCOD_NONE = 0u;
+
+  ConnectionCode mExVal = cCNCOD_NONE; // Default is head: up must be
+  ConnectionCode mExMsk = cCNCOD_UP;    // null, and that's all
+
+  ConnectionCode getCC(Segment & seg) {
+    return
+      (seg.mPocketPtrs[cBODY_UP] <= cPP_EAST   ? cCNCOD_UP   : 0u) |
+      (seg.mPocketPtrs[cBODY_DOWN] <= cPP_EAST ? cCNCOD_DOWN : 0u);
+  }
+
+  Bool executesHere(Segment & seg) {
+    return executesHere(getCC(seg));
+  }
+
+  Bool executesHere(ConnectionCode val) {
+    return (val & mExMsk) == (mExVal & mExMsk);
+  }
+}
+
+quark SW3Packet + DTU + Fail {
+
+  SW3CmdStatus mCmdStatus;
+
+  typedef UMod(4,1) SeqNo;
+  SeqNo mSeqNo;
+
+  SW3Cmd mCmd;
+
+  constant SW3CmdInfo mCmdInfo[] = {
+    { .mExVal = SW3CmdInfo.cCNCOD_NONE}, // cSW3C_NOOP 
+    { .mExVal = SW3CmdInfo.cCNCOD_NONE}, // cSW3C_SHRINK 
+    { .mExVal = SW3CmdInfo.cCNCOD_NONE}, // cSW3C_GROW 
+    { .mExVal = SW3CmdInfo.cCNCOD_NONE, .mExMsk = SW3CmdInfo.cCNCOD_NONE }, // cSW3C_BECOME: run everywhere
+    { .mExVal = SW3CmdInfo.cCNCOD_NONE}, // cSW3C_PLACE 
+    { .mExVal = SW3CmdInfo.cCNCOD_NONE}, // cSW3C_DIE 
+    { .mExVal = SW3CmdInfo.cCNCOD_NONE}, // cSW3C_DIEPL 
+    { .mExVal = SW3CmdInfo.cCNCOD_NONE}, // cSW3C_DELATM 
+    { .mExVal = SW3CmdInfo.cCNCOD_NONE}, // cSW3C_DELNCD 
+    { .mExVal = SW3CmdInfo.cCNCOD_NONE}, // cSW3C_HC3CTL 
+    { .mExVal = SW3CmdInfo.cCNCOD_NONE}, // cSW3C_GRIPDS 
+    { .mExVal = SW3CmdInfo.cCNCOD_NONE}, // cSW3C_HC3WDS
+  };
+
+  SW3Arg mArg;
+
+  typedef Unsigned(5) HC3Code;
+  constant HC3Code cHC3C_MAKEHG = 0u; //< change to HG
+  constant HC3Code cHC3C_MAKEDS = 1u; //< change to DS with default procunit and dirstatus
+  constant HC3Code cHC3C_MAKCDS = 2u; //< change to custom DS with supplied procunit map
+
+  Bool matchCore(SW3Packet other) {
+    return
+      mSeqNo == other.mSeqNo &&
+      mCmd == other.mCmd &&
+      mArg == other.mArg;
+  }
+
+  //// SW3Packet SERVICES
+  Bool tryHC3Ctl(SwapWormHC3State & s3s, SwapWormHC3 & s3, SW3Arg arg) {
+    QDebugUtils qd;
+    qd.takeDebug(s3s);
+    PocketDir pd = (PocketDir) (((Bits) arg) & 0x3);
+    HC3Code hc3Code = (HC3Code) ((((Bits) arg)>>2) & 0x1f);
+    SW3Packet & dpkt = (SW3Packet&) s3.mDownSignal;
+    qd.pR("THC3C10PTR");
+    qd.pR(pd);
+    qd.pR("THC3C11CODE");
+    qd.pR(hc3Code);
+
+    PocketHC3 & p = s3s.mPocket;
+
+    dpkt.mCmdStatus = cSW3CMST_CANT; // Assume there'll be a problem
+
+    if (p.mStatus != p.cSTATUS_OK)
+      return false;
+    C2D hc3c = p.mCoords[pd];
+    EventWindow ew;
+    if (!ew.isAccessible(hc3c)) return false;
+    Atom & a = ew[hc3c];
+    which (hc3Code) {
+      case cHC3C_MAKEHG: {
+        if (!(a is HardCellG)) {
+          HardCellG hg;
+          BaseClassUtils bcu;
+          Int bits = bcu.copySharedData(a,hg.atomof);
+          if (bits < 0) return false;
+          qd.pR("THC3C13MAKEHG");
+          ew[hc3c] = hg.atomof;
+        }
+        dpkt.mCmdStatus = cSW3CMST_DID; // whaddayano
+        return true;
+      }
+      case cHC3C_MAKEDS: {
+        if (!(a is DiamondSequencer)) {
+          DiamondSequencer ds;
+          BaseClassUtils bcu;
+          Int bits = bcu.copySharedData(a,ds.atomof);
+          if (bits < 0) return false;
+          QProcUnitMap allx = { .mQuadrantPUArray = { cPUNIT_XEQ, cPUNIT_XEQ, cPUNIT_XEQ, cPUNIT_XEQ, } };
+          ds.mProcUnitMap = allx;
+          //          for (Unsigned i = 0u; i < QuadrandPUArray.lengthof; ++i) 
+          //            ds.mQuadrantPUArray[i] =  cPUNIT_XEQ; // new DS is all X
+          qd.pR("THC3C13MAKEDS");
+          ew[hc3c] = ds.atomof;
+        }
+        dpkt.mCmdStatus = cSW3CMST_DID; // whaddayano
+        return true;
+      }
+      otherwise: {
+        qd.pR("THC3C13MAKCDS13");
+      }
+    }
+    return false;
+  }
+
+  PocketDir fromHeadingDirection(PocketPtr down, Bool goCW) {
+    which (down) {
+      //   DOWN DIR   HEADING DIR                CLOCKWISE  ANTICW
+      case cPP_WEST: /* EAST */  { return goCW ? cQUAD_SE : cQUAD_NE; }
+      case cPP_NORTH:/* SOUTH */ { return goCW ? cQUAD_SW : cQUAD_SE; }
+      case cPP_EAST: /* WEST */  { return goCW ? cQUAD_NW : cQUAD_SW; }
+      case cPP_SOUTH:/* NORTH */ { return goCW ? cQUAD_NE : cQUAD_NW; }
+      otherwise: { fail(__FILE__,__LINE__); }
+    }
+    return 0u; // NOT REACHED;
+  }
+
+  Void setGripFromHeading(DiamondSequencer & ds, PocketDir pd, Bits(8) arg) {
+    ds.mD&&ds.pR("SETGRIPFROMHEADING");
+    for (Unsigned i = 0u; i < 4u; ++i) {
+      Unsigned dist = i*2u;
+      ProcUnit pu = (ProcUnit) ((arg>>dist)&0x3);
+      ds.mD&&ds.pR(i);
+      ds.mD&&ds.pR(getPocketDirName(pd));
+      ds.mD&&ds.pR(getProcUnitColorName(pu));
+      ds.mProcUnitMap.setProcUnitInQuadrant(pd, pu);
+      pd = rotatePocketDir(pd, true);
+    }
+    ds.mD&&ds.pR(ds.mProcUnitMap.getProcUnitMap());
+  }
+    
+  /** Create a 'daughter' DS to the SW, gripped as specified, placed
+      either clockwise or anticlockwise from the 'heading direction',
+      defined as 180 degrees from the cBODY_DOWN direction.
+   */
+  Bool tryDaughterDS(SwapWormHC3State & s3s, SwapWormHC3 & s3, SW3Arg arg, Bool placeClockwise) {
+    QDebugUtils qd;
+    qd.takeDebug(s3s);
+    PocketDir pd = fromHeadingDirection(s3.mPocketPtrs[cBODY_DOWN], placeClockwise);
+    SW3Packet & dpkt = (SW3Packet&) s3.mDownSignal;
+    qd.pR("MAKEDSDTR10");
+    qd.pR(pd);
+    qd.pR("MAKEDSDTR11");
+    qd.pR(arg);
+
+    PocketHC3 & p = s3s.mPocket;
+
+    //// FIRST CHECK REASONS TO BLOCK
+    if (p.mStatus != p.cSTATUS_OK) return false; // Block
+    C2D hc3c = p.mCoords[pd];
+    EventWindow ew;
+    if (!ew.isAccessible(hc3c)) return false;
+    
+    Atom & a = ew[hc3c];
+    if (a as QHardCellGField) {
+      if (a.mMaxHops < a.mUpHops + 3u) // Far enough to have four complete DSPs
+        return false;                  // or block
+    }
+
+    { // CUSTOM DS FOR DAUGHTER
+      qd.pR("MAKEDSDTR12");
+      if (!(a is DiamondSequencer)) {
+        DiamondSequencer ds;
+        BaseClassUtils bcu;
+        bcu.copySharedData(a,ds.atomof);
+        ds.takeDebug(qd);
+        /// SET HEADING RELATIVE CUSTOM GRIP
+        setGripFromHeading(ds, pd, (Bits(8)) arg);
+        qd.pR("MAKEDSDTR13");
+        ew[hc3c] = ds.atomof;
+      }
+      dpkt.mCmdStatus = cSW3CMST_DID; // whaddayano
+      qd.pR("MAKEDSDTR14");
+      return true;
+    }
+
+    // NOT REACHED
+    qd.pR("MAKEDSDTR15");
+    dpkt.mCmdStatus = cSW3CMST_CANT; // Uh oh there was a problem
+    return false;
+  }
+
+  Bool tryBecome(SwapWormHC3State & s3s, SwapWormHC3 & s3, ClassUtils.ClassId classid) {
+    QDebugUtils qd;
+    qd.takeDebug(s3s);
+    qd.pR("3PKTTBEC10");
+
+    ClassUtils cu;
+    if (!cu.isBase(classid,Segment.classidof)) return false; 
+    qd.pR("3PKTTBEC11");
+
+    AtomUtils au;
+    Int etype = cu.getElementType(classid);
+    if (etype < 0) fail(__FILE__,__LINE__);
+    Atom a = au.new(etype); 
+
+    qd.pR("3PKTTBEC12");
+    BaseClassUtils bcu;
+    Int bits = bcu.copySharedData(s3.atomof,a);
+    if (bits < 0) return false;
+
+    qd.pR("3PKTTBEC13");
+    qd.pR(a);
+    
+    EventWindow ew;
+    SN s3sn = ew.getSiteNumber(s3);
+    if (s3sn == SN.maxof) fail(__FILE__,__LINE__);
+    ew[s3sn] = a;
+
+    return true;
+  }
+
+  Bool tryGrowSeg(SwapWormHC3State & s3s, SwapWormHC3 & s3, Bits axialDirMap) {
+    QDebugUtils qd;
+    qd.takeDebug(s3s);
+    qd.pR("3PKTGS10");
+    if (!s3.isHead()) fail(__FILE__,__LINE__);
+
+    qd.pR("3PKTGS11");
+    PocketPtr grewptr = s3.tryGrowOrMove(s3s, axialDirMap, true, false);
+    qd.pR("3PKTGS12");
+    if (grewptr == cPP_NULL) return false;
+    // We grew: Go fixup the new head's signals
+    EventWindow ew;
+    qd.pR("3PKTGS13");
+    qd.pR(grewptr);
+    //    s3s.mEmptySNs[grewptr].print(qd);
+    SwapWormHC3 & newhd = (SwapWormHC3&) ew[s3s.mEmptySNs[grewptr].pick()];
+    qd.pR(newhd);
+    SW3Packet pkt;
+    pkt = (SW3Packet) newhd.mDownSignal;
+    qd.pR("3PKTGS14");
+    qd.pR(pkt);
+    pkt.mCmdStatus = cSW3CMST_DID;
+    qd.pR(pkt);
+    newhd.mDownSignal = (SwapWormHC3.Signal) pkt;
+
+    return true;
+  }
+
+  Bool killSeg(SwapWormHC3State & s3s, SwapWormHC3 & s3, Bool pushdown) {
+    QDebugUtils qd;
+    qd.takeDebug(s3s);
+    EventWindow ew;
+    qd.pR("S3PKlSg10");
+    if (s3s.mPocketWithMate[cBODY_DOWN] != cPP_NULL) {
+      Segment & sg = (Segment&) ew[s3s.mEWSNMate[cBODY_DOWN]];
+      if (sg as SwapWormHC3) {
+        if (pushdown) {
+          qd.pR("S3PKlSg10PD");
+          sg.mDownSignal = s3.mDownSignal; // Push our 'head' signal down to new head-to-be
+        }
+      }
+      sg.mPocketPtrs[cBODY_UP] = cPP_NULL;
+      qd.pR("S3PKlSg11");
+    }
+    if (s3s.mPocketWithMate[cBODY_UP] != cPP_NULL) {
+      Segment & sg = (Segment&) ew[s3s.mEWSNMate[cBODY_UP]];
+      sg.mPocketPtrs[cBODY_DOWN] = cPP_NULL;
+      qd.pR("S3PKlSg12");
+    }
+    qd.pR("S3PKlSg13");
+    ew[0] = Empty.instanceof;
+    return true;
+  }
+
+  Bool tryDeletePocketAtom(SwapWormHC3State & s3s, SwapWormHC3 & s3, Bits axialDirMap) {
+    QDebugUtils qd;
+    qd.takeDebug(s3s);
+    qd.pR("3PTDA10");
+    if (!s3.isHead()) fail(__FILE__,__LINE__);
+
+    qd.pR("3PTDA11");
+    PocketPtr grewptr = s3.tryGrowOrMove(s3s, axialDirMap, true, false);
+    qd.pR("3PTDA12");
+    if (grewptr == cPP_NULL) return false;
+    // We grew: Go fixup the new head's signals
+    EventWindow ew;
+    qd.pR("3PTDA13");
+    qd.pR(grewptr);
+    //    s3s.mEmptySNs[grewptr].print(qd);
+    SwapWormHC3 & newhd = (SwapWormHC3&) ew[s3s.mEmptySNs[grewptr].pick()];
+    qd.pR(newhd);
+    SW3Packet pkt;
+    pkt = (SW3Packet) newhd.mDownSignal;
+    qd.pR("3PTDA14");
+    qd.pR(pkt);
+    pkt.mCmdStatus = cSW3CMST_DID;
+    qd.pR(pkt);
+    newhd.mDownSignal = (SwapWormHC3.Signal) pkt;
+
+    return true;
+  }
+
+  /** \returns true iff cmdstatus had been cSW3CMST_TRYING and is not
+      cSW3CMST_DID (or possibly cSW3CMST_CANT but that's pretty NYI.)
+  */
+  Bool executeSW3(SwapWormHC3State & s3s, SwapWormHC3 & s3, Bool atHead) {
+    QDebugUtils qd;
+    qd.takeDebug(s3s);
+    qd.pR("S3PEX10");
+
+    if (mCmdStatus != cSW3CMST_TRYING) return false;
+    which (mCmd) {
+      case cSW3C_NOOP: {
+        qd.pR("S3PEX11NOOP");
+        if (atHead) {
+          mCmdStatus = cSW3CMST_DID; // You're welcome
+          return true;
+        }
+        return false;
+      }
+      case cSW3C_SHRINK: {
+        qd.pR("S3PEX11SHRINK");
+        if (atHead) {
+          // Killing (our) seg now finishes the shrink task
+          mCmdStatus = cSW3CMST_DID;
+          return killSeg(s3s,s3,true);
+        }
+        qd.pR("S3PEX12SHRINK");
+        return false;
+      }
+      case cSW3C_GROW: {
+        qd.pR("S3PEX11GROW");
+        if (atHead)
+          return tryGrowSeg(s3s,s3,mArg);
+        qd.pR("S3PEX12GROW");
+        return false;
+      }
+      case cSW3C_BECOME: {
+        qd.pR("S3PEX11BECOME");
+        if (atHead)
+          return tryBecome(s3s,s3,(ClassUtils.ClassId) mArg); 
+        return false;
+      }
+      case cSW3C_DELATM: {
+        if (atHead) {
+          if (s3.tryDelAtom(s3s, (ClassUtils.ClassId) mArg, cPP_SELF)) 
+            mCmdStatus = cSW3CMST_DID;
+          else
+            mCmdStatus = cSW3CMST_CANT; //?
+          return true;
+        }
+        return false;
+      }
+      case cSW3C_DIE: {
+        qd.pR("S3PEX11DIE");
+        if (atHead) {
+          if (s3.mPocketPtrs[cBODY_DOWN] != cPP_NULL)  // Leave last single seg 
+            return killSeg(s3s,s3,true);
+        }
+        qd.pR("S3PEX12DIE");
+        return false;
+      }
+      case cSW3C_DIEPL:
+      case cSW3C_PLACE: {
+        qd.pR("S3PEX11PLACE");
+        if (atHead) {
+          // First make sure the arg is reasonable
+          ClassUtils cu;
+          Int etype = cu.getElementType(mArg);
+          if (etype < 0) {
+            qd.pR("S3PEX11PLACE11");
+            mCmdStatus = cSW3CMST_CANT; // WTF?
+            return false;
+          }
+          AtomUtils au;
+          Atom a = au.new(etype);
+
+          // Killing (our) seg now (almost) finishes the place task
+          mCmdStatus = cSW3CMST_DID; 
+          if (s3.mPocketPtrs[cBODY_DOWN] != cPP_NULL) { // Leave last single seg 
+            Bool ks = killSeg(s3s,s3,mCmd != cSW3C_DIEPL);
+            if (ks) {
+              // WATCH OUT: self and related refs are all stale! No more print!
+              EventWindow ew;
+              ew[0] = a;
+            }
+          }
+          return true;
+        }
+        qd.pR("S3PEX12SHRINK");
+        return false;
+      }
+      case cSW3C_HC3CTL: {
+        qd.pR("S3PEX11HC3CTL");
+        if (atHead)
+          return tryHC3Ctl(s3s,s3,mArg);
+        qd.pR("S3PEX12HC3CTL");
+        return false;
+      }
+      case cSW3C_GRIPDS: {
+        qd.pR("S3PEX11GRIPDS - NYI");
+        /*
+        if (atHead)
+          return tryHC3Ctl(s3s,s3,mArg);
+        qd.print("S3PEX12GRIPDS");
+        */
+        return false;
+      }
+      case cSW3C_HC3CWDS: {
+        qd.pR("S3PEX11HCSWDS");
+        if (atHead)
+          return tryDaughterDS(s3s,s3,mArg,true);
+        return false;
+      }
+      case cSW3C_HC3ACDS: {
+        qd.pR("S3PEX11HC3ACDS");
+        if (atHead)
+          return tryDaughterDS(s3s,s3,mArg,false);
+        return false;
+      }
+
+      otherwise: {
+        ByteStreamLogger bsl;
+        bsl.printf("S3PX: %d(0x%x)\n",mCmd,mArg);
+      }
+    }
+    return false;
+  }
+
+}

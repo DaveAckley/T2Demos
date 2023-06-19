@@ -1,0 +1,284 @@
+transient RecvLoopCodonState : CodonState {
+  //// Intender API
+  @Override
+  virtual Bool init(Intender & in) {
+    if (super.init(in))
+      return true;
+    //// CHECK FOR AUTO-DS DEPLOYMENT:
+
+    // (1) No existing DS
+    if (mInQuadrant) return false; // existing DS
+
+    // (2) No upstream mate
+    LXRecvLoop & rl = (LXRecvLoop&) in;
+    if (rl.mPocketPtrs[cBODY_UP] != cPP_NULL) return false; // Something upstream
+
+    // (3) RL.mPUMap non-zero
+    if (rl.mPUMap == 0u) return false; // No config
+
+    // (4) RL.mDSPD is plain HG
+    PocketHC3 & p = mPocket;
+    C2D pdc = p.mCoords[rl.mDSPD];
+    if (pdc.length() == 0u) return false; // bad corner
+
+    EventWindow ew;
+    Atom & a = ew[pdc];
+    if (!(a is HardCellG)) return false; // something weird
+
+    //// WE ARE GO FOR AUTO-DS DEPLOYMENT
+    DiamondSequencer ds;
+    BaseClassUtils bcu;
+    Int bcount = bcu.copySharedData(a,ds.atomof);
+    if (bcount < 0) return false; // ??
+
+    QProcUnitMap map;
+    map.setProcUnitMap(rl.mPUMap);
+    ds.mProcUnitMap = map;
+    ew[pdc] = ds.atomof; // THE DS IS AWAY
+    rl.mDeployDelay = rl.mDeployDelay.maxof; // Give ds gradient a chance
+    rl.mDSType = cDS_DUMB;                   // and don't let ECs mess with us
+
+    return true;
+  }
+    
+}
+
+/** Set up to receive the program loop entire.
+
+    DS PU assignments
+    Initial INP: control point (SW)
+    Initial OUT: storage loop (SE)
+    Initial XEQ: inbound codons (NE)
+
+    \symbol RL
+    \color #2ae
+ */
+element LXRecvLoop : LX + QLabelMark + TQDSControlStg {
+
+  Bits(8) mPUMap;               //< If non-zero, initial PUMap for deployed DS
+  PocketDir mDSPD;              //< If mPUMap non-zero, where to deploy DS
+  Unsigned(3) mDeployDelay;     //< If non-zero, count down before performing
+
+  typedef Unary(2) RecvPhase;
+  constant RecvPhase cRP_INIT = 0u; //< @kill inp and out. -> init out, xfer IR, INP<->XEQ
+  constant RecvPhase cRP_COPY = 1u; //< @copy inp to out, end check after IR. -> roll OUT
+  constant RecvPhase cRP_FINISH = 2u; //< @kill inp. -> erase ctrl XEQ<->OUT
+
+  RecvPhase mRecvPhase = cRP_INIT;
+
+  /* Unclear this is a good idea as is
+  TQDSControl mTQDSInboundConfig; //< Optional specific configuration for all inbound codons
+  */
+
+  //// LX API
+  @Override
+  virtual Bool perform(DiamondSequencerState & dss) {
+    EventWindow ew;
+    BaseClassUtils bcu;
+    Fail f;
+
+    mD&&pR("LXINITRECV10");
+    if (mDeployDelay > 0u) {
+      if (mDeployDelay-- == 1u)
+        mDSType = cDS_NORM;     // Stop playing dumb when time limit expires
+      return true;              // DS deployment delay in progress
+    } 
+
+    mD&&pR("LXINITRECVa10");
+
+    //// HAVE WE INITTED THINGS ALREADY?
+    if (mRecvPhase == cRP_INIT) {
+      //// WE HAVE NOT ALREADY INITIALIZED THINGS
+      mDSType = cDS_NORM;       // Become normal after initial delay
+
+      ////@STABILIZATION: WAIT TILL THE TONGUING IS DONE
+      Bool kinp = killPU(cPUNIT_INP, dss); // kill inp/ctrl
+      Bool kout = killPU(cPUNIT_OUT, dss); // kill out/dest loop
+      if (!kinp || !kout) return true; // dying in progress
+      //// _INP AND _OUT ARE BOTH EMPTY
+
+      ////->ACT
+
+      /// init OUT
+      ProcUnitInfo & puiout = dss.getPUInfo(cPUNIT_OUT); // get dest info
+
+      mD&&pR("DLPUND12O");
+      if (!puiout.mFound) f.fail(__FILE__,__LINE__); // ??
+
+      if (puiout.mOccupiedSites != 0u || puiout.mEmptySN == SN.maxof)
+        f.fail(__FILE__,__LINE__); // wtf we just killed it
+      
+      Looper looper;
+      bcu.copySharedData(self,looper);
+      looper.init(); // init over shared data
+      looper.setSingleTQ(puiout.mInQuadrant); // TQDS defaults
+      looper.setLockedDown(false);            // TQDS defaults
+      // DSMIN ON FROM THE START FOR INBOUND CODE LOOP IS TOO TIGHT
+      // Sun Jan 15 02:08:20 2023 LET'S TRY DSMIN AGAIN WITH REDONE ChainRules
+      // Thu Jan 19 16:17:04 2023 Modifiable minds killed!      looper.setMinDSHopsCommand(true);       // to spread to spawned loop
+
+      ew[puiout.mEmptySN] = looper.atomof;
+      /// OUT IS INITTED
+
+      ProcUnitInfo & puiinp = dss.getPUInfo(cPUNIT_INP); // get ctrl info
+
+      mD&&pR("DLPUND12I");
+      if (!puiinp.mFound) f.fail(__FILE__,__LINE__); // ??
+      if (puiinp.mOccupiedSites != 0u || puiinp.mEmptySN == SN.maxof)
+          f.fail(__FILE__,__LINE__); // wtf we just killed it
+
+      /// XFER RL FROM XEQ TO INP
+      {
+        Atom copy = self.atomof;
+
+        EmptyCodon ec; // init an ec to erase us with
+        bcu.copySharedData(copy,ec.atomof); 
+        ec.init();
+
+        Self & scopy = (Self&) copy; // Point at copy
+        scopy.mRecvPhase = cRP_COPY; // Copy moves on to next phase
+        scopy.mPocketPtrs[cBODY_UP] = cPP_NULL; // Copy is unconnected
+        scopy.mPocketPtrs[cBODY_DOWN] = cPP_NULL; // "
+        scopy.setSingleTQ(puiinp.mInQuadrant); // give sensible tqds
+
+        ew[puiinp.mEmptySN] = copy;  // Deploy self copy
+
+        markDSPForRotationForward(dss, 0u, cPUNIT_XEQ); // roll the germline IS
+        dss.swapPUs(cPUNIT_INP,cPUNIT_XEQ); // _INP is now src codons
+
+        SN oursn = ew.getSiteNumber(self);
+        if (oursn == SN.maxof)
+          f.fail(__FILE__,__LINE__); // wtf we just killed it
+
+        ew[oursn] = ec.atomof; // SELF IS STALE
+      }
+      return true; // Oh yeah we did stuff
+    }/// END PHASE cRP_INIT
+    //// WE HAVE ALREADY INITTED THINGS.
+
+    //// IS WHOLE LOOP COPYING DONE?
+    if (mRecvPhase == cRP_COPY) {
+      //// WHOLE LOOP COPYING IS NOT DONE.
+
+      ////@STABILIZATION: COPY THROUGH END
+      //// HAVE WE GOT A CODE CODON TO COPY
+      ProcUnitInfo & puiinp = dss.getPUInfo(cPUNIT_INP); // get code info
+
+      if (puiinp.mCodonSN == SN.maxof) 
+        f.fail(__FILE__,__LINE__); // wtf
+
+      Codon & ccodon = (Codon&) ew[puiinp.mCodonSN];
+      if (ccodon is EmptyCodon) {
+        /// WE DO NOT HAVE A CODE CODON
+        markDSPForRotationForward(dss, 0u, cPUNIT_INP); // bump it ahead
+        return true;
+      }
+      //// WE HAVE GOT A CODE CODON TO COPY
+
+      //// HAVE WE GOT A OUT EC TO COPY IT TO?
+      ProcUnitInfo puiout = dss.getPUInfo(cPUNIT_OUT);
+      if (!puiout.mFound) return false;
+      mD&&pR("CPUF14");
+
+      SN osn = puiout.mCodonSN;
+      if (osn == SN.maxof)
+        return false; // ??
+
+      mD&&pR("CPUF15");
+      Atom & oa = ew[osn];
+      if (!(oa is EmptyCodon)) {
+        markDSPForRotation(dss, 0u, cPUNIT_OUT, cDSTATUS_TEMP);  // ask out for empty spot
+        return false;
+      }
+      //// WE HAVE GOT AN OUT EC TO COPY IT TO.
+      EmptyCodon & oec = (EmptyCodon&) oa;
+
+      Atom copy = ccodon.atomof; // copy inbound non-EC
+      Codon & ccopy = (Codon&) copy;
+
+      //// HAVE WE ERASED THE INBOUND CODON?
+      EmptyCodon nec;           // make new EC
+      nec.copySegAndPChain(ccopy);  // pick up ptrs from src codon
+      nec.init();                          // then init over
+      ew[puiinp.mCodonSN] = nec.atomof;   // and nuke inbound codon
+      //// WE HAVE ERASED THE INBOUND CODON.
+
+      //// HAVE WE STASHED THE INBOUND COPY
+      ccopy.copySegAndPChain(oec); // pick up ptrs from existingZ
+      ccopy.mDSType = cDS_NORM;    // it's totally normal BTW
+
+      /*
+      if (!mTQDSInboundConfig.isDefaultTQDS()) {
+        TQDSControl & tqr = ccopy;
+        tqr = mTQDSInboundConfig;
+      }
+      */
+
+      ew[osn] = copy;            // then stash it
+      //// WE HAVE STASHED THE INBOUND COPY
+
+      //// DID WE JUST STASH THE FINAL CODON?
+      if (ccopy as QLabelMark) {
+        if (labelMatch(ccopy)) {
+          //// WE DID JUST STASH THE FINAL CODON.
+          
+          /*
+          //// TURN ON DSMIN
+          Atom & a = ew[osn];
+          if (a as TQDSControl)
+            a.setMinDSHopsCommand(true);       // XYZZY to tighten up the received loop
+          //// DSMIN IS ON
+          */
+
+          markDSPForRotationForward(dss, 0u, cPUNIT_OUT); // roll out to first insn after IR
+          mRecvPhase = cRP_FINISH; // Move on to final phase
+          return true;
+        }
+      }
+
+      //// WE DID NOT JUST STASH THE FINAL CODON.
+      markDSPForRotationForward(dss, 0u, cPUNIT_INP); // ask src for next non-EC
+      markDSPForRotation(dss, 0u, cPUNIT_OUT, cDSTATUS_TEMP);  // so ask out for empty spot
+      return true;
+    }//// END OF PHASE cRP_COPY
+
+    //// ARE WE DONE FINISHING UP?
+    if (mRecvPhase == cRP_FINISH) {
+      //// WE ARE NOT DONE FINISHING UP
+
+      ////@STABILIZATION: WAIT TILL THE KILLING IS DONE
+      Bool kinp = killPU(cPUNIT_INP, dss); // kill inp
+      if (!kinp) return true;              // killing in progress
+
+      /// INP IS DEAD
+      ////@ACT
+      
+      dss.swapPUs(cPUNIT_OUT,cPUNIT_XEQ); // _OUT is now live code
+
+      SN oursn = ew.getSiteNumber(self);
+      if (oursn == SN.maxof)
+        f.fail(__FILE__,__LINE__); // wtf we just killed it
+
+      ew[oursn] = Empty.instanceof; // we are gone SELF IS STALE
+      return true;
+    }////END PHASE FINISH
+
+    f.fail(__FILE__,__LINE__);
+    return false; // NOT REACHED
+  }
+
+  //// CODON API
+  virtual Void init() {
+    super.init();
+    mDSType = cDS_NORM;
+  }
+
+
+  //// Intender API
+  @Override
+  virtual ClassId getIntentionClass() { //< default unless overridden
+    RecvLoopCodonState qcs; // Ensure concrete
+    return qcs.classidof;
+  }
+
+}

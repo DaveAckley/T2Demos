@@ -1,0 +1,187 @@
+quark QStance + DTU {
+  typedef Unsigned(2) Caring;
+  Caring mCares[8]; // 0W+ 1W- 2N+ 3N- 4S+ 5S- 6E+ 7E-
+
+  //// QSTANCE SERVICES
+  Void reportDiamondStance(DCReport & dcr) {
+    constant String cNAMES[] =
+      {"w","-"," n","-"," s","-"," e","-"};
+    dcr.print("(");
+    for (Unsigned i = 0u; i < 8u; ++i) 
+      dcr.printf("%s%d",cNAMES[i],mCares[i]);
+    dcr.print(")");
+  }
+
+  Void setDim(Int err, Unsigned negidx, Unsigned posidx) {
+    if (false) { }
+    else if (err > 5) { mCares[posidx] = 3u; mCares[negidx+1u] = 2u; }
+    else if (err > 2) { mCares[posidx] = 2u; mCares[negidx+1u] = 1u; }
+    else if (err > 0) mCares[posidx] = 1u;
+    else if (err < -5) { mCares[negidx] = 3u; mCares[posidx+1u] = 2u; }
+    else if (err < -2) { mCares[negidx] = 2u; mCares[posidx+1u] = 1u; }
+    else if (err < -0) mCares[negidx] = 1u;
+  }
+
+  Void setStanceFromError(C2D error) {
+    // x<0 want w x>0 want e
+    // y<0 want n y>0 want s
+    Int x = error.x;
+    Int y = error.y;
+
+    setDim(x,0u,6u);
+    setDim(y,2u,4u);
+  }
+
+  Unsigned getCaringIdx(Bool good, AxialDir ad) {
+    return 2u*ad + (good ? 0u : 1u);
+  }
+    
+  Caring getCaring(Bool good, AxialDir ad) {
+    return mCares[getCaringIdx(good,ad)];
+  }
+
+  Void resetStance() {
+    for (Unsigned i = 0u; i < 8u; ++i)
+      mCares[i] = 0u;
+  }
+
+  Bool hasCares() {
+    for (Unsigned i = 0u; i < 8u; ++i)
+      if (mCares[i] != 0u) return true;
+    return false;
+  }
+
+
+  Bool mergeStance(QStance other) {
+    // XX Maybe someday randomize over maxStance and copyStance
+    return maxStance(other);
+  }
+
+  Bool maxStance(QStance other) {
+    Bool ret = false;
+    for (Unsigned i = 0u; i < mCares.lengthof; ++i) {
+      if (mCares[i] < other.mCares[i]) {
+        mCares[i] = other.mCares[i];
+        ret = true;
+      }
+    }
+    return ret;
+  }
+
+  Void copyStance(QStance fromOther) {
+    self = fromOther;
+  }
+
+}
+
+quark QDiamondStance : Codon + QStance + TQDSControlStg {
+  //// QDIAMONDSTANCE API
+  virtual Bool isStanceSink() { return false; } // if true, I consume all stances that find me
+}
+
+element DiamondStance : QDiamondStance {
+  typedef XTimer(3u,6u,2u) StanceDog; // short life but merge can reset
+  StanceDog mDogsLife;
+
+  Void behave() {               // from Injector.doRootHunter()..
+    mD&&pR("DMSTBH10");
+    EventWindow ew;
+    if (mDogsLife.countAlarm()) {
+      ew[0] = Empty.instanceof;
+      return;
+    }
+
+    mD&&pR("DMSTBH11");
+    //// Search for most uphoppy spot and local empty
+    MinPick minhoppick;
+    MinPick locemppick;
+    for (SN sn = 1u; sn < 41u; ++sn) {
+      if (!ew.isAccessible(sn)) continue;
+      Atom & a = ew[sn];
+      if (a as QHardCell) {
+        Unsigned hops = a.getUpHops();
+        minhoppick.update(sn, hops);
+      } else if (a is Empty) {
+        Unsigned len = ew.getCoord(sn).length();
+        locemppick.update(sn,len);
+      }
+    }
+    mD&&pR("DMSTBH12");
+    mD&&pR(minhoppick);
+    mD&&pR(locemppick);
+
+    if (!minhoppick.hasPick()) {
+      // Where the hell are we?
+      ew[0] = Empty.instanceof;
+      return;
+    }
+
+    mD&&pR("DMSTBH13");
+    C2D minc = minhoppick.getIdxC2D();
+    mD&&pR(minc);
+
+    //// Search for stances and empties around uphoppy spot
+    MinPick emppick;
+    MinPick sinkpick;  // priority stance sink
+    MinPick stancepick; // general stance propagator
+    
+    mD&&pR("DMSTBH14");
+    for (SN osn = 1u; osn <= 28u; ++osn) {
+      C2D oc = ew.getCoord(osn);
+      C2D c = minc + oc;
+      if (c.length() == 0u || !ew.isAccessible(c)) // umm don't consider self
+        continue;
+
+      SN sn = ew.getSiteNumber(c);
+      mD&&pR(c);
+
+      Unsigned ocdist = oc.length();
+      Atom & a = ew[c];
+      if (a is Empty) {
+        //        if (oc.x != 0 && oc.y != 0) // avoid minc's driving lanes
+        if (oc.x == 0 || oc.y == 0) // stick to minc's driving lanes
+          emppick.update(sn, ocdist);
+      } else if (a as QDiamondStance)
+        if (a.isStanceSink())
+          sinkpick.update(sn, ocdist);
+        else
+          stancepick.update(sn, ocdist);
+    }
+
+    mD&&pR("DMSTBH15");
+    mD&&pR(emppick);
+    mD&&pR(stancepick);
+
+    SN stancesn = SN.maxof;
+    if (sinkpick.hasPick()) stancesn = sinkpick.getIdxSN();
+    else if (stancepick.hasPick()) stancesn = stancepick.getIdxSN();
+
+    if (stancesn != SN.maxof) {
+      mD&&pR("DMSTBH16");
+      QDiamondStance & ods = (QDiamondStance&) ew[stancesn];
+      StanceDog.Counter ourage = mDogsLife.current();
+      ods.mergeStance(self);
+      if (ods as DiamondStance) { // special case for field DS
+        if (ods.mDogsLife.current() > ourage) 
+          ods.mDogsLife.set(ourage); // vampiric enyouthening
+      }
+      ew[0] = Empty.instanceof;
+      return;
+    }
+
+    if (emppick.hasPick()) {
+      mD&&pR("DMSTBH17");
+      ew.swap(0u,emppick.getIdxSN());
+      return;
+    }
+
+    // If nothing else to do, try diffusing
+    if (locemppick.hasPick()) {
+      mD&&pR("DMSTBH18");
+      mD&&pR(locemppick);
+      ew.swap(0u,locemppick.getIdxSN());
+      return;
+    }
+  }
+}
+

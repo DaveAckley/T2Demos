@@ -1,0 +1,64 @@
+transient XPick(Bool cMAX)
+  + Fail
+  + QDebugUtils
+{
+  typedef EventWindow.SiteNum SN;
+  Unsigned mTotalWeight = 0u;
+  Unsigned mIdx;
+  Unsigned mX;
+
+  Void reset() { mTotalWeight = 0u; }
+
+  Bool hasPick() { return mTotalWeight > 0u; }
+
+  Unsigned getIdx() {
+    if (!hasPick()) fail(__FILE__,__LINE__);
+    return mIdx;
+  }
+
+  SN getIdxSN() {
+    Unsigned sn = getIdx();
+    return (SN) sn;
+  }
+
+  C2D getIdxC2D() {
+    EventWindow ew;
+    return ew.getCoord(getIdxSN());
+  }
+
+  Atom & getIdxAtom() {
+    EventWindow ew;
+    return ew[getIdxSN()];
+  }
+
+  Unsigned getX() {
+    if (!hasPick()) fail(__FILE__,__LINE__);
+    return mX;
+  }
+
+  Bool update(Unsigned idx) { //< pick any idx fairly
+    return update(idx,0u,1u);
+  }
+
+  Bool update(Unsigned idx, Unsigned newx) { //< pick with weights all 1
+    return update(idx,newx,1u);
+  }
+
+  Bool update(Unsigned idx, Unsigned newx, Unsigned weight) {
+    if (weight == 0u) return false;
+    Random random;
+    if (mTotalWeight == 0u || (cMAX ? newx > mX : newx < mX)) {
+      // new leader
+      mIdx = idx;
+      mX = newx;
+      mTotalWeight = weight;
+      return true;
+    }
+    if (newx == mX && random.oddsOf(weight, mTotalWeight += weight)) {
+      // tie breaks for new
+      mIdx = idx;
+      return true;
+    }
+    return false;
+  }
+}

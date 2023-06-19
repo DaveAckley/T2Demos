@@ -1,0 +1,720 @@
+/**
+   \symbol Aa
+   \color #aaf
+ */
+element Antenna
+  + EdgeCoordProvider
+  + DEWLine
+  + DTU
+  + Fail
+  + QDebugUtils
+{
+  //  DefCon mContactDetection;
+  DEWLineC getAntennaWarnings() {
+    DEWLineC dl;
+    AxialDir ad1,ad2;
+    axialDirsBorderingQuad(mOpenDir, ad1, ad2);
+    dl.mDefCons[ad1] = mDefCons[ad1];
+    dl.mDefCons[ad2] = mDefCons[ad2];
+    return dl;
+  }
+
+  //// DEWLine API
+  @Override
+  virtual DefCon signalDC() { 
+    return cDC_DIST;            // ..not sure how Aa signal level will work..
+  }
+
+  //// URSELF API
+  @Override
+  virtual Void renderGraphics() {
+    Drawable drawable;
+    if (!drawable.canDraw()) return;
+    super.renderGraphics();
+
+    ColorUtils cu;
+
+    ARGB col = getColor(2u);
+    { // DRAW BODY
+      C2D.Coord size = 300u;
+
+      C2D siz(size, size);
+      C2D pos(-size/2,-size/2);
+
+      C2D pd = pocketDir2C2D(mOpenDir);
+      pos -= pd * (size/4);
+
+      drawable.fillRectangle(pos, siz, col);
+    }
+    
+    if (mTransmitEC.isValid())
+      renderEdgeCoord(drawable, mOpenDir, col);
+    if (mReceiveEC.isValid())
+      renderEdgeCoord(drawable, oppositePocketDir(mOpenDir), cu.color(0xffffff00));
+  }
+
+  Void renderEdgeCoord(Drawable drawable, PocketDir inpd, ARGB col) {
+    constant C2D.Coord side = Drawable.cUNITS_PER_SITE;
+    constant C2D.Coord halfSide = side/2;
+    constant C2D.Coord thick = 100;
+    constant C2D.Coord len = halfSide;
+
+    C2D pd = pocketDir2C2D(inpd);
+    C2D start(0,0), end = pd * len;
+    drawable.drawMaskedLine(start, end, col, col, (Bits) 0xffffffff, thick);
+  }
+
+  @Override
+  ARGB getColor(Unsigned selector) {
+    ARGB ret = super.getColor(selector);
+    ColorUtils cu;
+    if (!mTransmitEC.isValid())
+      ret = cu.dimmer(ret);
+    if (mReceiveEC.isValid())
+      ret = cu.brighter(ret);
+    Unsigned max = maxDCs();
+    if (max != 0u) 
+      ret = cu.between(cu.color(0xffff0000), ret, 25u*max); // go red
+    return ret;
+  }
+
+  Bool roomToGrowOutbound() {
+    return
+      mTransmitEC.isValid() &&
+      mTransmitEC.mHopsToEdge.length() < mMaxEdgeHops;
+  }
+
+  EdgeCoord mTransmitEC;
+  EdgeCoord mReceiveEC;
+
+  PocketDir mOpenDir;
+
+  //// EDGECOORDPROVIDER API
+  @Override
+    virtual Bool providesEdgeCoordFor(Bool outboundFrom, PocketDir ob, EdgeCoord & ec) { //< has plausible data from ob
+    if (outboundFrom && ob == mOpenDir && mTransmitEC.isValid()) {
+      ec = mTransmitEC;
+      return true;
+    }
+    if (!outboundFrom && oppositePocketDir(ob) == mOpenDir && mReceiveEC.isValid()) {
+      ec = mReceiveEC;
+      return true;
+    }
+    return false;
+  }
+
+  typedef Unsigned(4) MaxEdgeHops;
+  MaxEdgeHops mMaxEdgeHops;
+
+  Bool onOurDiagonalUp(C2D c) { //< is c *behind* us (== upstream) on our mOpenDir?
+    return onThisDiagonal(c, oppositePocketDir(mOpenDir));
+  }
+  Bool onOurDiagonalDown(C2D c) { //< is c *ahead* us (== downstream) on our mOpenDir?
+    return onThisDiagonal(c, mOpenDir);
+  }
+
+  Bool takeXmitFrom(Atom & a, C2D deltahops) {
+    EdgeCoord ec;
+    mD&&pR("TXMF10");
+    mD&&pR(a);
+    mD&&pR(deltahops);
+    /*
+    if (a as QDebugUtils)
+      a.takeDebug(self);
+    */
+
+    if (a as Antenna) { // Handle Antenna separately (instead of as OBCDists) to do recv also
+      mD&&pR("TXMF14");
+      if (a.mOpenDir != mOpenDir) return false;
+      Bool comms = false;
+      if (a.mTransmitEC.isValid()) { // if they have xmit data
+        mD&&pR("TXMF15");
+        EdgeCoord tmpec = a.mTransmitEC;
+        if (!updateDirOff(tmpec.mHopsToEdge, mOpenDir, deltahops))
+          return false;
+        mD&&pR("TXMF17");
+        mTransmitEC = tmpec;    // take it
+        comms = true;
+      }
+      mD&&pR("TXMF18");
+      mD&&pR(mReceiveEC);
+
+      if (mReceiveEC.isValid()) {  // if we have recv data
+        mD&&pR("RTXMF15");
+        EdgeCoord tmpec = mReceiveEC;
+        mD&&pR(tmpec);
+        if (!updateDirOff(tmpec.mHopsToEdge, a.mOpenDir, deltahops))
+          return false;
+        mD&&pR("RTXMF16");
+        mD&&pR(tmpec);
+        a.mReceiveEC = tmpec; // give it
+        comms = true;
+      }
+      return comms;
+    }
+    mD&&pR("TXMF13");
+
+    if (a as EdgeCoordProvider) {
+      mD&&pR("TXMF11");
+      if (!a.providesOutboundEdgeCoordFor(mOpenDir, ec)) return false;
+      mD&&pR("TXMF12");
+      mD&&pR(ec);
+      mD&&pR(deltahops);
+      mTransmitEC = ec;
+      mD&&pR("TXMF13");
+      mD&&pR(mTransmitEC.mHopsToEdge);
+      mD&&pR(mOpenDir);
+      mD&&pR(deltahops);
+      if (!updateDirOff(mTransmitEC.mHopsToEdge, mOpenDir, deltahops))
+        return false;
+      mD&&pR("TXMF210");
+      mD&&pR(mTransmitEC);
+      return true;
+    }
+
+    mD&&pR("TXMF16");
+    return false;
+  }
+
+  Bool pushRecvTo(Atom & a, C2D deltahops) {
+    EdgeCoord ec;
+    mD&&pR("PRVTO10");
+    mD&&pR(a);
+    if (!mReceiveEC.isValid()) return false;
+    mD&&pR("PRVTO13");
+    if (a as Antenna) {
+      mD&&pR("PRVTO14");
+      if (a.mOpenDir != mOpenDir) return false;
+      if (!a.mTransmitEC.isValid()) return false;
+      mD&&pR("PRVTO15");
+      a.mReceiveEC = mReceiveEC;
+      if (!updateDirOff(a.mReceiveEC.mHopsToEdge, a.mOpenDir, deltahops))
+        return false;
+      return true;
+    }
+    mD&&pR("PRVTO16");
+    return false;
+  }
+
+  Bool die() {
+    EventWindow ew;
+    mD&&pR("ANTDIE");
+    ew[0] = Empty.instanceof;
+    return true;
+  }
+
+  Bool maybeDie() {             // 10% default shot
+    return maybeDie(10u);
+  }
+
+  Bool maybeDie(Unsigned onein) {
+    Random random;
+    mD&&pR("ANTMBDI10");
+    mD&&pR(onein);
+    if (random.oneIn(onein)) return die();
+    mD&&pR("ANTMBDI11");
+    return true;
+  }
+
+  Void behave() {
+    Bool ret = doBehave();
+  }
+
+  DefCon contactLevel(SN sn, Bool onedge) {
+    mD&&pR("ANTISC10");
+    mD&&pR(sn);
+    EventWindow ew;
+    C2D c = ew.getCoord(sn);
+    Unsigned cdist = c.length();
+
+    DefCon dc = cDC_OPEN;
+
+    Unsigned aadist = mTransmitEC.mHopsToEdge.length();
+    DefCon defw = aadist > 4u ? cDC_DIST : cDC_NEAR;
+
+    if (!ew.isAccessible(sn)) 
+      dc = maxDCDC(dc,defw);           // EoU is contact
+    else {
+      Atom & a = ew[sn];
+
+      mD&&pR("ANTISC11");
+
+      if (a as Antenna) {
+        mD&&pR("ANTISCa11");
+        if (onedge && a.mOpenDir != mOpenDir) // non-us Aa is contact if we're on edge
+          dc = maxDCDC(dc,defw);
+      } else if (a as Membrane) {
+        mD&&pR("ANTISC12");
+        if (onedge && a.mOpenDir != mOpenDir) // non-us Aa is contact if we're on edge
+          dc = maxDCDC(dc,defw);
+      } else if (a as EdgeHG) {
+        mD&&pR("ANTISC13");
+        PocketDir aod;
+        if (onedge && a.getOpenDirIfAny(aod)) {
+          mD&&pR("ANTISCa13");
+          mD&&pR(aod);
+          mD&&pR(mOpenDir);
+          if (aod != mOpenDir) // non-us Aa is contact
+            dc = maxDCDC(dc,defw);
+        }
+      } else if (!(a is Empty)) {  // random non empty is contact for now
+        mD&&pR("ANTISC14");
+        if (!(a is D1Pocketable)) { //..if it's nonpocketish stuff anyway
+                                // (should really see if SN is 'inside the cell'
+                                // via mOpenDir and mTransmitEC.mHopsToEdge)
+          mD&&pR("ANTISCa14");
+          dc = maxDCDC(dc,defw);
+        }
+      }
+    }
+    mD&&pR("ANTISC15");
+    mD&&pR(dc);
+    return dc;
+  }
+
+  DefCon contactLevelDD(SN sn, PocketDir opendir1, PocketDir opendir2) {
+    mD&&pR("AACLN10");
+    mD&&pR(sn);
+    EventWindow ew;
+    C2D c = ew.getCoord(sn);
+    Unsigned cdist = c.length();
+
+    DefCon dc = cDC_OPEN;
+
+    Unsigned aadist = mTransmitEC.mHopsToEdge.length();
+    DefCon defw = aadist > 4u ? cDC_DIST : cDC_NEAR;
+
+    if (!ew.isAccessible(sn)) 
+      dc = maxDCDC(dc,defw);           // EoU is contact
+    else {
+      Atom & a = ew[sn];
+
+      mD&&pR("AACLN11");
+
+      if (a as Antenna) {
+        mD&&pR("AACLNa11");
+        if (a.mOpenDir != opendir1 &&
+            a.mOpenDir != opendir2) // non-us Aa is contact if it's neither of our dirs
+          dc = maxDCDC(dc,defw);
+      } else if (a as Membrane) {
+        mD&&pR("AACLN12");
+        if (a.mOpenDir != opendir1 &&
+            a.mOpenDir != opendir2) // non-us Aa is contact if it's neither of our dirs
+          dc = maxDCDC(dc,defw);
+      } else if (a as EdgeHG) {
+        mD&&pR("AACLN13");
+        PocketDir aod;
+        if (a.getOpenDirIfAny(aod)) {
+          mD&&pR("AACLNa13");
+          mD&&pR(aod);
+          mD&&pR(opendir1);
+          mD&&pR(opendir2);
+          if (aod != opendir1 && aod != opendir2) // non-us Aa is contact
+            dc = maxDCDC(dc,defw);
+        }
+      } else if (!(a is Empty)) {  // random non empty is contact for now
+        mD&&pR("AACLN14");
+        if (!(a is D1Pocketable)) { //..if it's nonpocketish stuff anyway
+                                // (should really see if SN is 'inside the cell'
+                                // via mOpenDir and mTransmitEC.mHopsToEdge)
+          mD&&pR("AACLNa14");
+          dc = maxDCDC(dc,defw);
+        }
+      }
+    }
+    mD&&pR("AACLN15");
+    mD&&pR(dc);
+    return dc;
+  }  
+
+  Bool isBlocker(SN sn) {
+    mD&&pR("AAISBL10");
+    mD&&pR(sn);
+    EventWindow ew;
+    if (!ew.isAccessible(sn)) return true;
+    C2D c = ew.getCoord(sn);
+    C2D pdc = pocketDir2C2D(mOpenDir);
+    Int d = c.dot(pdc);
+    mD&&pR("AAISBL11");
+    mD&&pR(c);
+    mD&&pR(d);
+    if (d <= 0) return false;   // not in our watch dirs
+    Atom & a = ew[sn];
+    mD&&pR(a);
+    if (a as Self) {
+      return a.mOpenDir != mOpenDir; // Non-self Aa is blocker?
+    }
+
+    if (a as Membrane) {
+      mD&&pR("AAISBL12");
+      if (!a.mDirBound) return false; // 'not' a blocker if uninit
+      return mOpenDir != a.mOpenDir;  // blocker if pointed different
+    }
+    mD&&pR("AAISBL13");
+    return !(a is Empty);
+  }
+
+  Bool stompable(C2D c) {
+    EventWindow ew;
+    if (!ew.isAccessible(c)) return false;
+    Atom & a = ew[c];
+
+    if (a is Empty) return true; // obvious case
+
+    if (a as Antenna) 
+      return a.mOpenDir != mOpenDir; // non-us Aa is stompable
+
+    return false;               // That's it for now
+  }
+
+  Bool doBehave() {
+    //setDebugOutputEnabled(true); // XXX
+    mD&&pR("ANTBH10");
+
+    //// PREPARE TO SEARCH MOORE NGB
+    EventWindow ew;
+    //  - possible upstreams (at least one required):
+    MinPick ecpUsDiagUp; // - Any ECP (including Aa) going our way diago up of us
+    MinPick egaaUsOff;   // - Aa or (preferably) Eg going our way not diago up of us
+
+    // - possible ngbs for IC signals (optional):
+    MinPick egaaThem;    // - Aa or (preferably) Eg going opposite way
+
+    // - possible downstream Aa (optional)
+    MinPick aaUsDiagDown;// - Aa only going our way diago down of us (may not be valid)
+
+    // - possible dest for IC signals (optional):
+    MinPick mbUs;        // - MB going our way 
+
+    // - reasons not to grow
+    MinPick hgany;       // - any Hg 
+
+    C2D ourwayc = pocketDir2C2D(mOpenDir);
+
+    //    DefCon anycontacts = cDC_OPEN;
+    resetDCs(); // start out minty DefCon fresh
+    HCPoint thc = mTransmitEC.mEdgePos;
+    Bool cornerAa = thc.x == 0 || thc.y == 0;
+    PocketDir opendir1 = mOpenDir;
+    PocketDir opendir2 = mOpenDir;
+    if (cornerAa) {
+      Zone z;
+      if (!thc.hcPoint2Zone(z)) fail(__FILE__,__LINE__);
+      if (2u != zone2PocketDirs(z, opendir1, opendir2)) fail(__FILE__,__LINE__);
+    }
+
+    DEWLineC tmpdc;
+    AxialDir openads[2];
+    axialDirsBorderingQuad(mOpenDir, openads[0], openads[1]);
+    C2D adcs[2];
+    adcs[0] = axialDir2C2D(openads[0]);
+    adcs[1] = axialDir2C2D(openads[1]);
+
+    DefCon rank = signalDC();
+
+    //// SEARCH
+    for (SN sn = 1u; sn < 41u; ++sn) {
+      C2D ac = ew.getCoord(sn);
+
+      // CHECK ADJACENT ADS FOR BLOCKERS
+      if (isBlocker(sn)) {
+        mD&&pR("NUANTDC10");
+        mD&&pR(ac);
+        if (ac.x * ac.y == 0) { // on an axis
+          mD&&pR("NUANTDC11");
+          for (Unsigned d = 0u; d < 2u; ++d) { // for relevant ads
+            if ((ac*adcs[d]).length() > 0u) { // if blocker on axis
+              mD&&pR("NUANTDCa11");
+              mD&&pR(openads[d]);
+              tmpdc.maxDC(openads[d],rank); // signal on axis
+              mD&&pR(tmpdc);
+            }
+          }
+        }
+      }
+
+      // anycontacts = maxDCDC(anycontacts, contactLevelDD(sn, opendir1, opendir2));
+
+      if (!ew.isAccessible(sn)) continue;
+      Bool moorengb = sn <= 8u;
+      Bool xmoorengb = sn <= 28u;
+      Unsigned aclen = ac.length();
+      Atom & a = ew[sn];
+
+      Unsigned egmin = a is EdgeHG ? 0u : 1u; // for when we prefer Eg
+
+      if (a as EdgeCoordProvider) {           // any EC..
+        EdgeCoord tmpec;
+        if (moorengb && a.providesOutboundEdgeCoordFor(mOpenDir, tmpec)) { // going our way..
+          if (ac == -ourwayc) {                        // diago up of us -
+            ecpUsDiagUp.update(sn);                    // found one (it)
+          } else {                                     // not diago up of us
+            egaaUsOff.update(sn,egmin); // found one (that)
+          }
+        }
+
+        // - possible ngbs for IC signals (optional): (full ngb)
+        if (a.providesOutboundEdgeCoordFor(oppositePocketDir(mOpenDir), tmpec)) { // going opposite way..
+          egaaThem.update(sn,2u*aclen+egmin); // take closest, break ties to EdgeHG
+        }
+      }
+
+      // - any Hg
+      if (a as HardCellG) {
+        hgany.update(sn);
+      }
+
+      // - possible dest for IC signals (optional):
+      if (a as MBase) {
+        if (a.mOpenDir == mOpenDir) { // mbUs - MB going our way 
+          mbUs.update(sn,aclen);      // take closest
+        }
+      }
+
+      // ALL OTHER SCANNING IS JUST MOORENGB
+      if (!moorengb) continue;
+
+      // - possible downstream Aa (optional)
+      if (a as Antenna) {
+        EdgeCoord tmpec;
+        if (a.mOpenDir == mOpenDir && // if going our way..
+            ac == ourwayc) {          // and diago down of us -
+          aaUsDiagDown.update(sn);
+        }
+      }
+
+      //// THAT'S ALL FOR THE SCAN?
+    }
+    //// TASK: CONTACT DETECTION PROPAGATION
+    if (aaUsDiagDown.hasPick()) {
+      Antenna & dnAa = (Antenna&) aaUsDiagDown.getIdxAtom();
+      mergeDCs(dnAa); // pick up their views
+    }
+
+    mD&&pR("NUANTDC12");
+    mD&&pR(tmpdc);
+    mD&&pR(self);
+
+    mD&&pR("NUANTDC13");
+    mergeDCs(tmpdc); // include our own sightings
+    mD&&pR(self);
+
+    Bool changes = false;
+
+    //// TASK: AVOID HG
+    if (hgany.hasPick()) {
+      ew[0] = Empty.instanceof;
+      return true;
+    }
+
+    //// TASK: REALIGN
+    {
+      if (!ecpUsDiagUp.hasPick()) {  // nothing diago up of us
+        if (egaaUsOff.hasPick()) {   // but something with out outbound EC nearby
+          C2D targetc = egaaUsOff.getIdxC2D() + ourwayc; // where we'd move
+          if (ew.isAccessible(targetc) && ew[targetc] is Empty) {
+            mTransmitEC.invalidate();
+            mReceiveEC.invalidate();
+            ew.swap(C2D.instanceof, targetc);
+            return true;
+          }
+        }
+        return die(); //  die (no feasible upstream)
+      }
+    }
+
+    //// [ we have upstream in ecpUsDiagUp ]
+
+    //// TASK: VALIDATE UPSTREAM
+    mD&&pR("ANTTSKVLUP10");
+    EdgeCoordProvider & upecp = (EdgeCoordProvider&) ecpUsDiagUp.getIdxAtom();
+    EdgeCoord upobec;
+    upecp.providesOutboundEdgeCoordFor(mOpenDir, upobec);
+    if (!upobec.isValid()) return maybeDie();
+    C2D upc = ecpUsDiagUp.getIdxC2D();
+    mD&&pR(upc);
+    mD&&pR(upobec);
+
+    //// [ we have valid upstream in ecpUsDiagUp ]
+
+    //// TASK: XMIT IN
+    {
+      mD&&pR("ANTTSKXMIN10");
+      mD&&pR(upc);
+      mD&&pR(upecp);
+      EdgeCoord tmpec = upobec;
+      if (!updateDirOff(tmpec.mHopsToEdge, mOpenDir, -upc))
+        return die();           // But we checked everything, right?
+      mD&&pR("ANTTSKXMIN11");
+      mD&&pR(tmpec);
+      if (tmpec.mHopsToEdge.length() > mMaxEdgeHops)
+        return die();
+      mD&&pR("ANTTSKXMIN12");
+
+      mTransmitEC = tmpec;      // Take it
+      changes = true;
+      mD&&pR("ANTTSKXMIN13");
+    }
+    //// [ we have fresh valid upstream in ourselves ]
+
+    mD&&pR("ANTBH11");
+
+    //// TASK: RECV XMIT CROSS
+    Bool freshlyReceived = false;
+    if (egaaThem.hasPick()) {
+      mD&&pR("ANTTSKCRSS10");
+      EdgeCoordProvider & ecpthem = (EdgeCoordProvider&) egaaThem.getIdxAtom();
+      C2D dnc = egaaThem.getIdxC2D();
+      EdgeCoord tmpec;
+      if (ecpthem.providesOutboundEdgeCoordFor(oppositePocketDir(mOpenDir), tmpec)) {
+        mD&&pR("ANTTSKCRSS11");
+        mD&&pR(tmpec);
+        if (tmpec.isValid()) {
+          mD&&pR("ANTTSKCRSS12");
+          mReceiveEC = tmpec;   // Take their data
+          mReceiveEC.mHopsToEdge = mTransmitEC.mHopsToEdge;   // But in our coords
+          freshlyReceived = true;
+          mD&&pR(mReceiveEC);
+          if (!updateDirOff(mReceiveEC.mHopsToEdge, mOpenDir, dnc)) // offset to who told us
+            return die();           // ??
+          mD&&pR("ANTTSKCRSS13");
+          mD&&pR(mReceiveEC);
+          changes = true;
+        }
+      }
+    }
+
+    mD&&pR("ANTBH12");
+
+    //// TASK: XMIT OUT
+    if (aaUsDiagDown.hasPick()) {
+      Antenna & dnAa = (Antenna&) aaUsDiagDown.getIdxAtom();
+      C2D dnc = aaUsDiagDown.getIdxC2D();
+
+      mD&&pR("ANTTSKXMOU10");
+      mD&&pR(dnc);
+      mD&&pR(dnAa);
+      EdgeCoord tmpec = mTransmitEC; // get our xmit
+      if (!updateDirOff(tmpec.mHopsToEdge, mOpenDir, dnc)) // update its hops
+        return die();           // How can dowsntream make negs?
+      mD&&pR("ANTTSKXMOU11");
+      if (tmpec.mHopsToEdge.length() > mMaxEdgeHops) { // See if should exist
+        ew[dnc] = Empty.instanceof;                    // No, it's overlength
+        aaUsDiagDown.reset();                          // We no longer have down
+        mD&&pR("ANTTSKXMOU12");
+      } else {
+        dnAa.mTransmitEC = tmpec; // Update downstream's xmit
+        changes = true;           // (call that changes on us?)
+        mD&&pR("ANTTSKXMOU13");
+      }
+    }
+
+    mD&&pR("ANTBH13");
+
+    //// TASK: RECV IN
+    if (aaUsDiagDown.hasPick()) { // might have had it but lost it
+      Antenna & dnAa = (Antenna&) aaUsDiagDown.getIdxAtom();
+      C2D dnc = aaUsDiagDown.getIdxC2D();
+
+      mD&&pR("ANTTSKRVIN10");
+      mD&&pR(dnc);
+      mD&&pR(dnAa);
+      if (dnAa.mReceiveEC.isValid()) { // if they have valid recv
+        mReceiveEC = dnAa.mReceiveEC;  // take as our recv
+        freshlyReceived = true;
+        if (!updateDirOff(mReceiveEC.mHopsToEdge, oppositePocketDir(mOpenDir), -dnc)) // update our recv hops
+          return die();         // How can downstream make negs?
+        mD&&pR("ANTTSKRVIN11");   // No overlength checks.. recv can just saturate
+        changes = true;
+        mD&&pR("ANTTSKRVIN12");
+      } else
+        mReceiveEC.invalidate(); // else if they don't have recv, we don't have recv
+    } else if (!freshlyReceived)
+      mReceiveEC.invalidate(); // else if no downstream to recv from, we don't have recv
+
+    mD&&pR("ANTBH14");
+
+    if (mReceiveEC.isValid()) { // cases if our recv is valid
+
+      //// TASK: RECV OUT 1 - Aa UP
+      if (upecp as Antenna) {     // if we have upstream Aa
+        mD&&pR("ANTTSKRVOU10");
+        EdgeCoord tmpec = mReceiveEC; // start with ours
+        if (!updateDirOff(tmpec.mHopsToEdge, oppositePocketDir(mOpenDir), upc)) // update recv hops
+          return die();         // ??
+        mD&&pR("ANTTSKRVOU11");
+        upecp.mReceiveEC = tmpec; // let em have it
+        changes = true;
+        mD&&pR("ANTTSKRVOU12");
+      }
+
+      //// TASK: RECV OUT 2 - MB NEAR
+      if (mbUs.hasPick()) {
+        mD&&pR("ANTTSKRVOUMB10");
+        MBase & mb = (MBase&) mbUs.getIdxAtom();
+        C2D mbc = mbUs.getIdxC2D();
+
+        mD&&pR(mb);
+        mD&&pR(mbc);
+        EdgeCoord tmpec = mReceiveEC; // start with ours
+        mD&&pR(tmpec);
+        if (!updateDirOff(tmpec.mHopsToEdge, oppositePocketDir(mOpenDir), mbc)) // update recv hops
+          return die();         // ??
+        mD&&pR("ANTTSKRVOUMB10");
+        mD&&pR(tmpec);
+
+        mb.mInboundEC = tmpec; // let em have it
+        mD&&pR(mb);
+        changes = true;
+      }
+
+    } /* else upecp.mReceiveEC.invalidate(); // Do we want to destroy signal super fast? */
+
+    mD&&pR("ANTBH15");
+
+    //// TASK: GROW
+    Bool growable = true;
+    if (growable && egaaThem.hasPick()) {
+      C2D dnc = egaaThem.getIdxC2D();
+      if (dnc.length()<3u) growable = false; // Don't grow if opposing ECP close to us
+    }
+    if (growable) {
+      //  If need downstream and empty downstream,
+      //    spawn downstream with invalid T&R, continue
+      Unsigned ourhops = mTransmitEC.mHopsToEdge.length();
+      mD&&pR("ANTSKGR10");
+      mD&&pR(ourhops);
+      mD&&pR(mMaxEdgeHops);
+      if (ourhops + 2u <= mMaxEdgeHops) { // then room for one more
+        mD&&pR("ANTSKGR11");
+        if (stompable(ourwayc)) {
+          mD&&pR("ANTSKGR12");
+          Self newaa = self;             // start with us
+          newaa.mReceiveEC.invalidate(); // no recv since down from us
+          if (updateDirOff(newaa.mTransmitEC.mHopsToEdge, mOpenDir, ourwayc)) {
+            ew[ourwayc] = newaa.atomof;
+            changes = true;
+          }
+        }
+      }
+    }
+
+    mD&&pR("ANTBH16");
+    //// TASK: DONE
+    return changes;
+  }
+}
+
+
+/**
+   \symbol SA
+*/
+element SeedAntenna + DTU {
+  Void behave() {
+    Random random;
+    Antenna a;
+    a.mOpenDir = (PocketDir) random.between(PocketDir.minof,PocketDir.maxof);
+    EventWindow ew;
+    ew[0] = a.atomof;
+  }
+}

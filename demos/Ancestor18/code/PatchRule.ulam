@@ -1,0 +1,513 @@
+transient PRPocket + DTU + QDebugUtils + Fail {
+  PocketUse mPocketUse;
+
+  Bool init(PatchState & ps) {
+    takeDebug(ps);
+    return true;
+  }
+
+  ChainType mCodonType;         //< Type of codon if cPRPU_CODON
+  ChainType mUpPairCodonType;   //< Type of up codon if cPRPU_CPAIR
+  ChainType mDownPairCodonType; //< Type of downstream codon if cPRPU_CPAIR
+  SN mUpCodonSN = SN.maxof;     //< Location of up codon after matchCPAIR true
+  SN mDownCodonSN = SN.maxof;   //< Location of down codon after matchCPAIR true
+  PLType mUpPLT;
+  PLType mDownPLT;
+
+  Bool isEC(PatchState & ps, PocketDir p, Codon & c, Bool swappable) {
+    ps.pR("PRPISEC10");
+    ps.pR(c);
+    if (!(c is EmptyCodon)) return false;
+
+    // assume somebody wants to occupy this EC
+    /*
+    ps.print("PRPISEC10UPHOPS");
+    if (ps.nearUpHopsEdge(p)) // so avoid the outer rim (XXX test)
+      return false;
+    */
+
+    ps.pR("PRPISEC11");
+    Bool inDSP = ps.isInDSP(p);
+    if (swappable && inDSP) return false;
+    ps.pR("PRPISEC12");
+    return true;
+  }
+
+  Bool isX(PatchState & ps, PocketDir p, Codon & c) {
+    ps.pR("PRPISX10");
+    Bool isNorm = c.mDSType == cDS_NORM;
+    Bool isntDSP = !ps.isInDSP(p);
+    ps.pR((Unsigned) p);
+    ps.pR(isNorm);
+    ps.pR(isntDSP);
+    ps.pR(c);
+    ps.pR(ps);
+    return isNorm && isntDSP;
+  }
+
+  Bool isCodeAt(PatchState & ss, PocketDir p, PocketChain & pc, ChainType code) {
+    ss.pR("PRPISCDAT10");
+    if (code == cCPAT_N) return true;
+    if (!(pc is Codon)) return false;
+    ss.pR("PRPISCDAT11");
+    ss.pR(getChainTypeName(code));
+    Codon & c = (Codon&) pc;
+    which (code) {
+    case cCPAT_EC: { return isEC(ss,p,c,true); } /* EC to be swapped elsewhere */
+    case cCPAT_FC: { return isEC(ss,p,c,false); } /* EC to leave fixed*/
+    case cCPAT_X:  { return isX(ss,p,c); }
+    case cCPAT_Y:  { return pc.mDSType == c.cDS_DUMB || pc.mDSType == c.cDS_NORM; }
+    case cCPAT_Z:  { return pc.mDSType == c.cDS_DUMB; }
+    case cCPAT_U:  { return pc.mDSType == c.cDS_UP; }
+    case cCPAT_D:  { return pc.mDSType == c.cDS_DOWN; }
+    case cCPAT_T:  { return pc.mDSType == c.cDS_UP || pc.mDSType == c.cDS_DOWN; }
+    case cCPAT_C:  { return !(c is EmptyCodon); }
+    case cCPAT_S:  { return !ss.isInDSP(p) && pc.mDSType != c.cDS_DUMB; } /* anything swappable */
+    otherwise: { fail(__FILE__,__LINE__); }
+    }
+    // NOT REACHED
+    return false;
+  }
+
+  Bool match(PocketDir l, PatchState & ps, PatchRulePatternBinding & prpb) {
+    mD&&pR("PRPOKMT10");
+    //// DOES THE POCKETUSE MATCH?
+    PocketDir p = prpb.l2pPatchIndex(l);
+    mD&&pR(p);
+    which (mPocketUse) {
+      case cPRPU_BARE: {
+        return
+          ps.mNonEmptyCount[p] == 0u && // absolutely empty
+          !ps.isInDSP(p); // DSP empties are not true empties
+      }
+      case cPRPU_PRBLE: {
+        if (ps.mSegmentSNs[p].count() != 1u) return false; // Need one segment
+        if (ps.mNonEmptyCount[p] != 1u) return false; // And nothing else
+        if (ps.isInDSP(p)) return false; // DSP empties are not pairable
+        return matchCODON(ps.mSegmentSNs[p].pick(), p, ps, prpb);
+      }
+      case cPRPU_EMPTY: {
+        return
+          ps.mNonEmptyCount[p] <= 1u && // redefining cPRPU_EMPTY to allow 1 non-empty
+          ps.mSegmentSNs[p].count() == 0u && // as long as it's not a segment..
+          !ps.isInDSP(p); // DSP empties are not true empties
+      }
+      case cPRPU_CODON: {
+        if (ps.mSegmentSNs[p].count() != 1u) return false; // Need one segment
+        if (ps.mNonEmptyCount[p] != 1u) return false; // redefining: and only one non-empty total
+        return matchCODON(ps.mSegmentSNs[p].pick(), p, ps, prpb);
+      }
+      case cPRPU_CPAIR: {
+        if (ps.mSegmentSNs[p].count() != 2u) return false;
+        return matchCPAIR(ps.mSegmentSNs[p], p, ps, prpb);
+      }
+      case cPRPU_UNCHK: { return true; }
+    }
+    fail(__FILE__,__LINE__);
+    return false; // NOT REACHED
+  }
+
+  Bool matchCODON(SN sn, PocketDir p, PatchState & ps, PatchRulePatternBinding & prpb) {
+    //// THE POCKETUSE MATCHES (AND IS cPRPRU_CODON)
+    mD&&pR("PRPOKMT11");
+
+    //// DOES THE mCodonType MATCH?
+    EventWindow ew;
+    Atom & a = ew[sn];
+    if (!(a is Codon)) return false;
+    Codon & c = (Codon &) a;
+    mD&&pR("PRPOKMT12");
+    if (!isCodeAt(ps, p, c, mCodonType))
+      return false; // No
+    //// THE mCodonType MATCHES
+
+    mD&&pR("PRPOKMT13");
+    mD&&pR(getPLTypeName(mUpPLT));
+    mD&&pR(getPocketPtrName(c.mPocketPtrs[cBODY_UP]));
+    if (!prpb.isPLType(p, c.mPocketPtrs[cBODY_UP], mUpPLT))
+      return false;
+
+    mD&&pR("PRPOKMT14");
+    mD&&pR(getPLTypeName(mDownPLT));
+    mD&&pR(getPocketPtrName(c.mPocketPtrs[cBODY_DOWN]));
+    if (!prpb.isPLType(p, c.mPocketPtrs[cBODY_DOWN], mDownPLT))
+      return false;
+
+    mD&&pR("PRPOKMT15MATCHED"); // holy carp, matched one position
+    return true;
+  }
+
+  Bool matchCPAIR(D1SNs & sns, PocketDir p, PatchState & ps, PatchRulePatternBinding & prpb) {
+    Bool old = isDebugOutputEnabled();
+    //    setDebugOutputEnabled(true);
+    print();
+    mD&&pR("MTCPAIR10");
+    mD&&pR(p);
+    mD&&pR(ps);
+    mD&&pR(prpb);
+    if (sns.count() != 2u) fail(__FILE__,__LINE__);
+    SN sn1 = sns.get(0u);
+    SN sn2 = sns.get(1u);
+    EventWindow ew;
+    Segment & s1 = (Segment&) ew[sn1];
+    Segment & s2 = (Segment&) ew[sn2]; // or fail
+    SN snup, sndn;
+
+    if (s1.mPocketPtrs[cBODY_DOWN] == cPP_SELF) {
+      snup = sn1; sndn = sn2;
+    } else if (s1.mPocketPtrs[cBODY_UP] == cPP_SELF) {
+      snup = sn2; sndn = sn1;
+    } else return false; // Two segments not bound to each other is not our thing.
+
+    Segment & sup = (Segment&) ew[snup];
+    Segment & sdn = (Segment&) ew[sndn];
+
+    mD&&pR("MTCPAIR11UP");
+    mD&&pR(sup);
+
+    //// DOES THE mUpPairCodonType MATCH?
+    if (sup as Codon) {
+      if (!isCodeAt(ps, p, sup, mUpPairCodonType))
+        return false;
+    } else return false;
+    //// THE mUpPairCodonType DOES MATCH
+
+    //// DOES THE mUpPLT MATCH?
+    mD&&pR("MTCPAIR11UPPLT");
+    mD&&pR(getPLTypeName(mUpPLT));
+    mD&&pR(getPocketPtrName(sup.mPocketPtrs[cBODY_UP]));
+    if (!prpb.isPLType(p, sup.mPocketPtrs[cBODY_UP], mUpPLT))
+      return false;
+    //// THE mUpPLT DOES MATCH
+
+    mD&&pR("MTCPAIR11DN");
+    mD&&pR(sdn);
+
+    //// DOES THE mDownPairCodonType MATCH?
+    if (sdn as Codon) {
+      if (!isCodeAt(ps, p, sdn, mDownPairCodonType))
+        return false;
+    } else return false;
+    //// THE mDownPairCodonType DOES MATCH
+
+    //// DOES THE mDownPLT MATCH?
+    mD&&pR("MTCPAIR11DOWNPLT");
+    mD&&pR(getPLTypeName(mDownPLT));
+    mD&&pR(getPocketPtrName(sdn.mPocketPtrs[cBODY_DOWN]));
+    if (!prpb.isPLType(p, sdn.mPocketPtrs[cBODY_DOWN], mDownPLT))
+      return false;
+    //// THE mDownPLT DOES MATCH
+
+    mD&&pR("MTCPAIR12");
+    // Record results
+    mUpCodonSN = snup;
+    mDownCodonSN = sndn;
+    mD&&pR(mUpCodonSN);
+    mD&&pR(mDownCodonSN);
+    setDebugOutputEnabled(old);
+    return true;
+  }
+
+  Void print() {
+    ByteStreamArray1K bsa;
+    printBSA(bsa);
+    mD&&pR(bsa,true);
+  }
+
+  Void printBSA(ByteStreamArray1K & bsa) {
+    bsa.printf("PU:%s, CT:%s, U:%s, D:%s",
+               getPocketUseName(mPocketUse),
+               getChainTypeName(mCodonType),
+               getPLTypeName(mUpPLT),
+               getPLTypeName(mDownPLT)
+               );
+    if (mPocketUse == cPRPU_CPAIR) {
+      bsa.printf(", UP@%d:%s, DP@%d:%s",
+                 mUpCodonSN,
+                 getChainTypeName(mUpPairCodonType),
+                 mDownCodonSN,
+                 getChainTypeName(mDownPairCodonType)
+                 );
+    }
+  }
+}
+
+transient PatchRulePattern + QDebugUtils + DTU + Fail {
+  typedef Unsigned(2) PocketNum;
+  PRPocket mPRPockets[PocketNum.maxof + 1u]; //< In 'logical CW' order
+
+  virtual Bool init(PatchState & ps) {
+    takeDebug(ps);
+    for (Unsigned i = 0; i < mPRPockets.lengthof; ++i) {
+      if (!mPRPockets[i].init(ps))
+        return false;
+    }
+    return true;
+  }
+
+  Void print() {
+    ByteStreamArray1K bsa;
+    printBSA(bsa);
+    mD&&pR(bsa,true);
+  }
+
+  virtual Void printBSA(ByteStreamArray1K & bsa) {
+    bsa.printf("[%s\n",
+               __CLASS__);
+    for (Unsigned i = 0u; i < mPRPockets.lengthof; ++i) {
+      bsa.printf(" [%d] ",i);
+      mPRPockets[i].printBSA(bsa);
+      bsa.printf("\n");
+    }
+    bsa.printf("%s]\n",__CLASS__);
+  }
+}
+
+transient PatchRulePatternBinding : PatchRulePattern {
+  Bool mValid;
+  PocketNum mStart;
+  Bool mReverse;
+
+  //// PatchRulePatternBinding SERVICES
+  virtual Void printBSA(ByteStreamArray1K & bsa) {
+    bsa.printf("[mStart=%d mReverse=%s\n",
+               mStart,
+               mReverse ? "true" : "false");
+    super.printBSA(bsa);
+    bsa.printf("]\n");
+  }
+
+  PocketDir l2pPatchIndex(PocketDir l) {
+    if (mReverse && (l % 2u != 0u))  l = (PocketDir) (4u-l);
+    return (PocketDir) ((l + mStart) % 4u);
+  }
+
+  PocketDir p2lPatchIndex(PocketDir p) {
+    PocketDir l = (PocketDir) ((p + 4u - mStart) % 4u);
+    if (mReverse && (l % 2u != 0u))  l = (PocketDir) (4u-l);
+    return l;
+  }
+
+  SN l2pGetCodonSN(PatchState & ps, PocketDir l) {
+    if (!ps.mValid) fail(__FILE__,__LINE__);
+    PocketDir p = l2pPatchIndex(l);
+    if (ps.mSegmentSNs[p].count() != 1u) fail(__FILE__,__LINE__);
+    return ps.mSegmentSNs[p].first();
+  }
+
+  Codon & l2pGetCodon(PatchState & ps, PocketDir l) {
+    SN sn = l2pGetCodonSN(ps, l);
+    EventWindow ew;
+    Codon & c = (Codon&) ew[sn]; // or fail
+    return c;
+  }
+
+  Codon & l2pGetCodonOfPair(PatchState & ps, PocketDir l, Bool wantUp) {
+    SN sn = l2pGetCodonOfPairSN(ps,l,wantUp);
+    if (sn == SN.maxof) fail(__FILE__,__LINE__);
+    EventWindow ew;
+    return (Codon&) ew[sn];
+  }
+
+  SN l2pGetCodonOfPairSN(PatchState & ps, PocketDir l, Bool wantUp) {
+    if (!ps.mValid) fail(__FILE__,__LINE__);
+    // XXX no l2p mapping in here at all???
+    PRPocket & pock = mPRPockets[l];
+    SN sn = wantUp ? pock.mUpCodonSN : pock.mDownCodonSN;
+    return sn;
+  }
+
+  /** \returns the physical direction that a \c plt would point if it
+   * was in the physical mapping of \c ldir, or fails.
+   */
+  PocketPtr l2pGetPocketPtr(PatchState & ps, PocketDir ldir, PLType plt) {
+    mD&&pR("l2pGtPktPr10");
+    //    mD&&pR(self);
+    if (plt == cPLTYPE_NULL)  return cPP_NULL;
+    if (plt == cPLTYPE_OUT) {
+      // NYI
+      fail(__FILE__,__LINE__);
+    }
+    if (plt == cPLTYPE_NSELF) {
+      // NYI
+      fail(__FILE__,__LINE__);
+    }
+    Bool netcw = plt == (mReverse ? cPLTYPE_CCW : cPLTYPE_CW);
+    PocketDir pdir = l2pPatchIndex(ldir);
+    mD&&pR("l2pGtPktPr11");
+    mD&&pR(getPocketDirName(ldir));
+    mD&&pR(getPocketDirName(pdir));
+    mD&&pR(getPLTypeName(plt));
+    mD&&pR(mReverse);
+    mD&&pR(netcw);
+    which (pdir) {
+    case cQUAD_NW: { return netcw ? cPP_EAST : cPP_SOUTH; }
+    case cQUAD_NE: { return netcw ? cPP_SOUTH : cPP_WEST; }
+    case cQUAD_SE: { return netcw ? cPP_WEST : cPP_NORTH; }
+    case cQUAD_SW: { return netcw ? cPP_NORTH : cPP_EAST; }
+    }
+    fail(__FILE__,__LINE__);
+    return cPP_NULL; // NOT REACHED
+  }
+
+  virtual Bool init(PatchState & ps) {
+    takeDebug(ps);
+    mD&&pR("PRPBIN10");
+    if (!super.init(ps)) return false;
+
+    //// CAN WE CONFIGURE BINDINGS?
+    Random random;
+    mValid = false;
+    if (!ps.mValid) return false;
+    if (ps.mPCount == 0u) return false;
+    mStart = ps.mPSNPocket;
+    mReverse = random.oneIn(2);
+    mD&&pR("PRPBIN10SR");
+    mD&&pR(mStart);
+    mD&&pR(mReverse);
+    //// BINDINGS ARE CONFIGURED
+    mValid = true;
+    mD&&pR("PRPBIN11");
+    return true;
+  }
+
+  Bool match(PatchState & ps, PatchRule & pr) {
+    mD&&pR("PRPBMT10");
+    //// ARE WE INITTED?
+    if (!mValid) fail(__FILE__,__LINE__);
+    //// WE ARE INITTED
+
+    mD&&pR("PRPBMT11");
+    //// CAN WE MATCH THE PATCHRULEPATTERN?
+    for (Unsigned l = 0u; l < mPRPockets.lengthof; ++l) {
+      PocketDir lpd = (PocketDir) l;
+      PRPocket & pock = mPRPockets[lpd];
+      mD&&pR("PRPBMT12");
+      mD&&pR(lpd);
+      Bool mat = pock.match(lpd, ps, self);
+      mD&&pR("PRPBMT13");
+      mD&&pR(mat);
+      if (!mat) return false; // WE CANNOT
+    }
+    //// WE MATCHED THE PATCHRULEPATTERN
+    {
+      Bool isdebug = isDebugOutputEnabled();
+      //      setDebugOutputEnabled(true);
+      mD&&pR("DANGRULEMATCHED");
+      mD&&pR(pr.getPatchRuleName());
+      print();
+      mD&&pRContext();
+      setDebugOutputEnabled(isdebug);
+    }
+    return true;
+  }
+
+  Bool isPLType(PocketDir phsquad, PocketPtr phsptr, PLType type) {
+    if (!mValid) fail(__FILE__,__LINE__);
+    mD&&pR("PRPBisPLT10");
+    print();
+    mD&&pR(getPocketDirName(phsquad));
+    mD&&pR(getPocketPtrName(phsptr));
+    mD&&pR(getPLTypeName(type));
+
+    if (type == cPLTYPE_NULL) return phsptr == cPP_NULL;
+    if (type == cPLTYPE_NSELF) return phsptr != cPP_SELF;
+
+    if (phsptr < cPP_WEST || phsptr > cPP_EAST) return false;
+    mD&&pR("PRPBisPLT11");
+
+    if (mReverse) {
+      mD&&pR("PRPBisPLT12");
+      if (type == cPLTYPE_CW) type = cPLTYPE_CCW;
+      else if (type == cPLTYPE_CCW) type = cPLTYPE_CW;
+      mD&&pR(getPLTypeName(type));
+    }
+    Bool isOut = false, isCW = false, isCCW = false;
+    which (phsquad) {
+      case cQUAD_NW: {
+        if (phsptr == cPP_NORTH || phsptr == cPP_WEST) isOut = true;
+        else if (phsptr == cPP_EAST) isCW = true; else isCCW = true;
+      }
+      case cQUAD_NE: {
+        if (phsptr == cPP_NORTH || phsptr == cPP_EAST) isOut = true;
+        else if (phsptr == cPP_SOUTH) isCW = true; else isCCW = true;
+      }
+      case cQUAD_SE: {
+        if (phsptr == cPP_SOUTH || phsptr == cPP_EAST) isOut = true;
+        else if (phsptr == cPP_WEST) isCW = true; else isCCW = true;
+      }
+      case cQUAD_SW: {
+        if (phsptr == cPP_SOUTH || phsptr == cPP_WEST) isOut = true;
+        else if (phsptr == cPP_NORTH) isCW = true; else isCCW = true;
+      }
+    }
+    mD&&pR("PRPBisPLT13");
+    mD&&pR(isOut);
+    mD&&pR(isCW);
+    mD&&pR(isCCW);
+    if (type == cPLTYPE_OUT) return isOut;
+    mD&&pR("PRPBisPLT14");
+    if (type == cPLTYPE_CW) return isCW;
+    mD&&pR("PRPBisPLT15");
+    return isCCW;
+  }
+}
+
+transient PatchRule + DTU + QDebugUtils + Fail {
+  //// PATCHRULE API
+  virtual String getPatchRuleName() ;
+
+  virtual PatchRulePatternBinding getPRPB() ;
+
+  virtual Int evaluate(PatchState & ps, PatchRulePatternBinding & prpb) ;
+
+  virtual Bool apply(PatchState & ps, PatchRulePatternBinding & prpb) ;
+
+  //// PATCHRULE SERVICES
+  /** \return true if rule applied (and changes were made), false
+   * otherwise. \returns false by default.
+   */
+  virtual Bool tryRule(PatchState & ps) {
+    mD&&pR("PARUTR10");
+    mD&&pR(getPatchRuleName());
+    PatchRulePatternBinding prpb = getPRPB();
+    prpb.takeDebug(self);
+    if (!prpb.init(ps)) return false;
+    mD&&pR("PARUTR11");
+    mD&&pR(prpb);
+    if (!prpb.match(ps,self)) return false;
+    mD&&pR("PARUTR12");
+
+    Bool isdebug = isDebugOutputEnabled();
+    //    setDebugOutputEnabled(true);
+
+    mD&&pR("MATCHONGOED");
+    prpb.takeDebug(self);
+    prpb.print();
+    Int dp = evaluate(ps,prpb); // returns delta penalty
+    mD&&pR("PARUTR12EVAL");
+    mD&&pR(getPatchRuleName());
+    mD&&pR(dp);
+    setDebugOutputEnabled(isdebug);
+
+    Random random;
+    // NO I CANNOT    if (dp > 0) return false; // NO UPHILL MOVES OKAY CAN YOU HANDLE THAT?
+    
+    if (dp > 1000) return false; // (this won't work either but) NO REALLY BAD UPHILL MOVES OKAY CAN YOU HANDLE THAT?
+    if (dp > 0 && !random.oneIn((Unsigned) (dp+1))) return false; // bigger is rarer
+    if (dp > 0) {
+      if (mD) { // okay tired of seeing alllll of these
+        ByteStreamLogger bsl;
+        bsl.print(getPatchRuleName());
+        bsl.printf(": APPLYING WITH PENALTY INCREASE %d\n",
+                   dp);
+      }
+    }
+    //    mD&&pR(prpb);
+    mD&&pR("PARUTR13APPLY");
+    //    if (!prpb.apply(ps,self)) return false;
+    if (!apply(ps,prpb)) return false;
+    mD&&pR("PARUTR13DONE");
+    return true;
+  }
+}

@@ -1,0 +1,39 @@
+quark QDSHops + DTU + Fail {
+  //// QDSHOPS API
+  virtual Unsigned getDSHops() ; //< Distance to nearest DiamondSequencer if any
+  virtual Void setDSHops(Unsigned dshops) ;
+
+  virtual XZone getDSXZone() ; //< ds quadrant, ds axis, none, uninitted
+  virtual Void setDSZone(Zone zone) ; //< ds quadrant or axis only
+
+  //// QDSHOPS SERVICES
+  OnDSAxes getOnDSAxes() { //< [0] dx==0; [1] dy==0
+    return xzone2OnDSAxes(getDSXZone());
+  }
+  Void setOnDSAxes(OnDSAxes dxdy) {
+    DebugUtils du;
+    du.print("setOnDSAxes INVALID CALL");
+    du.print(dxdy[0]);
+    du.print(dxdy[1]);
+    //    fail(__FILE__,__LINE__); // Not an invertible transform..
+  }
+  
+}
+
+quark QDSHopsStg : QDSHops {
+  //// QDSHops API
+  @Override
+  virtual Unsigned getDSHops() { return mDSHops; }
+
+  @Override
+  virtual Void setDSHops(Unsigned dshops) { mDSHops = (DSHops) dshops; }
+
+  @Override
+  virtual XZone getDSXZone() { return (XZone) mDSZone; }
+
+  @Override
+  virtual Void setDSZone(Zone zone) { mDSZone = zone; }
+
+  DSHops mDSHops;
+  Zone mDSZone;
+}

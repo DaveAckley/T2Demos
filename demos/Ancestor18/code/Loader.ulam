@@ -1,0 +1,206 @@
+transient LoaderState : CodonState {
+
+  //// Intention API
+
+  @Override
+  virtual Bool act(Intender & in) {
+    mD&&pR("LDRST10");
+    if (super.act(in)) return true;
+
+    mD&&pR("LDRST11");
+    Loader & ld = (Loader&) in;
+    
+    if (ld.mNextInstruction < Ancestor.cPROGRAM.lengthof) {
+      mD&&pR("LDRST12");
+      /// EC downstream of me?
+      SN dnsn = mEWSNMate[cBODY_DOWN];
+      if (ew.isAccessible(dnsn) &&
+          ew[dnsn] is EmptyCodon) {
+        EmptyCodon & ec = (EmptyCodon&) ew[dnsn];
+        ec.mDSType = cDS_DOWN; // Make sure it's headed down where we need it
+      }
+
+      /// EC upstream of me?
+      SN upsn = mEWSNMate[cBODY_UP];
+      if (ew.isAccessible(upsn) &&
+          ew[upsn] is EmptyCodon) {
+
+        Codon & up = (Codon&) ew[upsn];
+
+        Atom a = Ancestor.cPROGRAM[ld.mNextInstruction];
+        Codon & newc = (Codon&) a;
+
+        mD&&pR("CR_LDRL_WAD12INB");
+        mD&&pR(newc);
+        newc.copyTQDSControlFrom(ld); // Init chain control from loader
+        up.swapPocketPtrs(newc);
+        mD&&pR("CR_LDRL_WAD12INC-newc");
+        mD&&pR(newc);
+        mD&&pR("CR_LDRL_WAD12INF-a");
+        ew[upsn] = newc.atomof;
+        mD&&pR("ZONGBONG");
+        ++ld.mNextInstruction;
+        return true;
+      }
+      /*
+      /// EC TO BOTH SIDES OF ME?
+      ChainRule_LOADER_LOAD cr;
+      ChainRuleMatcher crm114;
+      cr.takeDebug(self);
+      crm114.takeDebug(self);
+      if (crm114.tryRule(self,cr)) {
+        mD&&pR("LDRST13");
+        //        ++ld.mNextInstruction;
+        return true;
+      }
+      */
+
+      mD&&pR("LDRST14");
+    } else { // PROGRAM LOADED
+      mD&&pR("LDRST15");
+
+      EventWindow ew;
+      //// Wait for ECs up and down, then lock down
+      {
+        SN upsn = mEWSNMate[cBODY_UP];
+        SN dnsn = mEWSNMate[cBODY_DOWN];
+        if (ew.isAccessible(upsn) && ew[upsn] is EmptyCodon &&
+            ew.isAccessible(dnsn) && ew[dnsn] is EmptyCodon) {
+          ld.setLockedDown(true); // Lock It Down
+        }
+      }
+    }
+    return false;
+  }
+}
+
+/** CHAINRULE: LOADER_LOAD: EC0 -> [X0] -> EC1  ==>  X1 -> [X0] -> EC1 */ 
+transient ChainRule_LOADER_LOAD : ChainRule_GENL_ALONE {
+
+  //// ChainRule_GENL_ALONE API
+  @Override
+  virtual Void whenAloneDo(PocketChainState & ss, ChainMatches & mat) {
+    mD&&pR("CR_LDRL_WAD10");
+    mD&&pR(ew[mat[1]]);
+    super.whenAloneDo(ss,mat);
+    EventWindow ew;
+    Loader & ld = (Loader&) ew[mat[1]];
+    //        { Fail f; f.fail(__FILE__,__LINE__); } // IMPLEMENT ME TQDS
+        //    ChainControlUp ccu = ld.mChainControlUp;
+        //    ChainControlDown ccd = ld.mChainControlDown;
+    // mD&&pR(ld.mChainControlDown);
+    // mD&&pR(ld.mNextInstruction);
+    Atom a = Ancestor.cPROGRAM[ld.mNextInstruction];
+    mD&&pR("CR_LDRL_WAD12INA");
+    mD&&pR(a);
+    Codon & up = (Codon&) ew[mat[0]];
+    Codon & newc = (Codon&) a;
+    mD&&pR("CR_LDRL_WAD12INB");
+    mD&&pR(newc);
+    newc.copyTQDSControlFrom(ld); // Init chain control from loader
+    up.swapPocketPtrs(newc);
+    mD&&pR("CR_LDRL_WAD12INC-newc");
+    mD&&pR(newc);
+    /*
+    mD&&pR("CR_LDRL_WAD12INC-newc.ccu");
+    mD&&pR(newc.mChainControlUp);
+    mD&&pR("CR_LDRL_WAD12INC-init");
+    newc.mChainControlUp.init(ccu);
+    mD&&pR("CR_LDRL_WAD12IND-newc.ccu");
+    mD&&pR(newc.mChainControlUp);
+    mD&&pR("CR_LDRL_WAD12IND-ld.ccu");
+    mD&&pR(ld.mChainControlUp);
+    mD&&pR("CR_LDRL_WAD12IND-newc");
+    mD&&pR(newc);
+    mD&&pR("CR_LDRL_WAD12INE-init");
+    newc.mChainControlDown.init(ccd);
+    mD&&pR("CR_LDRL_WAD12INE-newc.ccd");
+    mD&&pR(newc.mChainControlDown);
+    mD&&pR("CR_LDRL_WAD12INE-newc.ccu");
+    mD&&pR(newc.mChainControlUp);
+    mD&&pR("CR_LDRL_WAD12INE-newc");
+    mD&&pR(newc);
+    mD&&pR("CR_LDRL_WAD12INE-ld.ccd");
+    mD&&pR(ld.mChainControlDown);
+    mD&&pR("CR_LDRL_WAD12INE-ld.ccu");
+    mD&&pR(ld.mChainControlUp);
+    */
+    mD&&pR("CR_LDRL_WAD12INF-a");
+    mD&&pR(a);
+    mD&&pR("CR_LDRL_WAD12INF-newc");
+    mD&&pR(newc);
+    ew[mat[0]] = newc.atomof;
+    mD&&pR("ZONGBONG");
+    ++ld.mNextInstruction;
+    mD&&pR(ld);
+    /*
+    Codon & x  = (Codon&) ew[mat[1]];
+    Codon & ec  = (Codon&) ew[mat[2]];
+    ec.swapPocketPtrs(x);
+    ew.swap(mat[1],mat[2]);
+    */
+  }
+
+}
+
+/** \symbol Ld
+    \color #42e
+ */
+element Loader : LX {
+  typedef Unsigned(8) InstructionCount;
+  InstructionCount mNextInstruction = 0u;
+  
+  //// LX API
+  virtual Bool perform(DiamondSequencerState & dss) {
+    mD&&pR("LDRPRF10");
+    if (mNextInstruction < Ancestor.cPROGRAM.lengthof)
+      return true;              // nothing to do yet
+
+    EventWindow ew;
+    //// Wait until locked down, then check out
+    if (!getTQDSLockedDown()) return true;
+    
+    /// Time to check out!
+    markCurrentInstructionForRotation(dss, 0u); // speed up ancestor boot?
+
+    mD&&pR("LDRPRF11");
+    ProcUnitInfo & pui = dss.getPUInfo(cPUNIT_XEQ); // get X slot
+    if (!pui.mFound ||
+        pui.mCodonSN == SN.maxof ||
+        pui.mIsEmptyCodon)
+      fail(__FILE__,__LINE__);
+
+    mD&&pR("LDRPRF12");
+    Atom & a = ew[pui.mCodonSN];
+    if (a as Self) {
+      EmptyCodon ec;
+      Random random;
+      BaseClassUtils bcu;
+      //C++ BUILD FAILURE FROM THIS:      bcu.copySharedData(a,ec.atomof); // pick up ptrs, tqds, ...
+      bcu.copySharedData(a.atomof,ec.atomof); // pick up ptrs, tqds, ...
+      ec.mDSType = random.oneIn(2u) ? cDS_DOWN : cDS_UP; // flip for dir
+      ew[pui.mCodonSN] = ec.atomof;        // LOADER OUT
+      return true; // WRN: stale self
+    }
+
+    fail(__FILE__,__LINE__);
+    return true; // not reached
+  }
+
+  //// CODON API
+  virtual Void init() {
+    super.init();
+    mDSType = cDS_NORM;
+    setSingleTQ(cQUAD_SE);      // loaded stuff should stay in the SE for now
+  }
+
+  //// Intender API 
+  @Override
+  virtual ClassId getIntentionClass() { return LoaderState.classidof; }
+
+  //// LOADER SERVICES (RUNNING ON BEHALF OF DSS)
+
+  Void behave() {
+    pursueIntention();          // passive mode activities
+  }
+}

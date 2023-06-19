@@ -1,0 +1,322 @@
+transient SwapWormHC3State : CodonState {
+  Bool mHasDown;                //< head or middle
+  Bool mHasUp;                  //< tail or middle
+  Bool mUpIsUs;                 //< hasUp is SW3
+  Bool isHead() { return !mHasUp || !mUpIsUs; }
+  Bool isTail() { return !mHasDown; }
+  Bool isMiddle() { return mHasUp && mHasDown; }
+  Bool isAlone() { return !mHasUp && !mHasDown; }
+
+  Bool mHeadChange;             //< either upsignal or head status has changed
+  SwapWormHC3.Signal mOldUp;                //< previous upsignal 
+  Bool mTailChange;             //< either downsignal or tail status has changed
+  SwapWormHC3.Signal mOldDown;              //< previous downsignal
+
+  @Override
+  virtual Bool init(Intender & in) {
+    mD&&pR("SW3I10");
+    if (super.init(in)) return true;
+    mD&&pR("SW3I11");
+    SwapWormHC3 & s3 = (SwapWormHC3&) in;
+    mHeadChange = false;
+    //    mOldUp = 0u;
+    mTailChange = false;
+    //    mOldDown = 0u;
+    return false;
+  }
+
+  virtual Bool observe(Intender & in) {
+    mD&&pR("SW3O10");
+    if (super.observe(in)) return true;
+    mD&&pR("SW3O11");
+
+    //// MateStatus is cMATE_OK. Valid data in:
+    //  SN mEWSNMate[Segment.cBODY_DOWN+1u];
+    //  PocketPtr mPocketWithMate[Segment.cBODY_DOWN+1u]
+    mHasDown = mPocketWithMate[cBODY_DOWN] != cPP_NULL;
+    mHasUp = mPocketWithMate[cBODY_UP] != cPP_NULL;
+    mUpIsUs = false;
+    if (mHasUp) {
+      Atom & a = ew[mEWSNMate[cBODY_UP]];
+      mUpIsUs = a is SwapWormHC3;
+    }
+    mD&&pR("SW3O12updownus");
+    mD&&pR(mHasUp);
+    mD&&pR(mHasDown);
+    mD&&pR(mUpIsUs);
+    
+    mD&&pR("SW3O13");
+    mD&&pR(mPocketWithMate[cBODY_DOWN]);
+    mD&&pR(mPocketWithMate[cBODY_UP]);
+
+    return false;
+  }
+
+  @Override
+  virtual Bool stabilize(Intender & in) {
+    mD&&pR("SW3S10");
+    if (super.stabilize(in)) return true;
+    mD&&pR("SW3S11");
+    SwapWormHC3 & s3 = (SwapWormHC3&) in;
+    
+    if (mHasDown) {
+      mD&&pR("SW3S1210");
+      SwapWormHC3 & sd = (SwapWormHC3&) ew[mEWSNMate[cBODY_DOWN]];
+      /// PROPAGATE UPSIGNAL
+      s3.mUpSignal = sd.mUpSignal;
+    }
+
+    if (mHasUp && mUpIsUs) {
+      mD&&pR("SW3S1211");
+      SwapWormHC3 & su = (SwapWormHC3&) ew[mEWSNMate[cBODY_UP]];
+      /// PROPAGATE DOWNSIGNAL
+      s3.mDownSignal = su.mDownSignal;
+    }
+
+    /*
+    if (isHead()) {
+      mD&&pR("SW3S13");
+      SW3Packet pkt = (SW3Packet) s3.mUpSignal;
+      if (pkt.mCmdStatus == pkt.cCMST_DO) {
+        pkt.mCmdStatus = pkt.cCMST_TRYING;
+        s3.mUpSignal = (SwapWormHC3.Signal) pkt;
+        mD&&pR("SW3S1311");
+      }
+    }
+
+    if (isTail()) {
+      mD&&pR("SW3S15");
+      SW3Packet pkt = (SW3Packet) s3.mDownSignal;
+      if (pkt.mCmdStatus == pkt.cCMST_DO) {
+        pkt.mCmdStatus = pkt.cCMST_TRYING;
+        s3.mDownSignal = (SwapWormHC3.Signal) pkt;
+        mD&&pR("SW3S1511");
+      }
+    }
+    */
+
+    mD&&pR("SW3S16");
+    mD&&pR(s3);
+
+    return false;
+  }
+
+  @Override
+  virtual Bool act(Intender & in) {
+    mD&&pR("SW3A10");
+    if (super.act(in)) return true;
+
+    mD&&pR("SW3A11");
+    SwapWormHC3 & s3 = (SwapWormHC3&) in;
+    if (s3.actUp(self)) return true;
+    mD&&pR("SW3A12");
+    if (isTail() && s3.actDown(self)) return true;
+
+    mD&&pR("SW3A13");
+    Random random;
+    if (random.oneIn(3u)) return s3.diffuse(self);
+    mD&&pR("SW3A14");
+    return false;
+  }
+}
+
+/** Demo diamond swapworm. Intended, among other things, to be
+   serviceable as a 'write head' & 'construction arm'
+
+   \symbol SW
+   \color #00f0ff
+ */
+element SwapWormHC3 : Codon + TQDSControlStg {
+
+  //// Intender API 
+
+  @Override
+  virtual ClassId getIntentionClass() { return SwapWormHC3State.classidof; }
+
+  //// UrSelf API 
+
+  @Override
+  virtual ARGB getColor(Unsigned selector) {
+    ColorUtils cu;
+    ARGB ret = super.getColor(selector);
+    if (mUpSignal.mSeqNo == mDownSignal.mSeqNo) // make cmd/resp cycling low-key visible
+      ret = cu.dimmer(ret);
+    return ret;
+  }
+
+  //// SwapWormHC3 SERVICES
+  //Bool mUpStatus;     // RingO BODY_UP wire
+  //Bool mDownStatus;   // RingO BODY_DOWN wire
+
+  //  typedef Bits(18) Signal;
+  typedef SW3Packet Signal;
+  Signal mUpSignal;
+  Signal mDownSignal;
+  typedef Unsigned(18) USignal;
+
+  Bool actUp(SwapWormHC3State & s3s) {
+    mD&&pR("aUSW10");
+    if (!s3s.isHead() && !s3s.isAlone()) return false;
+
+    mD&&pR("aUSW11");
+
+    SW3Packet upkt = (SW3Packet) mUpSignal;
+    mD&&pR(upkt);
+    if (upkt.mCmdStatus != cSW3CMST_DO) return false;
+    
+    SW3Packet dpkt = (SW3Packet) mDownSignal;
+    if (!dpkt.matchCore(upkt)) {
+      mD&&pR("aUSW12");
+      dpkt = upkt;
+      dpkt.mCmdStatus = cSW3CMST_TRYING;
+      mDownSignal = (Signal) dpkt;
+      mD&&pR(self);
+    }
+    mD&&pR("aUSW13");
+    mD&&pR(dpkt);
+    /// DPKT.MATCHCORE(UPKT) IS TRUE
+    if (dpkt.mCmdStatus == cSW3CMST_TRYING) {
+      mD&&pR("aUSW14");
+      if (mDownSignal.executeSW3(s3s, self, true)) return true;
+    }
+    mD&&pR("aUSW15");
+    return false;
+  }
+
+  Bool actDown(SwapWormHC3State & s3s) {
+    mD&&pR("aDSW10");
+
+    if (!isTail()) return false;
+    mD&&pR("aDSW11");
+
+    mD&&pR("hUSg11");
+    /*
+    SW3Packet pkt = (SW3Packet) mDownSignal;
+    mD&&pR(pkt);
+    if (pkt.execute(s3s, self, false)) return true;
+    */
+    return false;
+  }
+
+  Void behave() {
+    pursueIntention();
+  }
+}
+
+/** Make an east pointing SW3 pair, obliviously.
+    \symbol D3
+    \color #222
+*/
+element SeedSW3 + DTU {
+  Void behave() {
+    EventWindow ew;
+    SwapWormHC3 h, t;
+    h.mPocketPtrs[cBODY_UP] = cPP_NULL;
+    h.mPocketPtrs[cBODY_DOWN] = cPP_WEST;
+    h.mDSType = cDS_DUMB;
+
+    t.mPocketPtrs[cBODY_UP] = cPP_EAST;
+    t.mPocketPtrs[cBODY_DOWN] = cPP_NULL;
+    t.mDSType = cDS_DUMB;
+    //    t.mUpSignal = 1u;
+
+    ew[21] = t.atomof;
+    ew[0] = h.atomof;
+
+  }
+}
+
+/** \symbol I5
+    \color #88f
+ */
+element S3CmdDIE : SW3Cmdr {
+  Void behave() {
+    //    setDebugOutputEnabled(true);
+    EventWindow ew;
+    if (inject(cSW3C_DIE))
+      ew[0] = Empty.instanceof;
+  }
+}
+
+/** \symbol I1
+    \color #88f
+ */
+element S3CmdSHRINK : SW3Cmdr {
+  Void behave() {
+    //    setDebugOutputEnabled(true);
+    EventWindow ew;
+    if (inject(cSW3C_SHRINK))
+      ew[0] = Empty.instanceof;
+  }
+}
+
+/** \symbol I3
+    \color #88f
+ */
+element S3CmdGrow : SW3Cmdr {
+  Void behave() {
+    //    setDebugOutputEnabled(true);
+    EventWindow ew;
+    if (inject(cSW3C_GROW,0x1f))
+      ew[0] = Empty.instanceof;
+  }
+}
+
+/** \symbol I4
+    \color #88f
+ */
+element S3CmdPlace : SW3Cmdr {
+  Void behave() {
+    //    setDebugOutputEnabled(true);
+    EventWindow ew;
+    if (inject(cSW3C_PLACE,Wall.classidof))
+      ew[0] = Empty.instanceof;
+  }
+}
+
+/** \symbol I6
+    \color #88f
+ */
+element S3CmdDiepl : SW3Cmdr {
+  Void behave() {
+    //    setDebugOutputEnabled(true);
+    EventWindow ew;
+    if (inject(cSW3C_DIEPL,Wall.classidof))
+      ew[0] = Empty.instanceof;
+  }
+}
+
+/** \symbol I7
+    \color #88f
+ */
+element S3CmdAllECs : SW3Cmdr {
+  Void behave() {
+    //    setDebugOutputEnabled(true);
+    EventWindow ew;
+    if (inject(cSW3C_BECOME,EmptyCodon.classidof))
+      ew[0] = Empty.instanceof;
+  }
+}
+
+/** Make a self-pointing SW3 pair, obliviously.
+    \symbol SF
+    \color #222
+*/
+element SeedSelfSW3 + DTU {
+  Void behave() {
+    EventWindow ew;
+    SwapWormHC3 h, t;
+    h.mPocketPtrs[cBODY_UP] = cPP_NULL;
+    h.mPocketPtrs[cBODY_DOWN] = cPP_SELF;
+    h.mDSType = cDS_DUMB;
+
+    t.mPocketPtrs[cBODY_UP] = cPP_SELF;
+    t.mPocketPtrs[cBODY_DOWN] = cPP_NULL;
+    t.mDSType = cDS_DUMB;
+    //    t.mUpSignal = 1u;
+
+    ew[4] = t.atomof;
+    ew[0] = h.atomof;
+
+  }
+}

@@ -1,0 +1,244 @@
+
+quark LoopOps + DTU + Fail {
+
+  Result dieResult() {
+    EventWindow ew;
+    ew[0] = Empty.instanceof;
+    return cRESULT_STOP;
+  }
+
+  Result pdiff(C2D empc) {
+    if (empc.length() > 0u) { // perhaps diffuse
+      C2D origin;             // Yes
+      EventWindow ew;
+      ew.swap(origin,empc);
+      return cRESULT_STOP;
+    }
+    return cRESULT_NOGO;        // No
+  }
+
+  /** If loop created successfully, \returns cRESULT_DONE and sets \c
+     centersn to SN of EC created in center pocket. \returns
+     cRESULT_NOGO if loop creation cannot even be attempted now, for
+     example due to crowding or inaccessibility. \returns cRESULT_STOP
+     if ew was changed so (for example) self is now unsafe to access.
+
+     NOTE: On a \c cRESULT_DONE return, the ew has been changed, but
+     ew[0] has not been altered (so self is likely still good). If
+     caller's job is then done it's up to caller to erase itself.
+   */
+  Result attemptMakeECLoop(PocketPtr openptr, PocketDir targetQuadrant, SN & centersn, SN & outsn) {
+    if (openptr < cPP_WEST || openptr > cPP_EAST) fail(__FILE__,__LINE__);
+
+    PocketHC3 p;
+    PocketHC3.Status pstat = p.init(self);
+    if (pstat == PocketHC3.cSTATUS_EDGE ||
+        pstat == PocketHC3.cSTATUS_OPEN ||
+        pstat == PocketHC3.cSTATUS_BENT) return cRESULT_NOGO; // wait for clarity
+
+    // Can't use PocketHC3.isDSP because stuff may be just setting up
+    // So we'll search for DS and just stay far away from it
+    EventWindow ew;
+    Random random;
+    SN dsn = SN.maxof;
+    Unsigned dscount = 0u;
+
+    for (SN sn = 1u; sn < 41u; ++sn) {
+      if (!ew.isAccessible(sn)) continue;
+      Atom & a = ew[sn];
+      if (a is DiamondSequencer && random.oneIn(++dscount))
+        dsn = sn;
+    }
+
+    RectIterator ri;
+
+    // First make sure we're alone in here
+    if (!p.initIterator(ri, 0u, true)) return cRESULT_NOGO;
+
+    C2D empc;
+    Unsigned ecount = 0;
+    Bool foundbad = false;
+
+    //// DO WE HAVE A CREATION/DIFFUSION SPOT IN CENTER POCKET?
+    while (ri.hasNext()) {
+      C2D n = ri.next();
+      if (!ew.isAccessible(n)) return cRESULT_NOGO; // in center pocket??
+      if (ew[n] is Empty) {
+        if (random.oneIn(++ecount))
+          empc = n;
+        continue;
+      }
+      if (!(ew[n] is Self))     // whather that is
+        foundbad = true;
+    }
+    if (ecount == 0u) return cRESULT_NOGO; // NO WE DO NOT.
+    
+    //// WE HAVE A CREATION/DIFFUSION SPOT IN CENTER POCKET.
+
+    //// DO WE HAVE ONLY ACCESSIBLE EMPTIES IN THE INDICATED DIRECTION?
+    if (!p.initIterator(ri, openptr, true)) return pdiff(empc);  // diffuse or block
+
+    C2D pickc;
+    Unsigned count;
+    while (ri.hasNext()) {
+      C2D n = ri.next();
+      if (!ew.isAccessible(n) || !(ew[n] is Empty))
+        return pdiff(empc);     // NO WE DO NOT; DIFFUSE
+
+      if (random.oneIn(++count))
+        pickc = n;
+    }
+    if (count == 0u) return pdiff(empc); // NO WE DO NOT; DIFFUSE
+
+    //// WE HAVE ONLY ACCESSIBLE EMPTIES IN THE INDICATED DIRECTION.
+
+    /// We have:
+    /// - An empty-but-us center pocket in empc
+    /// - An all-accessible selected side pocket with an empty in pickc
+    
+    //// FINAL CHECK: IS IT TOO CLOSE TO A DSP WE KNOW OF?
+    if (dsn != SN.maxof) {
+      C2D dsc = ew.getCoord(dsn);
+      Unsigned dist = dsc.manhattanDistance(pickc);
+      if (dist < 5u) return pdiff(empc); // WARNING: dist 4u could be in stretched DSP
+    }
+    //// THE SELECTED PICKC IS NOT TOO CLOSE TO A DSP WE KNOW OF.
+
+    /// Make linked ECs in empc and picks
+
+    EmptyCodon ec1;
+    ec1.init(); // random up or down
+
+    PocketDir tq = targetQuadrant;
+    ec1.setSingleTQ(tq);
+
+    EmptyCodon ec2;
+    ec2.init(); // random up or down
+    ec2.setSingleTQ(tq);
+
+    ec1.mPocketPtrs[Segment.cBODY_UP] = (PocketPtr) openptr; // Up and down are 
+    ec1.mPocketPtrs[Segment.cBODY_DOWN] = (PocketPtr) openptr; // both thataway
+
+    ec2.mPocketPtrs[Segment.cBODY_UP] = (PocketPtr) (5u-openptr);   // right back
+    ec2.mPocketPtrs[Segment.cBODY_DOWN] = (PocketPtr) (5u-openptr); // atcha
+
+    ew[empc] = ec1.atomof;
+    ew[pickc] = ec2.atomof;
+
+    centersn = ew.getSiteNumber(empc); // Output parm
+    outsn = ew.getSiteNumber(pickc); // Output parm
+    return cRESULT_DONE;
+  }
+
+}
+
+/** An anchored, directed loop seed
+    \symbol L1
+    \color #ff0
+ */
+element SeedLoop11 : NullIntender + LoopOps + Fail {
+  EventWindow ew;
+  Random random;
+  ClassUtils.ClassId mClassId = EmptyCodon.classidof; // default
+
+  PocketPtr mSeedDir = cPP_NULL;
+  PocketDir mTargetQuadrant;
+
+  typedef Unsigned(4) Count;
+  Count mCount;
+  
+  Void die() { ew[0] = Empty.instanceof; }
+
+  Void block() { /* doc only */ }
+
+  Void diffuse() {
+    EventWindow.SiteNum n = (EventWindow.SiteNum) random.between(1,4);
+    if (ew.isEmpty(n))
+      ew.swap(0u,n);
+  }
+
+  Void diffuse(D1PocketableState & ps) {
+    SN sn = ps.mEmptySNs[cPP_SELF].pick();
+    if (sn != SN.maxof)
+      ew.swap(0u,sn);
+  }
+
+  Void cvtECToClassId(SN sn, ClassUtils.ClassId classid) {
+    EventWindow ew;
+    EmptyCodon & ec = (EmptyCodon&) ew[sn];
+
+    ClassUtils cu;
+    Int etype = cu.getElementType(classid);
+    if (etype < 0) fail(__FILE__,__LINE__);
+    AtomUtils au;
+    Atom a = au.new(etype);
+    PocketChainTQ & atq = (PocketChainTQ&) a;
+
+    atq.copySegAndPChain(ec);   // Copy ptrs and targetting 
+    if (atq as Codon)
+      atq.init();               // Set up Codons however they want
+
+    ew[sn] = atq.atomof;
+  }
+
+  typedef XTimer(4u,8u,1u) DecayTimer;
+  DecayTimer mDecayTimer;
+
+  Void behave() {
+    if (mDecayTimer.countAlarm()) 
+      return (Void) dieResult();
+
+    if (++mCount < mCount.maxof) return;
+
+    D1PocketableState ps;
+    ps.takeDebug(self);
+    ps.pR("SL11BH10");
+    ps.pR(mCount);
+    if (ps.init(self)) return;
+    if (ps.observe(self)) return;
+
+    ps.pR("SL11BH11");
+    PocketHC3 & p = ps.mPocket;
+
+    ps.pR(p);
+    PocketQuadrant & pq = p.mPocketQuadrant;
+    if (pq.mQuadrantKnown) {
+      ps.pR("SL11BH12");
+      mSeedDir = (PocketPtr) random.between(cPP_WEST, cPP_EAST);
+      mTargetQuadrant = pq.mQuadrant;
+      ps.pR(mSeedDir);
+      ps.pR(mTargetQuadrant);
+    }
+    ps.pR("SL11BH13");
+    if (mSeedDir == cPP_NULL) return diffuse(ps);
+
+    ps.pR("SL11BH14n");
+    SN ctrsn, outsn;
+    Result res = attemptMakeECLoop(mSeedDir,mTargetQuadrant,ctrsn,outsn);
+
+    if (res == cRESULT_DONE) {
+      ps.pR("SL11BH15");
+      ps.pR(ctrsn);
+      cvtECToClassId(ctrsn,mClassId);
+
+      ps.pR("SL11BH1511");
+      ps.pR(outsn);
+      //LEAVE AS EC. WAS:      cvtECToClassId(outsn,Sh*peSh*fter.classidof);
+
+      EventWindow ew;
+      ew[0] = Empty.instanceof; // my job is done
+      return;
+    }
+
+    ps.pR("SL11BH16");
+    if (res == cRESULT_NOGO)
+      return diffuse(ps);
+    ps.pR("SL11BH17");
+
+  }
+}
+
+
+
+
+
