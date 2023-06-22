@@ -1,4 +1,4 @@
-{518}  -*-  mode: text; fill-column: 50;  -*-
+{543}  -*-  mode: text; fill-column: 50;  -*-
 [0:
 
 Sun Apr 16 09:53:15 2023 OK, in a desperate
@@ -6145,7 +6145,7 @@ Eg.mJunctionIndex or MB.mInboundEC.mEdgeTag. Or
 did it, in all those C2D computations?
 
 Let's annotate GapBasedJunction.configureStance a
-bit deeper. 
+bit deeper.
 
     C2D uspd = pocketDir2C2D(mOpenDir);
 
@@ -6161,7 +6161,7 @@ and mUsSize are built from EC.inferCenterAndSize(..)
     C2D themedgectr = mThemCenterC2D+thempd*((C2D.Coord) ((mThemSize-1u)*3u/2u));
 
 and the same for their edge, built in
-configureJunction based on the inbound EC. 
+configureJunction based on the inbound EC.
 
     C2D us2themgap = themedgectr - usedgectr;
 
@@ -6453,8 +6453,8 @@ DONE :459] - Doing the center2center alignment isn't enough
    min(inbound.hopstoedge.x, inbound.hopstoedge.y)
    as a perpendicular proxy. If that's maybe <=
    4u, it's time to start backing away if
-   possible. 
-  
+   possible.
+
 
 :457]
 
@@ -6638,7 +6638,7 @@ DiamondStance.
 
 I do note it's got mPocketPtrs=[0]=0,[1]=1,
 with the =0 meaning it was in a double-density
-pocket. 
+pocket.
 [477:
 
 Mon Jun  5 12:24:17 2023 OK, so this
@@ -6785,7 +6785,7 @@ So, in particular,
 (1) they don't have to be the lead MCSlash
 (2) they assume they're 'in tight' in a root
     pocket, so anchor points are always at max
-    corners. 
+    corners.
 
 Could we use FishProbes or the like to deliver
 diseqs to anchors? FP travel on the driving lanes,
@@ -6869,7 +6869,7 @@ I'm still thinking about some kind of
 anchors.
 
 Actually, could the anchors reroute
-DiamondStances? 
+DiamondStances?
 
 :494]
 
@@ -6907,14 +6907,14 @@ into the HG? Well, how much do we have?
 And how much space do they take?
 
  - Junction types: 4b
-      | COMPONENTS of JunctionIndexProviderStg <218> (4 bits/60 unused): 
+      | COMPONENTS of JunctionIndexProviderStg <218> (4 bits/60 unused):
       | Pos	| Bits	| Name	| Type <classid>
       | 0	| 3	| mJunctionIndex	| Unsigned(3)
       | 3	| 1	| mIsJunctionIndexAnchor	| Bool
 ..    | 4	| 0	| base	| Fail <90>
 
  - DiamondStance: 16b for a QStance, mainly
-      | COMPONENTS of DiamondStance <212> (31 bits/40 unused): 
+      | COMPONENTS of DiamondStance <212> (31 bits/40 unused):
       | Pos	| Bits	| Name	| Type <classid>
       | 0	| 3	| mDogsLife	| XTimer(3,6u,2u) <123>
 ..    | 3	| 16	| base	| QStance <213>
@@ -6925,8 +6925,8 @@ And how much space do they take?
 
 And what's HG looking like at the moment?
 
-      | COMPONENTS of HardCellG <34> (59 bits/12 unused): 
-      | 
+      | COMPONENTS of HardCellG <34> (59 bits/12 unused):
+      |
       | Pos	| Bits	| Name	| Type <classid>
       | 0	| 5	| super	| QHardCellGField <202>
       | 5	| 8	| base	| QDSHopsStg <198>
@@ -6967,7 +6967,7 @@ problematic.
    the mUpHops array in PatchState.
 
  - All the setUpHops(..) calls need to be examined
-   too. 
+   too.
 
 :497]
 
@@ -7049,7 +7049,7 @@ Mon Jun 19 10:07:47 2023 LoopOps.ulam mentions
 it. Are we using LoopOps for anything?[505:
 
 Mon Jun 19 10:08:25 2023 Well QBodyModel is using
-it too - 
+it too -
 
     Unsigned mindshops = p.mPocketQuadrant.mMinDSHops;
 
@@ -7183,7 +7183,17 @@ pretty fast..
 Mon Jun 19 14:05:47 2023 OK so things all seem to
 be working, through the first split and the kid
 MS's picking up their particular diseqs from the
-XDs. 
+XDs.
+
+I want to checkpoint commit this 'cleaned up'
+version before doing anything else..[518:
+
+Mon Jun 19 14:31:59 2023 OK committed and pushed,
+and now I've just cut out a tremendous amount of
+diked-out code.. checking to see if it still
+builds.
+
+:518]
 
 :517]
 
@@ -7217,3 +7227,360 @@ XDs.
 :500]
 :499]
 :498]
+[519:
+
+Mon Jun 19 23:06:48 2023 OK so we finally have
+eyes on a DiStance-induced program loop failure
+and are starting to trace it through. So far, for
+this particular case, we have these observations:
+
+ - It happens close to the edge, very shortly
+   after an Eg injects a Di
+
+ - The Eg injects the Di into its NW pocket, even
+   though I thought we'd concluded we wanted the
+   Dis to use the driving lanes.
+
+ - The pocket the Di gets injected into is
+   currently distorted, which seems like a kind of
+   bad time to be getting an injection.
+
+For the record, the transition looks something
+like this:
+
+           BEFORE                 AFTER
+
+       .  .  .  .  .          .  .  .  .  .
+       .  HG .  RL .          .  HG .  RL .
+       .  .  RM .  HG         .  .  RM .  HG
+       MB .  .  WT .          MB .  Di WT .
+       . (Eg).  .  HG         . [Eg].  .  HG
+       .  .  MB .  .          .  .  MB .  .
+       .  .  .  MB .          .  .  .  MB .
+
+and my gut reaction says I should:
+(1) Deploy only into driving lanes, and
+(2) Wait for the relevant pockets around the
+    driving lane to be relaxed.
+
+But let's push on and try to see the moment of
+failure.[520:
+
+Mon Jun 19 23:16:50 2023 Ah, and there it is. And
+deploying into a driving lane would have avoided
+it. It's
+
+         BEFORE                 AFTER
+
+     .  .  .  .  .          .  .  .  .  .
+     . (HG).  RL .          .  .  .  RL .
+     .  .  RM .  HG         . [HG].  .  HG
+     MB .  Di WT .          MB .  RM Di .
+     .  Eg .  .  HG         .  Eg .  .  HG
+     .  .  MB .  .          .  .  MB .  .
+     .  .  .  MB .          .  .  .  MB .
+
+
+and the south-going HG stomped on WT, as is HG's
+right, because there were three in the pocket.
+
+[521:
+
+Mon Jun 19 23:21:41 2023 Is that really current
+policy though? We'd thought about having HG block
+instead..
+
+But let's just make the obvious fix: Deploy to
+driving lanes![522:
+
+Tue Jun 20 00:41:26 2023 OK that's probably right
+but building that included the uphops->HCPoint
+stuff that hadn't been tested and that's blowing
+up a lot. In particular, HCPoint currently doesn't
+stabilize relative to an upgradient neighboring
+HCPoint - it pushes modifications of its own value
+out to the neighbors, instead of pulling a new
+value for itself from its neighbors. As a result,
+we currently can't kill a diamond by shooting out
+its root! Another HG gets grown there and set to
+HCPoint(0,0) by its ngbs, and then we're really
+fogged.
+
+[523:
+
+Tue Jun 20 00:46:05 2023 So it's way getting to be
+nap time, but we need to redo HCPoint
+stabilization following the uphops style:
+
+[524: Tue Jun 20 08:16:06 2023 Seems to be
+DONE :524] - Only stabilize your own value
+
+[525:
+DONE  :525] - Stabilize your own value only relative to a min
+   uphops around you
+
+[526:
+DONE :526] - Somehow coordinate that stabilization so you
+   only take an hcpoint and a maxgoal from the
+   same place.
+
+:523]
+
+
+:522]
+
+:521]
+
+:520]
+
+:519]
+[527:
+
+Tue Jun 20 08:16:20 2023 So, we've largely
+recovered from deleting mHops and taking only
+HCPoint as canonical. Cell death now proceeds from
+the inside-out instead of outside-in, which
+changes the MOKiller timing and I think makes
+things more fragile.. so we'll see if that needs
+to be revisited as we get more experience there.
+
+But in the meantime, we are now at:
+
+      | COMPONENTS of HardCellG <25> (54 bits/17 unused): 
+
+and if you're thinking this all seems like a lot
+of work for +5b, well, I hear you.
+[528:
+
+Tue Jun 20 08:21:55 2023 Actually it seems we have
+broken Eg, trying to get it to release DiStances
+only into the driving lanes.. Looks like it's
+never deploying DiS. So let's run that down.[529:
+
+Tue Jun 20 08:24:51 2023 It's because the iterator
+is excluding the driving lanes...[530:
+
+Tue Jun 20 08:33:22 2023 OK, now there's DiSts
+moving.. And pop pop pop we're back to the problem
+du jour: We don't have 'full' MCSlash control
+because the MO code loop hasn't moved out of the
+way yet.[531:
+
+Tue Jun 20 08:38:52 2023 And we had been claiming
+we'd route stuff through the HG to get earlier
+bodyplan control. How actually might we do that?
+Enquiring minds want to know.
+
+If we had a fixed 'cross-species' set of 'cell
+types', we could just flood the HG with its type,
+and then all and sundry could do whatever was
+appropriate for them given the cell type.
+
+We're not thrilled with that approach because that
+would mean, for example, that all needed
+symmetries would have to go into the cell
+type. MCSlash and MCBackSlash seem related but
+would have to use disjoint cell types.
+
+The 'junction anchor' (== 'junctor') principle
+would allow more generalization because symmetries
+could be handled centrally and distributed. And we
+could deploy junctors via (bounce shots off) the
+root so we could do them 'immediately'.
+
+Is that the basic claim? During some
+adviseRoot(..) call - or during addtional API -
+we'll get an edgemap from an edgemap provider, and
+self-stabilize it to WNSE of RG.
+
+:531]
+
+:530]
+
+:529]
+
+:528]
+:527]
+[532:
+
+Tue Jun 20 15:48:42 2023 Possible TODO:
+
+ - Redo DiamondCutter to travel in the driving
+   lanes. We think that should reduce its travel
+   time variance noticeably.
+[533:
+
+Tue Jun 20 16:20:01 2023 Looking at this, and
+wondering if we need the XD to be in a pocket
+while they wait to be picked up, lest they may
+keep pockets distorted which will block the
+EdgeModel atoms ability to pick them up..
+
+:533]
+:532]
+[534:
+
+Wed Jun 21 02:15:16 2023 OK another issue from
+ditching mHops for HCPoint. We were trying to slow
+down death propagation using random blockOrDie,
+but that means, when an HG chooses block, an HG
+downhill of it can (1) see the uphill blocking HG,
+(2) figure therefore it is okay itself, and (3)
+spawn into a neighboring UPHILL site that has
+already died.
+
+Being able to spawn uphill means the mother dying
+really never gets going. The idea 'you can only
+not spawn into the root' is insufficient.. We need
+it to be 'you can only spawn downhill'..
+[535:
+
+Wed Jun 21 02:51:27 2023 OK this is an unexpected
+level of pain from switching to HCPoint from
+mHops. It's like HCPoint is *too* specific, so
+there's no good way to say: Nothing is anchoring
+this HCPoint down, so it should 'just grow' until
+it exceeds maxgoalhops. mHops++ caused it to 'just
+grow', but how do you 'just grow' a 2D coord?
+
+And if you just take your min ngb, even if it's
+longer than you, and figure your implied hcp based
+on the ngb and its position relative to you,
+you'll end up 'just shrinking' your hcp.
+
+The only clear thing to do is die if your min is
+not shorter than you..
+
+Whiiiiiiiich is what we started out doing.. but
+then the dying went too fast and fucked up the
+daughters.. so we tried to slow the dying with
+random blocking.. but then downstream started
+healing back into upstream.. so we said you can
+only spawn downstream.. and that caused a giant
+mess of persistent maxgoal 18 HG regrowing even
+though the mother root was gone.. which we don't
+really understand but we've seen such bugs in the
+past, when we weren't careful about updating
+uphops and goalhops in a synchronized
+fashion.[536:
+
+Wed Jun 21 04:05:50 2023 OK so the current issue
+is we get a 'frontier' of MO and D where HG have
+the same length but completely incompatible HCP,
+typically with a x coord sign flip.
+
+And those MO HG take forever to die, and until
+they do die, the daughter HG can't spawn into
+them.
+
+Ugh.
+
+:536]
+
+:535]
+:534]
+[537:
+
+Wed Jun 21 09:39:14 2023 Hmm lost a couple notes
+in another video/obs-related lockup, Jake.
+
+I think we were saying that:
+
+(1) We went back to dying immediately if HG had no
+    upstream, and in the over-nap test it worked
+    okay enough.
+(2) We want to redo XD to run in the driving lanes
+    inbound and outbound.
+(3) We might want to make an HP2HP navigator thing
+    to help out. Tell it your destination HP and
+    it tells you an empty SN to swap with now, or
+    SN.maxof if you're blocked, or SN==0 if you're
+    done. Idea is use driving lanes while moving
+    but land in a not-crowded pocket when
+    at rest. 
+
+:537]
+[538:
+
+Thu Jun 22 01:35:39 2023 OK progress but still
+tuning the new driving-lane XD behavior. Need to
+change XD state once it seeds the new root so that
+it doesn't take off again when the HCPoints change
+out from underneath it.
+
+:538]
+[539:
+
+Thu Jun 22 02:31:38 2023 Getting a little
+better. Have gotten as far LD and RD picking up
+their correct DiSeqs. At the moment in the current
+runLD is NW and RD is SE so that's not so good,
+and I'm wondering: What about having a maybe
+UArm-type language for driving the cells around?
+
+We have to get the EdgeModel's into control as
+quickly as possible, but then suppose the chain of
+MCSlashs (in this case) had insns like (for the
+LD) go W 3 (to separate), then S 4 (to get under),
+then E 4 (to hook up), then 'do what comes
+naturally' (follow the body plan/junction
+dynamics).
+
+But I'd really rather cheat for the positioning
+also. Put the movement code into the body plan and
+just have the PC in the MCS.
+
+But we still have to get the EM's into control as
+quick as possible. We could use the new HP2HP
+navigator to deliver junction anchor orders with
+pretty fair reliability I think.
+
+[540:
+
+Thu Jun 22 08:42:45 2023 Also still concerned
+about the new MO-erasure dynamics. The original
+mHops way had the property that as the hop counts
+rose once the MO root was gone, the existing HG
+would 'swtich allegiance' as the incoming LD-or-RD
+root hop counts swept through.
+
+But now the MO HG die instead, and their have to
+be respawned by the daughter wave. Which leaves
+holes in the grid while that's happening.
+
+So once again, how can we spread.. what if we went
+uninitted instead? If we don't have an initted
+uphill ngb, we go uninitted. If we are uninitted,
+but have an initted ngb, we only init if we would
+be downhill from that ngb.
+
+If we are uninitted, and have only uninitted ngbs,
+we die? 
+
+Very afraid that the rest of the physics doesn't
+deal with uninitted grid very well, so this'll be
+a long frustrating road.
+[541:
+
+Thu Jun 22 08:55:32 2023 Could we block for a
+'pretty long time' instead? 
+
+If we're not ourselves HCP(0,0), then we're
+looking for a ngb that we would be downhill
+of. ..but it's not enough just to block, because
+then our other ngbs will see us as uphill. It has
+to recurse spatially.. which is what we were
+imagining the uninitted state could do.
+
+[542:
+
+Thu Jun 22 09:00:06 2023 Well I'm going to
+checkpoint commit here I think, wwwwwarts and all,
+before trying to head down the uninit HCP road.. 
+
+:542]
+
+:541]
+:540]
+
+:539]
