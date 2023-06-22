@@ -148,10 +148,6 @@ quark QHardCellG : QHardCell
     else basecol = cu.between(cu.color(0xffffff00),
                               cu.color(0xff000000),
                               100u * dh / mdh);
-    if (mProductivity) {
-      // Add 50% green if holding productivity report
-      basecol = cu.between(basecol, cu.color(0xff00ff00), 50u);
-    }
     return cu.between(dscol, basecol, pctds);
   }
 
@@ -159,11 +155,21 @@ quark QHardCellG : QHardCell
   @Override
   virtual ARGB getColor(Unsigned selector) {
     ARGB ret;
+
     if (selector == 2u) ret = getColorMinSettled();
     else if (selector == 1u) ret = getColorZone(); // XXX getColorDefault();
     else ret = super.getColor(selector);
 
     ret = junctionColorMod(ret);
+
+    if (mProductivity) {
+      // Add 50% green if holding productivity report
+      //      basecol = cu.between(basecol, cu.color(0xff00ff00), 50u);
+      // Tue Jun 20 14:41:29 2023 Do 80% black for productivity tracing 
+      ColorUtils cu;
+      ret = cu.between(ret,cu.color(0xff000000),20u);
+    }
+    
     return ret;
   }
 
@@ -198,14 +204,18 @@ quark QHardCellG : QHardCell
 quark QHardCellGField : QHardCellG
   + HCPointStg
 {
-  HopCount mUpHops = HopCount.maxof;//cMAX_HOPS;
+  //  HopCount mUpHops = HopCount.maxof;//cMAX_HOPS;
 
   @Override
-  virtual Unsigned getUpHops() { return mUpHops; }
+  virtual Unsigned getUpHops() { return getHCPoint().getUpHopsFromHCPoint(); }
   @Override
-  virtual Unsigned getMaxUpHops() { return mUpHops.maxof; }
+  virtual Unsigned getMaxUpHops() { return HopCount.maxof; }
+  /*
   @Override
-  virtual Void setUpHops(Unsigned uphops) { mUpHops = (HopCount) uphops; }
+  virtual Void setUpHops(Unsigned uphops) {
+    fail(__FILE__,__LINE__,"DEIMPLEMENTED");
+    //    mUpHops = (HopCount) uphops;
+    }*/
 }
 
 /** HardCellG: A Growable Low-Density Mobile Grid

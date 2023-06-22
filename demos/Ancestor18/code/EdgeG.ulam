@@ -73,8 +73,8 @@ element EdgeHG : QHardCellGField
     /// not around a DiamondSequencer?? How can that be?
 
     PocketDir innerpd = oppositePocketDir(opendir);
-    C2D c1(0,0);
-    C2D c2 = pocketDir2C2D(innerpd)*3;
+    C2D c1 = pocketDir2C2D(opendir)*1; // rectiterator excludes its bounds
+    C2D c2 = pocketDir2C2D(innerpd)*4; // so back 1 and forward 4
     C2D minc = c1.min(c2);
     C2D maxc = c1.max(c2);
 
@@ -93,10 +93,12 @@ element EdgeHG : QHardCellGField
     while (ri.hasNext()) {
       C2D c = ri.next();
       if (!ew.isAccessible(c)) continue;
+      if (c.length() == 0u) continue; // skip self
       ++sites;
       SN csn = ew.getSiteNumber(c);
       Atom & a = ew[c];
-      if (a is Empty) emppick.update(csn);
+      if (a is Empty && (c.x == 0 || c.y == 0)) // Only EC in our driving langes
+        emppick.update(csn);
       else if (a is DiamondStance) stancepick.update(csn);
     }
 

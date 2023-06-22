@@ -63,11 +63,11 @@ transient QHardCellState : Intention + DTU + QDebugUtils + Fail {
     if (initIfNeeded(hc)) return true;
     mD&&pR("QHCSSTAB11");
 
+    // if (stabilizeHCPointOrDie(hc)) return true;
+    // mD&&pR("QHCSSTAB1210");
+
     if (stabilizeHopsOrDie(hc)) return true;
     mD&&pR("QHCSSTAB12");
-
-    if (stabilizeHCPointOrDie(hc)) return true;
-    mD&&pR("QHCSSTAB1210");
 
     if (stabilizeAccessibleOrDie(hc)) return true;
     mD&&pR("QHCSSTAB1211");
@@ -122,11 +122,16 @@ transient QHardCellState : Intention + DTU + QDebugUtils + Fail {
       // YES
       /// ARE THERE ANY NGBS TO LOOK TO?
       if (hc3.minUpHops >= hc3.myUpHopsGoal) return qc.die(); // NO
-      qc.setUpHops(hc3.minUpHops + 1u);
+
+      HCPoint qchcp;
+      hc3.minHCPoint.updateAdjacentHCPointFromUs(qchcp,-hc3.minUpHopsC2D);
+
+      if (qchcp.length() < hc3.minHCPoint.length())
+        return qc.die();        // Don't init from downhill
+
+      qc.setHCPoint(qchcp);
       qc.setDSHops(hc3.minDSHops + 1u);
       qc.setMaxHopsGoal(hc3.minUpHopsGoal);
-      //XXX ?      setZone()
-      //      qc.setOnDSAxes(hc3.myOnDSAxes);
 
       return block();
     }
@@ -148,19 +153,42 @@ transient QHardCellState : Intention + DTU + QDebugUtils + Fail {
     // DIE IF NO NGBS.
     if (hc3.minUpHops == hc3.minUpHops.maxof) return qc.die();
 
-    // DO I NEED TO UPDATE EITHER MINUP HOP & GOAL?
+    // DO I NEED TO UPDATE EITHER MINUP (HOP &) GOAL?
     Bool changed = false;
+
     if (hc3.minUpHops + 1u != hc3.myUpHops ||
         hc3.minUpHopsGoal != hc3.myUpHopsGoal) {
-      // I DO.
       mD&&pR("QHDCL MAXGOALHOPS CHG") 
         &&pRContext();
+
+      // I DO. BUT DO I HAVE A LEGIT MINUP TO UPDATE FROM?
+      if (hc3.minUpHops >= hc3.myUpHops) { // I DO NOT. 
+        HCPoint hcp = qc.getHCPoint();
+        return qc.die(); 
+        //return qc.blockOrDie(qc.cNO_MINUP_DEATH_ODDS); 
+      }
+
       qc.setMaxHopsGoal(hc3.minUpHopsGoal); // Be consistent with chosen
-      qc.setUpHops(hc3.minUpHops+1u);       // upstream ngb
+      {
+        // Want to update OUR hcp from minHCPoint and minUpHopsC2D
+        HCPoint newus;
+        mD&&pR("QHDCLUPHCP10");
+        mD&&pR(qc);
+        mD&&pR(hc3.minUpHops);
+        mD&&pR(hc3.minHCPoint);
+        mD&&pR(hc3.minUpHopsC2D);
+        newus.unsetHCPoint();
+        hc3.minHCPoint.updateAdjacentHCPointFromUs(newus,-hc3.minUpHopsC2D);
+        if (newus.isValid())
+          qc.setHCPoint(newus);
+        mD&&pR("QHDCLUPHCP11");
+        mD&&pR(newus);
+        mD&&pR(qc);
+      }
       qc.setSettledDownHops(0u);  // and downstream is now considered unsettled
       changed = true;             // continue to the beyond goal check
     }
-    //// I DO NOT NEED TO UPDATE HOPS OR GOAL
+    //// I DO NOT NEED TO UPDATE (HOPS OR) GOAL
       
     mD&&pR("QHCUP1610");
 
@@ -182,7 +210,7 @@ transient QHardCellState : Intention + DTU + QDebugUtils + Fail {
     return false;
   }
 
-  Bool stabilizeHCPointOrDie(QHardCell & qc) {
+  Bool stabilizeHCPointOrDieUNUSED(QHardCell & qc) {
 
     HC3State& hc3 = getHC3State();
 
@@ -469,7 +497,7 @@ transient QHardCellState : Intention + DTU + QDebugUtils + Fail {
         HC3NgbState & n = hc3.mHC3NgbStates[i];
         if (n.foundAnyDownstream()) {
           QHardCell & hc = n.getNgb();
-          dl.mergeDCs(hc);
+          dl.mergePlausibleDCs(hc,(AxialDir) i);
         }
       }
     }
@@ -556,19 +584,24 @@ transient QHardCellState : Intention + DTU + QDebugUtils + Fail {
           copy.initCopy();
 
           HCPoint qch = qc.getHCPoint(); // our pos
-          HCPoint cch;
-          qch.updateAdjacentHCPointFromUs(cch, n.mNgbCtr); // their implied pos
-          copy.setHCPoint(cch);
-          
-          ew[n.mNgbCtr] = a;
-          mD&&pR("QHCUP219DONE");
-          mD&&pR(n.mNgbCtr);
-          mD&&pR(ew[n.mNgbCtr]);
-          spawns = true;
+          HCPoint cch = qch;
+          // If updateAdjacent finds they are (0,0), it leaves cch unchanged..
+          qch.updateAdjacentHCPointFromUs(cch, n.mNgbCtr); // ..so trying to heal root..
+          if (cch.length() > qch.length()) { // CAN ONLY SPAWN DOWNHILL
+            copy.setHCPoint(cch);  
+            ew[n.mNgbCtr] = a;
+            mD&&pR("QHCUP219DONE");
+            mD&&pR(n.mNgbCtr);
+            mD&&pR(ew[n.mNgbCtr]);
+            spawns = true;
+          }
         }
       }
 
-      if (spawns) return true; // I SPAWNED.
+      if (spawns) {
+        qc.signalLocalDamage(); // spawning means (had been) damage
+        return true;            // I SPAWNED.
+      }
 
       mD&&pR("QHCUP220");
 
@@ -729,6 +762,8 @@ quark QHardCell : Intender
   virtual ClassId getIntentionClass() { return QHardCellState.classidof; }
 
   //// QHardCell STATE
+  constant Unsigned cNO_MINUP_DEATH_ODDS = 10u;
+
   NgbRels mNgbRels;
 
   Bool mProductivity;
@@ -751,7 +786,7 @@ quark QHardCell : Intender
 
   virtual Unsigned getUpHops() ;          // Distance to root
   virtual Unsigned getMaxUpHops() ;       // uphops val that means uninitted
-  virtual Void setUpHops(Unsigned uphops) ;
+  // XXX  virtual Void setUpHops(Unsigned uphops) ;
 
   virtual Unsigned getMaxHopsGoal() ;     // Intended max hops (here)
   virtual Void setMaxHopsGoal(Unsigned maxup) ; 
@@ -761,7 +796,7 @@ quark QHardCell : Intender
 
   virtual Bool isRoot() { return false; } 
   virtual Bool rootBehave(QHardCellState &hcs) { return false; } 
-  virtual Void initCopy() { setUpHops(Unsigned.maxof); /* set uninitted */ }
+  virtual Void initCopy() { getHCPoint().unsetHCPoint(); /*setUpHops(Unsigned.maxof);*/ /* set uninitted */ }
 
   virtual Atom toSpawn() ;      //< Concrete subclass to build for spawning
 
@@ -777,10 +812,47 @@ quark QHardCell : Intender
   Bool isTail() { return getUpHops() == getMaxHopsGoal() - 1u; }
 
   Bool done() { return true; }  // Things are different now 
+
   Bool die() {
+    mD&&pR("QHCDIE10");
     EventWindow ew;
     ew[0] = Empty.instanceof; 
     return true;
+  }
+  
+  Bool blockOrDie(Unsigned deathOdds) {
+    mD&&pR("QHCBLOCKORDIE10");
+    mD&&pR(deathOdds);
+    Random random;
+    return random.oneIn(deathOdds) ? die() : done();
+  }
+
+  Void signalLocalDamage() {
+    // Possible conditions:
+    // (1) We spawned (so there had been damage)
+    // Action: Signal damage on axes base on our HCPoint
+    mD&&pR("QHCSLD10");
+    mD&&pR((DEWLine&) self);
+    Zone zone;
+    HCPoint ushc = getHCPoint();
+    mD&&pR(ushc);
+    if (!hcPoint2Zone(ushc, zone)) // can't signal if we're
+      return;                      // lost or the foggen root
+    AxialDir ads[2];
+    Unsigned dirs = zone2AxialDirs(zone, ads[0], ads[1]);
+    mD&&pR("QHCSLD11");
+    mD&&pR(dirs);
+    DEWLineC dl;
+    for (Unsigned i = 0u; i < dirs; ++i) {
+      mD&&pR("QHCSLD12");
+      mD&&pR(dirs);
+      dl.maxDC(ads[i], cDC_HERE);
+    }
+    mD&&pR("QHCSLD13");
+    mD&&pR(dl);
+    mergeDCs(dl);
+    mD&&pR("QHCSLD14");
+    mD&&pR((DEWLine&) self);
   }
   
   //  constant Unsigned cMIN_DOWN_SETTLED = 3u; // DEBUG TEST Say we must be this settled to ride

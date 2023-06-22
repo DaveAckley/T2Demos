@@ -50,10 +50,12 @@ quark EdgeModel : QBodyModel
 
     /// DON'T LET OUT GENERATIONS GROW TOO BIG
     Unsigned maxsize = getMaxSizeForDiSeq(mDiSequence);
-    if (root.mMaxHops >= maxsize && root.mCmdPhase == root.cCMD_STOP) {
-      root.mCmdPhase = root.cCMD_MOVE; // go back to moving
-      root.resetWatchdog();            // but you get a bye on productivity
-      return true;
+    if (root.mMaxHops >= maxsize) {    // If I say you too big then
+      root.reportProductivity();       // you get free productivity
+      if (root.mCmdPhase == root.cCMD_STOP) { // but if you try grow then
+        root.mCmdPhase = root.cCMD_MOVE; // I say no, go back to moving
+        return true;
+      }
     }
 
     // Everything else is only when moving
@@ -72,7 +74,7 @@ quark EdgeModel : QBodyModel
         AxialDir dad = (AxialDir) idx;
         AxialDir oad = oppositeAxialDir(dad);
         if (root.mDefCons[oad] <= 2u) {
-          dcr.printf("[EMdam%dad]",dad);
+          dcr.printf("[EMdam:%dad]",dad);
           return executeMove((SN) (oad+1u), root, qcs, dcr);
         }
       }

@@ -146,9 +146,9 @@ element LoopKiller : Codon + TQDSControlStg {
     ColorUtils cu;
     ARGB ret = cu.color(mBlink ? 0xff000000 : 0xffffffff);
     if (mKillFunc == cKLFN_UP)
-      ret = cu.between(ret, cu.color(0xff00ff00), 80u);
+      ret = cu.between(ret, cu.color(0xff00ff00), 70u);
     else if (mKillFunc == cKLFN_DOWN)
-      ret = cu.between(ret, cu.color(0xffff0000), 80u);
+      ret = cu.between(ret, cu.color(0xffff0000), 70u);
     return ret;
   }
 

@@ -95,6 +95,7 @@ quark LX : Codon + DTU + QDebugUtils + Fail + TQDSControlStg {
   }
 }
 
+/*
 union LXSourceU + DTU {
   ProcUnit mLXUProcUnit;
   LXClassId mLXUClassid;
@@ -109,6 +110,7 @@ quark LXSource {
   LXSourceType mType;
   LXSourceU mSources;
 }
+*/
 
 quark QLabelMark {
   typedef Bits(6) Mark;
@@ -168,7 +170,6 @@ element LXMarker : LX + QLabelMark + TQDSControlStg {
 
 /** \symbol RS
     \color #e42
- */
 element LXReset : LX + QLabelMark {
   //// LX API
   @Override
@@ -205,10 +206,10 @@ element LXReset : LX + QLabelMark {
   LXSource mSeedClassId;
   LXSource mRetryCount;
 }
+*/
 
 /** \symbol KD
     \color #f60
- */
 element LXKillDiamond : LX {
   //// LX API
   @Override
@@ -242,10 +243,11 @@ element LXKillDiamond : LX {
     mDSType = cDS_NORM;
   }
 }
+ */
+
 
 /** \symbol CD
     \color #ace
- */
 element LXCommandDS : LX + SW3Cmdr + DTU + Fail + TQDSControlStg {
   SW3Packet mPacket;
   //// LX API
@@ -263,4 +265,5 @@ element LXCommandDS : LX + SW3Cmdr + DTU + Fail + TQDSControlStg {
     mDSType = cDS_NORM;
   }
 }
+*/
 

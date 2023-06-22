@@ -41,6 +41,7 @@ transient HC3NgbState + DTU + QDebugUtils {
 
   NgbState mState = cNGB_INIT;
   Unsigned mHops = Unsigned.maxof; // If mState <= 4
+  HCPoint mHCPoint;                // If mState <= 4
   Unsigned mJunctionIndex = 0u; // If mState <= 4
   Unsigned mDSHops = Unsigned.maxof; // If mState <= 4
   XZone mDSXZone;                    // If mState <= 4
@@ -112,6 +113,11 @@ transient HC3NgbState + DTU + QDebugUtils {
     return mHops;
   }
 
+  HCPoint getHCPoint() {
+    assertHasNeighbor();
+    return mHCPoint;
+  }
+
   Unsigned getJunctionIndex() {
     assertHasNeighbor();
     return mJunctionIndex;
@@ -149,6 +155,7 @@ transient HC3NgbState + DTU + QDebugUtils {
     //vvvvXXX     self = Self.instanceof; // Nuke from orbit
     mState = cNGB_INIT;
     mHops = Unsigned.maxof; // If mState <= 4
+    mHCPoint.unsetHCPoint();
     mJunctionIndex = 0u;    // 0 == none; If mState <= 4
     mDSHops = Unsigned.maxof; // If mState <= 4
     mDSXZone = cXZONE_UN;       // uninitted
@@ -225,6 +232,7 @@ transient HC3NgbState + DTU + QDebugUtils {
         if (!me.inMyGroup(a)) continue;
 
         Unsigned ahops = a.getUpHops();
+        HCPoint ahcp = a.getHCPoint();
         Unsigned amaxhops = a.getMaxUpHops(); 
         if (ahops >= amaxhops)      mFoundUninit = true;
         else if (ahops < myhops)    mFoundUpstream = true;
@@ -237,6 +245,7 @@ transient HC3NgbState + DTU + QDebugUtils {
           mState = (NgbState) sn;
           mFoundAt = at;
           mHops = ahops;
+          mHCPoint = ahcp;
           if (a as JunctionIndexProvider) 
             mJunctionIndex = a.getJunctionIndex();
           Unsigned agoalhops = a.getMaxHopsGoal();

@@ -173,7 +173,7 @@ quark SW3Packet + DTU + Fail {
     
     Atom & a = ew[hc3c];
     if (a as QHardCellGField) {
-      if (a.mMaxHops < a.mUpHops + 3u) // Far enough to have four complete DSPs
+      if (a.mMaxHops < a.getUpHops() + 3u) // Far enough to have four complete DSPs
         return false;                  // or block
     }
 

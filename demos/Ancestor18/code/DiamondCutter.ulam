@@ -208,6 +208,41 @@ transient DiamondCutterBase : D1PocketableState + QDebugUtils {
  */
 transient DiamondCutterFindOldRoot : DiamondCutterBase {
   @Override
+  virtual Bool init(Intender & in) {
+
+    PocketHC3 & p = mPocket;
+    DiamondCutter & dc = (DiamondCutter &) in;
+
+    HP2HP hp2hp;
+    hp2hp.takeDebug(dc);
+    // This won't work because it's only certain EdgeModels that we
+    // want to stop at:  hp2hp.blockOnClass(EdgeModel.classid);
+
+    mD&&pR("DCFOR10");
+    SN nextsn = hp2hp.route2HP(C2D.instanceof);
+    if (nextsn == SN.maxof)     // route says blocked
+      return true;              // so wait
+
+    if (nextsn == SN.maxof-1u)  // route says lost
+      return die();             // so die
+
+    mD&&pR("DCFOR11");
+
+    EventWindow ew;
+    if (nextsn != 0u) {         // route says go here
+      mD&&pR("DCFOR12");
+      mD&&pR(nextsn);
+      ew.swap(0u,nextsn);
+      return true;
+    }
+
+    // route says we're done
+    mD&&pR("DCFOR13");
+    return super.init(in);
+
+  }
+
+  @Override
   virtual Bool observe(Intender & in) {
     mD&&pR("DCFOROB10");
     if (super.observe(in)) return true;
@@ -227,8 +262,7 @@ transient DiamondCutterFindOldRoot : DiamondCutterBase {
     return false;
   }
 
-  @Override
-  virtual Bool act(Intender & in) {
+  Bool act(Intender & in) {
     PocketHC3 & p = mPocket;
     DiamondCutter & dc = (DiamondCutter &) in;
 
@@ -347,7 +381,7 @@ transient DiamondCutterFindOldRoot : DiamondCutterBase {
     }
     //// WE HAVE FULLY DEPLOYED;
     dc.adoptNewIntention(dc.cDCS_DELETE_OLD_ROOT); // Adopt a new intention
-    dc.mEventCounter = (DiamondCutter.EventCounter) (3u*oldmaxgoal/2u); // set timer
+    dc.mEventCounter = DiamondCutter.cMOTHER_LINGER_DELAY_TIME; // set timer
 
     //// ERASE SECOND KEY
     ew[snk] = Empty.instanceof;
@@ -365,6 +399,46 @@ transient DiamondCutterFindOldRoot : DiamondCutterBase {
          move to DS RED, and stay there
  */
 transient DiamondCutterSeedNewRoot : DiamondCutterBase {
+
+@Override
+  virtual Bool init(Intender & in) {
+
+    PocketHC3 & p = mPocket;
+    DiamondCutter & dc = (DiamondCutter &) in;
+
+    HP2HP hp2hp;
+    hp2hp.takeDebug(dc);
+
+    C2D dest1, dest2;
+    if (dc.mOriginalAxialDir==cW) {
+      dest1.set(-9,-1); dest2.set(-10,0); // SW of LD DS
+    } else {
+      dest1.set( 9,-1); dest2.set(  8,0); // SW of RD DS
+    }
+    mD&&pR("DCSNR10");
+    SN nextsn = hp2hp.route2HP(dest1,dest2);
+    if (nextsn == SN.maxof)     // route says blocked
+      return true;              // so wait
+
+    if (nextsn == SN.maxof-1u)  // route says lost
+      return die();             // so die
+
+    mD&&pR("DCSNR11");
+
+    EventWindow ew;
+    if (nextsn != 0u) {         // route says go here
+      mD&&pR("DCSNR12");
+      mD&&pR(nextsn);
+      ew.swap(0u,nextsn);
+      return true;
+    }
+
+    // route says we're done
+    mD&&pR("DCSNR13");
+    return super.init(in);
+
+  }
+
   @Override
   virtual Bool act(Intender & in) {
     DiamondCutter & dc = (DiamondCutter &) in;
@@ -389,7 +463,7 @@ transient DiamondCutterSeedNewRoot : DiamondCutterBase {
     /// try to avoid the tangled south most of the time
     if (mindshops > 1u && hcp.y >= -2) {
 
-      mD&&pR("DCFORa10");
+      mD&&pR("DCSNRa10");
       if (tryMoveAD(dc, cN))
         return true;
     }
@@ -442,7 +516,7 @@ transient DiamondCutterSeedNewRoot : DiamondCutterBase {
     ew[p.mCoords[newrootpd]] = newroot.atomof;  // YOUR JOB HAS JUST BEGUN
     mD&&pR(ew[p.mCoords[newrootpd]]);
 
-    //ew[0] = Empty.instanceof;                   // BUT MY JOB IS DONE
+    dc.adoptNewIntention(DiamondCutter.cDCS_DELIVER_DISEQ);  // AND I MUST MOVE ON
 
     return true;
   }
@@ -498,53 +572,15 @@ transient DiamondCutterDeliverDiSeq : DiamondCutterBase {
   virtual Bool act(Intender & in) {
     DiamondCutter & dc = (DiamondCutter &) in;
     EventWindow ew;
-
-    return false;
-    /*
-    //// ARE WE DS ADJACENT?
-    mD&&pR("DCSNR10");
-    PocketDir towardds;
-    AxialDir nextad;
-    Unsigned dspd = diamondSequencerAdjacent(nextad, dc.mOriginalAxialDir);
-    if (dspd == Unsigned.maxof) {
-      //// WE ARE NOT DS ADJACENT
-      mD&&pR("DCSNR11");
-      return tryMoveAD(dc, nextad);
+    Random random;
+    
+    // HANG AROUND UNTIL EATEN OR TIMEOUT
+    if (random.oneIn(2u) && dc.mEventCounter-- == 0u) {
+      ew[0] = Empty.instanceof;
+      return true;
     }
 
-    //// WE ARE DS ADJACENT.
-    mD&&pR("DCSNR12");
-    Unsigned newrootpd;
-    if (dspd == cQUAD_NW) newrootpd = cQUAD_SW;
-    else if (dspd == cQUAD_NE) newrootpd = cQUAD_SE;
-    else return tryMoveAD(dc,cS);  // BUT NOT BELOW DS: TRY GOING S
-
-    setDebugOutputEnabled(true); // This rest of this is rare and ballistic if it's working
-    mD&&pR("DCSNR13");
-    mD&&pR(newrootpd);
-    PocketHC3 & p = mPocket;
-
-    mD&&pR("DCSNR14");
-    mD&&pR(p.mCoords[newrootpd]);
-
-    Atom & a = ew[p.mCoords[newrootpd]];
-    BaseClassUtils bcu;
-    RootHardCellG newroot;                      // YOU ARE TO BE ROOT THOUGH
-    bcu.copySharedData(a, newroot.atomof);      // YOU ARE LIKE ME IN MANY WAYS
-
-    mD&&pR("DCSNR15");
-    newroot.setMaxHopsGoal(dc.mNewMaxGoalHops); // ROOT OVER ALL THIS LAND
-    newroot.setSettledDownHops(0u);             // WHICH DOES NEED A MOMENT
-    newroot.mCmdPhase = newroot.cCMD_STOP;      // START OUT STOPPED
-    mD&&pR(newroot);
-
-    mD&&pR("DCSNR16");
-    ew[p.mCoords[newrootpd]] = newroot.atomof;  // YOUR JOB HAS JUST BEGUN
-    mD&&pR(ew[p.mCoords[newrootpd]]);
-    ew[0] = Empty.instanceof;                   // BUT MY JOB IS DONE
-
-    return true;
-    */
+    return false;
   }
 }
 
@@ -556,6 +592,7 @@ quark DiamondCutter : D1Pocketable + DTU + XTimer(3u,5u,20u) {
   }
 
   //// DiamondCutter API
+  
   /** Which directions to deploy new roots. 
    */
   virtual AxialDirMap getNewRootDirs(DiamondCutterBase & dcb) ;
@@ -571,6 +608,7 @@ quark DiamondCutter : D1Pocketable + DTU + XTimer(3u,5u,20u) {
   AxialDir mOriginalAxialDir; // which way did we start out
   HardCellG.HopCount mNewMaxGoalHops; // also event counter in DC#3?
   typedef Unsigned(HardCellG.HopCount.sizeof + 4u) EventCounter; // Four bits bigger than HopCount..
+  constant EventCounter cMOTHER_LINGER_DELAY_TIME = 32u;
   EventCounter mEventCounter;
 
   //// INTENDER API

@@ -78,6 +78,20 @@ quark DEWLine + DTU {
     return max;
   }
 
+  Bool mergePlausibleDCs(constant DEWLine & other, AxialDir fromad) {
+    Bool ret = false;
+    AxialDir implausiblead = oppositeAxialDir(fromad);
+    for (Unsigned i = 0u; i < 4u; ++i) {
+      if (i == implausiblead) continue;
+      if (mDefCons[i] < other.mDefCons[i]) {
+        mDefCons[i] = other.mDefCons[i];
+        ret = true;
+      }
+    }
+    return ret;
+  }
+
+
   Bool mergeDCs(constant DEWLine & other) {
     Bool ret = false;
     for (Unsigned i = 0u; i < 4u; ++i) {

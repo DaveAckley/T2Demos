@@ -53,7 +53,8 @@ element SeedSeq : XTimer(3u,6u,4u) + DTU + QDebugUtils {
       DiamondSequencer ds;
       QHardCellG & rds = ds;
       rds = root; // pick up all QHardCellG fields
-      ds.setUpHops(1u); // we're down one hop
+      //XXX ds.setUpHops(1u); // we're down one hop
+      ds.setHCPoint(HCPoint.instanceof(0,-1)); // we're up one hop
       ew[0] = ds.atomof;
       return;
     }

@@ -67,8 +67,8 @@ element RootHardCellG : QHardCellG
   virtual Unsigned getUpHops() { return 0u; }
   @Override
   virtual Unsigned getMaxUpHops() { return Unsigned.maxof; } // ??
-  @Override
-  virtual Void setUpHops(Unsigned uphops) { Fail f; f.fail(__FILE__,__LINE__); }
+  //  @Override
+  //  virtual Void setUpHops(Unsigned uphops) { Fail f; f.fail(__FILE__,__LINE__); }
 
   typedef Unsigned(2) CmdPhase;
   constant CmdPhase cCMD_MOVE = 0u;

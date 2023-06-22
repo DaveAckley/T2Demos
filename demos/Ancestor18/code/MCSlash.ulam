@@ -47,7 +47,7 @@ element MCSlash : EdgeModel
     .mDiSeqInfoMap = {
       { .mEdgeTags =      // NW  NE  SE  SW
         { .mEdgeTagArray = { 0u, 0u, 0u, 0u } }, // DiSeq#1 no junctions
-        .mDVec = {.x =-10, .y =  0}},            // DiSeq#1 drift west
+        .mDVec = {.x = 0, .y =  0}},             // DiSeq#1 no drift
       { .mEdgeTags = {    // NW  NE  SE  SW
           .mEdgeTagArray = { 0u, 5u, 0u, 0u } }, // DiSeq#2 tag 5 to NE
         .mDVec = {.x = 20, .y = 10}},            // DiSeq#2 drift NNE
@@ -107,10 +107,15 @@ element MCSlash : EdgeModel
     mD&&pR(def);
     MaxPick dirs;
     dirs.update((SN) 0u, 1u, 32u); // doing nothing gets 32 votes
+    Random random;
+    dirs.update((SN) random.between(1,4), 1u, 2u); // doing random WNSE gets 2 votes
     for (Unsigned i = 0u; i < 4u; ++i) {
       AxialDir ad = (AxialDir) i;
       C2D adc = axialDir2C2D(ad);
       Int len = def.dot(adc);
+      mD&&pR("MCSAFDF11");
+      mD&&pR(adc);
+      mD&&pR(len);
       if (len > 0)
         dirs.update((SN) (ad+1u), 1u, (Unsigned) len); // pick weighted by len
     }
@@ -121,7 +126,7 @@ element MCSlash : EdgeModel
     SN movesn = (SN) dirs.getIdx();
     setDebugOutputEnabled(old);
     if (movesn > 0u) {
-      dcr.printf("[MCSafdf%d]",movesn);
+      dcr.printf("[MCSafdf:%d]",movesn);
       return executeMove(movesn, root, qcs, dcr);
     }
     return false;

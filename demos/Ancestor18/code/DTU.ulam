@@ -242,6 +242,20 @@ quark DTU {
     return 0u; // NOT REACHED?
   }
 
+  Unsigned zone2AxialDirs(Zone z, AxialDir & ad1, AxialDir & ad2) {
+    which (z) {
+    case cZONE_NT: { ad1 = cN; return 1u; }
+    case cZONE_ET: { ad1 = cE; return 1u; }
+    case cZONE_ST: { ad1 = cS; return 1u; }
+    case cZONE_WT: { ad1 = cW; return 1u; }
+    case cZONE_NW: { ad1 = cN; ad2 = cW; return 2u; }
+    case cZONE_NE: { ad1 = cN; ad2 = cE; return 2u; }
+    case cZONE_SE: { ad1 = cS; ad2 = cE; return 2u; }
+    case cZONE_SW: { ad1 = cS; ad2 = cW; return 2u; }
+    }
+    return 0u; // NOT REACHED
+  }
+
   Bool onDiagonal(C2D c) {
     C2D a = c.abs();
     return a.x > 0 && a.x == a.y;

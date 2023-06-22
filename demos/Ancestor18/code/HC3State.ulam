@@ -6,8 +6,9 @@ transient HC3State + DTU + QDebugUtils {
 
   // values from the Intender
   Bool myIsRoot;
+  HCPoint myHCPoint;
   Unsigned myUpHops;
-  Unsigned myUpHopsGoal; // IN EFFECT myUpHopsGoal
+  Unsigned myUpHopsGoal;
   Unsigned myDSHops;
   OnDSAxes myOnDSAxes;
   XZone myXZone;
@@ -15,7 +16,8 @@ transient HC3State + DTU + QDebugUtils {
   // reductions from the ngbs
   Unsigned minDSHops;
   Unsigned minUpHops;
-  C2D minUpHopsC2D;             //< Where minUpHops was found
+  HCPoint minHCPoint;
+  C2D minUpHopsC2D;             //< Where minUpHops/minHCPoint was found
   Unsigned maxJunctionIndex;    //< JunctionIndex of the chosen minUpHops
   AxialDir minUpHopsAD;         // which of our ngbrel idx to upstream
   Unsigned minUpHopsGoal;       // of specifically minUpHopsC2D
@@ -50,14 +52,14 @@ transient HC3State + DTU + QDebugUtils {
   Void init(QHardCell & q) {
     //    setDebugOutputEnabled(true);
     mD&&pR("H3SINMIN10");
-    init(q.isRoot(), q.getUpHops(), q.getMaxHopsGoal(), q.getDSHops(), q.getDSXZone());
+    init(q.isRoot(), q.getHCPoint(), q.getMaxHopsGoal(), q.getDSHops(), q.getDSXZone());
   }
 
-  Void init(Bool isroot, Unsigned uphops, Unsigned maxhopsgoal, Unsigned dshops, XZone xzone) {
+  Void init(Bool isroot, HCPoint hcp, Unsigned maxhopsgoal, Unsigned dshops, XZone xzone) {
     //    setDebugOutputEnabled(true);
     mD&&pR("H3SINIT10");
     myIsRoot = isroot;
-    myUpHops = uphops;
+    myUpHops = hcp.getUpHopsFromHCPoint();
     myUpHopsGoal = maxhopsgoal; // center qhc current goal
     myDSHops = dshops;
     myXZone = xzone;
@@ -96,6 +98,7 @@ transient HC3State + DTU + QDebugUtils {
   Void examineNgbs(QHardCell & qhc) {
     uninits = false;
     minUpHops = Unsigned.maxof;
+    minHCPoint.unsetHCPoint();
     minUpHopsC2D = C2D.instanceof;
     minDSHops = Unsigned.maxof;
     xzoneOfMinDSHops = cXZONE_UN;
@@ -136,6 +139,7 @@ transient HC3State + DTU + QDebugUtils {
           }
           if (takeinfo) {
             minUpHops = n.getUpHops();
+            minHCPoint = n.getHCPoint();
             minUpHopsC2D = n.getNgbC2D();
             minUpHopsAD = (AxialDir) i;
             minUpHopsGoal = n.getNgbMaxGoalHops(); // 

@@ -1,0 +1,134 @@
+/**
+   A HCPoint-based intradiamond navigation assistent
+*/
+transient HP2HP
+  + DTU
+  + QDebugUtils
+  + Fail
+{
+  typedef ClassUtils.ClassId ClassId;
+  constant Unsigned cMAX_CLASSES = 16u;
+  ClassId mBlockIds[cMAX_CLASSES];
+  Unsigned mBlockIdsInUse;
+
+  Void init() {
+  }
+
+  //// HP2HP SERVICES
+  Bool blockOnClass(ClassId cid) {
+    if (mBlockIdsInUse >= cMAX_CLASSES)
+      return false;
+    mBlockIds[mBlockIdsInUse++] = cid;
+    return true;
+  }
+  
+  /** \returns 0 if currently within pocket that can see desthp.
+      \sa route2HP(C2D desthp1,C2D desthp1) 
+      for details and caveats.
+   */
+  SN route2HP(C2D desthp) {
+    return route2HP(desthp,desthp);
+  }
+  
+  /** \returns 0 if currently within pocket that can see desthp1 and desthp2.
+      \returns SN.maxof if currently blocked
+      \returns SN.maxof-1u if lost (cannot see any QHardCell).
+
+      Otherwise, \returns SN \c swapsn of an empty site that ew[0]
+      could swap with to get closer to desthp. In that case, \c swapsn
+      will be in an HG pocket if that will leave \c desthp is less
+      than 3 sites manhattan distance away, otherwise \c swapsn will
+      be in an HG driving lane.
+   */
+  SN route2HP(C2D desthp1, C2D desthp2) {
+    EventWindow ew;
+    mD&&pR("HP2RT10");
+    mD&&pR(desthp1);
+    mD&&pR(desthp2);
+    Unsigned destspread = desthp1.manhattanDistance(desthp2);
+    mD&&pR(destspread);
+
+    /// FIRST PASS: Find QHCs
+    MinPick qhcdest1;           // closest to dest1
+    MinPick qhcdest2;           // closest to dest2
+    MinPick qhcsum;             // closest to dest1+dest2
+    C2D origin;                 // where I'm assumed to be
+    ClassUtils cu;
+    for (SN sn = 1u; sn < 41u; ++sn) {
+      if (!ew.isAccessible(sn)) continue;
+      Atom & a = ew[sn];
+      for (Unsigned i = 0u; i < mBlockIdsInUse; ++i) {
+        if (cu.isBase((UrSelf&) a, mBlockIds[i]))
+          return SN.maxof;
+      }
+      if (a as QHardCell) {
+        HCPoint ahp = a.getHCPoint();
+        if (!ahp.isValid()) continue;
+        C2D ahpc = ahp.validHCPoint2C2D();
+        Unsigned dist1 = ahpc.manhattanDistance(desthp1);
+        qhcdest1.update(sn,dist1);
+        Unsigned dist2 = ahpc.manhattanDistance(desthp2);
+        qhcdest2.update(sn,dist2);
+        qhcsum.update(sn,dist1+dist2);
+      }
+    }
+    mD&&pR("HP2RT11");
+    mD&&pR(qhcdest1);
+    mD&&pR(qhcdest2);
+    mD&&pR(qhcsum);
+
+    if (!qhcsum.hasPick()) return SN.maxof - 1u;
+    SN destsn = (SN) qhcsum.getIdx();
+    C2D destc = ew.getCoord(destsn);
+    QHardCell & todest = (QHardCell&) ew[destsn];
+    Unsigned distremaining = qhcsum.getX();
+    Bool finalstep = (distremaining <= destspread);
+
+    mD&&pR("HP2RT12");
+    mD&&pR(distremaining);
+    mD&&pR(destc);
+    mD&&pR(todest);
+    mD&&pR(finalstep);
+
+    //// SECOND PASS: Find destination
+    MinPick picksn;    // empty driving lane or pocket near qhcdest
+    for (SN sn = 0u; sn < 41u; ++sn) { // start at 0u to consider we might be done
+      if (!ew.isAccessible(sn)) continue;
+      if (sn != 0u && !(ew[sn] is Empty)) continue; 
+      C2D c = ew.getCoord(sn);
+      C2D diffsum = destc - c;
+      Unsigned lensum = diffsum.length();
+      if (lensum > 4u) continue;
+      Bool ondrivinglane =
+        (diffsum.x == 0 || diffsum.y == 0);
+      if (finalstep == ondrivinglane) 
+        continue;               
+      // drivinglane iff !final
+      Unsigned totallen = diffsum.length();
+      if (qhcdest1.hasPick()) {
+        C2D c1 = qhcdest1.getIdxC2D();
+        totallen += c.manhattanDistance(c1);
+      } else totallen += 5u;
+      if (qhcdest2.hasPick()) {
+        C2D c2 = qhcdest2.getIdxC2D();
+        totallen += c.manhattanDistance(c2);
+      } else totallen += 5u;
+      // minimize distance to goals and chosen qhc
+      picksn.update(sn, totallen);
+    }
+
+    mD&&pR("HP2RT13");
+    mD&&pR(picksn);
+
+    if (picksn.hasPick()) {
+      SN ret = picksn.getIdxSN();
+      mD&&pR("HP2RT14");
+      mD&&pR(ret);
+      return ret; // Might be 0->done
+    }
+
+    
+    mD&&pR("HP2RT15");
+    return SN.maxof;
+  }
+}

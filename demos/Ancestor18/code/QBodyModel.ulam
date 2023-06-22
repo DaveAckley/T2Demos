@@ -18,13 +18,18 @@ transient EdgeModelState : CodonState
 {
   //// Intention API
   virtual Bool stabilize(Intender & in) {
+
+    EdgeModel & em = (EdgeModel&) in;
+    if (maybeNukeTheRoot(em)) return true; // move root nuking earlier
+    mD&&pR("CMSAa12");
+
     mD&&pR("CMSSTB10");
     if (super.stabilize(in)) return true;
-    EdgeModel & em = (EdgeModel&) in;
 
     Bool ret = false;
 
     if (!em.mIsHead) {
+
       /// PROPAGATE DEPLOYMENT INFO DOWNSTREAM FROM HEAD
       PocketPtr uppp = em.mPocketPtrs[cBODY_UP];
       if (uppp >= cPP_WEST && uppp <= cPP_EAST) {
@@ -199,9 +204,6 @@ transient EdgeModelState : CodonState
     if (cm.mIsHead) {
       mD&&pR("CMSAa11");
 
-      if (maybeNukeTheRoot(cm)) return true;
-      mD&&pR("CMSAa12");
-
       if (deployPhaseTwo(cm)) return true;
       mD&&pR("CMSAa13");
 
@@ -356,7 +358,7 @@ transient EdgeModelState : CodonState
           if (xdcount < 2u)
             xdsns[xdcount] = sn;
           ++xdcount;
-        } else if (a.getIntentionClass() == DiamondCutterSeedNewRoot.classidof) {
+        } else if (a.getIntentionClass() == DiamondCutterDeliverDiSeq.classidof) {
           xdseqsn = sn; // hmm taking last :(
         }
       } else if (a is RootHardCellG) {
@@ -408,7 +410,7 @@ transient EdgeModelState : CodonState
 
       /// OK, our last job: Wait and kill the root
       dm.mMOKiller = true;
-      dm.mEventCounter = (DiamondCutter.EventCounter) (3u*oldmaxgoal/2u); // set timer
+      dm.mEventCounter = DiamondCutter.cMOTHER_LINGER_DELAY_TIME; // set bogus timer to bogus value
 
       return true;
     }
