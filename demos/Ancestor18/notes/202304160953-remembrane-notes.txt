@@ -1,4 +1,4 @@
-{543}  -*-  mode: text; fill-column: 50;  -*-
+{591}  -*-  mode: text; fill-column: 50;  -*-
 [0:
 
 Sun Apr 16 09:53:15 2023 OK, in a desperate
@@ -2353,8 +2353,12 @@ TODO
 DONE:292]     - How about orthogonal Aa signals contact?
        Just that much could help a lot.
  - Consider workflow changes to reduce pain
-   = Separable logging streams?
-   = Incremental compilation?
+[560: Fri Jun 23 01:49:36 2023 Made separate
+motion decision logging, which has helped, so
+DONE :560]   = Separable logging streams?
+[561: Fri Jun 23 01:49:58 2023 Made parallel gcc
+builds, which help a lot, so let's say
+DONE :561]   = Incremental compilation?
 
 :169]
 [170:
@@ -4520,7 +4524,8 @@ Fri May 26 02:10:21 2023 Urgh, sidetracked. More
 
 TODO
 
- - Think of ways to distinguish LD from RD in cell
+[558:
+DONE :558] - Think of ways to distinguish LD from RD in cell
    sequence.[346:
 [366:
 DONE :366]   = How about if the diamond cutters carry cell
@@ -4624,7 +4629,8 @@ Sat May 27 01:09:24 2023 Well can we here get some
 
 TODO
 
- - Have DiamondCutterBase.rootAdjacent(..) try to
+[557: Fri Jun 23 01:44:19 2023 Redone in general,
+DONE :557] - Have DiamondCutterBase.rootAdjacent(..) try to
    head for HCPoint (-1,1) specifically, rather
    than (0,0)
 
@@ -5102,7 +5108,13 @@ shake things loose, before going back to
 squeezing. And we have to be in C consecutively
 long enough to believe the lockdown has reached
 the whole loop and back.
+[550:
 
+Thu Jun 22 14:33:52 2023 We never did that did we?
+It still seems like a plausible/possibly good
+idea.. 
+
+:550]
 :381]
 [382:
 
@@ -6075,7 +6087,8 @@ come on for the mystery tour. Let's
 
 TODO
 
- - Review how DiamondStance signaling is supposed
+[556:
+DONE :556] - Review how DiamondStance signaling is supposed
    to work
 
 :438]
@@ -7405,7 +7418,8 @@ self-stabilize it to WNSE of RG.
 
 Tue Jun 20 15:48:42 2023 Possible TODO:
 
- - Redo DiamondCutter to travel in the driving
+[555: Fri Jun 23 01:43:39 2023 It did!
+DONE :555] - Redo DiamondCutter to travel in the driving
    lanes. We think that should reduce its travel
    time variance noticeably.
 [533:
@@ -7577,10 +7591,462 @@ imagining the uninitted state could do.
 Thu Jun 22 09:00:06 2023 Well I'm going to
 checkpoint commit here I think, wwwwwarts and all,
 before trying to head down the uninit HCP road.. 
+[543:
 
+Thu Jun 22 09:03:28 2023 OK committed. Here we go.
+[544:
+
+Thu Jun 22 10:34:30 2023 Well, the HG uninitted
+stuff is looking surprisingly plausible after some
+tweaks. Current issue is the MO body model isn't
+cleaning itself up very well, leaving little
+pieces of its loop stuck to one or both central
+tips of the daughters.[545:
+
+Thu Jun 22 10:57:50 2023 Let's try another little
+movie of these tunings..[546:
+
+Thu Jun 22 13:32:27 2023 Looks good at 148kAEPS..
+[548:
+
+Thu Jun 22 14:23:12 2023 Except, aaahhhh, we've
+now seen two countem two HG deadlocks happening to
+an uncontested single Di, both appearing to happen
+near an ITC and possibly related to a growth
+spurt. [549:
+
+Thu Jun 22 14:26:52 2023 Could it be I messed
+stuff up with the spawning changes? For example:
+Is spawning from any uphill strict enough? We went
+through something like that before, right?[551:
+
+Thu Jun 22 14:36:24 2023 Well not seeing it
+immediately in this file anyway. But I feel this
+was a thing. What does HG spawning look like now
+vs 'then'.
+[552:
+
+Thu Jun 22 16:59:09 2023 I see a clue: I think
+it's happening after the DS kills itself. That
+leaves a gap in the HG, which causes the HG due
+north of the gap to go uninitted, which causes a
+chain of uninits going up, which (mumble mumble)
+eventually causes an incorrect spawning and a
+deadlock.
+
+The schlocky obvious fix would be for the DS not
+to simply erase itself, but replace itself with a
+plain HG.[553:
+
+Thu Jun 22 23:52:20 2023 Aannnd we went schlocky,
+with Classutils.copySharedData(..), and it seems
+to be fine.
+
+:553]
+
+:552]
+:551]
+
+:549]
+
+:548]
+[547:
+
+Thu Jun 22 13:59:45 2023 OK, so. How to 'deploy
+bodyplan control earlier'? Currently, BTW, MCSlash
+has one whole bit remaining.
+
+Sequence (single daughter POV):
+
+(1) Daughter is at cINS_WAIT_CUT
+(2) MO deploys XD carrying DiSeq
+(3) XD deploys D root. Chaos ensues.
+(4) cINS_WAIT_CUT & _CUT11 complete
+
+
+:547]
+
+:546]
+
+:545]
+
+:544]
+:543]
 :542]
 
 :541]
 :540]
 
 :539]
+[554:
+
+Fri Jun 23 01:43:08 2023 So can we claim anything?
+I feel like it hasn't been a very productive
+couple days?
+
+:554]
+[559:
+
+Fri Jun 23 01:45:21 2023 Well, claimed some
+stuff. Despite :291: and :293: above, I'd really
+like to have better tip-to-tip signaling if we
+could find a decent way. The moments after cell
+splitting really shouldn't have so many
+near-collision events.
+
+:559]
+[562:
+
+Fri Jun 23 02:27:15 2023 Looking at the
+tip-failure-to-signal issue a bit here, and seeing
+an issue with hcpoint->derived uphops. HC3State
+minimizes over ngb uphops without considering
+whether the HCPoint of the source of the uphops is
+compatible with us or not.
+
+As a result, the W tip of RD can get picked up as
+minuphops for the E tip of LD - specifically that,
+because we made RD smaller than LD at birth to try
+to keep them apart. As a result, the E tip of LD
+"switches allegiance" to the RD, even though it's
+actually beyond the maxgoal for RD.
+
+So it seems either HC3State should consider that,
+before picking a minuphops, or QHardCell should
+consider that, before acting on what HC3State
+says. 
+[563:
+
+Fri Jun 23 04:43:37 2023 OK hacked on that some;
+intervened in HC3NgbState.. tips are better but
+I'd still like to see more contact warnings out of
+the tip Egs. Ah well.
+[564:
+
+Fri Jun 23 06:09:22 2023 So, the 'plausible
+hcpoint relations' idea in HC3NgbState is in fact
+causing problems too: It stops or hinders HG from
+'changing allegiance' when the daughters set their
+roots and try to start spreading. I'm thinking
+maybe we don't want the 'plausible relations' idea
+because the "don't grow beyond your bounds" idea
+should be enough to block the tip-to-tip poaching
+we were seeing before.
+
+:564]
+:563]
+:562]
+[565:
+
+Fri Jun 23 16:05:00 2023 So come on, we're out of
+time.. Let's put a constant String mBootCode into
+DiSeqInfo, and put some kind of PC into QBodyModel
+or MCSlash, and GET MOVING ON initial Di CONTROL.
+[566:
+
+Sat Jun 24 13:12:51 2023 OK so we made
+
+  String mBootCode;             //< Startup insns for new MC Di
+
+in DiSeqInfo.. and what insns should we support?
+ - WNES: Try to step once in given direction
+ - X/eof: Done
+ - 0..9: Try to grow to size 10..19?
+[567:
+
+Sat Jun 24 13:37:53 2023 So one thing is MCSlash,
+for example, is pretty foggen packed:
+
+  /*__________________________________________________
+  | COMPONENTS of MCSlash <53> (70 bits/1 unused): 
+  | 
+  | Pos	| Bits	| Name	| Type <classid>
+  | 0	| 21	| super	| EdgeModel <151>
+  | 21	| 15	| base	| TQDSControlStg <153>
+  | 36	| 0	| base	| QDiamondStance <168>
+  | 36	| 0	| base	| UrSelf <0>
+  | 36	| 0	| base	| DTU <55>
+  | 36	| 0	| base	| Codon <82>
+  | 36	| 0	| base	| D1Pocketable <76>
+  | 36	| 0	| base	| DiamondController <135>
+  | 36	| 16	| base	| QStance <167>
+  | 52	| 0	| base	| Intender <115>
+  | 52	| 0	| base	| LX <98>
+  | 52	| 6	| base	| QLabelMark <152>
+  | 58	| 3	| base	| PocketChain <83>
+  | 61	| 0	| base	| PocketChainTQ <117>
+  | 61	| 0	| base	| QBodyModel <172>
+  | 61	| 3	| base	| QDebugUtils <66>
+  | 64	| 6	| base	| Segment <19>
+  | 70	| 0	| base	| TQDSControl <125>
+  | 70	| 0	| base	| TQDSControlSettable <202>
+  | 70	| 0	| base	| Fail <65>
+  | 70	| 0	| base	| DebugUtils <95>
+  |___________________________________________________
+
+so where would be put the PC for this boot code
+sequence we're imagining?
+
+I think we need a bigger redo here. Like, for
+example a single-atom super-cheat body model
+that's deployed by the BPM but not literally
+represented there. However we'd do that in
+constant atoms..
+[568:
+
+Sat Jun 24 13:46:45 2023 Now, that EdgeModel is
+pretty damn big - what all is in there?[569:
+
+Sat Jun 24 14:57:21 2023 Well, there's a foggen 9b
+event counter we should surely do something
+about. And an 8b mDiSequence we could trim a
+little, and some flags.
+
+:569]
+
+:568]
+:567]
+:566]
+:565]
+[570:
+
+Sun Jun 25 08:52:38 2023 OK come on come on. What
+are we using EdgeModel.mEventCounter for?
+
+..Well, I guess:
+
+      EventCounter mEventCounter; // For simulating XD's DELETE_OLD_ROOT
+[571:
+
+Sun Jun 25 08:56:20 2023 Seems like it only needs
+to be as big as
+DiamondCutter.cMOTHER_LINGER_DELAY_TIME, which is
+currently
+
+  constant EventCounter cMOTHER_LINGER_DELAY_TIME = 28u;
+
+so 5 bits would do ATM. Albeit a bit tight given
+how widely we've messed with the LINGER time
+recently.
+
+:571]
+
+:570]
+[572:
+
+Sun Jun 25 09:29:12 2023 OK now EdgeModel has like
+this:
+
+  | 8	| 5	| mEventCounter	| Unsigned(5)
+  | 13	| 4	| mBootPC	| Unsigned(4)
+
+so we could have up to 15 insns in our 'boot
+code'.  MCSlash is now saying stuff like:
+
+        .mDVec = {.x = 20, .y = 10},             // DiSeq#2 drift NNE
+        .mBootCode = "WSWSSEEE"},                // DiSeq#2 SW at split then E to close
+
+but nobody is examing mBootCode yet.
+
+Currently thinking about a 'general purpose'
+pocket-to-pocket-via-driving-lanes quark that we
+could use to configure the junction anchors with.
+[573:
+
+Sun Jun 25 10:41:27 2023 OK we have a rough-cut
+untested quark P2PvDL that we're thinking of
+trying to route among the anchor sites. Hmm and
+then maybe back to its start where MCSlash could
+see that things worked out?[574:
+
+Sun Jun 25 11:10:36 2023 Wow, we've got
+
+    element DemoP2PvDL : P2PvDL
+
+doing a grand tour of (+-2,+-2) corners and then
+returning to (0,0) and then erasing itself, and it
+works fine and is foggen fast to boot.
+[575:
+
+Sun Jun 25 11:55:03 2023 So let's make
+DeployJunctors based on DemoP2PvDL
+[576:
+
+Sun Jun 25 21:05:49 2023 OK, we decided to make a
+'J' opcode meaning 'configure junctors now', but
+we can't usefully to run it before we configure
+our mDiSequence, so how do we schedule that?
+[577:
+
+Sun Jun 25 21:07:33 2023 ..make another opcode
+that waits for mDiSequence to be non-zero?
+ + init mDiSequence to zero instead of 1
+[578:
+
+Sun Jun 25 21:08:48 2023 but ooops catch-22: we
+don't even know what boot code to run until we
+have a mDiSequence.
+
+But still we could just hardcode waiting for
+non-zero mDiSequence..
+[579:
+
+Mon Jun 26 03:35:34 2023 OK so we're initing
+mDiSequence to 0 and letting it pick up XD
+whenever it can. And if it gets all the way to MO
+XD deployment without getting mDiSequence != 0u,
+it declares it to be 1u at that point. And now we
+see LD#2 and RD#3 as before.
+
+Next question is when/how do we execute the J
+opcode? If we go opportunistically as soon as we
+have an mDiSeq, how do we know to wait until the
+thing returns?
+
+Hmm, in for a pound? Could we like also have a 'j'
+opcode meaning wait for and then consume the
+returning DeployJunctors? So we could go open loop
+or not as we wished? [580:
+
+Mon Jun 26 03:51:24 2023 So how does DeployJunctor
+know where to return to? We tell it and it
+remembers? I guess. Budget is okay, right?[581:
+
+Mon Jun 26 03:54:50 2023 Yah alright
+
+      /*__________________________________________________
+      | COMPONENTS of DeployJunctors <139> (18 bits/53 unused): 
+
+:581]
+
+:580]
+
+:579]
+:578]
+
+:577]
+
+:576]
+:575]
+:574]
+
+:573]
+
+:572]
+[582:
+
+Mon Jun 26 22:40:37 2023 Urgh we just had another
+program loss split failure due, I think, to our
+failure to wait and recheck mMaxDSHops after
+starting the lockdown. I guess just watch and
+wait, though, still, rather than divert to that
+now.. 
+
+:582]
+[583:
+
+Mon Jun 26 22:52:05 2023 So I'm asking myself for
+the zillionth time whether to go ahead and finally
+shoot all but the first (mHead) atom of the body
+model, and commit, for the moment anyway, to a
+pitiful ultracheat single atom body model.
+
+ + it could deploy first and be nailed down
+ - it is ultracheat -> won't generalize to more
+   complex and adaptable/evolvable models
+ + crawl before fly
+
+fog let's do it. TODO
+
+ - Put MS first in ancestor program and remove the
+   initial nanoarm
+
+ - Get the MS to deploy itself to RED on first
+   event
+
+ - get that much working
+
+ - get bootcode running in that framework.
+
+[584:
+
+Mon Jun 26 23:40:25 2023 Actually, if we're doing
+this, what about having a generic body model
+deployer at the head of the program, instead of a
+tailored subclass. Like put a sub-QBodyModel
+classid in there. That would allow us to buy back
+a bunch of bits in the deployed model. Let's do
+that.
+[585:
+
+Tue Jun 27 00:06:39 2023 Jeez, ClassUtils.ClassId
+is a full Unsigned(32)? Who thinks we're ever
+going to need four billion elements?
+
+But still, it fits even at that:
+
+      /*__________________________________________________
+      | COMPONENTS of GeneralDeployer <213> (59 bits/12 unused): 
+      | 
+      | Pos	| Bits	| Name	| Type <classid>
+      | 0	| 32	| mClassToDeploy	| Unsigned
+      | 32	| 0	| super	| QLXDeployer <212>
+ ..
+
+[586:
+
+Tue Jun 27 00:10:12 2023 Let's cut that down to
+16b anyway just to avoid embarrassment.  But how
+does this help us? We still have to have a
+dedicated type to deploy, with no configuration
+possible beyond the classid itself.
+
+Well I guess that just more of the ultracheat
+coming home to roost.
+
+[587:
+
+Tue Jun 27 02:18:28 2023 Some kind of gcc issue
+with
+
+//! QLXDeployer.ulam:17:     ProcUnitInfo pui = dss.mPUInfos.mPUInfoAry[pu];
+
+..breaking it down.
+[588:
+
+Tue Jun 27 02:35:40 2023 Looks like some read
+issue involving transients. This seems to work:
+
+   ProcUnitInfo & pui = dss.mPUInfos.mPUInfoAry[pu];
+
+:588]
+:587]
+
+:586]
+
+:585]
+:584]
+:583]
+[589:
+
+Tue Jun 27 02:36:41 2023 So, we now have a solo
+MCSlash being deployed by a GeneralDeployer. And
+it shows up, naturally enough, at all default
+values - !mIsHead, !mIsDeployed, etc etc.
+
+But if we're really buying the ultracheat, we
+don't need either of those anyway. It's always the
+head. It's deployed as soon as it exists..
+
+I guess it's time to write MCSlash v2 and see how
+it goes.[590:
+
+Tue Jun 27 02:49:57 2023 So this means that
+QBodyModel must not be LX, either.. and other base
+class changes too. Wondering if I should really go
+to Ancestor19 for this? Or at least commit with
+MCSlash v1?
+
+:590]
+
+:589]
