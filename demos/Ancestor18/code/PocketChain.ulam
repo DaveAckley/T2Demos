@@ -37,9 +37,9 @@ transient PocketChainState : SegmentState + Fail {
       if (p.mStatus == PocketHC3.cSTATUS_OPEN) {
         mD&&pR("PCHNS12");
         if (p.mCoordCount < 3u) {
-          if (p.mCoordCount > 0u) {
+          if (p.mCoordCount > 1u) {
             mD&&pR("PCHNSa13BLOCKON2");
-            return true;        // Block on 1 or 2 instead of die?
+            return true;        // Block on 2 instead of die?
           }
           PocketChain & qc = (PocketChain&) seg;
           return qc.die("PocketChain: Too open pocket");

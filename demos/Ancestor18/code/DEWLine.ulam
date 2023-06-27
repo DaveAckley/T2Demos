@@ -32,6 +32,16 @@ quark DEWLine + DTU {
     return cDC_OPEN;
   }
 
+  Void damageFromC2D(C2D pos, DefCon level) {
+    for (Unsigned i = 0u; i < 4u; ++i) {
+      AxialDir ad = (AxialDir) i;
+      C2D adc = axialDir2C2D(ad);
+      Int d = adc.dot(pos);
+      if (d > 0 && mDefCons[i] < level)
+        mDefCons[i] = level;
+    }
+  }
+
   Unsigned getSourceRank(ClassUtils.ClassId cid) {
     which (cid) {
     case RootHardCellG.classidof: { return 10u; }

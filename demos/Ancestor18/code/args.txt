@@ -1,5 +1,5 @@
-{{3J3}} -n -a 0 -e 4 -p 15 --accelerate 15 --surge 60 --dir /home/ackley/MFMS-TMP
 {{3J3}} -n -a 0 --dir /home/ackley/MFMS-TMP
+{{3J3}} -n -a 0 -e 6 -p 15 --accelerate 15 --dir /home/ackley/MFMS-TMP
 {{3G3}} -n -a 0 -e 40 -p 15 --dir /home/ackley/MFMS-TMP
 {{2J3}} -n -a 0 --dir /home/ackley/MFMS-TMP
 {{2G2}} -n -a 0

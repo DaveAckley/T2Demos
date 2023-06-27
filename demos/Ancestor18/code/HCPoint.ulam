@@ -4,6 +4,7 @@ quark HCPointable
   //// HCPointable API
   virtual HCPoint getHCPoint() ;
   virtual Void setHCPoint(HCPoint pt) ;
+  virtual Void unsetHCPoint() ;
 
   //// HCPointable SERVICES
   Bool hcPoint2PocketDir(PocketDir & pd) {
@@ -23,8 +24,9 @@ quark HCPointStg : HCPointable {
   HCPoint mHCPoint = { .x = HCPoint.cHCCoord_UNSET, .y = HCPoint.cHCCoord_UNSET };
 
   //// HCPointable API
-  virtual HCPoint getHCPoint() { return mHCPoint; }
-  virtual Void setHCPoint(HCPoint pt) { mHCPoint = pt; }
+  @Override virtual HCPoint getHCPoint() { return mHCPoint; }
+  @Override virtual Void setHCPoint(HCPoint pt) { mHCPoint = pt; }
+  @Override virtual Void unsetHCPoint() { mHCPoint.unsetHCPoint(); }
 }
 
 /** A position within a HardCell, in (-31..31, -31..31)
@@ -41,6 +43,11 @@ quark HCPoint : C2DT(6u)
   Self(HCCoord x, HCCoord y) {
     self.x = x;
     self.y = y;
+  }
+
+  Self(C2D c) {
+    self.x = (HCCoord) c.x;
+    self.y = (HCCoord) c.y;
   }
 
   Bool operator==(Self & other) {
@@ -85,6 +92,16 @@ quark HCPoint : C2DT(6u)
       x = other.x;
       y = other.y;
     }
+  }
+
+  Void setHCPoint(C2D other) {
+    x = (HCCoord) other.x;
+    y = (HCCoord) other.y;
+  }
+
+  Void setHCPoint(Int ax, Int ay) {
+    x = (HCCoord) ax;
+    y = (HCCoord) ay;
   }
 
   Void updateAdjacentHCPointFromUs(Self & them, C2D tpos) {

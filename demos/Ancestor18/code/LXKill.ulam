@@ -100,7 +100,10 @@ element LXKill : LX + QLabelMark + TQDSControlStg {
       //// NEED TO KILL DS?
       if (mKillDS) {
         mD&&pR("LXKILL214");
-        ew[0] = Empty.instanceof;
+        HardCellG hg;           // get a bare HG
+        ClassUtils cu;
+        cu.copySharedData(ew[0],hg.atomof); // take what we can
+        ew[0] = hg.atomof;                  // step on DS
       }
       //// DS IS KILLED IF REQUESTED
 

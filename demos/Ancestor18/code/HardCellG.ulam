@@ -154,6 +154,7 @@ quark QHardCellG : QHardCell
   //// UrSelf API
   @Override
   virtual ARGB getColor(Unsigned selector) {
+    ColorUtils cu;
     ARGB ret;
 
     if (selector == 2u) ret = getColorMinSettled();
@@ -162,13 +163,15 @@ quark QHardCellG : QHardCell
 
     ret = junctionColorMod(ret);
 
-    if (mProductivity) {
-      // Add 50% green if holding productivity report
-      //      basecol = cu.between(basecol, cu.color(0xff00ff00), 50u);
-      // Tue Jun 20 14:41:29 2023 Do 80% black for productivity tracing 
-      ColorUtils cu;
-      ret = cu.between(ret,cu.color(0xff000000),20u);
-    }
+    if (!getHCPoint().isValid()) // yellowfy uninitted
+      ret = cu.between(ret,cu.color(0xffffff00),20u);
+    else 
+      if (mProductivity) {
+        // Add 50% green if holding productivity report
+        //      basecol = cu.between(basecol, cu.color(0xff00ff00), 50u);
+        // Tue Jun 20 14:41:29 2023 Do 80% black for productivity tracing 
+        ret = cu.between(ret,cu.color(0xff000000),20u);
+      }
     
     return ret;
   }

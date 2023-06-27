@@ -182,6 +182,7 @@ transient HC3NgbState + DTU + QDebugUtils {
     //    mD&&pR(me);
     mD&&pR("H3NGSINIT12");
 
+    HCPoint myhcp = me.getHCPoint();
     Unsigned myhops = me.getUpHops();
 
     Bool foundaxes = false;
@@ -193,6 +194,7 @@ transient HC3NgbState + DTU + QDebugUtils {
       if (!foundaxes && ew.isAccessible(at)) {
         Atom & a = ew[at];
         if (a as QHardCell) {
+
           mD&&pR("H3NGSINIT12FA");
           mD&&pR(at);
           mOnDSAxes = a.getOnDSAxes();
@@ -231,8 +233,21 @@ transient HC3NgbState + DTU + QDebugUtils {
       if (a as QHardCell) {
         if (!me.inMyGroup(a)) continue;
 
-        Unsigned ahops = a.getUpHops();
+        /// CHECKING FOR PLAUSIBLE HCPOINT RELATIONS
         HCPoint ahcp = a.getHCPoint();
+        if (false) { // XXX CONSIDERED HARMFUL?
+          if (myhcp.isValid() && ahcp.isValid()) {
+            C2D ac = ahcp.validHCPoint2C2D();
+            C2D myc = myhcp.validHCPoint2C2D();
+            if (ac.x * myc.x < 0 || ac.y * myc.y < 0) { // changing sign is not plausible
+              mFoundBlockage = true; // so if it ain't me, it's a blockage of me
+              continue;           
+            }
+          }
+        }
+        /// PLAUSIBLE HCPOINT RELATIONS HAVE BEEN CHECKED
+
+        Unsigned ahops = a.getUpHops();
         Unsigned amaxhops = a.getMaxUpHops(); 
         if (ahops >= amaxhops)      mFoundUninit = true;
         else if (ahops < myhops)    mFoundUpstream = true;

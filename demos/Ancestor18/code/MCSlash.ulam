@@ -38,6 +38,14 @@ element MCSlash : EdgeModel
     return s.classidof;
   }
 
+  //// LX API
+  virtual Bool perform(DiamondSequencerState & dss) {
+    mD&&pR(__FILE__,__LINE__);
+    if (!mIsHead) return super.perform(dss);
+    mD&&pR(__FILE__,__LINE__,"XXX WRITE ME");
+    return super.perform(dss);
+  }
+
   //// QDiamondStance API
   @Override
   virtual Bool isStanceSink() { return mIsDeployed && mIsHead; } // When I'm in charge I consume all stances that find me
@@ -47,13 +55,16 @@ element MCSlash : EdgeModel
     .mDiSeqInfoMap = {
       { .mEdgeTags =      // NW  NE  SE  SW
         { .mEdgeTagArray = { 0u, 0u, 0u, 0u } }, // DiSeq#1 no junctions
-        .mDVec = {.x = 0, .y =  0}},             // DiSeq#1 no drift
+        .mDVec = {.x = 0, .y =  0},              // DiSeq#1 no drift
+        .mBootCode = "Jj"},                      // DiSeq#1 just set junctors
       { .mEdgeTags = {    // NW  NE  SE  SW
           .mEdgeTagArray = { 0u, 5u, 0u, 0u } }, // DiSeq#2 tag 5 to NE
-        .mDVec = {.x = 20, .y = 10}},            // DiSeq#2 drift NNE
+        .mDVec = {.x = 20, .y = 10},             // DiSeq#2 drift NNE
+        .mBootCode = "JjWSWSSEEE"},              // DiSeq#2 SW at split then E to close
       { .mEdgeTags = {    // NW  NE  SE  SW
           .mEdgeTagArray = { 0u, 0u, 0u, 5u } }, // DiSeq#3 tag 5 to SW
-        .mDVec = {.x =-20, .y =-10}},            // DiSeq#3 drift SSW
+        .mDVec = {.x =-20, .y =-10},             // DiSeq#3 drift SSW
+        .mBootCode = "JjENENNWWW"},              // DiSeq#3 NE at split then W to close
     }
   };
 
@@ -61,7 +72,7 @@ element MCSlash : EdgeModel
   @Override
   virtual DiSequence getChildDiSeq(Bool leftKid) {
     if (mDiSequence == 2u)
-      return leftKid ? 0u : 2u; // LD is new MC/, RD stays part of existing MC/
+      return leftKid ? 1u : 2u; // LD is new MC/, RD stays part of existing MC/
     return super.getChildDiSeq(leftKid);
   }
 

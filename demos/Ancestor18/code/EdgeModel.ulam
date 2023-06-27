@@ -1,3 +1,429 @@
+transient EdgeModelState : CodonState
+  + Fail
+{
+  //// Intention API
+  virtual Bool stabilize(Intender & in) {
+
+    EdgeModel & em = (EdgeModel&) in;
+    if (maybeNukeTheRoot(em)) return true; // move root nuking earlier
+    mD&&pR("CMSAa12");
+
+    mD&&pR("CMSSTB10");
+    if (super.stabilize(in)) return true;
+
+    Bool ret = false;
+
+    if (!em.mIsHead) {
+
+      /// PROPAGATE DEPLOYMENT INFO DOWNSTREAM FROM HEAD
+      PocketPtr uppp = em.mPocketPtrs[cBODY_UP];
+      if (uppp >= cPP_WEST && uppp <= cPP_EAST) {
+        if (mMateStatus == cMATE_OK) {
+          SN upsn = mEWSNMate[cBODY_UP];
+          EventWindow ew;
+          Atom & a = ew[upsn];
+          if (a as EdgeModel) {
+            if (a.mIsDeployed != em.mIsDeployed) {
+              em.mIsDeployed = a.mIsDeployed;
+              ret = true;
+            }
+            if (a.mDiSequence != em.mDiSequence) {
+              em.mDiSequence = a.mDiSequence;
+              ret = true;
+            }
+          }
+        }
+      }
+    }
+    if (ret) return ret;
+
+    //// ENSURE DEPLOYED ARE CLOSE TO ROOT
+    if (em.mIsDeployed) {
+
+      /// DEPLOYED CM MUST BE CLOSE TO ROOT
+      mD&&pR("CMSSTB11");
+      PocketHC3 & p = mPocket;
+      Unsigned minhops = Unsigned.maxof;
+      for (Unsigned i = 0u; i < 4u; ++i) 
+        minhops = min(minhops,p.mCornerHops[i]);
+      mD&&pR("CMSSTB12");
+      mD&&pR(minhops);
+
+      if (minhops > 5u) // We are OUT OF POSITION
+        return em.die();
+
+      mD&&pR("CMSSTB13");
+    }
+   
+    return ret;
+  }
+
+  Bool deployPhaseTwoDEPRECATWED(EdgeModel & em) {
+    if (!em.mIsHead) return false;
+
+    mD&&pR("DPPH210");
+    PocketHC3 & p = mPocket;
+    Unsigned mindshops = p.mPocketQuadrant.mMinDSHops;
+    if (mindshops < 5u) return false;
+    mD&&pR("DPPH211");
+
+    if (em.mPocketPtrs[cBODY_UP] != cPP_NULL) return false;
+    PocketPtr ptr = cPP_EAST;
+    if (mPocketFull[ptr] != 0u) return false;
+    mD&&pR("DPPH212");
+
+    if (mPocketInaccessible[ptr] != 0u) return false;
+    mD&&pR("DPPH213");
+
+    if (mEmptySNs[ptr].count() == 0u) return false;
+    mD&&pR("DPPHa213");
+
+    constant NanoArm
+      cINS_ROOT_LOOP = {
+      .mDSType = DTU.cDS_NORM,
+      .mHeading = DTU.cN,  // start out heading west
+      .mProgram = {
+        NanoArm.cGF, // 0: N: RG SE->NE
+        NanoArm.cTL, // 1: W
+        NanoArm.cGF, // 2: W: RG NE->NW
+        NanoArm.cEP, // 3
+      },
+    };
+    /// Deploy root loop to our east
+
+    mD&&pR("DPPH214");
+
+    NanoArm na = cINS_ROOT_LOOP;
+    na.mPocketPtrs[cBODY_DOWN] = cPP_WEST;
+    em.mPocketPtrs[cBODY_UP] = cPP_EAST;
+    mD&&pR(na);
+    mD&&pR(em);
+
+    SN empsn = mEmptySNs[ptr].pick();
+    mD&&pR("DPPHa214");
+    mD&&pR(empsn);
+    mD&&pR(ptr);
+
+    EventWindow ew;
+    ew[empsn] = na.atomof;
+    mD&&pR("DPPHb214");
+    mD&&pR(empsn);
+    mD&&pR(ew[empsn]);
+
+    mD&&pR("DPPHd214");
+    mD&&pR(em);
+    em.mDSType = cDS_NORM;      // Free to move again.
+
+    mD&&pR("DPPHe214");
+    mD&&pR(em);
+
+    mD&&pR("DPPH215");
+    return true;
+  }
+
+  Bool closeBodyModelDEPRECATED(EdgeModel & em) {
+    if (!em.mIsHead) return false;
+
+    mD&&pR("CLBDML210");
+    PocketHC3 & p = mPocket;
+    Unsigned mindshops = p.mPocketQuadrant.mMinDSHops;
+    if (mindshops < 5u) return false;
+    mD&&pR("CLBDML211");
+
+    if (em.mPocketPtrs[cBODY_UP] != cPP_NULL) return false;
+
+    PocketPtr ptr = cPP_SOUTH;
+    if (mUsSNs[ptr].count() != 1u) return false;
+    mD&&pR("CLBDML212");
+    SN ssn = mUsSNs[ptr].pick();
+    EventWindow ew;
+    Atom & a = ew[ssn];
+    if (!a is EdgeModel) return false;
+    EdgeModel & tem = (EdgeModel&) a;
+
+    if (tem.mPocketPtrs[cBODY_DOWN] != cPP_NULL) return false;
+
+    // Connect to south!
+    em.mPocketPtrs[cBODY_UP] = cPP_SOUTH;
+    tem.mPocketPtrs[cBODY_DOWN] = cPP_NORTH;
+
+    mD&&pR("CLBDML213");
+    return true;
+  }
+
+  Bool maybeNukeTheRoot(EdgeModel & dm) {
+    mD&&pR("MBNKRT10");
+    if (!dm.mIsHead) return false;
+
+    mD&&pR("MBNKRTa10");
+    if (!dm.mMOKiller) return false;
+
+    mD&&pR("MBNKRTa11");
+    if (dm.mEventCounter-- > 0u) // not yet time
+      return false;
+
+    mD&&pR("MBNKRT11");
+
+    //// TIME TO NUKE THE ROONUTS
+    PocketHC3 & p = mPocket;
+    PocketDir rootpd;
+    Bool atroot =  rootAdjacent(rootpd);
+    if (!atroot) fail(__FILE__,__LINE__);
+    C2D rootc = p.mCoords[rootpd];
+    EventWindow ew;
+    Atom & a = ew[rootc];
+    if (!(a is QHardCell)) fail(__FILE__,__LINE__);
+    ew[rootc] = Empty.instanceof;   // THE ROOT IS (QUIETLY) NUKED
+    ew[0] = Empty.instanceof;
+    //// AS ARE WE
+    return true;
+  }
+
+  @Override
+  virtual Bool act(Intender & in) {
+    mD&&pR("CMSA10");
+    if (super.act(in)) return true;
+
+    mD&&pR("CMSAa10");
+    EdgeModel & cm = (EdgeModel&) in;
+    if (cm.mIsHead) {
+      mD&&pR("CMSAa11");
+
+      if (cm.actBootCode(self))
+        return true;
+
+      /*
+      if (deployPhaseTwo(cm)) return true;
+      mD&&pR("CMSAa13");
+
+      if (closeBodyModel(cm)) return true;
+      mD&&pR("CMSAa14");
+
+      SN downsn = mEWSNMate[cBODY_DOWN];
+      if (downsn == SN.maxof) return false;
+      mD&&pR("CMSA11");
+      EventWindow ew;
+      Atom & a = ew[downsn];
+      mD&&pR(a);
+
+      // Push away ECs so EMs crowd in
+      if (a as EmptyCodon) {
+        mD&&pR("CMSA12");
+        if (a.mDSType != cDS_DOWN) {
+          mD&&pR("CMSA13");
+          a.mDSType = cDS_DOWN;
+          return cm.diffuse(self);
+        }
+      }
+      */
+    }
+
+    mD&&pR("CMSA14");
+
+    mD&&pR("CMSA210");
+
+    if (cm.mIsTail) { // If we're the tail
+      mD&&pR("CMSA210");
+      if (cm.mPocketPtrs[cBODY_UP] == cPP_SOUTH &&
+          cm.mPocketPtrs[cBODY_DOWN] == cPP_NORTH) {
+        mD&&pR("CMSA211");
+        if (mPocketGood[cPP_SELF] &&
+            mPocketGood[cPP_NORTH] &&
+            mPocketGood[cPP_EAST]) {
+          mD&&pR("CMSA212");
+          if (mUsSNs[cPP_NORTH].count() == 1u &&
+              mUsSNs[cPP_EAST].count() == 1u) {
+            mD&&pR("CMSA213");
+            SN nsn = mUsSNs[cPP_NORTH].pick();
+            Atom & na = ew[nsn];
+            SN esn = mUsSNs[cPP_EAST].pick();
+            Atom & ea = ew[esn];
+            if (ea as EdgeModel) {
+              mD&&pR("CMSA214");
+              if (ea.mPocketPtrs[cBODY_UP] == cPP_NULL &&
+                  ea.mIsHead) {
+                mD&&pR("CMSA214");
+                if (na as EmptyCodon) {
+                  mD&&pR("CMSA215");
+                  // Disconnect from north!
+                  na.mPocketPtrs[cBODY_UP] = cPP_NULL;
+                  cm.mPocketPtrs[cBODY_DOWN] = cPP_NULL;
+                  mD&&pR(na);
+
+                  mD&&pR("CMSA216");
+
+                  // Kill north!
+                  LoopKiller lk;
+                  lk.copySegAndPChain(na);
+                  lk.mDSType = cDS_DUMB;
+                  lk.mKillFunc = lk.cKLFN_ROOT;            // We are anchor; last to go
+                  ew[nsn] = lk.atomof;
+                  mD&&pR("CMSA217");
+                  mD&&pR(lk);
+                  return true;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    
+    mD&&pR("CMSA299");
+    //// CHECK FOR XD PICKUPS
+    if (actCheckForXD(cm)) return true;
+
+    mD&&pR("CMSA3100");
+    //// CHECK FOR JUNCTION ANCHORING
+    if (actCheckJunction(cm)) return true;
+    
+    mD&&pR("CMSA3101");
+    return cm.diffuse(self);
+  }
+
+  Bool actCheckJunction(EdgeModel & dm) {
+    mD&&pR("EMSACCHJU10");
+    if (!dm.mIsDeployed) return false;
+    
+    HCPoint minhc, maxhc;
+    if (2u != getHCMinMax(minhc,maxhc))
+      return false;
+
+    C2D maxc;
+    if (!maxhc.hcPoint2C2D(maxc)) fail(__FILE__,__LINE__);
+    EventWindow ew;
+    Atom & a = ew[maxc];
+    mD&&pR("EMSACCHJU11");
+    mD&&pR(maxc);
+    mD&&pR(a);
+
+    if (a as JunctionIndexProviderStg) {
+      mD&&pR("EMSACCHJU12");
+      XZone xz = c2D2XZone(maxc);
+      if (xz == cXZONE_CT) return false; // or fail?
+      PocketDir ourpd;
+      if (!zone2PocketDir((Zone) xz, ourpd)) return false; // ditto?
+
+      EdgeModel.DiSequence ourdiseq = dm.mDiSequence;
+      mD&&pR("EMSACCHJU13");
+      mD&&pR(ourpd);
+      mD&&pR(ourdiseq);
+      
+      Bool ret = false;
+      DiSeqInfo dsinfo = dm.getDiSeqInfo(ourdiseq);
+      EdgeModel.EdgeTag et = dsinfo.getEdgeTagForEdge(ourpd);
+
+      mD&&pR("EMSACCHJU14");
+      mD&&pR(et);
+      if (et == 0u)             // No edge control, no anchor
+        ret = a.setIsJunctionIndexAnchor(false);
+      else {
+        mD&&pR("EMSACCHJU15");
+        ret = a.setIsJunctionIndexAnchor(true);
+        if (a.setJunctionIndex(et)) ret = true;
+      }
+      mD&&pR("EMSACCHJU16");
+      mD&&pR(ret);
+      return ret;
+    }
+
+    mD&&pR("EMSACCHJU17");
+    return false;
+  }
+
+  Bool actCheckForXD(EdgeModel & dm) {
+    EventWindow ew;
+    Unsigned xdcount = 0u;
+    SN xdsns[2];
+    SN xdseqsn = SN.maxof;
+    SN rgsn = SN.maxof;
+    mD&&pR("DMAC4XD10");
+
+    if (!dm.mIsHead) return false;
+    for (SN sn = 1u; sn < 41u; ++sn) {
+      if (!ew.isAccessible(sn)) continue;
+      Atom & a = ew[sn];
+      if (a as XCutDiamond) {
+        if (a.getIntentionClass() == DiamondCutterFindOldRoot.classidof) {
+          if (xdcount < 2u)
+            xdsns[xdcount] = sn;
+          ++xdcount;
+        } else if (a.getIntentionClass() == DiamondCutterDeliverDiSeq.classidof) {
+          xdseqsn = sn; // hmm taking last :(
+        }
+      } else if (a is RootHardCellG) {
+        rgsn = sn;
+      }
+    }
+    mD&&pR("DMAC4XD11");
+    if (xdcount > 1u && rgsn != SN.maxof) {
+      RootHardCellG & rootg = (RootHardCellG&) ew[rgsn];
+
+      //// TAKE IT OVER
+      rootg.mCmdPhase = RootHardCellG.cCMD_WAIT;
+
+      //// IS THE GRID ALL SETTLED?
+      if (!rootg.stableToEdge()) return true; // XXX localDiffuse(true); // no, block
+      //// THE GRID IS ALL SETTLED
+
+      //// GET PARAMETERS
+      Unsigned oldmaxgoal = rootg.getMaxHopsGoal();
+      HardCellG.HopCount newmaxg = (HardCellG.HopCount) (oldmaxgoal/2u+0u); // we shall see
+      EdgeModel.DiSequence kidSeq[2];
+      if (dm.mDiSequence == 0u) // If you're still fresh like from the loader at this point
+        dm.mDiSequence = 1u;    // You're a #1
+
+      kidSeq[0] = dm.getChildDiSeq(true);
+      kidSeq[1] = dm.getChildDiSeq(false);
+
+      setDebugOutputEnabled(true);
+      mD&&pR("DMAC4XD12 DOING STUFF");
+      mD&&pR(newmaxg);
+      mD&&pR(kidSeq[0]);
+      mD&&pR(kidSeq[1]);
+
+      //// CONFIGURE XD
+      for (Unsigned i = 0u; i < 2u; ++i) {
+        SN dcsn = xdsns[i];
+        AxialDir dcad = i == 0u ? cW : cE; // W even, E odd
+        Unsigned extrahop = 0; // Nobody gets extra hop
+        //XXX        Unsigned extrahop = i == 0u ? 1u : 0u; // W gets extra hop
+        XCutDiamond xd;
+        xd.mNewMaxGoalHops = (HardCellG.HopCount) (newmaxg + extrahop);
+        xd.mOriginalAxialDir = dcad;
+        xd.mEventCounter = xd.mEventCounter.maxof;
+
+        xd.mDeliveredDiSequence = kidSeq[i];
+        xd.adoptNewIntention(DiamondCutter.cDCS_SEED_NEW_ROOT);
+        mD&&pR("DMAC4XD13");
+        mD&&pR(xd);
+        ew[dcsn] = xd.atomof;     // DEPLOY: Overwrite with new intention
+      }
+
+      mD&&pR("DMAC4XD14");
+
+      /// OK, our last job: Wait and kill the root
+      dm.mMOKiller = true;
+      dm.mEventCounter = DiamondCutter.cMOTHER_LINGER_DELAY_TIME; // set bogus timer to bogus value
+
+      return true;
+    }
+    
+    // If we think we're in a daughter and see XD
+    if (!dm.mMOKiller &&
+        dm.mIsDeployed &&
+        dm.mIsHead &&
+        xdseqsn != SN.maxof) {
+      XCutDiamond & dc = (XCutDiamond&) ew[xdseqsn];
+      dm.mDiSequence = dc.mDeliveredDiSequence; // Pick up our destiny
+      ew[xdseqsn] = Empty.instanceof;           // and shoot the messenger
+      return true;
+    }
+
+    return false;
+  }
+}
+
 /** EdgeModel. Represent somatic properties of a diamond edge within a
     multicellular body.
  */
@@ -12,14 +438,66 @@ quark EdgeModel : QBodyModel
   virtual DiSeqInfo getDiSeqInfo(DiSequence diseq) ;
 
   virtual DiSequence getChildDiSeq(Bool leftKid) {
+    if (mDiSequence==0u)
+      fail(__FILE__,__LINE__);
     return (EdgeModel.DiSequence) (mDiSequence*2u + (leftKid ? 0u : 1u));
   }
 
-  typedef Unsigned(8) DiSequence; // Room for seven generations + leading 1
-  DiSequence mDiSequence = 1u;
+  //// EdgeModel SERVICES
+  Bool actBootCode(EdgeModelState & ems) {
+    if (!mIsHead || !mIsDeployed || mDiSequence == 0u) return false;
+    mD&&pR(__FILE__,__LINE__,"AcBoCo");
+    DiSeqInfo dinf = getDiSeqInfo(mDiSequence);
+    String bootcode = dinf.getBootCode();
+    Unsigned bclen = bootcode.lengthof;
+    if (mBootPC >= bclen)
+      return false;
+    ASCII op = bootcode[mBootPC];
+    if (op == 'J') {
+      mD&&pR(__FILE__,__LINE__,"DEPLOYDeployJunctor");
+      mD&&pR(ems);
+      if (!ems.mAllPocketsGood || ems.mPocketFull[0] > 1u)
+        return false;
+      mD&&pR("DEPDepJun11");
+      DeployJunctors dj;
+      dj.init(dinf.mEdgeTags,ems);
+      mD&&pR(dj);
+      EventWindow ew;
+      SN djsn = ems.mEmptySNs[0].pick();
+      ew[djsn] = dj.atomof;
+      ++mBootPC;
+      return true;
+    } else if (op == 'j') {
+      mD&&pR(__FILE__,__LINE__,"COLLECTDeployJunctor");
+      EventWindow ew;
+      for (SN sn = 1u; sn < 8u; ++sn) {
+        if (!ew.isAccessible(sn)) continue;
+        Atom & a = ew[sn];
+        if (a as DeployJunctors) {
+          mD&&pR("DEPColJun11");
+          if (a.mState > 3u) {
+            mD&&pR("DEPColJun12");
+            ew[sn] = Empty.instanceof;
+            ++mBootPC;
+            return true;
+          }
+        }
+      }
+      return true;              // else block
+    }
+    return false;
+  }
 
-  typedef Unsigned(HardCellG.HopCount.sizeof + 4u) EventCounter; // Four bits bigger than HopCount..
+  typedef Unsigned(8) DiSequence; // Room for seven generations + leading 1
+  DiSequence mDiSequence = 0u; //< 0 -> Uninitted
+
+  //  typedef Unsigned(HardCellG.HopCount.sizeof + 4u) EventCounter; // Four bits bigger than HopCount..
+  typedef Unsigned(5) EventCounter; // Supports 0..31 LINGER
   EventCounter mEventCounter; // For simulating XD's DELETE_OLD_ROOT
+
+  typedef Unsigned(4) BootPC;
+  BootPC mBootPC;               // 0..15 Current boot code position
+
   Bool mMOKiller = false;
 
   Bool mIsHead = false;      //< true if we're the head of the EM loop
@@ -63,19 +541,18 @@ quark EdgeModel : QBodyModel
     
     //// CONSIDER EMERGENCY MOVES AGAINST DAMAGE
     {
-      MaxPick dc;
+      MaxPick bd;  // bad dir
+      MinPick gd;  // good dir
       for (Unsigned i = 0u; i < 4u; ++i) {
-        dc.update((SN) i, root.mDefCons[i]);
+        bd.update((SN) i, root.mDefCons[i]);
+        gd.update((SN) i, root.mDefCons[i]);
       }
-      if (!dc.hasPick()) fail(__FILE__,__LINE__);
-      Unsigned idx = dc.getIdx();
-      Unsigned val = dc.getX();
-      if (val >= 3u) {
-        AxialDir dad = (AxialDir) idx;
-        AxialDir oad = oppositeAxialDir(dad);
-        if (root.mDefCons[oad] <= 2u) {
-          dcr.printf("[EMdam:%dad]",dad);
-          return executeMove((SN) (oad+1u), root, qcs, dcr);
+      if (!bd.hasPick() || !gd.hasPick()) fail(__FILE__,__LINE__);
+      if (bd.getX() >= 3u) { // If bd has damage, just pick
+        AxialDir gad = (AxialDir) gd.getIdx(); // best dir (unless
+        if (gd.getX() <= 2u) {                 // it's damg too),
+          dcr.printf("[EMgdam:%dad]",gad);     // and do that
+          return executeMove((SN) (gad+1u), root, qcs, dcr);
         }
       }
     }
@@ -88,7 +565,8 @@ quark EdgeModel : QBodyModel
 
     HC3State &hcs = qcs.getHC3State();
     qcs.resetSettledDownHops(root, hcs);
-    root.mMovementWatchdog.reset();
+    root.resetWatchdog();    // If we force a move, call it productive
+    root.mMovementWatchdog.reset(); // as well as a movement.
     root.moveEntourage(qcs,movesn);
     return true; // yes
   }
@@ -139,3 +617,4 @@ quark EdgeModel : QBodyModel
     return true;
   }
 }
+

@@ -46,7 +46,16 @@ quark QDebugUtils {
   Bool pR(String file, Unsigned line) {
     if (mD) {
       ByteStreamArray1K bsa;
-      bsa.printf("LOCATION TAG:\n%s:%d:HERE", file, line);
+      bsa.printf("LOCATION TAG:\n%s:%d:<HERE>", file, line);
+      DebugUtils du;
+      du.print((ByteStreamReader&) bsa);
+    }
+    return mD;
+  }
+  Bool pR(String file, Unsigned line, String message) {
+    if (mD) {
+      ByteStreamArray1K bsa;
+      bsa.printf("LOCATION TAG:\n%s:%d:%s", file, line, message);
       DebugUtils du;
       du.print((ByteStreamReader&) bsa);
     }

@@ -11,7 +11,12 @@ transient HP2HP
   ClassId mBlockIds[cMAX_CLASSES];
   Unsigned mBlockIdsInUse;
 
+  SN mRouteSN;                // Value last returned from route2HP(..)
+  SN mChosenHCSN;
+
   Void init() {
+    mRouteSN = SN.maxof;
+    mChosenHCSN = SN.maxof;
   }
 
   //// HP2HP SERVICES
@@ -45,13 +50,13 @@ transient HP2HP
     mD&&pR("HP2RT10");
     mD&&pR(desthp1);
     mD&&pR(desthp2);
-    Unsigned destspread = desthp1.manhattanDistance(desthp2);
-    mD&&pR(destspread);
+    Unsigned destspreadhp = desthp1.manhattanDistance(desthp2);
+    mD&&pR(destspreadhp);
 
     /// FIRST PASS: Find QHCs
-    MinPick qhcdest1;           // closest to dest1
-    MinPick qhcdest2;           // closest to dest2
-    MinPick qhcsum;             // closest to dest1+dest2
+    MinPick qhcdest1hp;         // closest to dest1hp in hp
+    MinPick qhcdest2hp;         // closest to dest2hp in hp
+    MinPick qhcsumhp;           // closest to dest1hp+dest2hp
     C2D origin;                 // where I'm assumed to be
     ClassUtils cu;
     for (SN sn = 1u; sn < 41u; ++sn) {
@@ -65,54 +70,61 @@ transient HP2HP
         HCPoint ahp = a.getHCPoint();
         if (!ahp.isValid()) continue;
         C2D ahpc = ahp.validHCPoint2C2D();
-        Unsigned dist1 = ahpc.manhattanDistance(desthp1);
-        qhcdest1.update(sn,dist1);
-        Unsigned dist2 = ahpc.manhattanDistance(desthp2);
-        qhcdest2.update(sn,dist2);
-        qhcsum.update(sn,dist1+dist2);
+        Unsigned dist1hp = ahpc.manhattanDistance(desthp1);
+        qhcdest1hp.update(sn,dist1hp);
+        Unsigned dist2hp = ahpc.manhattanDistance(desthp2);
+        qhcdest2hp.update(sn,dist2hp);
+        qhcsumhp.update(sn,dist1hp+dist2hp);
       }
     }
     mD&&pR("HP2RT11");
-    mD&&pR(qhcdest1);
-    mD&&pR(qhcdest2);
-    mD&&pR(qhcsum);
+    mD&&pR(qhcdest1hp);
+    mD&&pR(qhcdest2hp);
+    mD&&pR(qhcsumhp);
 
-    if (!qhcsum.hasPick()) return SN.maxof - 1u;
-    SN destsn = (SN) qhcsum.getIdx();
-    C2D destc = ew.getCoord(destsn);
-    QHardCell & todest = (QHardCell&) ew[destsn];
-    Unsigned distremaining = qhcsum.getX();
-    Bool finalstep = (distremaining <= destspread);
+    if (!qhcsumhp.hasPick()) return (mRouteSN = SN.maxof - 1u); // no nearby HC at all?
+    C2D d1c = qhcdest1hp.getIdxC2D(); // site of closest to desthp1 (might be same as d2c)
+    C2D d2c = qhcdest2hp.getIdxC2D(); // site of closest to desthp2 (even if hp1&2 differ)
+    Unsigned destspreadc = d1c.manhattanDistance(d2c); // sites between those two if any
+
+    SN chosenhcsn = (SN) qhcsumhp.getIdx(); // sn of chosen hc
+    C2D chosenhcc = ew.getCoord(chosenhcsn); // coord of chosen hc
+    QHardCell & chosenhc = (QHardCell&) ew[chosenhcsn]; // the chosen hc
+
+    Unsigned distremaininghp = qhcsumhp.getX(); // sum of hp dists
+    Bool finalstep = (distremaininghp <= destspreadhp); // if chosen is 'between' dhp1 & 2
 
     mD&&pR("HP2RT12");
-    mD&&pR(distremaining);
-    mD&&pR(destc);
-    mD&&pR(todest);
+    mD&&pR(distremaininghp);
+    mD&&pR(chosenhcc);
+    mD&&pR(chosenhc);
     mD&&pR(finalstep);
 
-    //// SECOND PASS: Find destination
-    MinPick picksn;    // empty driving lane or pocket near qhcdest
+    //// SECOND PASS: Find destinations assuming final and not
+    MinPick picksn;   // empty driving lane or pocket site near qhcdest
     for (SN sn = 0u; sn < 41u; ++sn) { // start at 0u to consider we might be done
       if (!ew.isAccessible(sn)) continue;
       if (sn != 0u && !(ew[sn] is Empty)) continue; 
       C2D c = ew.getCoord(sn);
-      C2D diffsum = destc - c;
+      C2D diffsum = chosenhcc - c;
       Unsigned lensum = diffsum.length();
       if (lensum > 4u) continue;
       Bool ondrivinglane =
         (diffsum.x == 0 || diffsum.y == 0);
       if (finalstep == ondrivinglane) 
         continue;               
-      // drivinglane iff !final
+
+      // c is an appropriate type site: drivinglane iff !final
+      // Shortcut for self:
+      if (finalstep && sn == 0u) {
+        mChosenHCSN = chosenhcsn;
+        return (mRouteSN = 0u); // good enough
+      }
+
       Unsigned totallen = diffsum.length();
-      if (qhcdest1.hasPick()) {
-        C2D c1 = qhcdest1.getIdxC2D();
-        totallen += c.manhattanDistance(c1);
-      } else totallen += 5u;
-      if (qhcdest2.hasPick()) {
-        C2D c2 = qhcdest2.getIdxC2D();
-        totallen += c.manhattanDistance(c2);
-      } else totallen += 5u;
+      totallen += c.manhattanDistance(d1c);
+      totallen += c.manhattanDistance(d2c);
+
       // minimize distance to goals and chosen qhc
       picksn.update(sn, totallen);
     }
@@ -124,11 +136,13 @@ transient HP2HP
       SN ret = picksn.getIdxSN();
       mD&&pR("HP2RT14");
       mD&&pR(ret);
-      return ret; // Might be 0->done
+      mChosenHCSN = chosenhcsn;
+      return (mRouteSN = ret); // Might be 0->done
     }
 
     
     mD&&pR("HP2RT15");
-    return SN.maxof;
+    return (mRouteSN = SN.maxof);
   }
 }
+

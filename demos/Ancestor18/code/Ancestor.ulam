@@ -165,6 +165,13 @@ local constant LXReleaseDiamondCutter
 };
 
 //////////// BEGIN BODY MODEL PRELUDE DEFINITIONS
+local constant GeneralDeployer
+  cINS_DEPLOY_MODEL_SPECIES = {
+  .mClassToDeploy = (GeneralDeployer.DeployableClassId) SPECIES.classidof,
+  .mProcUnitToDeployInto = DTU.cPUNIT_OUT,
+  .mDSType = DTU.cDS_NORM,
+};
+
 local constant NanoArm
   cINS_NANOARM_DEPLOYMODEL10 = {
     .mDSType = DTU.cDS_NORM,
@@ -225,15 +232,16 @@ local constant LXWait
 transient Ancestor {
 
   constant Atom cPROGRAM[] = {
-    // BEGIN BODY MODEL PRELUDE
-    cINS_NANOARM_DEPLOYMODEL10,   // MO: NA BUILD BODY MODEL LOOP
-    cINS_EDGEMODEL_HEAD,          // MO: EM 'HEAD' & EDGE MODEL 1
-    cINS_SEND_LOOP_MODEL10,       // MO: SL SEND BODY MODEL
-    cINS_MK5_EDGEMODEL11,         // MO: EM#5 EDGE MODEL 2
-    cINS_EDGEMODEL12,             // MO: EM EDGE MODEL 3
-    cINS_MK5_EDGEMODEL_TAIL,      // MO: EM#5 EDGE MODEL 4
-    cINS_WAIT_FOR_MODEL,          // MO: WT WAIT TIL BLU CLEAR
-    // END BODY MODEL PRELUDE
+    //// BEGIN BODY MODEL PRELUDE
+    cINS_DEPLOY_MODEL_SPECIES,  // MO: DEPLOY DEFAULT INSTANCE OF SPECIES
+    //    cINS_NANOARM_DEPLOYMODEL10,   // MO: NA BUILD BODY MODEL LOOP
+    // cINS_EDGEMODEL_HEAD,          // MO: EM 'HEAD' & EDGE MODEL 1
+    // cINS_SEND_LOOP_MODEL10,       // MO: SL SEND BODY MODEL
+    // cINS_MK5_EDGEMODEL11,         // MO: EM#5 EDGE MODEL 2
+    // cINS_EDGEMODEL12,             // MO: EM EDGE MODEL 3
+    // cINS_MK5_EDGEMODEL_TAIL,      // MO: EM#5 EDGE MODEL 4
+    // cINS_WAIT_FOR_MODEL,          // MO: WT WAIT TIL BLU CLEAR
+    //// END BODY MODEL PRELUDE
 
     cINS_NANOARM_MOTHER10,        // MO: NA BUILD 1ST ARM 
     cINS_SEND_LOOP10,             // MO: SL SEND CODE

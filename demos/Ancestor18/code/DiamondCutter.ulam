@@ -608,7 +608,7 @@ quark DiamondCutter : D1Pocketable + DTU + XTimer(3u,5u,20u) {
   AxialDir mOriginalAxialDir; // which way did we start out
   HardCellG.HopCount mNewMaxGoalHops; // also event counter in DC#3?
   typedef Unsigned(HardCellG.HopCount.sizeof + 4u) EventCounter; // Four bits bigger than HopCount..
-  constant EventCounter cMOTHER_LINGER_DELAY_TIME = 32u;
+  constant EventCounter cMOTHER_LINGER_DELAY_TIME = 28u;
   EventCounter mEventCounter;
 
   //// INTENDER API

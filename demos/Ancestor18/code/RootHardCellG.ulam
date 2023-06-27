@@ -4,6 +4,7 @@
  */
 element RootHardCellG : QHardCellG
   + QDSHopsStg
+  + Fail
 {
 
   //// JunctionIndexProvider API
@@ -12,10 +13,8 @@ element RootHardCellG : QHardCellG
 
   //// HCPointable API
   @Override virtual HCPoint getHCPoint() { return HCPoint.instanceof(0,0); }
-  @Override virtual Void setHCPoint(HCPoint pt) {
-    Fail f;
-    f.fail(__FILE__,__LINE__);
-  }
+  @Override virtual Void setHCPoint(HCPoint pt) { fail(__FILE__,__LINE__); }
+  @Override virtual Void unsetHCPoint() { fail(__FILE__,__LINE__); }
   
   constant Unsigned cWDOG_BITS = 4u;
   constant Unsigned cWDOG_TRIG = 12u;
@@ -222,7 +221,7 @@ element RootHardCellG : QHardCellG
       /// STABLE TO EDGE?
       if (unsettledDown < mMaxHops - 1u) {
         // NO, GIVE UP?
-        if (random.oneIn(8u*mMaxHops)) {
+        if (random.oneIn(10u*mMaxHops)) {
           mCmdPhase = cCMD_MOVE; // YES
           dcr.reportDone(true,dcr.printf("RG:uD%d<%d[STOP->MOVE].",
                                          unsettledDown, mMaxHops-1u));

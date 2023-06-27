@@ -121,17 +121,31 @@ transient QHardCellState : Intention + DTU + QDebugUtils + Fail {
       mD&&pR("QHCUP12");
       // YES
       /// ARE THERE ANY NGBS TO LOOK TO?
-      if (hc3.minUpHops >= hc3.myUpHopsGoal) return qc.die(); // NO
+      if (hc3.minUpHops >= hc3.myUpHopsGoal) // NO
+        return qc.blockOrDie(25u); 
 
       HCPoint qchcp;
       hc3.minHCPoint.updateAdjacentHCPointFromUs(qchcp,-hc3.minUpHopsC2D);
+      mD&&pR("QHCUPa12");
+      mD&&pR(qchcp);
+      mD&&pR(hc3.minHCPoint);
+      mD&&pR(hc3.minUpHopsGoal);
+
+      if (qchcp.length() >= hc3.minUpHopsGoal) // Room for one more?
+        return qc.die();                       // No.
 
       if (qchcp.length() < hc3.minHCPoint.length())
-        return qc.die();        // Don't init from downhill
+        return qc.blockOrDie(25u); // Don't init from downhill
+
+      mD&&pR("QHCUPb12");
 
       qc.setHCPoint(qchcp);
       qc.setDSHops(hc3.minDSHops + 1u);
       qc.setMaxHopsGoal(hc3.minUpHopsGoal);
+      mD&&pR("QHCUPc12");
+      mD&&pR(qc);
+      qc.damageFromC2D(qchcp.validHCPoint2C2D(),cDC_NEAR);
+      mD&&pR(qc);
 
       return block();
     }
@@ -156,16 +170,31 @@ transient QHardCellState : Intention + DTU + QDebugUtils + Fail {
     // DO I NEED TO UPDATE EITHER MINUP (HOP &) GOAL?
     Bool changed = false;
 
+    mD&&pR("QHCUPa14");
+    mD&&pR(hc3.minUpHops);
+    mD&&pR(hc3.myUpHops);
+    mD&&pR(hc3.minUpHopsGoal);
+    mD&&pR(hc3.myUpHopsGoal);
+
+    if (hc3.myUpHops >= hc3.myUpHopsGoal)
+      return qc.die();
+    mD&&pR("QHCUPa14a");
+
     if (hc3.minUpHops + 1u != hc3.myUpHops ||
         hc3.minUpHopsGoal != hc3.myUpHopsGoal) {
       mD&&pR("QHDCL MAXGOALHOPS CHG") 
         &&pRContext();
+      mD&&pR("QHDCLCHG11");
+      mD&&pR(hc3.minUpHops);
+      mD&&pR(hc3.minUpHopsC2D);
+      mD&&pR(hc3.minUpHopsGoal);
+      mD&&pR(hc3.myUpHops);
+      mD&&pR(hc3.myUpHopsGoal);
 
       // I DO. BUT DO I HAVE A LEGIT MINUP TO UPDATE FROM?
       if (hc3.minUpHops >= hc3.myUpHops) { // I DO NOT. 
-        HCPoint hcp = qc.getHCPoint();
-        return qc.die(); 
-        //return qc.blockOrDie(qc.cNO_MINUP_DEATH_ODDS); 
+        qc.unsetHCPoint();                 // Give up my position
+        return true;                       // And block (for starters for now)
       }
 
       qc.setMaxHopsGoal(hc3.minUpHopsGoal); // Be consistent with chosen
@@ -193,12 +222,13 @@ transient QHardCellState : Intention + DTU + QDebugUtils + Fail {
     mD&&pR("QHCUP1610");
 
     // AM I (NOW, DON'T TRUST HC3) BEYOND THE GOAL?
-    if (qc.getUpHops() >= qc.getMaxHopsGoal()) { // YES
+    if (qc.getUpHops() > qc.getMaxHopsGoal()) { // YES
       mD&&pR("QHCUP1610DIE");
       return qc.die(); // I MUST DIE
     }
 
     mD&&pR("QHCUP1611");
+    mD&&pR(changed);
 
     //// DO I HAVE UNINITTED NGBS?
     if (changed || hc3.uninits)
@@ -422,6 +452,9 @@ transient QHardCellState : Intention + DTU + QDebugUtils + Fail {
     HC3State& hc3 = getHC3State();
     EventWindow ew;
 
+    mD&&pR("QHCSTCW10");
+    mD&&pR(mytotaldowns);
+
     /// UPDATE MY CONTACTWARNINGS IF NEEDED
     DEWLineC dl;
     if (mytotaldowns == 0u) {
@@ -599,7 +632,8 @@ transient QHardCellState : Intention + DTU + QDebugUtils + Fail {
       }
 
       if (spawns) {
-        qc.signalLocalDamage(); // spawning means (had been) damage
+        if (false) // CONSIDERED BAD IDEA?
+          qc.signalLocalDamage(); // spawning means (had been) damage
         return true;            // I SPAWNED.
       }
 
