@@ -11,7 +11,11 @@ else
     DEFAULT_ULAM_BIN=/data/ackley/PART4/code/D/ULAM/bin
     DEFAULT_MFM_BIN=/data/ackley/PART4/code/D/MFM/bin
 fi
+
+START_TIME="$(date -u +%s)"
+echo START `date`
 echo BUILDING FOR ENGINE: $ENGINE
+
 
 MAKEVARS+=" ENGINE=$ENGINE"
 MAKEVARS+=" DEFAULT_ULAM_BIN=$DEFAULT_ULAM_BIN"
@@ -35,4 +39,9 @@ fi
 # everything else runs via ./code/Makefile
 echo make -C code -k $MAKEARG $MAKEVARS
 make -C code -k $MAKEARG $MAKEVARS
-
+STATUS=$?
+echo END `date`
+END_TIME="$(date -u +%s)"
+ELAPSED_TIME="$(($END_TIME-$START_TIME))"
+echo "BUILD TIME:" "$(($ELAPSED_TIME/60))m" "$(($ELAPSED_TIME%60))s"
+exit $STATUS
