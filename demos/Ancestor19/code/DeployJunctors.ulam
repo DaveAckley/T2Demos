@@ -1,0 +1,122 @@
+/** \symbol JD
+    \color #0f0
+ */
+element DeployJunctors : P2PvDL
+  + DTU
+  + Fail
+{
+  typedef Unsigned(3) DeployState;
+  DeployState mState = DeployState.maxof; // 0..3 PocketDir, 4 return, 5 wait, 7 init
+
+  typedef Unsigned(3) InitialWait;
+  InitialWait mInitialWait = 0u;
+
+  Void behave() {
+    if (mInitialWait++ < mInitialWait.maxof) // Reluctantly kill some time to help
+      return;                                // HCPoint values near RG settle, so
+    super.behave();                          // we don't anchor any wrong spots
+  }
+
+  Bool mDeliverToPocket;
+  HCPoint mReturnHP1, mReturnHP2;
+
+  Void init(EdgeSJCs esjcs, D1PocketableState & d1s) {
+    PocketHC3 & hc3 = d1s.mPocket;
+    if (hc3.mCoordCount != 4u)
+      fail(__FILE__,__LINE__,"Bad PocketHC3?");
+    EventWindow ew;
+    C2D c1 = hc3.mCoords[0u]; // opposite
+    C2D c2 = hc3.mCoords[2u]; // corners
+    HCPointable & hmin = (HCPointable&) ew[c1];
+    HCPointable & hmax = (HCPointable&) ew[c2];
+    init(esjcs,hmin.getHCPoint(),hmax.getHCPoint());
+  }
+
+  Void init(EdgeSJCs esjcs, HCPoint returnaddr) {    
+    init(esjcs, returnaddr, returnaddr);
+  }
+
+  Void init(EdgeSJCs esjcs, HCPoint ra1, HCPoint ra2) {    
+    mEdgeSJCs = esjcs;
+    mReturnHP1 = ra1;
+    mReturnHP2 = ra2;
+    mState = 0u;
+  }
+
+  EdgeSJCs mEdgeSJCs;           // values to deploy
+
+  //// P2PvDL API
+  @Override
+  virtual Bool deliverToPocket(HP2HP& hp2hp) {
+    return mDeliverToPocket;
+  }
+
+  @Override
+  virtual Void getDestPockets(HCPoint & d1, HCPoint & d2) {
+    if (mState < 4u) {
+      C2D c = pocketDir2C2D((PocketDir) mState); // (+-1,+-1)
+      d1.setHCPoint(c);
+      d2.setHCPoint(c);
+    } else if (mState == 4u) {
+      d1.setHCPoint(mReturnHP1);
+      d2.setHCPoint(mReturnHP2);
+    } else {
+      // no dest
+      d1.unsetHCPoint();
+      d2.unsetHCPoint();
+    }
+  }
+
+  SN findAnchorHG() {
+    EventWindow ew;
+    if (mState >= 4u) return SN.maxof; // or fail?
+    C2D c = pocketDir2C2D((PocketDir) mState); // (+-1,+-1)
+    for (SN sn = 0u; sn < 41u; ++sn) {
+      if (!ew.isAccessible(sn)) continue;
+      Atom & a = ew[sn];
+      // Look for HardCellG, specifically, to get the combination of
+      // HCPointable and StandardJunctionStg (eg, no RootHardCellG)
+      if (a as HardCellG) {     
+        HCPoint at = a.getHCPoint();
+        if (!at.isValid()) continue;
+        C2D atc = at.validHCPoint2C2D();
+        if (atc == c) 
+          return sn;            // Found desired anchorHG
+      }
+    }
+    {
+      DebugUtils du;
+      du.printContext();
+      du.print("DEPLOY JUNCTORS DELIVERY FAILURE");
+      du.print(c);
+    }
+    return SN.maxof;            // Not found
+  }
+
+  @Override
+  virtual Bool onDelivery(HP2HP& hp2hp) {
+    mD&&pR("DPJNOD10");
+    mD&&pR(mState);
+    if (mState < 4u) {
+      EventWindow ew;
+      SN destsn = findAnchorHG();
+      if (destsn == SN.maxof)
+        return false;           // TRY AGAIN
+
+      HardCellG & dest = (HardCellG &) ew[destsn];
+      dest.setSJC(mEdgeSJCs.getSJC((PocketDir) mState));
+      dest.setIsJunctionAnchor(true);
+
+      mD&&pR("DPJNOD12");
+      mD&&pR(dest);
+      ++mState;             // On to next task!
+      return false;         // false since this wasn't the final delivery
+    } else if (mState==4u) {
+      mD&&pR("DPJNOD14");
+      
+    }
+    mD&&pR("DPJNOD15");    
+    return false;               // Wait for BodyModel to eat us
+  }
+  
+}

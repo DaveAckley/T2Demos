@@ -1,0 +1,144 @@
+/** \symbol MT
+    \color #f53
+ */
+element MTip 
+  + DTU
+  + QDebugUtils
+{
+  /** \returns true if SN contains something recognizable Di corner,
+      and set onaxis to indicate which corner it is. Otherwise
+      \returns false if SN does not contain a corner or we can't tell.
+   */
+  Bool isCornerSN(SN sn, AxialDir &onaxis) {
+    EventWindow ew;
+    if (!ew.isAccessible(sn)) return false; // can't see
+    mD&&pR("MTISCSN10");
+
+    Atom & a = ew[sn];
+    if (!a is QHardCellG) return false; // not Di
+    mD&&pR("MTISCSN11");
+
+    QHardCellG & qhg = (QHardCellG&) a;
+    HCPoint hp = qhg.getHCPoint();
+    if (!hp.isValid()) return false; // not localized
+    mD&&pR("MTISCSN12");
+
+    C2D hc = hp.validHCPoint2C2D();
+    Unsigned hclen = hc.length();
+    if (hclen == 0u) return false; // center can't be corner
+    mD&&pR("MTISCSN13");
+
+    Zone z = (Zone) c2D2XZone(hc);
+    AxialDir ad;
+    if (!zone2AxialDir(z,ad)) return false; // not on axis
+    mD&&pR("MTISCSN14");
+
+    if (hclen + 1u != qhg.mMaxHops) return false; // not Di corner
+    mD&&pR("MTISCSN15");
+
+    onaxis = ad;
+    return true;
+  }
+
+  Void die() {
+    EventWindow ew;
+    ew[0] = Empty.instanceof;
+  }
+
+  Void blockOrDie() {
+    Random random;
+    EventWindow ew;
+    if (random.oneIn(10u)) 
+      ew[0] = Empty.instanceof;
+    return;
+  }
+
+  Bool mICanSee;
+
+  //// UrSELF API
+  @Override
+  ARGB getColor(Unsigned selector) {
+    ARGB ret = super.getColor(selector);
+    ColorUtils cu;
+    if (!mICanSee) ret = cu.dimmer(ret);
+    return ret;
+  }
+
+  @Override
+  Void behave() {
+    EventWindow ew;
+    Random random;
+    MinPick corners[AxialDir.maxof + 1u];
+    MinPick allcorners;
+    MinPick otherdanger;
+    MinPick theycansee;
+    MinPick emptypick;
+
+    /// FIND CORNERS AND DANGER
+    for (SN sn = 1u; sn < 41u; ++sn) {
+      if (!ew.isAccessible(sn)) {
+        otherdanger.update(sn);
+        continue;
+      }
+
+      Atom & a = ew[sn];
+      if (a is Empty)
+        emptypick.update(sn);
+      else if (a as Self) {
+        if (a.mICanSee)
+          theycansee.update(sn);
+      }
+
+      if (!(a is Empty || a is Self || a is Membrane || 
+            a is Antenna || a is QHardCell || a is D1Pocketable)) {
+        otherdanger.update(sn);
+        continue;
+      }
+
+      AxialDir cornerad;
+      if (isCornerSN(sn,cornerad)) {
+        corners[cornerad].update(sn);
+        allcorners.update(sn,1u,1u,cornerad); // pick any but remember its ad
+      } else if (a is QHardCell)  // QHardcell that isn't corner means we're out of place
+        return blockOrDie();
+    }
+
+    /// MAYBE EVAPORATE
+    Unsigned acw = allcorners.getTotalWeight();
+    mICanSee = acw > 0u;
+
+    if (!mICanSee) {            // If I see no corners
+      if (theycansee.hasPick() && //   but I see someone who does
+          theycansee.getIdxC2D().euclideanSquaredLength() <= 4u) // nearby
+        return;                 //   then block, else
+      return blockOrDie();             // maybe die
+    }
+
+    C2D chosenc = allcorners.getIdxC2D();
+    AxialDir chosenad = (AxialDir) allcorners.getArg();
+
+    Bool moveordie = (chosenc.euclideanSquaredLength() < 3u && acw < 2u);  // Don't get too close when we're alone
+
+    /// SIGNAL ALL(-ish) CORNERS
+    if (acw > 1u || otherdanger.hasPick()) { // Multiple corners or something scary
+      for (Unsigned i = 0u; i < 4u; ++i) {
+        AxialDir ad = (AxialDir) i;
+        if (!corners[ad].hasPick()) continue;
+        QHardCellG & qhg = (QHardCellG&) corners[ad].getIdxAtom();
+        qhg.maxDC(ad,cDC_HERE);
+      }
+    }
+
+    /// MAYBE SPAWN IF UNALIGNED WITH CHOSEN
+    for (C2D.Coord i = 3; i <= 6; ++i) {
+      C2D mtipc = chosenc + axialDir2C2D(chosenad)*i; // find aligned spots
+      if (!ew.isAccessible(mtipc)) continue;
+      if (mtipc.length() != 0u && ew[mtipc] is Empty) { // if not where we are
+        ew[mtipc] = Self.instanceof; // spawn
+      }
+    }
+
+    if (moveordie)              // might have spawned but tough if not
+      return blockOrDie();
+  }
+}

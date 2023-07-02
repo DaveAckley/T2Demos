@@ -1,0 +1,220 @@
+/** Set up to transmit the program loop entire, with programmable
+    post-transmission cleanup.
+
+    DS PU assignments
+    Initial REG/BLU: outbound arm
+    Initial INP/GRN: control point
+    Initial OUT/RED: <unused>
+    Initial XEQ/WHT: src codons
+
+    \symbol SL
+    \color #a2e
+    \version 11
+ */
+element LXSendLoop : LX + QLabelMark + TQDSControlStg {
+  typedef Unsigned(4) HeadCount;
+  HeadCount mSkipInsnsFront;    //< #insns to skip over before starting transmission
+  HeadCount mSkipInsnsBack;     //< #insns to skip back over after ending transmission
+  HeadCount mSkipInsnsAfter;    //< #insns to skip forward over before ending execution
+  HeadCount mInsnsProcessed;    //< #insns skipped (forward or back) so far
+
+  Bool mPollForECs = false;     //< otherwise lock processor waiting for them
+
+  typedef Unsigned(3) SendPhase;
+  constant SendPhase cSP_INIT = 0u; //< kill ctrl and head, init and regrip
+  constant SendPhase cSP_HEAD = 1u; //< skip forward mSkipInsnsFront
+  constant SendPhase cSP_COPY = 2u; //< ship loop
+  constant SendPhase cSP_BACK = 3u; //< skip backward mSkipInsnsBack
+  constant SendPhase cSP_AFTER = 4u; //< skip forward mSkipInsnsAfter, regrip W<->B, kill self
+
+  SendPhase mSendPhase = cSP_INIT;
+  Bool mLabelAcquired = false; //< have we picked up first shipped label?
+
+  //// LX API
+  @Override
+  virtual Bool perform(DiamondSequencerState & dss) {
+    EventWindow ew;
+    BaseClassUtils bcu;
+    Fail f;
+
+    mD&&pR("LXINITSEND10");
+    //// HAVE WE INITTED THINGS ALREADY?
+    if (mSendPhase == cSP_INIT) {
+      //// WE HAVE NOT ALREADY INITIALIZED THINGS
+
+      Bool kctrl = killPU(cPUNIT_GRN, dss); // kill ctrl
+      if (!kctrl) return true; // dying in progress
+
+      {
+        ProcUnitInfo & puictrl = dss.getPUInfo(cPUNIT_GRN); // get ctrl info
+
+        mD&&pR("DLPUND12C");
+        if (!puictrl.mFound) f.fail(__FILE__,__LINE__); // ??
+
+        if (puictrl.mOccupiedSites != 0u || puictrl.mEmptySN == SN.maxof)
+          f.fail(__FILE__,__LINE__); // wtf we just killed it
+
+        // We must keep this self (which is on the germline) pristine
+        // (e.g., in cSP_INIT). Do mods only on the copy
+        Atom copy = self.atomof;
+        Self & scopy = (Self&) copy; // Point at copy
+        scopy.mSendPhase = cSP_HEAD; // Copy moves on to next phase
+        scopy.mInsnsProcessed = 0u;  // Copy has skips 0 insns so far
+        scopy.mPocketPtrs[cBODY_UP] = cPP_NULL; // Copy is unconnected
+        scopy.mPocketPtrs[cBODY_DOWN] = cPP_NULL; // "
+
+        scopy.setSingleTQ(puictrl.mInQuadrant); // give sensible tqds
+        ew[puictrl.mEmptySN] = copy;  // Deploy self copy
+
+        markDSPForRotationForward(dss, 0u, cPUNIT_WHT); // roll the germline IS
+        dss.swapPUs(cPUNIT_GRN,cPUNIT_WHT); // _GRN is now src codons
+      }
+      return true; // Oh yeah we did stuff
+    }
+    //// WE HAVE ALREADY INITTED THINGS.
+
+    //// IS HEAD SETUP COMPLETE?
+    if (mSendPhase == cSP_HEAD) {
+      
+      if (mInsnsProcessed < mSkipInsnsFront) { // More insns to skip at front?
+        ++mInsnsProcessed;
+        markDSPForRotationForward(dss, 0u, cPUNIT_GRN); // skip another insn
+        return true;                      // did stuff
+      }
+
+      //// WE HAVE NO MORE HEAD INSNS TO SKIP
+
+      mSendPhase = cSP_COPY;    // start copying
+      return true;
+    }
+    //// HEAD SETUP IS COMPLETE
+
+    //// IS WHOLE LOOP COPYING DONE?
+    if (mSendPhase == cSP_COPY) {
+      //// WHOLE LOOP COPYING IS NOT DONE.
+
+      //// HAVE WE GOT A CODE CODON TO COPY
+      ProcUnitInfo & puicode = dss.getPUInfo(cPUNIT_INP); // get code info
+
+      if (puicode.mCodonSN == SN.maxof) 
+        f.fail(__FILE__,__LINE__); // wtf
+
+      Codon & ccodon = (Codon&) ew[puicode.mCodonSN];
+      if (ccodon is EmptyCodon) {
+        /// WE DO NOT HAVE A CODE CODON
+        markDSPForRotationForward(dss, 0u, cPUNIT_INP); // bump it ahead
+        return true;
+      }
+      //// WE HAVE GOT A CODE CODON TO COPY
+
+      //// HAVE WE GOT AN XFER EC TO COPY IT TO?
+      ProcUnitInfo puixfer = dss.getPUInfo(cPUNIT_REG);
+      if (!puixfer.mFound) return false;
+      mD&&pR("CPUF14");
+
+      SN xsn = puixfer.mCodonSN;
+      if (xsn == SN.maxof)
+        return false; // ??
+
+      mD&&pR("CPUF15");
+      Atom & xa = ew[xsn];
+      if (!(xa is EmptyCodon)) {
+        maybeDemandEC(dss);
+        return false;
+      }
+      //// WE HAVE GOT AN XFER EC TO COPY IT TO.
+
+      Atom copy = ccodon.atomof;
+      Codon & ccopy = (Codon&) copy;
+
+      EmptyCodon & xac = (EmptyCodon&) xa;
+      bcu.copySharedData(xa, copy);
+      ccopy.mDSType = cDS_NORM; // need this?
+      ccopy.setTQDSLockedDown(true); // let's keep our shape on the wire?
+
+      ew[xsn] = copy; // Send next codon
+      maybeDemandEC(dss);// and maybe ask reg to push it
+
+      //// WE HAVE SENT ANOTHER CODON
+
+      //// HAVE WE ACQUIRED A LABEL YET?
+      if (!mLabelAcquired) {
+        //// WE HAVE NOT ACQUIRED A LABEL
+
+        if (ccopy as QLabelMark) { // Does this codon have a mark?
+          setLabel(ccopy.getLabel()); // Yes, pick it up
+          mLabelAcquired = true;      // and remember we did
+        }
+        markDSPForRotationForward(dss, 0u, cPUNIT_INP); // either way we're done with this codon
+        return true;
+      }
+      //// WE HAVE ACQUIRED A LABEL
+
+      //// DID WE JUST SHIP THE FINAL CODON?
+      if (ccopy as QLabelMark) {
+        if (labelMatch(ccopy)) {
+          //// WE DID JUST SHIP THE FINAL CODON.
+
+          mInsnsProcessed = 0u;  // reset insns-to-process count
+          mSendPhase = cSP_BACK; // Move on
+          return true;
+        }
+      }
+      //// WE DID NOT JUST SHIP THE FINAL CODON
+      markDSPForRotationForward(dss, 0u, cPUNIT_INP); // roll to next codon to ship insn 
+      return true;
+    }
+
+    //// IS POST-COPY BACKING UP DONE?
+    if (mSendPhase == cSP_BACK) {
+
+      if (mInsnsProcessed < mSkipInsnsBack) { // More postcopy insns to back-up over?
+
+        //// BACKING UP IS NOT DONE.
+        ++mInsnsProcessed;
+        markDSPForRotationBackward(dss, 0u, cPUNIT_GRN); // back up src stream
+        return true;
+
+      }
+      //// BACKING UP IS DONE.
+      mInsnsProcessed = 0u;  // reset insns-to-process count
+      mSendPhase = cSP_AFTER; // Move on to after skipping
+      return true;
+    }
+
+    //// IS FORWARD SKIPPING AFTER DONE?
+    if (mSendPhase == cSP_AFTER) {
+
+      if (mInsnsProcessed < mSkipInsnsAfter) { // More final insns to skip over?
+
+        //// FINAL SKIPPING IS NOT DONE.
+        ++mInsnsProcessed;
+        markDSPForRotationForward(dss, 0u, cPUNIT_GRN); // skip src stream fwd
+        return true;
+
+      }
+
+      //// FINAL FORWARD SKIPPING IS DONE.
+      dss.swapPUs(cPUNIT_WHT,cPUNIT_GRN); // swap back to original loop
+
+      SN usn = ew.getSiteNumber(self);
+      if (usn == SN.maxof) f.fail(__FILE__,__LINE__);
+      ew[usn] = Empty.instanceof; // We are done
+      return true;                // and gone
+    }
+    f.fail(__FILE__,__LINE__);
+    return false; // NOT REACHED
+  }
+
+  Void maybeDemandEC(DiamondSequencerState & dss) {
+    if (!mPollForECs)                                         // unless we're polling,
+      markDSPForRotation(dss, 0u, cPUNIT_REG, cDSTATUS_TEMP);  // lock DS until EC shows
+  }
+
+  //// CODON API
+  virtual Void init() {
+    super.init();
+    mDSType = cDS_NORM;
+  }
+
+}

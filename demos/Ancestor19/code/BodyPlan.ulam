@@ -1,0 +1,31 @@
+quark BodyPlan
+  + DTU
+{
+  typedef EdgeModel.DiSequence DiSequence;
+
+  //// BodyPlan API
+  virtual DiSequence getDiSequenceCount() ;
+  virtual DiSeqInfo getDiSeqInfo(DiSequence diseq) ; // diseq: 1..count
+}
+
+transient BodyPlanStg(Unsigned cDISEQ_COUNT) : BodyPlan
+  + DTU
+{
+  //// BodyPlan API
+  @Override
+  virtual DiSequence getDiSequenceCount() {
+    return (DiSequence) cDISEQ_COUNT;
+  }
+
+  @Override
+  DiSeqInfo getDiSeqInfo(DiSequence diseq) {
+    DiSeqInfo ret;
+    if (diseq > 0u && diseq <= cDISEQ_COUNT)
+      ret = mDiSeqInfoMap[diseq-1u];
+    return ret;
+  }
+
+  typedef DiSeqInfo DiSeqInfoMap[cDISEQ_COUNT];
+  DiSeqInfoMap mDiSeqInfoMap;
+
+}

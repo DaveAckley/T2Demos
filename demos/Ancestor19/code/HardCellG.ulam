@@ -1,0 +1,281 @@
+transient QHardCellGState : QHardCellState {
+
+  //// INTENTION API
+
+  @Override
+  virtual Bool stabilize(Intender & in) {
+    mD&&pR("QHGSSTAB10");
+    if (super.stabilize(in)) return true;
+
+    QHardCellG & hg = (QHardCellG&) in;
+    mD&&pR("QHGSSTAB11");
+
+    if (stabilizeJunction(hg)) return true;
+    mD&&pR("QHGSSTAB12");
+
+    return false;
+  }
+
+  //// QHardCellGState SERVICES
+  Bool stabilizeJunction(QHardCellG & hg) {
+
+    mD&&pR("QHGSSTABJN10");
+    /// NEED TO UPDATE MY JUNCTION?
+    if (hg.isJunctionAnchor())
+      return false;             // I'm an anchor so no
+
+    mD&&pR("QHGSSTABJN11");
+    /// NOT ANCHOR SO CHECK UPSTREAM
+    HC3State& hc3 = getHC3State();
+    C2D minupc = hc3.minUpHopsC2D;
+    mD&&pR(minupc);
+    if (minupc.length() == 0u)
+      return false;             // No upstream?
+
+    EventWindow ew;
+    Atom & a = ew[minupc];
+    mD&&pR("QHGSSTABJN12");
+    mD&&pR(a);
+
+    if (a as StandardJunction) {
+      mD&&pR("QHGSSTABJN13");
+      StandardJunctorConfig sjc = a.getSJC();
+      mD&&pR(sjc);
+      mD&&pR(hg);
+      mD&&pR("QHGSSTABJN14");
+      Bool ret = hg.setSJC(sjc);
+      mD&&pR(hg);
+      return ret;
+    }
+
+    mD&&pR("QHGSSTABJN15");
+    return false;
+  }
+}
+
+quark QHardCellG : QHardCell
+  + StandardJunction
+{
+  typedef Unsigned(3) NChan;
+
+  //// Intender API
+  @Override
+  virtual ClassId getIntentionClass() { return QHardCellGState.classidof; }
+
+  //// QHardCell API
+  @Override
+  virtual Bool countWatchdog() { return false; }
+
+  @Override
+  virtual Void resetWatchdog() { Fail f; f.fail(__FILE__,__LINE__); }
+
+  @Override
+  virtual Atom toSpawn() {
+    mD&&pR("HCGTSP0");
+    mD&&pR(self);
+    mD&&pR("HCGTSP10");
+    HardCellG hg;
+    BaseClassUtils bcu;
+    bcu.copySharedData(self.atomof, hg.atomof);
+    mD&&pR(hg);
+    //    Self & hgr = hg;
+    //    hgr = self;  // Init from our fields
+    mD&&pR("HCGTSP11");
+    mD&&pR(hg);
+    return hg.atomof;
+  }
+
+  //// DEWLine API
+  @Override
+  virtual DefCon signalDC() { 
+    return cDC_HERE;            // Now have no distinction between 'contact' and 'damage'
+  }
+
+  typedef EventWindow.SiteNum SN;
+  typedef Unsigned(5) HopCount;
+  constant HopCount cMAX_MAX_HOPS = 18u;
+  constant HopCount cMIN_MAX_HOPS = QHardCell.cMIN_DOWN_SETTLED + 1u;
+  HopCount mMaxHops;
+
+  Bool isTail() { return getUpHops() == mMaxHops - 1u; }
+
+  constant Unsigned cDIFFUSE_ODDS = 1u;
+
+  HopCount mSettledDownHops = 0u;
+
+  ARGB baseColor() {
+    ColorUtils cu;
+    return cu.color(0xff808080); // ?
+  }
+
+  constant Unsigned cXZONE_COLOR[XZone.maxof+1u] = {
+    0xffff0000, // cZONE_NW
+    0xffffff00, // cZONE_NT
+    0xff00ff00, // cZONE_NE
+    0xff00ffff, // cZONE_ET
+    0xff0000ff, // cZONE_SE
+    0xffff00ff, // cZONE_ST
+    0xffff8080, // cZONE_SW
+    0xff80ff80, // cZONE_WT
+    0xffffffff, // cXZONE_CT
+    0xff000000, // cXZONE_UN
+  };
+
+  ARGB getColorZone() {
+    ColorUtils cu;
+    ARGB zc = cu.color(cXZONE_COLOR[getDSXZone()]);
+    ARGB def = getColorDefault();
+    Unsigned pct = 70u;
+    return cu.between(zc,def,pct);
+  }
+
+  ARGB getColorDefault() {
+    ColorUtils cu;
+    Unsigned hc = getUpHops();
+    Unsigned maxhc = getMaxHopsGoal();
+    if (hc >= maxhc) {
+      return cu.color(0xff, 0xff, 0x00);
+    }
+    Unsigned closeness = maxhc - hc;
+    Unsigned pct = 30u + 40u * closeness / maxhc;
+    ARGB base = baseColor();
+    ARGB black;
+    ARGB ret = cu.between(base,black,pct);
+    Unsigned max = maxDCs();
+    if (max > 0u)
+      return cu.color(0xff,0u,0u);
+    return ret;
+  }
+
+  ARGB getColorMinSettled() {
+    ColorUtils cu;
+    Unsigned dh = getSettledDownHops();
+    Unsigned mdh = cMIN_DOWN_SETTLED/2u;
+
+    Unsigned dsh = getDSHops();
+    Unsigned mdsh = DSHops.maxof;
+    ARGB dscol = cu.color(0xff0000ff); // bluer closer to DS?
+    Unsigned pctds = 25u*(mdsh-dsh)/mdsh; // max 25% DS bias
+
+    ARGB basecol;
+    if (dh > mdh) basecol = cu.color(0xffffffff);
+    else basecol = cu.between(cu.color(0xffffff00),
+                              cu.color(0xff000000),
+                              100u * dh / mdh);
+    return cu.between(dscol, basecol, pctds);
+  }
+
+  //// UrSelf API
+  @Override
+  virtual ARGB getColor(Unsigned selector) {
+    ColorUtils cu;
+    ARGB ret;
+
+    if (selector == 2u) ret = getColorMinSettled();
+    else if (selector == 1u) ret = getColorZone(); // XXX getColorDefault();
+    else ret = super.getColor(selector);
+
+    ret = junctionColorMod(ret);
+
+    if (!getHCPoint().isValid()) // yellowfy uninitted
+      ret = cu.between(ret,cu.color(0xffffff00),20u);
+    else 
+      if (mProductivity) {
+        // Add 50% green if holding productivity report
+        //      basecol = cu.between(basecol, cu.color(0xff00ff00), 50u);
+        // Tue Jun 20 14:41:29 2023 Do 80% black for productivity tracing 
+        ret = cu.between(ret,cu.color(0xff000000),20u);
+      }
+    
+    return ret;
+  }
+
+  //// QHardCell API
+  @Override
+  virtual Unsigned getMaxHopsGoal() { return mMaxHops; }
+  @Override
+  virtual Void setMaxHopsGoal(Unsigned maxup) {
+    if (maxup > mMaxHops.maxof) {
+      Fail f;
+      f.fail("QHardCell maxup too big");
+    }
+    mMaxHops = (HopCount) maxup;
+  }
+
+  @Override
+  virtual Unsigned getSettledDownHops() { return mSettledDownHops; }
+  @Override
+  virtual Void setSettledDownHops(Unsigned settledown) { mSettledDownHops = (HopCount) settledown; }
+
+  @Override
+  virtual Void initCopy() {
+    super.initCopy();
+    //    mutateColor();
+  }
+
+  Void behave() {
+    pursueIntention();
+  }
+}
+
+quark QHardCellGField : QHardCellG
+  + HCPointStg
+  + StandardJunctionStg
+{
+  //  HopCount mUpHops = HopCount.maxof;//cMAX_HOPS;
+
+  @Override
+  virtual Unsigned getUpHops() { return getHCPoint().getUpHopsFromHCPoint(); }
+  @Override
+  virtual Unsigned getMaxUpHops() { return HopCount.maxof; }
+  /*
+  @Override
+  virtual Void setUpHops(Unsigned uphops) {
+    fail(__FILE__,__LINE__,"DEIMPLEMENTED");
+    //    mUpHops = (HopCount) uphops;
+    }*/
+}
+
+/** HardCellG: A Growable Low-Density Mobile Grid
+   \symbol HG
+   \color 0xf0f0f0
+ */
+element HardCellG : QHardCellGField
+  + QDSHopsStg
+{
+  Void behave() {
+    if (getUpHops() == getMaxHopsGoal()-1u) {
+      EdgeHG eg;
+      BaseClassUtils bcu;
+      bcu.copySharedData(self.atomof,eg.atomof);
+      EventWindow ew;
+      ew[0] = eg.atomof;
+      return;
+    }
+    return super.behave();
+  }
+}
+
+/** Cell Resizer
+    \symbol CR
+    \color #48a
+*/
+element CellResizer + DTU {
+  Void behave() {
+    EventWindow ew;
+    Random random;
+    for (SN sn = 1u; sn <= 4u; ++sn) {
+      if (!ew.isAccessible(sn)) continue;
+      Atom & a = ew[sn];
+      if (a as RootHardCellG) {
+        Int goal = (Int) a.getMaxHopsGoal();
+        Int mod = random.between(-2,2);
+        goal += mod;
+        if (goal > 2 && goal < 20)
+          a.setMaxHopsGoal((Unsigned) goal);
+        break;
+      }
+    }
+    ew[0] = Empty.instanceof;
+  }
+}

@@ -1,0 +1,742 @@
+transient DiamondCutterBase : D1PocketableState + QDebugUtils {
+
+  @Override
+  virtual Bool init(Intender & in) {
+    DiamondCutter & dc = (DiamondCutter &) in;
+    takeDebug(dc);
+    if (super.init(in)) {       // Bad pocket eg
+      if (mPocket.mCoordCount < 2u) { // Are we 'contained' at all?
+        if (dc.countAlarm()) {         // Not really
+          EventWindow ew;
+          ew[0] = Empty.instanceof;
+        }
+      }
+      return true;
+    } 
+    return false;
+  }
+
+  @Override
+  virtual Bool observe(Intender & in) {
+    mD&&pR("DXOB10");
+    if (super.observe(in)) return true;
+    DiamondCutter & dc = (DiamondCutter &) in;
+    mD&&pR("DXOB11");
+    if (!mAllPocketsGood) {     // Kick dog when pocket problems
+      mD&&pR("DXOB12");
+      if (dc.countAlarm()) {
+        setDebugOutputEnabled(true);
+        mD&&pR("XD TIMEOUT");
+        EventWindow ew;
+        ew[0] = Empty.instanceof;
+        return true;
+      }
+      mD&&pR("DXOB13");
+    } else dc.reset();          // But pet it if pocket okay
+
+    return false;
+  }
+
+  Bool die() {
+    mD&&pR("DCYING");
+    EventWindow ew;
+    ew[0] = Empty.instanceof;
+    return true;
+  }
+
+  Void renderSlash(C2D off, ARGB col, Unsigned size) {
+    Drawable drawable;
+    if (!drawable.canDraw()) return;
+    C2D ctr = off*(3*Drawable.cUNITS_PER_SITE/8); 
+    C2D start = ctr-(C2D.Coord) (size/2u);
+    /* end was supposed to be 'start+' etc, trying
+       to make a horizontal line. But I like the diagonal
+       diamonds this makes better, at least for now.
+     */
+    C2D end = ctr+C2D.instanceof(0,(C2D.Coord) size/2u);
+    drawable.drawMaskedLine(start, end, col, col, (Bits) 0xffffffff, size);
+  }
+
+  /** \returns non-zero C2D of empty site in uncrowded adjacent pocket
+      ad, or (0,0) if cannot find such a site
+   */
+  C2D couldMoveAD(AxialDir ad) {
+    return couldMovePP((PocketPtr) (ad+1u));
+  }
+
+  Bool localDiffuse(Bool ret) {
+    mD&&pR("LOCDIF10");
+    C2D c = couldMovePP(cPP_SELF);
+    mD&&pR(c);
+    if (c.length() > 0u) {
+      C2D origin;
+      mD&&pR("LOCDIF11");
+      ew.swap(origin,c);
+      return true;
+    }
+    mD&&pR("LOCDIF12");
+    return ret;
+  }
+
+  C2D couldMovePP(PocketPtr pp) {
+    C2D origin; // (0,0) means can't move ad
+
+    RectIterator ri;
+    mPocket.takeDebug(self);
+    if (!mPocket.initIterator(ri, pp, true)) return origin;
+    mD&&pR("DCTMAD11");
+    Unsigned emptycount=0u, fullcount=0u, inaccesscount=0u;
+    C2D emptyc;
+    Random random;
+    while (ri.hasNext()) {
+      C2D c = ri.next();
+      if (!ew.isAccessible(c)) {
+        ++inaccesscount;
+        continue;
+      }
+      Atom & a = ew[c];
+      if (a is Empty) {
+        if (random.oneIn(++emptycount))
+          emptyc = c;
+      } else ++fullcount;
+    }
+    mD&&pR("DCTMAD12");
+    mD&&pR(inaccesscount);
+    mD&&pR(fullcount);
+    mD&&pR(emptycount);
+    if (inaccesscount > 0u ||
+        (pp != cPP_SELF && fullcount > 1u) ||  // ALLOW DC INTO DOUBLY-OCCUPIED SELF !
+        emptycount == 0u) return origin;
+    mD&&pR("DCTMAD13");
+    return emptyc;
+  }
+
+  Bool tryMoveAD(DiamondCutter & dc, AxialDir ad) {
+    mD&&pR("TDCTMAD10");
+    C2D destc = couldMoveAD(ad);
+    if (destc.length() == 0u) 
+      destc = couldMovePP(cPP_SELF); // try 'diffusing' locally
+
+    mD&&pR("TDCTMAD11");
+    if (destc.length() == 0u) 
+      return false;
+
+    mD&&pR("TDCTMAD12");
+    ew.swap(C2D.instanceof, destc);
+    return true;
+  }
+
+  /*
+  Bool targetAdjacent(PocketDir & dirquad, HCPoint target) {
+    mD&&pR("TARGADJ10");
+    PocketHC3 & p = mPocket;
+    mD&&pR(p);
+    MinPick dist;
+    for (Unsigned i = 0u; i < p.mCornerHops.lengthof; i++) {
+      
+      if (p.mCornerHops[i] < mincornerhops) {
+    
+  }
+  */
+
+  /** \returns pocketdir of dsroot if found else unsigned maxof, also
+     sets nextad and mindshops in any case
+   */
+  Unsigned diamondSequencerAdjacent(AxialDir & nextad, Unsigned & mindshops, AxialDir lastad) {
+    mD&&pR("DCDSA10");
+    PocketHC3 & p = mPocket;
+    Unsigned mincorneridx;
+    Unsigned mincornerdshops = Unsigned.maxof;
+    Unsigned mincornercount = 0u;
+    SN mincornerSN;
+    Random random;
+    for (Unsigned i = 0u; i < p.mCornerHops.lengthof; i++) {
+      if (p.mCoords[i].length() == 0u) continue; // XXX?
+      QDSHopsStg qdsh = p.mCornerQDSHopsStg[i];
+      Unsigned dshops = qdsh.getDSHops();
+      if (dshops < mincornerdshops) {
+        mD&&pR("DCDSA10BEAT");
+        mincorneridx = i;
+        mincornerdshops = dshops;
+        mincornercount = 1u;
+        mD&&pR(mincorneridx);
+        mD&&pR(mincornerdshops);
+      } else if (dshops == mincornerdshops) {
+        if (i/2u > mincorneridx/2u || // break ties southward
+            random.oneIn(++mincornercount)) {
+          mD&&pR("DCDSA10TIE");
+          mincorneridx = i;
+          mD&&pR(mincorneridx);
+        }
+      }
+    }
+
+    mD&&pR("DCDSA11");
+    if (mincornercount == 0u) die(); // wth?
+
+    nextad = lastad;            // assume keep tracking
+    mindshops = mincornerdshops;
+
+    if (mincornerdshops == 0u) 
+      return mincorneridx;      // ds root found
+
+    mD&&pR("DCDSA12");
+
+    constant Unsigned cDSHOPS_GRADIENT_THRESHOLD = 5u;
+    if (mincornerdshops < cDSHOPS_GRADIENT_THRESHOLD) {
+      mD&&pR("DCDSA13");
+      mD&&pR(mincornerdshops);
+      
+      AxialDir ad1, ad2;
+      axialDirsBorderingQuad((PocketDir) mincorneridx, ad1, ad2);
+      nextad = random.oneIn(2) ? ad1 : ad2;
+    }
+
+    mD&&pR("DCDSA14");
+    return Unsigned.maxof;    // nextad set or defaulted
+    
+  }
+}
+
+/**  - DC intention 0:
+       = Find root
+       = Wait until two DC intention 0s in sight
+       = Derive config info from root
+       = Erase second DC intention 0
+       = Release DC intention 1s toward new roots
+       = adopt intention 2
+ */
+transient DiamondCutterFindOldRoot : DiamondCutterBase {
+  @Override
+  virtual Bool init(Intender & in) {
+
+    PocketHC3 & p = mPocket;
+    DiamondCutter & dc = (DiamondCutter &) in;
+
+    HP2HP hp2hp;
+    hp2hp.takeDebug(dc);
+    // This won't work because it's only certain EdgeModels that we
+    // want to stop at:  hp2hp.blockOnClass(EdgeModel.classid);
+
+    mD&&pR("DCFOR10");
+    SN nextsn = hp2hp.route2HP(C2D.instanceof);
+    if (nextsn == SN.maxof)     // route says blocked
+      return true;              // so wait
+
+    if (nextsn == SN.maxof-1u)  // route says lost
+      return die();             // so die
+
+    mD&&pR("DCFOR11");
+
+    EventWindow ew;
+    if (nextsn != 0u) {         // route says go here
+      mD&&pR("DCFOR12");
+      mD&&pR(nextsn);
+      ew.swap(0u,nextsn);
+      return true;
+    }
+
+    // route says we're done
+    mD&&pR("DCFOR13");
+    return super.init(in);
+
+  }
+
+  @Override
+  virtual Bool observe(Intender & in) {
+    mD&&pR("DCFOROB10");
+    if (super.observe(in)) return true;
+    mD&&pR("DCFOROB11");
+    EventWindow ew;
+    for (SN sn = 1u; sn < 41u; ++sn) {
+      if (!ew.isAccessible(sn)) continue;
+      Atom & a = ew[sn];
+      if (a as EdgeModel) {
+        if (a.mIsHead && a.mIsDeployed) {
+          mD&&pR("DCFOROB13");
+          return true;          // block around deployed front DM
+        }
+      }
+    }
+    mD&&pR("DCFOROB14");
+    return false;
+  }
+
+  Bool act(Intender & in) {
+    PocketHC3 & p = mPocket;
+    DiamondCutter & dc = (DiamondCutter &) in;
+
+    mD&&pR(__FILE__,__LINE__);
+    mD&&pR(self);
+    mD&&pR(dc);
+
+    //// ARE WE ROOT ADJACENT?
+    mD&&pR("DCFOR10");
+    PocketDir towardroot;
+    Bool rootadjacent = rootAdjacent(towardroot);
+    HCPoint hcp = minHCPoint();
+
+    /// try to avoid the tangled south most of the time
+    Bool avoidSouth = false;
+    if (hcp.y >= -2 && abs(hcp.x) > 1u) {
+      avoidSouth = true;
+
+      mD&&pR("DCFORa1011");
+      if (tryMoveAD(dc, cN))
+        return true;
+    }
+
+    Random random;
+    if (!rootadjacent || random.oneIn(5u)) {
+
+      //// WE ARE NOT ROOT ADJACENT BUT IT'S THATAWAY
+      AxialDir ad1, ad2;
+      axialDirsBorderingQuad(towardroot, ad1, ad2);
+      mD&&pR("DCFOR12");
+      Bool pick = random.oneIn(2u);
+      if (avoidSouth) {
+        if (ad1 == cS) pick = false;
+        else if (ad2 == cS) pick = true;
+      }
+      return tryMoveAD(dc, pick ? ad1 : ad2);
+    }
+
+    //// WE ARE ROOT ADJACENT.
+    mD&&pR("DCFOR13");
+    mD&&pR(towardroot);
+    mD&&pR(p.mCoords[towardroot]);
+    return deployRootSeeds(dc, p.mCoords[towardroot]);
+  }
+
+  Bool deployRootSeeds(DiamondCutter & dc, C2D rootc) {
+    Fail f;
+    mD&&pR("DCFORDRS11");
+    //// GET ACCESS TO THE ROOT
+    EventWindow ew;
+    if (!ew.isAccessible(rootc)) f.fail(__FILE__,__LINE__);
+    Atom & a = ew[rootc];
+    QHardCell & qhc = (QHardCell&) ew[rootc]; // or fail
+    if (qhc.getUpHops() != 0u) return false; //??
+    //// GOT ACCESS TO THE ROOT
+
+    //// IS THERE A SECOND KEY PRESENT?
+    Bool seeSW = false;
+    Bool found2ndkey = false;
+    SN snk;
+    for (snk = 1u; snk < 41u; ++snk) {
+      if (!ew.isAccessible(snk)) continue;
+      Atom & a = ew[snk];
+      if (a as DiamondCutter) {
+        if (a.mStateIdx == a.cDCS_FIND_OLD_ROOT) {
+          found2ndkey = true;
+        }
+      } else if (a as HardCellG) {
+        HCPoint hcp = a.getHCPoint();
+        if (hcp.x == -1 && hcp.y == 1) // SW corner of SW pocket of RG
+          seeSW = true;
+      }
+    }
+    if (!found2ndkey || !seeSW)
+      return localDiffuse(true); // block
+
+    //// FOR NOW AT LEAST, INSIST THE ROOT IS ROOTHARDCELLG
+    RootHardCellG & rootg = (RootHardCellG &) qhc; // or fail
+
+    //// TAKE IT OVER
+    rootg.setCmdPhase(RootHardCellG.cCMD_WAIT);
+
+    //// IS THE GRID ALL SETTLED?
+    if (!rootg.stableToEdge()) return localDiffuse(true); // no, block
+    //// THE GRID IS ALL SETTLED
+
+    //// CONFIGURE PARAMETERS
+    Unsigned oldmaxgoal = qhc.getMaxHopsGoal();
+    dc.mNewMaxGoalHops = (HardCellG.HopCount) (oldmaxgoal/2u+0u); // we shall see
+
+    AxialDirMap adm = dc.getNewRootDirs(self);
+    //// CAN WE DEPLOY IN ALL NEEDED DIRS
+    C2D dests[4];
+    for (Unsigned i = cW; i <= cE; ++i) {
+      AxialDir ad = (AxialDir) i;
+      if ((adm & (1u<<ad)) != 0u) {
+        //// CAN WE DEPLOY TOWARD ad
+        dests[i] = couldMoveAD(ad);
+        if (dests[i].length() == 0u) return false; // NO
+        //// WE COULD DEPLOY TOWARD ad
+      }
+    }
+    //// WE CAN DEPLOY IN ALL NEEDED DIRS
+
+    //// HAVE WE FULLY DEPLOYED
+    for (Unsigned i = cW; i <= cE; ++i) {
+      AxialDir ad = (AxialDir) i;
+      if ((adm & (1u<<ad)) != 0u) {
+        Atom copy = dc.atomof;  // newmaxgoal already configured
+        DiamondCutter & dcnew = (DiamondCutter&) copy;
+        dcnew.adoptNewIntention(DiamondCutter.cDCS_SEED_NEW_ROOT);
+        dcnew.mOriginalAxialDir = ad;
+        dcnew.mEventCounter = dcnew.mEventCounter.maxof; // Last ditch
+        ew[dests[i]] = dcnew.atomof; // THE BIRD IS AWAY
+      }
+    }
+    //// WE HAVE FULLY DEPLOYED;
+    dc.adoptNewIntention(dc.cDCS_DELETE_OLD_ROOT); // Adopt a new intention
+    dc.mEventCounter = DiamondCutter.cMOTHER_LINGER_DELAY_TIME; // set timer
+
+    //// ERASE SECOND KEY
+    ew[snk] = Empty.instanceof;
+
+    return true;
+  }
+  
+}
+
+/**  - DC intention 1:
+       = Climb dshops gradient.
+       = If no gradient, continue in same direction
+       = when can see DS and HG south of DS, convert
+         HG south of DS to a configured root and then
+         move to DS RED, and stay there
+ */
+transient DiamondCutterSeedNewRoot : DiamondCutterBase {
+
+@Override
+  virtual Bool init(Intender & in) {
+
+    PocketHC3 & p = mPocket;
+    DiamondCutter & dc = (DiamondCutter &) in;
+
+    HP2HP hp2hp;
+    hp2hp.takeDebug(dc);
+
+    C2D dest1, dest2;
+    if (dc.mOriginalAxialDir==cW) {
+      dest1.set(-9,-1); dest2.set(-10,0); // SW of LD DS
+    } else {
+      dest1.set( 9,-1); dest2.set(  8,0); // SW of RD DS
+    }
+    mD&&pR("DCSNR10");
+    SN nextsn = hp2hp.route2HP(dest1,dest2,true);
+    if (nextsn == SN.maxof)     // route says blocked
+      return true;              // so wait
+
+    if (nextsn == SN.maxof-1u)  // route says lost
+      return die();             // so die
+
+    mD&&pR("DCSNR11");
+
+    EventWindow ew;
+    if (nextsn != 0u) {         // route says go here
+      mD&&pR("DCSNR12");
+      mD&&pR(nextsn);
+      ew.swap(0u,nextsn);
+      return true;
+    }
+
+    // route says we're done
+    mD&&pR("DCSNR13");
+    return super.init(in);
+
+  }
+
+  @Override
+  virtual Bool act(Intender & in) {
+    DiamondCutter & dc = (DiamondCutter &) in;
+    EventWindow ew;
+
+    //// DO WE HAVE MORE TIME?
+    if (dc.mEventCounter-- == 0u) {
+      ew[0] = Empty.instanceof;
+      return true;
+    }
+    //// WE DO HAVE MORE TIME
+
+    //// ARE WE DS ADJACENT?
+    mD&&pR("DCSNR10");
+    PocketDir towardds;
+    AxialDir nextad;
+    Unsigned mindshops;
+    Unsigned dspd = diamondSequencerAdjacent(nextad, mindshops, dc.mOriginalAxialDir);
+
+    HCPoint hcp = minHCPoint();
+
+    /// try to avoid the tangled south most of the time
+    if (mindshops > 1u && hcp.y >= -2) {
+
+      mD&&pR("DCSNRa10");
+      if (tryMoveAD(dc, cN))
+        return true;
+    }
+    
+    if (dspd == Unsigned.maxof) {
+      //// WE ARE NOT DS ADJACENT
+      mD&&pR("DCSNR11");
+      return tryMoveAD(dc, nextad);
+    }
+
+    //// WE ARE DS ADJACENT.
+    mD&&pR("DCSNR12");
+    Unsigned newrootpd;
+    if (dspd == cQUAD_NE) // if DS is NE, excellent
+      newrootpd = cQUAD_SE;     // newroot will be SE
+    else if (dspd == cQUAD_NW) // if DS is NW,
+      return tryMoveAD(dc,cW);  // try going W to make it NE
+    else return tryMoveAD(dc,cS);  // Otherwise try: Try going S
+
+    //// WE ARE SW OF DS
+
+    //// DOES RG ALREADY EXIST?
+
+    mD&&pR("DCSNR13");
+    mD&&pR(newrootpd);
+    PocketHC3 & p = mPocket;
+
+    mD&&pR("DCSNR14");
+    mD&&pR(p.mCoords[newrootpd]);
+
+    Atom & a = ew[p.mCoords[newrootpd]];
+    if (a is RootHardCellG)     // if already have RG,
+      return localDiffuse(true); // just hang around
+
+    //// RG DOES NOT ALREADY EXIST
+
+    setDebugOutputEnabled(true); // This rest of this is rare and ballistic if it's working
+    
+    BaseClassUtils bcu;
+    RootHardCellG newroot;                      // YOU ARE TO BE ROOT THOUGH
+    bcu.copySharedData(a, newroot.atomof);      // YOU ARE LIKE ME IN MANY WAYS
+
+    mD&&pR("DCSNR15");
+    newroot.setMaxHopsGoal(dc.mNewMaxGoalHops); // ROOT OVER ALL THIS LAND
+    newroot.setSettledDownHops(0u);             // WHICH DOES NEED A MOMENT
+    newroot.setCmdPhase(newroot.cCMD_WAIT);     // SO JUST WAIT FOR NOW (General Deployer is coming)
+    mD&&pR(newroot);
+
+    mD&&pR("DCSNR16");
+    ew[p.mCoords[newrootpd]] = newroot.atomof;  // YOUR JOB HAS JUST BEGUN
+    mD&&pR(ew[p.mCoords[newrootpd]]);
+
+    dc.adoptNewIntention(DiamondCutter.cDCS_DELIVER_DISEQ);  // AND I MUST MOVE ON
+
+    return true;
+  }
+}
+
+/**  - DC intention 2:
+       = Count newmaxhopsgoal events
+       = Destroy local root by setting its mHops = 1u
+       = Erase self
+*/
+transient DiamondCutterDeleteOldRoot : DiamondCutterBase {
+  @Override
+  virtual Bool act(Intender & in) {
+    Fail f;
+    PocketHC3 & p = mPocket;
+
+    DiamondCutter & dc = (DiamondCutter &) in;
+    Random random;              // stochastic double count
+    if (random.oneIn(2u) && dc.mEventCounter-- == 0u) {
+
+      //// TIME TO NUKE THE ROOT
+      PocketDir rootpd;
+      Bool atroot =  rootAdjacent(rootpd);
+      if (!atroot) f.fail(__FILE__,__LINE__);
+      C2D rootc = p.mCoords[rootpd];
+      EventWindow ew;
+      Atom & a = ew[rootc];
+      if (!(a is QHardCell)) f.fail(__FILE__,__LINE__);
+      {
+        //Xplit s;
+        //s.mRoot = true;
+        //s.mPosition = 1u;
+        //        ew[rootc] = s.atomof;   // THE ROOT IS NUKED
+        ew[rootc] = Empty.instanceof;   // THE ROOT IS (QUIETLY) NUKED
+      }
+      ew[0] = Empty.instanceof;
+      //// AS ARE WE
+      return true;
+    }
+
+    mD&&pR(__FILE__,__LINE__);
+    mD&&pR(dc.mNewMaxGoalHops);
+    return false;
+  }
+}
+
+/**  - DC intention 3:
+       = Go to DSP GRN. If no DS, erase self
+       = Wait
+ */
+transient DiamondCutterDeliverDiSeq : DiamondCutterBase {
+  @Override
+  virtual Bool act(Intender & in) {
+    DiamondCutter & dc = (DiamondCutter &) in;
+    EventWindow ew;
+    Random random;
+    
+    // HANG AROUND UNTIL EATEN OR TIMEOUT
+    if (random.oneIn(2u) && dc.mEventCounter-- == 0u) {
+      ew[0] = Empty.instanceof;
+      return true;
+    }
+
+    return false;
+  }
+}
+
+quark DiamondCutter : D1Pocketable + DTU + XTimer(3u,5u,20u) {
+
+  Void adoptNewIntention(StateIdx idx) {
+    mStateIdx = idx;
+    //    mDCWatchdog.reset();
+  }
+
+  //// DiamondCutter API
+  
+  /** Which directions to deploy new roots. 
+   */
+  virtual AxialDirMap getNewRootDirs(DiamondCutterBase & dcb) ;
+
+  typedef Unary(3) StateIdx;
+  constant StateIdx cDCS_FIND_OLD_ROOT = 0u;
+  constant StateIdx cDCS_SEED_NEW_ROOT = 1u;
+  constant StateIdx cDCS_DELETE_OLD_ROOT = 2u;
+  constant StateIdx cDCS_DELIVER_DISEQ = 3u;
+
+  StateIdx mStateIdx = cDCS_FIND_OLD_ROOT;
+
+  AxialDir mOriginalAxialDir; // which way did we start out
+  HardCellG.HopCount mNewMaxGoalHops; // also event counter in DC#3?
+  typedef Unsigned(HardCellG.HopCount.sizeof + 4u) EventCounter; // Four bits bigger than HopCount..
+  constant EventCounter cMOTHER_LINGER_DELAY_TIME = 25u;
+  EventCounter mEventCounter;
+
+  //// INTENDER API
+  @Override
+  virtual ClassId getIntentionClass() {
+    which (mStateIdx) {
+      case cDCS_FIND_OLD_ROOT:   { return DiamondCutterFindOldRoot.classidof; }
+      case cDCS_SEED_NEW_ROOT:   { return DiamondCutterSeedNewRoot.classidof; }
+      case cDCS_DELETE_OLD_ROOT: { return DiamondCutterDeleteOldRoot.classidof; }
+    }
+    /* cDCS_DELIVER_DISEQ: */    { return DiamondCutterDeliverDiSeq.classidof; }
+
+  }
+  
+}
+
+/** LXReleaseDiamondCutter
+    \symbol DX
+    \color #ccf
+ */
+element LXReleaseDiamondCutter : LX + QLabelMark + TQDSControlStg {
+  //// LX API
+  @Override
+  virtual Bool perform(DiamondSequencerState & dss) {
+    mD&&pR("LXRDX10");
+    Random random;
+    SN empsn = SN.maxof;
+    Unsigned empcount = 0u;
+    EventWindow ew;
+    DiamondSequencer & ds = (DiamondSequencer&) ew[0];
+    for (Unsigned i = cPUNIT_REG; i <= cPUNIT_XEQ; ++i) {
+      ProcUnit pu = (ProcUnit) i;
+
+      // Try to deploy only to the north for safer travels
+      PocketDir pupd;
+      if (!ds.getQuadrantOfPU(pu,pupd)) continue;  // pu not in use in ds
+      C2D pdc = pocketDir2C2D(pupd);
+      if (pdc.y > 0) continue; // avoid south for deployment
+
+      ProcUnitInfo & pui = dss.getPUInfo(pu);
+      if (pui.mEmptySN != SN.maxof &&
+          random.oneIn(++empcount))
+        empsn = pui.mEmptySN;
+    }
+    if (empcount > 0u) {
+      EventWindow ew;
+      XCutDiamond cdv;
+      ew[empsn] = cdv.atomof;
+      markDSPForRotationForward(dss, 0u, cPUNIT_XEQ); // we're done
+      return true;
+    }
+    return false;
+  }
+}
+
+/** XCutDiamond
+    \symbol XD
+    \color #f33
+ */
+element XCutDiamond : DiamondCutter
+  + DiamondController // To freeze the new root from the outset
+{
+
+  //// DiamondController API
+  @Override
+  virtual Bool couldAdvise(RootHardCellG & root,
+                           QHardCellState & qcs)
+  {
+    return hasAdvice();
+  }
+
+  @Override
+  virtual Bool adviseRoot(RootHardCellG & root,
+                          QHardCellState & qcs,
+                          DCReport & dcr) {
+    if (hasAdvice()) {
+      dcr.printf("[XDdfm:STOP]");
+      root.setCmdPhase(root.cCMD_STOP); // Don't. Foggen. Move.
+      return true;
+    }
+    return false;
+  }
+
+  Bool hasAdvice() {
+    return (mDeliveredDiSequence != 0u &&
+            mStateIdx == cDCS_DELIVER_DISEQ);
+  }
+  
+  typedef EdgeModel.DiSequence DiSequence;
+  DiSequence mDeliveredDiSequence;
+
+  @Override
+  virtual ARGB getColor(Unsigned selector) {
+    ColorUtils cu;
+    which (mStateIdx) {
+    case cDCS_FIND_OLD_ROOT:    { return cu.color(0xffff0000); }
+    case cDCS_SEED_NEW_ROOT:    { return cu.color(0xffffff00); }
+    case cDCS_DELETE_OLD_ROOT:  { return cu.color(0xff0000ff); }
+    }
+    /*cDCS_DELIVER_DISEQ */     { return cu.color(0xff00ff00); }
+  }
+
+  @Override
+  virtual Void renderGraphics() {
+    C2D offset; // (0,0)
+    ColorUtils cu;
+    ARGB col = getColor(2u);
+    renderSlash(offset,col,700u);
+  }
+
+  Void renderSlash(C2D off, ARGB col, Unsigned size) {
+    Drawable drawable;
+    if (!drawable.canDraw()) return;
+    C2D ctr = off*(3*Drawable.cUNITS_PER_SITE/8); 
+    C2D start = ctr-(C2D.Coord) (size/2u);
+    /* end was supposed to be 'start+' etc, trying
+       to make a horizontal line. But I like the diagonal
+       diamonds this makes better, at least for now.
+     */
+    C2D end = ctr+C2D.instanceof(0,(C2D.Coord) size/2u);
+    drawable.drawMaskedLine(start, end, col, col, (Bits) 0xffffffff, size);
+  }
+  @Override
+  virtual AxialDirMap getNewRootDirs(DiamondCutterBase & dcb) {
+    return (AxialDirMap) ((1u<<cW)|(1<<cE));
+  }
+
+  Void behave() {
+    pursueIntention();
+  }
+}

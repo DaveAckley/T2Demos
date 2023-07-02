@@ -1,0 +1,12 @@
+quark C2DTU(Unsigned coordBits) {
+  typedef Unsigned(coordBits) Coord;
+
+  load "C2D.inc";
+
+  Self(C2D other) {
+    x = (Self.Coord) other.x;
+    y = (Self.Coord) other.y;
+  }
+
+}
+

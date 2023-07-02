@@ -1,0 +1,82 @@
+quark QLXDeployer : LX
+  + QDebugUtils
+  + DTU
+  + Fail
+{
+  //// QLXDeployer API
+  typedef Unsigned(16) DeployableClassId;
+  virtual DeployableClassId classToDeploy() ;
+  virtual ProcUnit procUnitToDeployInto() ;
+
+  //// LX API
+  @Override
+  virtual Bool perform(DiamondSequencerState & dss) {
+    mD&&pR(__FILE__,__LINE__);
+    DeployableClassId id = classToDeploy();
+    ProcUnit pu = procUnitToDeployInto();
+    ProcUnitInfo & pui = dss.mPUInfos.mPUInfoAry[pu];
+    mD&&pR(id);
+    mD&&pR(pu);
+    mD&&pR("QLXDEPRF11");
+    mD&&pR(dss.mPUInfos);
+    mD&&pR(pui);
+    if (!pui.mFound) return false; // Our PU isn't represented?
+    if (pui.mOccupiedSites > 1u) return false; // No room at the (pu)in(fo)
+    EventWindow ew;
+    SN empsn = pui.mEmptySN;
+    if (!ew.isAccessible(empsn)) return false; // Sure yah
+    ClassUtils cu;
+    Int etype = cu.getElementType(id);
+    if (etype < 0)
+      fail(__FILE__,__LINE__,"classid to deploy is not an element");
+
+    /// READY TO DEPLOY. RELEASE RG WHEN THINGS ARE CALM
+    {
+      if (!(ew[23u] is RootHardCellG))
+        fail(__FILE__,__LINE__,"RG is missing in frozen Di WTF");
+      RootHardCellG & rg = (RootHardCellG &) ew[23u];
+      if (!rg.stableToEdge()) return false; // best wait a bit more
+
+      rg.setCmdPhase(rg.cCMD_MOVE); // Carry on citizen
+      rg.setSettledDownHops(0u); // For what little it's worth given the ngbs
+
+    }
+
+    AtomUtils au;
+    Atom a = au.new(etype);
+    mD&&pR("QLXDEPRF12");
+    mD&&pR(a);
+    ew[empsn] = a;
+    markDSPForRotationForward(dss, 0u, cPUNIT_XEQ); // we're done
+    return true;
+  }
+
+}
+
+/** General Deployer.
+    \symbol GD
+    \color #888
+*/
+element GeneralDeployer : QLXDeployer
+{
+  //// QLXDeployer API
+  @Override
+  virtual DeployableClassId classToDeploy() {
+    return mClassToDeploy;
+  }
+  @Override
+  virtual ProcUnit procUnitToDeployInto() {
+    return mProcUnitToDeployInto;
+  }
+
+  DeployableClassId mClassToDeploy;
+  ProcUnit mProcUnitToDeployInto;
+  
+  /// GeneralDeployer SERVICES
+  Void init(ClassUtils.ClassId id) {
+    if (id >= DeployableClassId.maxof)
+      fail(__FILE__,__LINE__,"Yah. Sure. Right");
+    
+    mClassToDeploy = (DeployableClassId) id;
+  }
+}

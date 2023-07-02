@@ -1,0 +1,46 @@
+quark SW3Cmdr + DTU + QDebugUtils {
+  //// SW3Cmdr SERVICES
+  Bool inject(SW3Cmd cmd) {
+    return inject(cmd, 0u);
+  }
+
+  Bool inject(SW3Packet& upsig, SW3Packet.SeqNo & seqno, SW3Cmd cmd, Unsigned arg) {
+    SW3Packet pkt;
+    pkt = upsig;
+    mD&&pR("3CDR12");
+    mD&&pR(pkt);
+
+    pkt.mCmd = cmd;
+    pkt.mArg = (SW3Arg) arg;
+    pkt.mSeqNo.increment();
+    seqno = pkt.mSeqNo;
+    pkt.mCmdStatus = cSW3CMST_DO;
+
+    mD&&pR("3CDR1210");
+    mD&&pR(pkt);
+
+    upsig = (SwapWormHC3.Signal) pkt;
+
+    mD&&pR("3CDR13");
+    mD&&pR(upsig);
+
+    return true;
+  }
+
+  Bool inject(SW3Cmd cmd, Unsigned arg) {
+    EventWindow ew;
+    mD&&pR("3CDR10");
+    for (SN sn = 1u; sn <= 4u; ++sn) {
+      if (!ew.isAccessible(sn)) continue;
+      mD&&pR("3CDR11");
+      mD&&pR(sn);
+      Atom & a = ew[sn];
+      if (a as SwapWormHC3) {
+        SW3Packet.SeqNo s;
+        return inject(a.mUpSignal, s, cmd, arg);
+      }
+    }
+    mD&&pR("3CDR14");
+    return false;
+  }
+}

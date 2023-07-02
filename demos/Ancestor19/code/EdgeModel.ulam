@@ -1,0 +1,533 @@
+transient EdgeModelState : D1PocketableState
+  + Fail
+{
+  //// Intention API
+  @Override
+  virtual Bool init(Intender & in) {
+    EdgeModel & em = (EdgeModel&) in;
+    if (super.init(in)) {
+      if (em.mInitWatchdog.countAlarm()) {
+        DebugUtils du;
+        du.printContext();
+        du.print("EM CAN'T INIT DYING");
+        EventWindow ew;
+        ew[0] = Empty.instanceof;
+        return true;
+      }
+    } else em.mInitWatchdog.reset();
+    return false;
+  }
+
+  @Override
+  virtual Bool stabilize(Intender & in) {
+
+    EdgeModel & em = (EdgeModel&) in;
+    if (maybeNukeTheRoot(em)) return true; // move root nuking earlier
+    mD&&pR("CMSAa12");
+
+    mD&&pR("CMSSTB10");
+    if (super.stabilize(in)) return true;
+
+    Bool ret = false;
+
+    if (ret) return ret;
+
+    //// ENSURE DEPLOYED ARE CLOSE TO ROOT
+   
+    return ret;
+  }
+
+  Bool maybeNukeTheRoot(EdgeModel & dm) {
+    mD&&pR("MBNKRT10");
+    if (!dm.mIsHead) return false;
+
+    mD&&pR("MBNKRTa10");
+    if (!dm.mMOKiller) return false;
+
+    mD&&pR("MBNKRTa11");
+    if (dm.mEventCounter-- > 0u) // not yet time
+      return false;
+
+    mD&&pR("MBNKRT11");
+
+    //// TIME TO NUKE THE ROONUTS
+    PocketHC3 & p = mPocket;
+    PocketDir rootpd;
+    Bool atroot =  rootAdjacent(rootpd);
+    if (!atroot) fail(__FILE__,__LINE__);
+    C2D rootc = p.mCoords[rootpd];
+    EventWindow ew;
+    Atom & a = ew[rootc];
+    if (!(a is QHardCell)) fail(__FILE__,__LINE__);
+    ew[rootc] = Empty.instanceof;   // THE ROOT IS (QUIETLY) NUKED
+    ew[0] = Empty.instanceof;
+    //// AS ARE WE
+    return true;
+  }
+
+  @Override
+  virtual Bool act(Intender & in) {
+    mD&&pR("CMSA10");
+    if (super.act(in)) return true;
+
+    mD&&pR("CMSAa10");
+    EdgeModel & cm = (EdgeModel&) in;
+    if (cm.mIsHead) {
+      mD&&pR("CMSAa11");
+
+      if (cm.actBootCode(self))
+        return true;
+
+      /*
+      if (deployPhaseTwo(cm)) return true;
+      mD&&pR("CMSAa13");
+
+      if (closeBodyModel(cm)) return true;
+      mD&&pR("CMSAa14");
+
+      SN downsn = mEWSNMate[cBODY_DOWN];
+      if (downsn == SN.maxof) return false;
+      mD&&pR("CMSA11");
+      EventWindow ew;
+      Atom & a = ew[downsn];
+      mD&&pR(a);
+
+      // Push away ECs so EMs crowd in
+      if (a as EmptyCodon) {
+        mD&&pR("CMSA12");
+        if (a.mDSType != cDS_DOWN) {
+          mD&&pR("CMSA13");
+          a.mDSType = cDS_DOWN;
+          return cm.diffuse(self);
+        }
+      }
+      */
+    }
+
+    mD&&pR("CMSA14");
+
+    mD&&pR("CMSA210");
+
+    mD&&pR("CMSA299");
+    //// CHECK FOR XD PICKUPS
+    if (actCheckForXD(cm)) return true;
+
+    mD&&pR("CMSA3100");
+
+    //// XXX NO: THIS IS HANDLED BY DEPLOYJUNCTORS NOW
+    //    //// CHECK FOR JUNCTION ANCHORING
+    //    if (actCheckJunction(cm)) return true;
+    
+    mD&&pR("CMSA3101");
+    return cm.diffuse(self);
+  }
+
+  Bool actCheckJunction(EdgeModel & dm) {
+    mD&&pR("EMSACCHJU10");
+    if (!dm.mIsDeployed) return false;
+    
+    HCPoint minhc, maxhc;
+    if (2u != getHCMinMax(minhc,maxhc))
+      return false;
+
+    C2D maxc;
+    if (!maxhc.hcPoint2C2D(maxc)) fail(__FILE__,__LINE__);
+    EventWindow ew;
+    Atom & a = ew[maxc];
+    mD&&pR("EMSACCHJU11");
+    mD&&pR(maxc);
+    mD&&pR(a);
+
+    if (a as StandardJunction) {
+      mD&&pR("EMSACCHJU12");
+      XZone xz = c2D2XZone(maxc);
+      if (xz == cXZONE_CT) return false; // or fail?
+      PocketDir ourpd;
+      if (!zone2PocketDir((Zone) xz, ourpd)) return false; // ditto?
+
+      EdgeModel.DiSequence ourdiseq = dm.mDiSequence;
+      mD&&pR("EMSACCHJU13");
+      mD&&pR(ourpd);
+      mD&&pR(ourdiseq);
+      
+      Bool ret = false;
+      DiSeqInfo dsinfo = dm.getDiSeqInfo(ourdiseq);
+      StandardJunctorConfig sjc = dsinfo.getSJCForEdge(ourpd);
+      mD&&pR("EMSACCHJU14");
+      mD&&pR(sjc);
+
+      
+      // XXXX NO: This is wrong: We need to be an anchor even when
+      // XXXXXXX !hasEdgeControl (mET == 0), so we don't soak up
+      // XXXXXXX junction info from the ngbs.
+      //      if (!sjc.hasEdgeControl())             // No edge control, no anchor
+      //        ret = a.setIsJunctionAnchor(false);
+      //      else {
+      mD&&pR("EMSACCHJU15");
+      ret = a.setIsJunctionAnchor(true);
+      if (a.setSJC(sjc)) ret = true;
+      //      }
+      mD&&pR("EMSACCHJU16");
+      mD&&pR(ret);
+      return ret;
+    }
+
+    mD&&pR("EMSACCHJU17");
+    return false;
+  }
+
+  Bool actCheckForXD(EdgeModel & dm) {
+    EventWindow ew;
+    Unsigned xdcount = 0u;
+    SN xdsns[2];
+    SN xdseqsn = SN.maxof;
+    SN rgsn = SN.maxof;
+    mD&&pR("DMAC4XD10");
+
+    if (!dm.mIsHead) return false;
+    for (SN sn = 1u; sn < 41u; ++sn) {
+      if (!ew.isAccessible(sn)) continue;
+      Atom & a = ew[sn];
+      if (a as XCutDiamond) {
+        if (a.getIntentionClass() == DiamondCutterFindOldRoot.classidof) {
+          if (xdcount < 2u)
+            xdsns[xdcount] = sn;
+          ++xdcount;
+        } else if (a.getIntentionClass() == DiamondCutterDeliverDiSeq.classidof) {
+          xdseqsn = sn; // hmm taking last :(
+        }
+      } else if (a is RootHardCellG) {
+        rgsn = sn;
+      }
+    }
+    mD&&pR("DMAC4XD11");
+    if (xdcount > 1u && rgsn != SN.maxof) {
+      RootHardCellG & rootg = (RootHardCellG&) ew[rgsn];
+
+      //// TAKE IT OVER
+      rootg.setCmdPhase(RootHardCellG.cCMD_WAIT);
+
+      //// IS THE GRID ALL SETTLED?
+      if (!rootg.stableToEdge()) return true; // XXX localDiffuse(true); // no, block
+      //// THE GRID IS ALL SETTLED
+
+      //// GET PARAMETERS
+      Unsigned oldmaxgoal = rootg.getMaxHopsGoal();
+      HardCellG.HopCount newmaxg = (HardCellG.HopCount) (oldmaxgoal/2u+0u); // we shall see
+      EdgeModel.DiSequence kidSeq[2];
+      if (dm.mDiSequence == 0u) { // If you're still fresh like from the loader at this point
+        dm.mDiSequence = 1u;      // You're a #1
+        dm.mBootPC = dm.mBootPC.maxof; // And we don't want to run your boot code
+      }
+
+      kidSeq[0] = dm.getChildDiSeq(true);
+      kidSeq[1] = dm.getChildDiSeq(false);
+
+      setDebugOutputEnabled(true);
+      mD&&pR("DMAC4XD12 DOING STUFF");
+      mD&&pR(newmaxg);
+      mD&&pR(kidSeq[0]);
+      mD&&pR(kidSeq[1]);
+
+      //// CONFIGURE XD
+      for (Unsigned i = 0u; i < 2u; ++i) {
+        SN dcsn = xdsns[i];
+        AxialDir dcad = i == 0u ? cW : cE; // W even, E odd
+        Unsigned extrahop = 0; // Nobody gets extra hop
+        //XXX        Unsigned extrahop = i == 0u ? 1u : 0u; // W gets extra hop
+        XCutDiamond xd;
+        xd.mNewMaxGoalHops = (HardCellG.HopCount) (newmaxg + extrahop);
+        xd.mOriginalAxialDir = dcad;
+        xd.mEventCounter = xd.mEventCounter.maxof;
+
+        xd.mDeliveredDiSequence = kidSeq[i];
+        xd.adoptNewIntention(DiamondCutter.cDCS_SEED_NEW_ROOT);
+        mD&&pR("DMAC4XD13");
+        mD&&pR(xd);
+        ew[dcsn] = xd.atomof;     // DEPLOY: Overwrite with new intention
+      }
+
+      mD&&pR("DMAC4XD14");
+
+      /// OK, our last job: Wait and kill the root
+      dm.mMOKiller = true;
+      dm.mEventCounter = DiamondCutter.cMOTHER_LINGER_DELAY_TIME; // set bogus timer to bogus value
+
+      return true;
+    }
+    
+    // If we think we're in a daughter and see XD
+    if (!dm.mMOKiller &&
+        dm.mIsDeployed &&
+        dm.mIsHead &&
+        xdseqsn != SN.maxof) {
+      XCutDiamond & dc = (XCutDiamond&) ew[xdseqsn];
+      dm.mDiSequence = dc.mDeliveredDiSequence; // Pick up our destiny
+      ew[xdseqsn] = Empty.instanceof;           // and shoot the messenger
+      return true;
+    }
+
+    return false;
+  }
+}
+
+/** EdgeModel. Represent somatic properties of a diamond edge within a
+    multicellular body.
+ */
+quark EdgeModel : QBodyModel
+  + DiamondController
+{
+  typedef EdgeCoord.EdgeTag EdgeTag;
+
+  //// URSELF API
+  @Override
+  virtual Void renderGraphics() {
+    Drawable drawable;
+    if (!drawable.canDraw()) return;
+    super.renderGraphics();
+
+    ColorUtils cu;
+
+    ARGB col = getColor(2u);
+
+    constant C2D.Coord side = Drawable.cUNITS_PER_SITE;
+    constant C2D.Coord halfSide = side/2;
+    constant C2D.Coord thick = 400;
+    constant C2D.Coord len = halfSide;
+    constant C2D lo = { .x = 0, .y = -thick/2};
+
+    // DRAW LINES
+    C2D c;
+    for (Int i = 0; i < 2; ++i) {
+      c.set(100,180*i-90); // Slightly squished on y
+      C2D start = -c*halfSide/100;
+      C2D end = c*halfSide/100;
+      drawable.drawMaskedLine(start+lo, end+lo, col, col, (Bits) 0xffffffff, thick);
+    }
+  }
+
+  //// EdgeModel API
+  virtual Unsigned getMaxSizeForDiSeq(DiSequence diseq) ;
+  virtual DiSequence getMaxEmbodiedDiSeq() ;
+  virtual DiSeqInfo getDiSeqInfo(DiSequence diseq) ;
+
+  virtual DiSequence getChildDiSeq(Bool leftKid) {
+    if (mDiSequence==0u)
+      fail(__FILE__,__LINE__);
+    return (EdgeModel.DiSequence) (mDiSequence*2u + (leftKid ? 0u : 1u));
+  }
+
+  //// EdgeModel SERVICES
+  Bool actBootCode(EdgeModelState & ems) {
+    if (!mIsHead || !mIsDeployed || mDiSequence == 0u) return false;
+    mD&&pR(__FILE__,__LINE__,"AcBoCo");
+    DiSeqInfo dinf = getDiSeqInfo(mDiSequence);
+    String bootcode = dinf.getBootCode();
+    Unsigned bclen = bootcode.lengthof;
+    if (mBootPC >= bclen)
+      return false;
+    ASCII op = bootcode[mBootPC];
+    if (op == 'J') {
+      mD&&pR(__FILE__,__LINE__,"DEPLOYDeployJunctor");
+      mD&&pR(ems);
+      if (!ems.mAllPocketsGood || ems.mPocketFull[0] > 1u)
+        return false;
+      mD&&pR("DEPDepJun11");
+      DeployJunctors dj;
+      dj.init(dinf.mEdgeSJCs,ems);
+      dj.mDeliverToPocket = false;
+      mD&&pR(dj);
+      EventWindow ew;
+      SN djsn = ems.mEmptySNs[0].pick();
+      ew[djsn] = dj.atomof;
+      ++mBootPC;
+      return true;
+    } else if (op == 'j') {
+      mD&&pR(__FILE__,__LINE__,"COLLECTDeployJunctor");
+      EventWindow ew;
+      for (SN sn = 1u; sn < 25u; ++sn) { // radius 3
+        if (!ew.isAccessible(sn)) continue;
+        Atom & a = ew[sn];
+        if (a as DeployJunctors) {
+          mD&&pR("DEPColJun11");
+          if (a.mState > 3u) {
+            mD&&pR("DEPColJun12");
+            ew[sn] = Empty.instanceof;
+            ++mBootPC;
+            return true;
+          }
+        }
+      }
+      return true;              // else block
+    }
+    return false;
+  }
+
+  typedef Unsigned(8) DiSequence; // Room for seven generations + leading 1
+  DiSequence mDiSequence = 0u; //< 0 -> Uninitted
+
+  //  typedef Unsigned(HardCellG.HopCount.sizeof + 4u) EventCounter; // Four bits bigger than HopCount..
+  typedef Unsigned(5) EventCounter; // Supports 0..31 LINGER
+  EventCounter mEventCounter; // For simulating XD's DELETE_OLD_ROOT
+
+  typedef XTimer(3u, 7u, 8u) InitWatchdog;
+  InitWatchdog mInitWatchdog;
+
+  typedef Unsigned(4) BootPC;
+  BootPC mBootPC;               // 0..15 Current boot code position
+
+  Bool mMOKiller = false;
+
+  constant Bool mIsHead = true;      //< true if we're the head of the EM loop
+  constant Bool mIsTail = false;      //< true if we're the tail of the EM loop
+
+  constant Bool mIsDeployed = true; //< true if we're deployed out of the germline
+
+  //// Intender API
+  @Override
+  virtual ClassId getIntentionClass() {
+    EdgeModelState s; // Ensure concrete
+    return s.classidof;
+  }
+
+  //// DiamondController API
+  virtual Bool couldAdvise(RootHardCellG & root,
+                          QHardCellState & qcs)
+  {
+    return mIsHead; // only head can advise at this point
+  }
+
+  virtual Bool adviseRoot(RootHardCellG & root,
+                          QHardCellState & qcs,
+                          DCReport & dcr)
+  {
+    mD&&pR(__FILE__,__LINE__);
+    if (!couldAdvise(root,qcs)) fail(__FILE__,__LINE__);
+
+    /// DON'T LET OUT GENERATIONS GROW TOO BIG
+    Unsigned maxsize = getMaxSizeForDiSeq(mDiSequence);
+    if (root.mMaxHops >= maxsize) {    // If I say you too big then
+      root.reportProductivity();       // you get free productivity
+      if (root.mCmdPhase == root.cCMD_STOP) { // but if you try grow then
+        dcr.printf("[EM2B%d>=%d->MOVE]",root.mMaxHops,maxsize);
+        root.setCmdPhase(root.cCMD_MOVE); // I say no, go back to moving
+        return true;
+      }
+    }
+
+    // Everything else is only when moving
+    if (root.mCmdPhase != root.cCMD_MOVE) return false;
+    
+    //// CONSIDER EMERGENCY MOVES AGAINST DAMAGE
+    {
+      MaxPick bd;  // bad dir
+      MinPick gd;  // good dir
+      for (Unsigned i = 0u; i < 4u; ++i) {
+        bd.update((SN) i, root.mDefCons[i]);
+        gd.update((SN) i, root.mDefCons[i]);
+      }
+      if (!bd.hasPick() || !gd.hasPick()) fail(__FILE__,__LINE__);
+      if (bd.getX() >= 3u) { // If bd has damage, just pick
+        AxialDir gad = (AxialDir) gd.getIdx(); // best dir (unless
+        if (gd.getX() <= 2u) {                 // it's damg too),
+          dcr.printf("[EMgdam:%dad]",gad);     // and do that
+          return executeMove((SN) (gad+1u), root, qcs, dcr);
+        }
+      }
+    }
+
+    //// CONSIDER BOOT PC OPS
+    {
+      DiSeqInfo dinf = getDiSeqInfo(mDiSequence);
+      String bootcode = dinf.getBootCode();
+      if ((Bool) bootcode) { 
+        Unsigned bclen = bootcode.lengthof;
+        if (mBootPC < bclen) {
+          ASCII op = bootcode[mBootPC];
+          Unsigned dir = Unsigned.maxof;
+          which (op) {
+          case 'W': { dir = cW; }
+          case 'N': { dir = cN; }
+          case 'S': { dir = cS; }
+          case 'E': { dir = cE; }
+          }
+          if (dir != Unsigned.maxof) {
+            AxialDir ad = (AxialDir) dir;
+            if (root.mDefCons[ad] <= 1u) {
+              dcr.printf("[EMpc%d%c:%dad]",mBootPC,op,ad); 
+              ++mBootPC;          // 'whether it works or not'
+              return executeMove((SN) (ad+1u), root, qcs, dcr);
+            }
+          }
+        }
+      }
+    }
+    return false;
+  }
+
+  Bool executeMove(SN movesn, RootHardCellG & root, QHardCellState & qcs, DCReport & dcr) {
+    dcr.printf("[EMxm:->%d]",movesn);
+
+    HC3State &hcs = qcs.getHC3State();
+    qcs.resetSettledDownHops(root, hcs);
+    root.resetWatchdog();    // If we force a move, call it productive
+    root.mMovementWatchdog.reset(); // as well as a movement.
+    root.moveEntourage(qcs,movesn);
+    return true; // yes
+  }
+
+  //// URSELF API
+  @Override
+  Void behave() {
+    pursueIntention();
+  }
+
+  /*
+  //// LX API
+  @Override
+  virtual Bool perform(DiamondSequencerState & dss) {
+    mD&&pR(__FILE__,__LINE__);
+    if (!mIsHead) return false; // XXX only head executes in DSP, for starters
+
+    //// HAVE WE GOT AN XFER EC TO COPY IT TO?
+    ProcUnitInfo puixfer = dss.getPUInfo(cPUNIT_REG);
+    if (!puixfer.mFound) return false;
+    mD&&pR("CMCPUF14");
+
+    SN xsn = puixfer.mCodonSN;
+    if (xsn == SN.maxof)
+      return false; // ??
+
+    mD&&pR("CMCPUF15");
+    EventWindow ew;
+    Atom & xa = ew[xsn];
+    if (!(xa is EmptyCodon)) {
+      //maybeDemandEC(dss);
+      return false;
+    }
+    //// WE HAVE GOT AN XFER EC TO COPY IT TO.
+
+    mD&&pR("CMCPUF16");
+    Atom acopy = self.atomof;
+    Self & scopy = (Self&) acopy;
+
+    EmptyCodon & xac = (EmptyCodon&) xa;
+    BaseClassUtils bcu;
+    bcu.copySharedData(xa, acopy);
+    //    scopy.mDSType = cDS_NORM; // need this?
+    //    scopy.setTQDSLockedDown(true); // let's keep our shape on the wire?
+    //    scopy.mIsDeployed = true;        // You Are Body Model Now
+    
+    ew[xsn] = acopy;            // Send copy of us
+    markDSPForRotation(dss, 0u, cPUNIT_REG, cDSTATUS_TEMP);  // push it out
+
+    // MODIFY GERMLINE HERE
+    mD&&pR("CMCPUF17XXX GERMLINE??");
+    //    mDiSequence += 2u;        // room for LD + RD somehow..
+    
+    markDSPForRotationForward(dss, 0u, cPUNIT_WHT); // and we are DONE
+    return true;
+  }
+  */
+}
+

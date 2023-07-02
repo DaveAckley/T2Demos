@@ -1,0 +1,119 @@
+quark HCPointable
+  + DTU
+{
+  //// HCPointable API
+  virtual HCPoint getHCPoint() ;
+  virtual Void setHCPoint(HCPoint pt) ;
+  virtual Void unsetHCPoint() ;
+
+  //// HCPointable SERVICES
+  Bool hcPoint2PocketDir(PocketDir & pd) {
+    return hcPoint2PocketDir(getHCPoint(), pd);
+  }
+
+  Bool hcPoint2PocketDir(HCPoint hc, PocketDir & pd) {
+    Zone zone;
+    if (!hc.hcPoint2Zone(zone)) return false;
+    if (!zone2PocketDir(zone, pd))
+      return false; // (E.g., corners don't have pocketdirs)
+    return true;
+  }
+}
+
+quark HCPointStg : HCPointable {
+  HCPoint mHCPoint = { .x = HCPoint.cHCCoord_UNSET, .y = HCPoint.cHCCoord_UNSET };
+
+  //// HCPointable API
+  @Override virtual HCPoint getHCPoint() { return mHCPoint; }
+  @Override virtual Void setHCPoint(HCPoint pt) { mHCPoint = pt; }
+  @Override virtual Void unsetHCPoint() { mHCPoint.unsetHCPoint(); }
+}
+
+/** A position within a HardCell, in (-31..31, -31..31)
+ */
+quark HCPoint : C2DT(6u)
+  + DTU
+  + Fail
+{
+  typedef C2DT(6u) C2D6;
+  typedef C2D6.Coord HCCoord;
+  constant HCCoord cHCCoord_UNSET = HCCoord.minof;
+  constant C2D6 cC2D6_UNSET = { .x = cHCCoord_UNSET, .y = cHCCoord_UNSET };
+
+  Self(HCCoord x, HCCoord y) {
+    self.x = x;
+    self.y = y;
+  }
+
+  Self(C2D c) {
+    self.x = (HCCoord) c.x;
+    self.y = (HCCoord) c.y;
+  }
+
+  Bool operator==(Self & other) {
+    return
+      x == other.x &&
+      y == other.y;
+  }
+
+  Unsigned getUpHopsFromHCPoint() {
+    if (!isValid()) return HardCellG.HopCount.maxof;
+    return self.length();
+  }
+
+  Bool isValid() { return isSetHCPoint(); }
+
+  Bool isSetHCPoint() { return x != cHCCoord_UNSET; }
+
+  Void unsetHCPoint() { x = y = cHCCoord_UNSET; }
+
+  Bool hcPoint2Zone(Zone & zone) {
+    return hcPoint2Zone(self, zone);
+  }
+
+  C2D validHCPoint2C2D() {
+    C2D ret;
+    if (!hcPoint2C2D(ret)) 
+      fail(__FILE__,__LINE__,"Invalid HCPoint");
+    return ret;
+  }
+
+  Bool hcPoint2C2D(C2D & ret) {
+    if (!isSetHCPoint()) return false;
+    ret.x = x;
+    ret.y = y;
+    return true;
+  }
+
+  Void setHCPoint(Self other) {
+    if (false) {
+      self = other; // THIS DOESN'T WORK?
+    } else {
+      x = other.x;
+      y = other.y;
+    }
+  }
+
+  Void setHCPoint(C2D other) {
+    x = (HCCoord) other.x;
+    y = (HCCoord) other.y;
+  }
+
+  Void setHCPoint(Int ax, Int ay) {
+    x = (HCCoord) ax;
+    y = (HCCoord) ay;
+  }
+
+  Void updateAdjacentHCPointFromUs(Self & them, C2D tpos) {
+    Self s = self;
+    if (tpos.x > 0) ++s.x;
+    else if (tpos.x < 0) --s.x;
+
+    if (tpos.y > 0) ++s.y;
+    else if (tpos.y < 0) --s.y;
+
+    if (s.x != 0 || s.y != 0)   // Not allowed to update root 
+      them.setHCPoint(s);
+  }
+  
+}

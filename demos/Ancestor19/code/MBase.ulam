@@ -1,0 +1,247 @@
+transient MembraneState : D1PocketableState {
+}
+
+transient MembraneBaseState : MembraneState {
+
+  //// Intention API
+  @Override
+  virtual Bool init(Intender & seg) {
+
+    mD&&pR("MMBST10");
+    if (super.init(seg)) { // Let's have membrane be pretty fragile 
+      mD&&pR("MMBST11");    // so they don't clog things up too ofteno
+      mD&&pR(mPocket.mStatus);
+      mD&&pR("MMBST1110PRESEG");
+      mD&&pR(seg);
+      Membrane & mb = (Membrane&) seg;
+      mD&&pR("MMBST1110PREMEM");
+      mD&&pR(mb);
+      // If we can't init, let's not signal. Does that work for you?
+      mb.resetDCs();
+      mD&&pR("MMBST1110POST");
+      mD&&pR(mb);
+      mD&&pR("MMBST1110POSTSEG");
+      mD&&pR(seg);
+      //      mb.die();
+      return true;
+    }
+    mD&&pR("MMBST12");
+    return false;
+  }
+}
+
+/**
+   \symbol MB
+   \color #f0f
+ */
+element MBase : Membrane
+  + EdgeCoordProvider
+  + StandardJunctionStg
+  + Random
+{
+
+  //// EdgeCoordProvider API
+  @Override
+  virtual Bool providesEdgeCoordFor(Bool outboundFrom, PocketDir ob, EdgeCoord & ec) {
+    if (outboundFrom) return false; // MBase only provides inbounds!
+    if (ob != mOpenDir) return false; // ob always in opendir terms even for inbound ec
+    ec = mInboundEC;
+    return true;
+  }
+  
+  EdgeCoord mInboundEC;
+
+  virtual ClassId getIntentionClass() {
+    return MembraneBaseState.classidof;
+  }
+
+  //// UrSelf API
+  @Override
+  virtual ARGB getColor(Unsigned selector) {
+    ARGB ret = super.getColor(selector);
+    ColorUtils cu;
+    if (maxDCs() == 0u) 
+      ret = cu.dimmer(ret);
+    if (mInboundEC.isValid())       // but having IEC is important
+      ret = cu.brighter(ret);
+    return ret;
+  }    
+
+  @Override
+  virtual Void renderGraphics() {
+    Drawable drawable;
+    if (!drawable.canDraw()) return;
+    super.renderGraphics();
+
+    ColorUtils cu;
+
+    ARGB col = getColor(2u);
+
+    constant C2D.Coord side = Drawable.cUNITS_PER_SITE;
+    constant C2D.Coord halfSide = side/2;
+    constant C2D.Coord thick = 300;
+    constant C2D.Coord len = halfSide;
+
+    // DRAW CROSSING LINE
+    C2D rpd = pocketDir2C2D(rotatePocketDir(mOpenDir,true));
+    C2D start = -rpd*halfSide;
+    C2D end = rpd*halfSide;
+    drawable.drawMaskedLine(start, end, col, col, (Bits) 0xffffffff, thick);
+    
+    // DRAW 'BODY'
+    
+    C2D.Coord size = 400u;
+    if (maxDCs() == 0u) 
+      size -= 100;
+    if (mInboundEC.isValid())       // but having IEC is important
+      size += 150;
+
+    C2D siz(size, size);
+    C2D pos(-size/2,-size/2);
+
+    drawable.fillRectangle(pos, siz, col);
+  }
+
+
+  //// DEWLine API
+  @Override
+  virtual DefCon signalDC() {
+    return cDC_HERE; // MBase signals 'contact'
+  }
+
+  //// Membrane API
+
+  typedef XTimer(3u,4u,1u) DecayTimer;
+  DecayTimer mDecayTimer;
+  
+  Void behave() {
+    mD&&pR("MBBEH10");
+    resetDCs();
+    mD&&pR("MBBEHDEW10");
+    mD&&pR(self);
+
+    self.updateCornerDistances();   // let's do this at the top, for clarity?
+
+    Random random;
+    if (mInboundEC.isValid() && random.oneIn(10u)) 
+      mInboundEC.invalidate();  // age out
+    
+    DebugUtils du;
+    MembraneBaseState mbs;
+    PocketHC3 & p = mbs.mPocket;
+    mD&&pR("MBBEH11UNINIT");
+    mD&&pR(mbs);
+    mD&&pR("MBBEH12SELF");
+    mD&&pR(self);
+    
+    if (mbs.init(self)) {
+      mD&&pR("MBBEH13MBS");
+      mD&&pR(mbs);
+      mD&&pR("MBBEH13SELF");
+      mD&&pR(self);
+      mD&&pR("MBBEH13POCK");
+      mD&&pR(p);
+
+      if (p.mStatus == PocketHC3.cSTATUS_BENT) {
+        if (mDecayTimer.countAlarm()) return die();
+        return; //block
+      }
+      mD&&pR("MBBEH14");
+      if (p.mStatus == PocketHC3.cSTATUS_EDGE) {
+        // just die if on edge.. we're spawning so fast now anyway..
+        //        return; //block
+      }
+      mD&&pR("MBBEH15");
+      if (p.mStatus != PocketHC3.cSTATUS_OPEN) {
+        return die();
+      }
+      mD&&pR("MBBEH16");
+    }
+    mD&&pR("MBBEH17");
+    mD&&pR(p.mCoordCount);
+    // Pocket can see just 2 HC3 during movement
+    if (p.mCoordCount == 2u) return; //block
+    if (p.mCoordCount != 3u)
+      if (oneIn(10u)) return die();
+      else return; // block
+
+    {
+      /// If it can see three, two should be edge
+      Unsigned edgec = 0u;
+      for (Unsigned c = 0u; c < p.mCoordCount; ++c) {
+        if (p.mCornerHops[c] + 1u >= p.mCornerMaxHopsGoal[c])
+          ++edgec;
+      }
+      mD&&pR("MBBEH1710");
+      mD&&pR(edgec);
+      if (edgec < 2u && oneIn(10u)) return die();
+      mD&&pR("MBBEH1711");
+    }
+    
+    mD&&pR("MBBEH18");
+
+    /// Find open dir
+    Unsigned opendir = Unsigned.maxof;
+    for (Unsigned i = 0u; i < 4u; ++i) {
+      mD&&pR("MBBEH19");
+      mD&&pR(p.mCoords[i]);
+      if (p.mCoords[i].length() == 0u) { // uninitted
+        opendir = i;
+        mD&&pR(opendir);
+        break;
+      }
+    }
+    mD&&pR("MBBEH210");
+        
+    /// Lock or check open dir
+    if (mDirBound) {
+      mD&&pR("MBBEH211");
+      if (opendir != mOpenDir) return die();
+    } else {
+      mD&&pR("MBBEH212");
+      mOpenDir = (PocketDir) opendir;
+      mDirBound = true;
+    }
+    mD&&pR("MBBEH213");
+    /// We are bound and good
+
+    {
+      //// Too many MBase around? Are we poorly located?
+      Unsigned mbcount = 0u;
+      Unsigned hgcount = 0u;
+      Unsigned ehgcount = 0u;
+      EventWindow ew;
+      for (SN sn = 1u; sn <= 8u; ++sn) {
+        if (!ew.isAccessible(sn)) continue;
+        Atom & a = ew[sn];
+        if (a as MBase) ++mbcount;
+        else if (a as QHardCellGField) { // Seeing an HG field that
+          if (a is EdgeHG) ++ehgcount;   // isn't EdgeHG (or MTip) is bad
+          else ++hgcount;
+        }
+      }
+      if (mbcount >= 2u && ehgcount == 0u) {
+        // We are a poorly located 3rd MB. Bahyeee
+        ew[0] = Empty.instanceof;
+        return;
+      }
+    }
+    mDecayTimer.reset();
+    mD&&pR("MBBEH214PRE");
+    mD&&pR(self);
+    
+    // do sOQ to get some contact signaling
+    Unsigned sensorcount = scanOuterQuadrant();
+    mD&&pR("MBBEH214POST");
+    mD&&pR(self);
+
+    //// SPAWN ANTENNAE
+
+  }
+
+  Void updateCornerDistances() {
+    if (!mDirBound) return; // too soon
+    // DEIMPLEMENTED
+  }
+}
+

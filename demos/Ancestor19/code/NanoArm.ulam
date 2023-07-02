@@ -1,0 +1,378 @@
+transient NanoArmState : CodonState {
+  Bool mHasDown;                //< head or middle
+  Bool mHasUp;                  //< tail or middle
+  Bool mUpIsUs;                 //< hasUp is SW3
+  Bool isHead() { return !mHasUp || !mUpIsUs; }
+  Bool isTail() { return !mHasDown; }
+  Bool isMiddle() { return mHasUp && mHasDown; }
+  Bool isAlone() { return !mHasUp && !mHasDown; }
+
+  Bool mHeadChange;             //< either upsignal or head status has changed
+  Bool mTailChange;             //< either downsignal or tail status has changed
+
+  @Override
+  virtual Bool init(Intender & in) {
+    mD&&pR("NARMI10");
+    if (super.init(in)) return true;
+    mD&&pR("NARMI11");
+    NanoArm & s3 = (NanoArm&) in;
+    mHeadChange = false;
+    mTailChange = false;
+    return false;
+  }
+
+  virtual Bool observe(Intender & in) {
+    mD&&pR("NARMO10");
+    if (super.observe(in)) return true;
+    mD&&pR("NARMO11");
+
+    //// MateStatus is cMATE_OK. Valid data in:
+    //  SN mEWSNMate[Segment.cBODY_DOWN+1u];
+    //  PocketPtr mPocketWithMate[Segment.cBODY_DOWN+1u]
+    mHasDown = mPocketWithMate[cBODY_DOWN] != cPP_NULL;
+    mHasUp = mPocketWithMate[cBODY_UP] != cPP_NULL;
+    mUpIsUs = false;
+    if (mHasUp) {
+      Atom & a = ew[mEWSNMate[cBODY_UP]];
+      mUpIsUs = a is NanoArm;
+    }
+    mD&&pR("NARMO12updownus");
+    mD&&pR(mHasUp);
+    mD&&pR(mHasDown);
+    mD&&pR(mUpIsUs);
+    
+    mD&&pR("NARMO13");
+    mD&&pR(mPocketWithMate[cBODY_DOWN]);
+    mD&&pR(mPocketWithMate[cBODY_UP]);
+
+    return false;
+  }
+
+  @Override
+  virtual Bool stabilize(Intender & in) {
+    mD&&pR("NARMS10");
+    if (super.stabilize(in)) return true;
+    mD&&pR("NARMS11");
+    NanoArm & s3 = (NanoArm&) in;
+    
+    if (mHasDown) {
+      mD&&pR("NARMS1210");
+    }
+
+    if (mHasUp && mUpIsUs) {
+      mD&&pR("NARMS1211");
+    }
+
+    mD&&pR("NARMS16");
+    mD&&pR(s3);
+
+    return false;
+  }
+
+  @Override
+  virtual Bool act(Intender & in) {
+    mD&&pR("NARMA10");
+    if (super.act(in)) return true;
+
+    mD&&pR("NARMA11");
+    NanoArm & na = (NanoArm&) in;
+    if (mHasUp) return na.diffuse(self);
+
+    /// WE ARE HEAD. WE'RE THE CHEESE. WE'RE THE HEAD CHEESE.
+
+    /// SO BE DUMB FOR THE REST OF OUR LIFE
+    na.mDSType = cDS_DUMB;      // Nobody can mess with us
+
+    PocketHC3 & p = mPocket;
+    if (p.isDSP(cPP_SELF) && mHasDown)  // Don't act if in DSP with a down
+      return na.diffuse(self);
+
+    //// RUN PROGRAM
+
+    /// PUSH DOWN UP TEMPS
+    na.pushECDown(self);
+
+    /// RUN PROGRAM IF NOT DONE
+    if (na.runProgram(self))
+      return true; // blocked
+
+    if (na.programDone())
+      return na.actFinal(self);
+
+    /// NOT DONE YET
+    return na.diffuse(self);
+  }
+}
+
+/** A swapworm with a one-time preprogrammed path
+
+   \symbol NA
+   \color #00f0ff
+ */
+element NanoArm : LX + TQDSControlStg + DTU {
+
+  //// Intender API 
+
+  @Override
+  virtual ClassId getIntentionClass() { return NanoArmState.classidof; }
+
+  //// LX API
+  @Override
+  virtual Bool perform(DiamondSequencerState & dss) {
+    if (mDeployToUnit == cPUNIT_XEQ) { // if target is white -> be noop
+      markCurrentInstructionForRotation(dss, 0u); // so move on
+      return true;
+    }
+
+    ProcUnitInfo & destpui = dss.getPUInfo(mDeployToUnit); // get destination info
+    if (!destpui.mFound) fail(__FILE__,__LINE__); // coder needs to get their act together
+
+    Bool killpu = killPU(mDeployToUnit, dss); // clear out dest
+    if (!killpu) return true;                 // dying in progress
+
+    /// confirm destpui is Codon-free and has an empty
+    if (destpui.mCodons != 0u || destpui.mEmptySN == SN.maxof) 
+      fail(__FILE__,__LINE__); // wtf
+
+    Atom copy = self.atomof;
+    Self & scopy = (Self&) copy; // Point at copy
+    scopy.mPocketPtrs[cBODY_UP] = cPP_NULL; // Copy is unconnected
+    scopy.mPocketPtrs[cBODY_DOWN] = cPP_NULL; // "
+    scopy.mDSType = cDS_DUMB;                 // Don't let ECs mess with us
+
+    EventWindow ew;
+    ew[destpui.mEmptySN] = copy;  // Deploy self copy
+
+    markCurrentInstructionForRotation(dss, 0u); // so move on
+    return true;
+  }
+
+  //// UrSelf API 
+
+  @Override
+  virtual ARGB getColor(Unsigned selector) {
+    ColorUtils cu;
+    ARGB ret = super.getColor(selector);
+    return ret;
+  }
+
+  //// NanoArm SERVICES
+
+  ProcUnit mDeployToUnit; //< where we copy to when executed (_WHT means noop)
+
+  typedef Unsigned(2) Cmd;
+  constant Cmd cGF = 0u; //< grow forward
+  constant Cmd cTL = 1u; //< turn left without growing
+  constant Cmd cTR = 2u; //< turn right without growing
+  constant Cmd cEP = 3u; //< end of program
+  Cmd mProgram[17];  // 17x2b == 34b
+  AxialDir mHeading; // initial & current heading
+
+  Bool programDone() { return mProgram[0] == cEP; }
+
+  Bool runProgram(NanoArmState & nas) {
+    while (!programDone()) {
+      Cmd cmd = mProgram[0];
+      which (cmd) {
+      case cTL: { mHeading = adjacentAxialDir(mHeading,false); advance(); }
+      case cTR: { mHeading = adjacentAxialDir(mHeading,true); advance(); }
+      case cGF: { return tryGrowForward(nas); } // true if grow succeeded
+      }
+    }
+    return false;
+  }
+
+  Void advance() {
+    constant Unsigned cLASTIDX = mProgram.lengthof - 1u;
+    for (Unsigned i = 0u; i < cLASTIDX; ++i) 
+      mProgram[i] = mProgram[i+1u];
+    mProgram[cLASTIDX] = cEP;
+  }
+
+  Bool tryGrowForward(NanoArmState & nas) {
+    mD&&pR("NAGF10");
+
+    //    if (!nas.mAllPocketsGood) return false; // let's keep it simple for now
+    PocketPtr pp = axialDir2PocketPtr(mHeading);
+    PocketPtr pb = axialDir2PocketPtr(oppositeAxialDir(mHeading));
+
+    if (!nas.mPocketGood[pp]) return false;
+
+    if (nas.mPocketInaccessible[pp] > 0u) return false;
+    if (nas.mPocketFull[pp] > 0u) return false;
+    if (nas.mEmptySNs[pp].count() == 0u) return false;
+
+    /// EXTRA BLOCKING CONDITIONS WHEN NEAR AN EDGE
+    {
+      mD&&pR("NAGFa10");
+      PocketHC3 & p = nas.mPocket;
+      Unsigned idx = p.mMinCornerHopsIndex;
+      if (idx < 4u) {
+        Unsigned chop3 = p.mCornerHops[idx] + 3u;
+        Unsigned cgoal = p.mCornerMaxHopsGoal[idx];
+        mD&&pR("NAGFb10");
+        mD&&pR(chop3);
+        mD&&pR(cgoal);
+        if (chop3 > cgoal) return false; // no way
+        if (chop3 == cgoal) {
+          mD&&pR("NAGFc10");
+          EventWindow ew;
+          C2D cc2d = p.mCoords[idx];
+          HCPointable & hca = (HCPointable&) ew[cc2d];
+          HCPoint hcp = hca.getHCPoint();
+          C2D hcc;
+          if (!hcp.hcPoint2C2D(hcc)) return false; // invalid hcp?
+          C2D movec = pocketPtr2C2D(pp);
+          if ((hcc+movec).length() > hcc.length())
+            return false;       // nuh-unh, moving into edge
+          // OTHERWISE FALL THROUGH
+        }
+      }
+      mD&&pR("NAGFd10");
+    }
+    /// OK let's go for it
+    SN emptysn = nas.mEmptySNs[pp].pick();
+    
+    advance();                  // copy starts at next insn
+
+    Bool firstec = self.mPocketPtrs[cBODY_DOWN] == cPP_NULL;
+    EmptyCodon ec;
+    ec.init();                  // get a tag on it early
+    ec.mDSType = firstec ? cDS_DUMB : cDS_DOWN; // make first EC dumb
+    ec.mDSType = firstec ? cDS_DUMB : cDS_DOWN; // make first EC dumb
+    ec.mPocketPtrs[cBODY_UP] = pp;
+    ec.mPocketPtrs[cBODY_DOWN] = self.mPocketPtrs[cBODY_DOWN];
+    ec.mLockedDown = mLockedDown; // If we're locked down so is it
+
+    Self copy = self;
+    copy.mPocketPtrs[cBODY_UP] = cPP_NULL;
+    copy.mPocketPtrs[cBODY_DOWN] = pb;
+
+    mD&&pR("NAGF11");
+    mD&&pR(ec);
+    mD&&pR(copy);
+    mD&&pR(self);
+
+    mD&&pR("NAGF15");
+    EventWindow ew;
+    ew[emptysn] = copy.atomof;  // Deploy new us
+    ew[0] = ec.atomof;          // Replace old us
+    
+    return true;
+  }
+
+  Bool pushECDown(NanoArmState & nas) {
+    if (nas.mMateStatus == cMATE_OK) {
+      EventWindow ew;
+
+      //// Check downbody:
+      SN dsn = nas.mEWSNMate[cBODY_DOWN];
+      if (dsn == SN.maxof)
+        return false;
+      
+      Atom & a = ew[dsn];
+
+      if (a as PocketChain) {
+
+        if (a.mDSType == cDS_UP) {
+          a.mDSType = cDS_DOWN;
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  Bool actFinal(NanoArmState & nas) {
+    EventWindow ew;
+    mD&&pR("NAAF10");
+
+    if (nas.mMateStatus >= cMATE_MISSING) { // die on weirdos
+      mD&&pR("NAAF11");
+      ew[0] = Empty.instanceof;
+      return true;
+    }
+
+    mD&&pR("NAAF12");
+    if (nas.mMateStatus != cMATE_OK) // block on possibly temporary stuff
+      return true;
+
+    //// Check downbody:
+    SN dsn = nas.mEWSNMate[cBODY_DOWN];
+    if (dsn == SN.maxof)
+      return false;
+
+    Atom & a = ew[dsn];
+    mD&&pR("NAAF12");
+    mD&&pR(a);
+
+    if (a as PocketChain) {
+      mD&&pR("NAAF13");
+
+      mD&&pR("NAAF14");
+      // - If if d is down temp (or dumb), block
+      if (a.mDSType != cDS_NORM)
+        return true;
+
+      mD&&pR("NAAF15");
+      // - If if d is normal, swap and erase self
+      EmptyCodon ec;            // what we'll become
+      ec.init();
+      ec.mDSType = cDS_DOWN;
+      ec.swapPocketPtrs(self);  // give it our ptrs
+      a.swapPocketPtrs(ec);     // a gets ours, ec gets as
+      a.mDSType = cDS_DUMB;     // a becomes dumb (with promotion to head of chain)
+      mD&&pR(ec);
+      mD&&pR(a);
+      ew.swap(0u,dsn);          // swap us with a
+      ew[dsn] = ec.atomof;      // overwrite us with ec
+      return true;
+    }
+
+    mD&&pR("NAAF16");
+    return false; // now what?
+  }
+
+  Void behave() {
+    pursueIntention();
+  }
+}
+
+/** Make a box-making NA
+    \symbol N3
+    \color #222
+*/
+
+element SeedNA + DTU {
+  Void behave() {
+    EventWindow ew;
+    NanoArm h = {
+      .mHeading = cW,
+      .mProgram = {
+        NanoArm.cGF, // 0
+        NanoArm.cGF, // 1
+        NanoArm.cTL, // 2
+        NanoArm.cGF, // 3
+        NanoArm.cGF, // 4
+        NanoArm.cGF, // 5
+        NanoArm.cTL, // 6
+        NanoArm.cGF, // 7
+        NanoArm.cGF, // 8
+        NanoArm.cGF, // 9
+        NanoArm.cTL, // a
+        NanoArm.cGF, // b
+        NanoArm.cGF, // c
+        NanoArm.cGF, // d
+        NanoArm.cTL, // e
+        NanoArm.cGF, // f
+        NanoArm.cEP, // f
+      }
+    };
+    h.mPocketPtrs[cBODY_UP] = cPP_NULL;
+      h.mPocketPtrs[cBODY_DOWN] = cPP_NULL;
+    h.mDSType = cDS_DUMB;
+    ew[0] = h.atomof;
+  }
+}
+
+

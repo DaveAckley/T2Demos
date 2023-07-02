@@ -1,0 +1,295 @@
+quark EdgeG + DEWLine {
+}
+
+/** Edge Hardcell G
+   \symbol Eg
+   \color #a33
+ */
+element EdgeHG : QHardCellGField
+  + EdgeCoordProvider
+  + StandardJunctionStg
+  + QDSHopsStg
+  + EdgeG
+  + Fail
+{
+
+  //// EdgeCoordProvider API
+  @Override
+  virtual Bool providesEdgeCoordFor(Bool outboundFrom, PocketDir ob, EdgeCoord & ec) { //< has plausible data oubound from ob
+    if (!outboundFrom) return false; // Eg got no inbound genes
+
+    Zone zone;
+    if (!getHCPoint().hcPoint2Zone(zone)) return false;
+
+    /// EDGES PROVIDE ONE PD, CORNERS PROVIDE TWO PDs
+    PocketDir pds[2];
+    Unsigned pdcount = zone2PocketDirs(zone, pds[0], pds[1]);
+    for (Unsigned i = 0u; i < pdcount; ++i) {
+      PocketDir opendir = pds[i];
+      if (ob == opendir) {
+        ec.mEdgePos = getHCPoint(); // We're the damn edge, and
+        ec.mHopsToEdge.set(0,0);    // We're right here, and
+        ec.mEdgeTag = getJunctionEdgeTag(); // We're this kind of edge
+
+        return true;
+      }
+    }
+    return false;
+  }
+
+  //// EdgeHG SERVICES
+  Bool getOpenDirIfAny(PocketDir & pd) {
+    return hcPoint2PocketDir(pd);
+  }
+
+  PocketDir getOpenDir() {
+    PocketDir pd;
+    if (!hcPoint2PocketDir(pd))
+      fail(__FILE__,__LINE__);
+    return pd;
+  }
+
+  //// Intender API
+
+  @Override
+  virtual ClassId getIntentionClass() { return EdgeHGState.classidof; }
+
+  //// EdgeHG SERVICES
+  Bool actJunction(EdgeHGState & ehs, PocketDir opendir) {
+
+    //// COLLECT INFO TO CONFIG JUNCTION
+    mD&&pR("EHEMST10");
+    mD&&pR(ehs);
+
+    EdgeCoord usec;
+    if (!providesOutboundEdgeCoordFor(opendir, usec)) return false;
+    if (!usec.isValid()) return false;
+
+    mD&&pR("EHEMSTa10");
+    mD&&pR(usec);
+
+    /// We have no automation to search a pocket from an HC3, if it's
+    /// not around a DiamondSequencer?? How can that be?
+
+    PocketDir innerpd = oppositePocketDir(opendir);
+    C2D c1 = pocketDir2C2D(opendir)*1; // rectiterator excludes its bounds
+    C2D c2 = pocketDir2C2D(innerpd)*4; // so back 1 and forward 4
+    C2D minc = c1.min(c2);
+    C2D maxc = c1.max(c2);
+
+    RectIterator ri;
+    ri.init(minc,maxc);
+
+    mD&&pR("EHEMST11");
+    mD&&pR(ri);
+
+    //// SEARCH FOR EMPTY AND STANCE 
+    EventWindow ew;
+    MinPick emppick;
+    MinPick stancepick;
+
+    Unsigned sites = 0u;
+    while (ri.hasNext()) {
+      C2D c = ri.next();
+      if (!ew.isAccessible(c)) continue;
+      if (c.length() == 0u) continue; // skip self
+      ++sites;
+      SN csn = ew.getSiteNumber(c);
+      Atom & a = ew[c];
+      if (a is Empty && (c.x == 0 || c.y == 0)) // Only EC in our driving langes
+        emppick.update(csn);
+      else if (a is DiamondStance) stancepick.update(csn);
+    }
+
+    mD&&pR("EHEMST12");
+    mD&&pR(sites);
+    mD&&pR(emppick);
+    mD&&pR(stancepick);
+
+    //// FIND MB
+    MinPick mbpick;
+    for (SN sn = 1u; sn <= 8u; ++sn) {
+      if (!ew.isAccessible(sn)) continue;
+      Atom & a = ew[sn];
+      if (a as MBase) {
+        if (a.mInboundEC.isValid())
+          mbpick.update(sn);
+      }
+    }
+
+    // WE NEED A VALID MB FOR INBOUND INFO (? right?)
+    if (!mbpick.hasPick()) return false;
+    mD&&pR("EHEMST14");
+    mD&&pR(mbpick);
+
+    /// MAKE A STANDARD JUNCTOR
+    StandardJunctor jtor;
+
+    mD&&pR("EHEMST15");
+    mD&&pR(jtor);
+
+    if (jtor.initStandardJunctor(self)) return true;
+
+    mD&&pR("EHEMSTa15");
+    mD&&pR(jtor);
+
+    /// CONFIGURE IT
+    
+    MBase & mb = (MBase&) mbpick.getIdxAtom();
+    C2D mbc = mbpick.getIdxC2D();
+
+    mD&&pR("EHEMSTe15");
+    mD&&pR(mb);
+    mD&&pR(mbc);
+
+    EdgeCoord ourec;
+    ourec.mEdgePos = getHCPoint(); // where we are in the Di
+    ourec.mHopsToEdge.set(0,0);    // and we're right here
+    ourec.mEdgeTag = getJunctionEdgeTag(); // and this is our tag
+
+    if (!jtor.configureStandardJunctor(ourec, mb.mInboundEC, mbc)) {
+      mD&&pR("EHEMSTb15");
+      return false;
+    }
+
+    mD&&pR("EHEMSTc15");
+    mD&&pR(jtor);
+
+    DiamondStance ds;
+    if (!jtor.makeStance(ds))
+      return false;
+
+    mD&&pR("EHEMST16");
+    mD&&pR(ds);
+
+    if (!ds.hasCares())
+      return false;
+
+    mD&&pR("EHEMST17");
+    mD&&pR(jtor);
+
+    /// DEPLOY STANCE
+    if (stancepick.hasPick()) { // If see an existing ds
+      DiamondStance & dsx = (DiamondStance&) stancepick.getIdxAtom();
+      dsx.copyStance(ds); // replace it with us (we're newer)
+      mD&&pR("EHEMST18");
+      mD&&pR(dsx);
+      return true;
+    }
+    if (emppick.hasPick()) {
+      SN empsn = (SN) emppick.getIdx();
+      mD&&pR("EHEMST19");
+      mD&&pR(empsn);
+      ew[empsn] = ds.atomof;
+      return true;
+    }
+
+    mD&&pR("EHEMST210");
+    return false;
+  }
+
+  Zone getEdgeZone() {          //< infer outbound zone from HCPoint
+    Zone ret;
+    if (!hcPoint2Zone(getHCPoint(), ret))
+      fail(__FILE__,__LINE__);
+    return ret;
+  }
+
+  Bool hasEdgeZone() {
+    HCPoint hc = getHCPoint();
+    return hc.isValid() && hc.length() > 0u;
+  }
+
+  Void behave() {
+    if (getUpHops() < getMaxHopsGoal()-1u) {
+      HardCellG hg;
+      BaseClassUtils bcu;
+      bcu.copySharedData(self.atomof,hg.atomof);
+      EventWindow ew;
+      ew[0] = hg.atomof;
+      return;
+    }
+    // uphops >= goal-1u
+    
+    return super.behave();
+  }
+}
+
+transient EdgeHGState : QHardCellGState {
+  //// QHARDCELL API
+
+  @Override
+  virtual Bool act(Intender & in) {
+    mD&&pR("EHSAC10");
+    EventWindow ew;
+    if (super.act(in)) return true;
+    EdgeHG & eh = (EdgeHG&) in;
+    mD&&pR("EHSAC11");
+    mD&&pR(eh);
+    Bool changes = false;
+
+    if (!eh.hasEdgeZone()) return false;
+    Zone zone = eh.getEdgeZone();
+    mD&&pR("EHSAC12");
+
+    PocketDir pds[2];
+    Unsigned pdcount;
+    if (zone2PocketDir(zone,pds[0])) pdcount = 1u; // not corner: check one pd
+    else {
+      mD&&pR("EHSAC13");
+      AxialDir ad;
+      if (zone2AxialDir(zone,ad)) {                // corner: check two pds
+        pocketDirsBorderingAxialDir(ad, pds[0], pds[1]);
+        pdcount = 2u;
+      }
+    }
+
+    mD&&pR("EHSAC14");
+    for (Unsigned i = 0u; i < pdcount; ++i) {
+      PocketDir opendir = pds[i];
+      mD&&pR("EHSAC15");
+      mD&&pR(i);
+      mD&&pR(opendir);
+      // DO JUNCTION PROCESSING IF NOT CORNER
+      if (pdcount == 1u && eh.actJunction(self,opendir)) {
+        mD&&pR("EHSAC16");
+        changes = true;
+      }
+
+      mD&&pR("EHSAC17");
+      C2D adjc = pocketDir2C2D(opendir);
+      if (ew.isAccessible(adjc)) {
+        Atom & a = ew[adjc];
+        if (a as Antenna) {     // If already Aa
+          mD&&pR("EHSAC18");
+          mD&&pR(a);
+          // PICK UP AA CONTACT WARNINGS IF NOT CORNER
+          HCPoint myhcp = eh.getHCPoint();
+          Bool inACorner = myhcp.area() == 0u;
+          mD&&pR("EHSAC19");
+          if (!inACorner) {
+            mD&&pR("EHSAC210");
+            AxialDir had, vad;
+            axialDirsBorderingQuad(opendir,had,vad);
+            eh.mDefCons[had] = maxDCDC(eh.mDefCons[had],a.mDefCons[had]);
+            eh.mDefCons[vad] = maxDCDC(eh.mDefCons[vad],a.mDefCons[vad]);
+          }
+          mD&&pR("EHSAC211");
+        } else if (a is Empty) { // else spawn Aa if empty
+          Antenna aa;
+          aa.mOpenDir = opendir;
+          aa.mMaxEdgeHops = 8u; // XXX PROGRAM CTL
+          ew[adjc] = aa.atomof;
+          mD&&pR("EHSAC212");
+          mD&&pR(adjc);
+        }
+      }
+      mD&&pR("EHSAC213");
+    }
+    mD&&pR("EHSAC214");
+    mD&&pR(changes);
+
+    return changes;
+  }
+}
+

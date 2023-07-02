@@ -1,0 +1,160 @@
+/**
+   A HCPoint-based intradiamond navigation assistent
+*/
+transient HP2HP
+  + DTU
+  + QDebugUtils
+  + Fail
+{
+  typedef ClassUtils.ClassId ClassId;
+  constant Unsigned cMAX_CLASSES = 16u;
+  ClassId mBlockIds[cMAX_CLASSES];
+  Unsigned mBlockIdsInUse;
+
+  SN mRouteSN;                // Value last returned from route2HP(..)
+  SN mChosenHCSN;
+
+  Void init() {
+    mRouteSN = SN.maxof;
+    mChosenHCSN = SN.maxof;
+  }
+
+  //// HP2HP SERVICES
+  Bool blockOnClass(ClassId cid) {
+    if (mBlockIdsInUse >= cMAX_CLASSES)
+      return false;
+    mBlockIds[mBlockIdsInUse++] = cid;
+    return true;
+  }
+  
+  /** \returns 0 if currently within pocket that can see desthp.  \sa
+      route2HP(C2D desthp1,C2D desthp1) for details and caveats.
+   */
+  SN route2HP(C2D desthp) {
+    return route2HP(desthp,true);
+  }
+
+  /** \returns 0 if currently in pocket (if deliverToPocket) or
+      driving lane (otherwise) that can see desthp.  \sa route2HP(C2D
+      desthp1,C2D desthp1) for details and caveats.
+   */
+  SN route2HP(C2D desthp, Bool deliverToPocket) {
+    return route2HP(desthp,desthp, deliverToPocket);
+  }
+  
+  /** \returns 0 if currently in pocket (if deliverToPocket) or
+       driving lane (otherwise) that can see desthp1 and desthp2.
+      \returns SN.maxof if currently blocked
+      \returns SN.maxof-1u if lost (cannot see any QHardCell).
+
+      Otherwise, \returns SN \c swapsn of an empty site that ew[0]
+      could swap with to get closer to desthp. In that case, \c swapsn
+      will be in an HG pocket if that will leave \c desthp is less
+      than 3 sites manhattan distance away, otherwise \c swapsn will
+      be in an HG driving lane.
+   */
+  SN route2HP(C2D desthp1, C2D desthp2, Bool deliverToPocket) {
+    EventWindow ew;
+    mD&&pR("HP2RT10");
+    mD&&pR(desthp1);
+    mD&&pR(desthp2);
+    Unsigned destspreadhp = desthp1.manhattanDistance(desthp2);
+    mD&&pR(destspreadhp);
+
+    /// FIRST PASS: Find QHCs
+    MinPick qhcdest1hp;         // closest to dest1hp in hp
+    MinPick qhcdest2hp;         // closest to dest2hp in hp
+    MinPick qhcsumhp;           // closest to dest1hp+dest2hp
+    C2D origin;                 // where I'm assumed to be
+    ClassUtils cu;
+    for (SN sn = 1u; sn < 41u; ++sn) {
+      if (!ew.isAccessible(sn)) continue;
+      Atom & a = ew[sn];
+      for (Unsigned i = 0u; i < mBlockIdsInUse; ++i) {
+        if (cu.isBase((UrSelf&) a, mBlockIds[i]))
+          return SN.maxof;
+      }
+      if (a as QHardCell) {
+        HCPoint ahp = a.getHCPoint();
+        if (!ahp.isValid()) continue;
+        C2D ahpc = ahp.validHCPoint2C2D();
+        Unsigned dist1hp = ahpc.manhattanDistance(desthp1);
+        qhcdest1hp.update(sn,dist1hp);
+        Unsigned dist2hp = ahpc.manhattanDistance(desthp2);
+        qhcdest2hp.update(sn,dist2hp);
+        qhcsumhp.update(sn,dist1hp+dist2hp);
+      }
+    }
+    mD&&pR("HP2RT11");
+    mD&&pR(qhcdest1hp);
+    mD&&pR(qhcdest2hp);
+    mD&&pR(qhcsumhp);
+
+    if (!qhcsumhp.hasPick()) return (mRouteSN = SN.maxof - 1u); // no valid HC nearby at all?
+    C2D d1c = qhcdest1hp.getIdxC2D(); // site of closest to desthp1 (might be same as d2c)
+    C2D d2c = qhcdest2hp.getIdxC2D(); // site of closest to desthp2 (even if hp1&2 differ)
+    Unsigned destspreadc = d1c.manhattanDistance(d2c); // sites between those two if any
+
+    SN chosenhcsn = (SN) qhcsumhp.getIdx(); // sn of chosen hc
+    C2D chosenhcc = ew.getCoord(chosenhcsn); // coord of chosen hc
+    QHardCell & chosenhc = (QHardCell&) ew[chosenhcsn]; // the chosen hc
+
+    Unsigned distremaininghp = qhcsumhp.getX(); // sum of hp dists
+    Bool finalstep = deliverToPocket && (distremaininghp <= destspreadhp); // if chosen is 'between' dhp1 & 2
+
+    mD&&pR("HP2RT12");
+    mD&&pR(distremaininghp);
+    mD&&pR(chosenhcc);
+    mD&&pR(chosenhc);
+    mD&&pR(finalstep);
+
+    //// SECOND PASS: Find destinations assuming final and not
+    MinPick picksn;   // empty driving lane or pocket site near qhcdest
+    for (SN sn = 0u; sn < 41u; ++sn) { // start at 0u to consider we might be done
+      if (!ew.isAccessible(sn)) continue;
+      if (sn != 0u && !(ew[sn] is Empty)) continue; 
+      C2D c = ew.getCoord(sn);
+      C2D diffsum = chosenhcc - c;
+      Unsigned lensum = diffsum.length();
+      if (lensum > 4u) continue;
+      Bool ondrivinglane =
+        (diffsum.x == 0 || diffsum.y == 0);
+      if (finalstep == ondrivinglane) 
+        continue;               
+
+      // c is an appropriate type site: drivinglane iff !final
+      /* unwise
+      // Shortcut for self:
+      if (finalstep && sn == 0u) {
+        mChosenHCSN = chosenhcsn;
+        return (mRouteSN = 0u); // good enough
+      }
+      */
+
+      Unsigned totallen = diffsum.length();
+      totallen += c.manhattanDistance(d1c);
+      totallen += c.manhattanDistance(d2c);
+      if (sn != 0u)             // +1 bonus for picking sn==0 if we can
+        ++totallen;
+
+      // minimize distance to goals and chosen qhc
+      picksn.update(sn, totallen);
+    }
+
+    mD&&pR("HP2RT13");
+    mD&&pR(picksn);
+
+    if (picksn.hasPick()) {
+      SN ret = picksn.getIdxSN();
+      mD&&pR("HP2RT14");
+      mD&&pR(ret);
+      mChosenHCSN = chosenhcsn;
+      return (mRouteSN = ret); // Might be 0->done
+    }
+
+    
+    mD&&pR("HP2RT15");
+    return (mRouteSN = SN.maxof);
+  }
+}
+

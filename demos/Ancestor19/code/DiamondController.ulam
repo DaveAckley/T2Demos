@@ -1,0 +1,264 @@
+transient DCReport : ByteStreamArray(256u)
+  + DTU
+{
+
+  //// DCReport API
+
+  //// DCReport SERVICES
+  Self & printDefCons(DefCon dc[4]) {
+    printf("dc[%d %d %d %d]",
+           dc[0],dc[1],dc[2],dc[3]);
+    return self;
+  }
+  
+  Void sendReport() {
+    if (Parms.cDCREPORTING_ENABLED) {
+      DebugUtils du;
+      if (Parms.cDCREPORTING_CONTEXT) du.printContext(0u);
+      du.print((ByteStreamReader&) self);
+    }
+  }
+
+  Bool reportDone(Bool retval) {
+    return reportDone(retval, printf("."));
+  }
+
+  Bool reportDone(Bool retval, ByteStreamWriter & bsw) {
+    sendReport();
+    return retval;
+  }
+}
+
+quark DiamondController + DebugUtils
+{
+  //// DiamondController API
+  /** \returns true if this DC, in this situation, is prepared to give
+      advise to the root. Note that even if couldAdvise(..) returns
+      true, though, a subsequent call to adviseRoot might return
+      false, but if so, that's an assertive statement that there is
+      no advice in this situation, and the RG should use free will.
+   */
+  virtual Bool couldAdvise(RootHardCellG & root,
+                           QHardCellState & qcs) ;
+
+  virtual Bool adviseRoot(RootHardCellG & root,
+                          QHardCellState & qcs,
+                          DCReport & dcr) ;
+}
+
+/** Demo DiamondController Stub
+    \symbol Dc
+    \color #f3c
+ */
+element DCStub : DiamondController + DTU {
+  typedef Unsigned(10) MoveDistance;
+  MoveDistance mMoveDistance;
+  typedef RXTimer(2u,3u,20u) RootLess;
+  RootLess mRootLess;
+  
+  Void behave() {
+    EventWindow ew;
+    for (SN sn = 1u; sn < 41u; ++sn) {
+      if (!ew.isAccessible(sn)) continue;
+      if (ew[sn] is QHardCellG) {
+        mRootLess.reset();
+        return;
+      }
+    }
+    if (mRootLess.countAlarm()) { // Need a root eventually
+      // Spam the log file as we go
+      Fail f; f.fail("NO ROOT TO ADVISE");
+    }
+  }
+
+  //// DiamondController API
+  virtual Bool couldAdvise(RootHardCellG & root,
+                           QHardCellState & qcs)
+  {
+    return true;
+  }
+
+  virtual Bool adviseRoot(RootHardCellG & root, QHardCellState & qcs, DCReport & dcr) {
+    EventWindow ew;
+    Random random;
+    DebugUtils du;
+
+    /*
+      Mon Feb 20 13:56:24 2023 OK now I want the stub to
+      cause the diamond to go east 10 times and then the
+      stub releases control..
+    */
+    if (root.mCmdPhase != root.cCMD_MOVE) return false;
+    
+    /// DON'T CONSIDER GROWING UNLESS OPEN SKIES
+    Bool allClear =
+      root.mDefCons[0] == DEWLine.cDC_OPEN &&
+      root.mDefCons[1] == DEWLine.cDC_OPEN &&
+      root.mDefCons[2] == DEWLine.cDC_OPEN &&
+      root.mDefCons[3] == DEWLine.cDC_OPEN;
+
+    if (root.mMaxHops < mMoveDistance && root.mMaxHops < 18u && allClear) {
+      /// try to grow first
+      root.setCmdPhase(root.cCMD_STOP);
+      return true;
+    }
+
+    if (mMoveDistance < 250u) { // go waaay east
+      
+      /// TRY TO MOVE EAST NOW?
+      if (!allClear && random.oddsOf(1,6)) // if cloudy sometimes defer
+        return false;
+
+      SN sn = 4u; // east
+      if (root.mDefCons[sn-1u] == DEWLine.cDC_OPEN &&
+          ew.isAccessible(sn) && ew[sn] is Empty) {
+
+        ++mMoveDistance;
+
+        HC3State &hcs = qcs.getHC3State();
+        qcs.resetSettledDownHops(root, hcs);
+        root.mMovementWatchdog.reset();
+        root.moveEntourage(qcs,sn);
+        return true; // yes
+      }
+
+      // can't
+      return false;
+    }
+
+    du.print("IDIDZMYWUKANOWIZDUN");
+    SN mysn = ew.getSiteNumber(self);
+    ew[mysn] = Empty.instanceof;
+    return true;
+  }
+  
+}
+
+
+/** Driver Stub. Likes to live SW of root.
+    \symbol Dv
+    \color #fc3
+ */
+element DCDriveDir : DiamondController + DTU {
+
+  AxialDir mDriveDir;
+  
+  typedef Unsigned(4) Pressure; 
+  Pressure mPressure;           //< how hard to push the pedal
+
+  typedef Unsigned(10) MoveDistance;
+  MoveDistance mMoveDistance;   //< how far to go before bailing
+
+  Void configure(MoveDistance dist, AxialDir dir, Pressure pres) {
+    mMoveDistance = dist;
+    mDriveDir = dir;
+    mPressure = pres;
+  }
+
+  typedef RXTimer(2u,3u,20u) RootLess;
+  RootLess mRootLess;
+  
+  //// DiamondController API
+  virtual Bool couldAdvise(RootHardCellG & root,
+                           QHardCellState & qcs)
+  {
+    return true;
+  }
+
+  virtual Bool adviseRoot(RootHardCellG & root, QHardCellState & qcs, DCReport & dcr) {
+    EventWindow ew;
+    Random random;
+    DebugUtils du;
+
+    /*
+      Mon Feb 20 13:56:24 2023 OK now I want the stub to
+      cause the diamond to go east 10 times and then the
+      stub releases control..
+    */
+    if (root.mCmdPhase != root.cCMD_MOVE) return false;
+    
+    /// DON'T CONSIDER GROWING UNLESS OPEN SKIES
+    Bool allClear =
+      root.mDefCons[0] == DEWLine.cDC_OPEN &&
+      root.mDefCons[1] == DEWLine.cDC_OPEN &&
+      root.mDefCons[2] == DEWLine.cDC_OPEN &&
+      root.mDefCons[3] == DEWLine.cDC_OPEN;
+
+    if (root.mMaxHops < mMoveDistance && root.mMaxHops < 18u && allClear) {
+      /// try to grow first
+      root.setCmdPhase(root.cCMD_STOP);
+      return true;
+    }
+
+    if (mMoveDistance > 0u) { // go waaay east
+      
+      /// TRY TO MOVE EAST NOW?
+      if (!allClear && random.oddsOf(1u,mPressure + 1u)) // defer less with more pressure
+        return false;
+
+      SN sn = mDriveDir + 1u; // axialdir -> dest
+      if (root.mDefCons[sn-1u] == DEWLine.cDC_OPEN &&
+          ew.isAccessible(sn) && ew[sn] is Empty) {
+
+        --mMoveDistance;
+
+        HC3State &hcs = qcs.getHC3State();
+        qcs.resetSettledDownHops(root, hcs);
+        root.mMovementWatchdog.reset();
+        root.moveEntourage(qcs,sn);
+        return true; // yes
+      }
+
+      // can't
+      return false;
+    }
+
+    du.print("IDIDZMYWUKANOWIZDUN");
+    SN mysn = ew.getSiteNumber(self);
+    ew[mysn] = Empty.instanceof;
+    return true;
+  }
+  
+  Void behave() {
+    EventWindow ew;
+    C2D rootc;
+    for (SN sn = 1u; sn < 41u; ++sn) {
+      if (!ew.isAccessible(sn)) continue;
+      if (ew[sn] is RootHardCellG) {
+        rootc = ew.getCoord(sn);
+        break;
+      }
+    }
+
+    if (rootc.length() > 0u) {
+      // Found root.
+      // Are we SW of it? (Is it NE of us?)
+      if (!(rootc.x >= 0 && rootc.y <= 0)) {
+        // We are not SW (or on border) of it
+        // Try to find an empty that is SW of it
+        for (SN sn = 1u; sn < 41u; ++sn) {
+          if (!ew.isAccessible(sn)) continue;
+          if (!(ew[sn] is Empty)) continue;
+          C2D ec = ew.getCoord(sn); // empty pos
+          C2D offset = rootc - ec; 
+          if (offset.x > 1 && offset.y < 0) { // ec SW of root?
+            ew.swap(C2D.instanceof,ec); // yeah go there
+            return;               // and be done for today
+          }
+        }
+        return;                 // no suitable empty? (time out?)
+      }
+      // we are SW of root
+      mRootLess.reset();  // So we're happy
+      return;             // and that's that
+    }
+      
+    // We did not find root
+    if (mRootLess.countAlarm()) { // Need a root eventually
+      // Spam the log file as we go
+      Fail f; f.fail("NO ROOT TO ADVISE");
+    }
+  }
+}
+
+

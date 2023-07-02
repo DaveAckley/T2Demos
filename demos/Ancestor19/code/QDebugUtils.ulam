@@ -1,0 +1,156 @@
+quark QDebugUtils {
+  Bool(3) mD = false; //< Need robustness here! Unintended debug output huge!
+
+  Bool isDebugOutputEnabled() { return mD; }
+
+  Void setDebugOutputEnabled(Bool enabled) {
+    mD = enabled;
+  }
+
+  Bool takeDebug(QDebugUtils & other) {
+    Bool ret = other.isDebugOutputEnabled();
+    setDebugOutputEnabled(ret);
+    return ret;
+  }
+
+  Bool pRContext() {
+    if (mD) {
+      DebugUtils du;
+      du.printContext();
+    }
+    return mD;
+  }
+
+  Bool pRContext(Bits flags) {
+    if (mD) {
+      DebugUtils du;
+      du.printContext(flags);
+    }
+    return mD;
+  }
+
+  Bool pR(UrSelf & ur) {
+    if (mD) {
+      DebugUtils du;
+      du.print(ur);
+    }
+    return mD;
+  }
+  Bool pR(String s) {
+    if (mD) {
+      DebugUtils du;
+      du.print(s);
+    }
+    return mD;
+  }
+  Bool pR(String file, Unsigned line) {
+    if (mD) {
+      ByteStreamArray1K bsa;
+      bsa.printf("LOCATION TAG:\n%s:%d:<HERE>", file, line);
+      DebugUtils du;
+      du.print((ByteStreamReader&) bsa);
+    }
+    return mD;
+  }
+  Bool pR(String file, Unsigned line, String message) {
+    if (mD) {
+      ByteStreamArray1K bsa;
+      bsa.printf("LOCATION TAG:\n%s:%d:%s", file, line, message);
+      DebugUtils du;
+      du.print((ByteStreamReader&) bsa);
+    }
+    return mD;
+  }
+  Bool pR(Int s) {
+    if (mD) {
+      DebugUtils du;
+      du.print(s);
+    }
+    return mD;
+  }
+  Bool pR(Unsigned s) {
+    if (mD) {
+      DebugUtils du;
+      du.print(s);
+    }
+    return mD;
+  }
+  Bool pR(Bool s) {
+    if (mD) {
+      DebugUtils du;
+      du.print(s);
+    }
+    return mD;
+  }
+  Bool pR(Bits s) {
+    if (mD) {
+      DebugUtils du;
+      du.print((Unsigned) s);
+    }
+    return mD;    
+  }
+  Bool pR(Atom & s) {
+    if (mD) {
+      DebugUtils du;
+      du.print(s);
+    }
+    return mD;        
+  }
+
+  Bool pR(ByteStreamReader& a, Bool reread) {
+    if (mD) {
+      if (reread && a.canReread()) a.reread();
+      pR(a);
+    }
+    return mD;    
+  }
+
+  Bool pR(ByteStreamReader & bs) {
+    if (mD) {
+      DebugUtils du;
+      du.print(bs);
+    }
+    return mD;    
+  }
+}
+
+quark QDebugUtilsEnabler + DTU {
+  Bool setEnablingOnOne(Bool enable) {
+    EventWindow ew;
+    for (SN sn = 0u; sn <= 8u; ++sn) {
+      if (!ew.isAccessible(sn)) continue;
+      Atom & a = ew[sn];
+      if (a as QDebugUtils) {
+        if (a.isDebugOutputEnabled() != enable) {
+          a.setDebugOutputEnabled(enable);
+          return true;
+        }
+      }
+    }
+    return false;
+  }
+}
+
+/** \symbol Do
+    \color #f00
+ */
+element EnableQDebugUtils : QDebugUtilsEnabler {
+  Void behave() {
+    if (setEnablingOnOne(true)) {
+      EventWindow ew;
+      ew[0] = Empty.instanceof;
+    }
+  }
+}
+
+/** \symbol Df
+    \color #00f
+ */
+element DisableQDebugUtils : QDebugUtilsEnabler {
+  Void behave() {
+    if (setEnablingOnOne(false)) {
+      EventWindow ew;
+      ew[0] = Empty.instanceof;
+    }
+  }
+}

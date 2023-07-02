@@ -1,0 +1,152 @@
+/** Kill and perhaps init pockets, with optional regrip and
+    optional killing of the DS
+
+    \symbol KL 
+    \color #e42
+ */
+element LXKill : LX + QLabelMark + TQDSControlStg {
+  typedef Bool PocketMap[4];
+  PocketMap mPocketsToKill;
+  PocketMap mPocketsToInit;
+  ProcUnit mRegripXToPU = cPUNIT_XEQ; //< default means don't regrip
+  Bool mKillDS;
+
+  typedef Unary(2) KillPhase;
+  constant KillPhase cKP_KILL = 0u;
+  constant KillPhase cKP_INIT = 1u;
+  constant KillPhase cKP_WRAP = 2u;
+
+  KillPhase mKillPhase = cKP_KILL;
+
+  //// LX API
+  @Override
+  virtual Bool perform(DiamondSequencerState & dss) {
+    EventWindow ew;
+    BaseClassUtils bcu;
+    Fail f;
+
+    mD&&pR("LXKILL10");
+    /// ARE ALL DOOMED POCKETS (EXCEPT XEQ) KILLED?
+    if (mKillPhase == cKP_KILL) {
+      mD&&pR("LXKILL11");
+      Bool killingInProgress;
+      for (Unsigned i = cPUNIT_REG; i < cPUNIT_XEQ; ++i) { // ALL BUT XEQ
+        ProcUnit pu = (ProcUnit) i;
+        if (!mPocketsToKill[pu]) continue;  // leave that one be
+        // WANT KILL
+        Bool killed = killPU(pu, dss);
+        if (!killed) killingInProgress = true;
+        mD&&pR("LXKILL12");
+        mD&&pR(getProcUnitName(pu));
+        mD&&pR(killed);
+      }
+      if (killingInProgress) return true;
+      mD&&pR("LXKILL13");
+      mKillPhase = cKP_INIT;
+      // FALL THROUGH
+    }
+    /// ALL DOOMED POCKETS (EXCEPT XEQ) ARE KILLED
+
+    mD&&pR("LXKILL14");
+    /// ARE NEWBORNE POCKETS (EXCEPT XEQ) INITTED?
+    if (mKillPhase == cKP_INIT) {
+      mD&&pR("LXKILL15");
+
+      for (Unsigned i = cPUNIT_REG; i < cPUNIT_XEQ; ++i) { // ALL BUT XEQ
+        ProcUnit pu = (ProcUnit) i;
+        if (!mPocketsToInit[pu]) continue; // leave that one be
+        // WANT INIT
+
+        ProcUnitInfo & pui = dss.getPUInfo(pu);
+
+        mD&&pR("LXKILL16");
+        mD&&pR(getProcUnitName(pu));
+
+        if (pui.mOccupiedSites == 0u) { // Init pu if empty
+          if (pui.mEmptySN == SN.maxof) f.fail(__FILE__,__LINE__); // WTF?
+          mD&&pR("LXKILL17");
+          mD&&pR(pui.mEmptySN);
+          Looper looper;
+          bcu.copySharedData(self,looper);
+          looper.init(); // init over shared data
+          ew[pui.mEmptySN] = looper.atomof; // OK, it's not empty now
+          mD&&pR("LXKILL18");
+        }
+      }
+      mD&&pR("LXKILL19");
+      mKillPhase = cKP_WRAP;
+      // FALL THROUGH
+    }
+    /// NEWBORNE POCKETS (EXCEPT XEQ) ARE INITTED
+
+    mD&&pR("LXKILL210");
+
+    /// IS FINAL WRAP-UP DONE?
+    if (mKillPhase == cKP_WRAP) {
+
+      mD&&pR("LXKILL211");
+
+      //// NEED TO REGRIP FOR THE FUTURE?
+      if (mRegripXToPU != cPUNIT_XEQ) {
+        mD&&pR("LXKILL212");
+        mD&&pR(mRegripXToPU);
+        if (!dss.swapPUs(mRegripXToPU, cPUNIT_XEQ))
+          f.fail(__FILE__,__LINE__);
+      }
+      //// WE REGRIPPED FOR THE FUTURE.
+
+      mD&&pR("LXKILL213");
+
+      //// NEED TO KILL DS?
+      if (mKillDS) {
+        mD&&pR("LXKILL214");
+        HardCellG hg;           // get a bare HG
+        ClassUtils cu;
+        cu.copySharedData(ew[0],hg.atomof); // take what we can
+        ew[0] = hg.atomof;                  // step on DS
+      }
+      //// DS IS KILLED IF REQUESTED
+
+      mD&&pR("LXKILL215");
+
+      //// NEED TO START KILLING SELF?
+      if (mPocketsToKill[cPUNIT_XEQ]) {
+
+        mD&&pR("LXKILL216");
+
+        //// NEED TO START KILLING SELF.
+        SN oursn = ew.getSiteNumber(self);
+        if (oursn == SN.maxof) f.fail(__FILE__,__LINE__);
+        mD&&pR(oursn);
+
+        LoopKiller lk;
+        lk.copySegAndPChain(self);
+        lk.mDSType = cDS_DUMB;
+        lk.mKillFunc = lk.cKLFN_ROOT;            // We are kill anchor; last to go
+
+        mD&&pR("LXKILL217");
+        mD&&pR(lk);
+        ew[oursn] = lk.atomof;                   // self is STALE
+        return true;
+      }
+      //// DO NOT NEED TO START KILLING SELF
+
+      mD&&pR("LXKILL218");
+      if (!mKillDS) {                              // cannot move on if DS is gone
+        mD&&pR("LXKILL219");        
+        markCurrentInstructionForRotation(dss, 0u); // So just move on
+      }
+      mD&&pR("LXKILL220");        
+      return true;
+    }
+    f.fail(__FILE__,__LINE__);
+    return false; // NOT REACHED
+  }
+
+  //// CODON API
+  virtual Void init() {
+    super.init();
+    mDSType = cDS_NORM;
+  }
+
+}

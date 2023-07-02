@@ -1,0 +1,327 @@
+transient MCSlash11State : EdgeModelState {
+  @Override
+  //// Intention API
+  virtual Bool stabilize(Intender & in) {
+    mD&&pR("MCSISTB10");
+    if (super.stabilize(in)) return true;
+    MCSlash11 & ld = (MCSlash11&) in;
+    mD&&pR(ld);
+    return false;
+  }
+}
+
+
+/** MCSlash11. Representing a demo two-cell multicellular organism,
+    with limited offspring and a symmetric final form
+
+    \symbol M2
+    \color #58f
+ */
+element MCSlash11 : EdgeModel
+  + QDiamondStance
+{
+  //// Intender API
+  virtual ClassId getIntentionClass() {
+    MCSlash11State s; // Ensure concrete
+    return s.classidof;
+  }
+
+  //// QDiamondStance API
+  @Override
+  virtual Bool isStanceSink() { return mIsDeployed && mIsHead; } // When I'm in charge I consume all stances that find me
+
+  typedef BodyPlanStg(5u) MCSlash11BodyPlan;
+  constant MCSlash11BodyPlan cMCSLASH11_BODYPLAN = {
+    .mDiSeqInfoMap = {
+      // DiSeq#1 no junctions
+      { .mEdgeSJCs =             
+        { .mEdgeSJCArray = { {.mET = 0u}, // NW
+                             {.mET = 0u}, // NE
+                             {.mET = 0u}, // SE
+                             {.mET = 0u}  // SW
+          } },
+        .mDVec = {.x = 0, .y =  0},              // DiSeq#1 no drift
+        .mBootCode = "JjWWWW",                   // DiSeq#1 W to clear a bit, in out generations
+      },
+
+      // DiSeq#2 tag 1 (leader of 2) to NE
+      { .mEdgeSJCs =             
+        { .mEdgeSJCArray = { {.mET = 0u}, // NW
+                             {.mET = 1u, .mGH = cHABIT_AEQBO2}, // NE, A (them) should == B (us) / 2
+                             {.mET = 0u}, // SE
+                             {.mET = 0u}  // SW
+          } },
+        .mDVec = {.x = 20, .y = -10},     // DiSeq#2 drift NNE
+        .mBootCode = "JjWSWSSSSESES",     // DiSeq#2 W, S+, E, then dvec
+      },
+
+      // DiSeq#3 tag 2 (follower of 1) to SW
+      { .mEdgeSJCs =             
+        { .mEdgeSJCArray = { {.mET = 0u}, // NW
+                             {.mET = 0u}, // NE
+                             {.mET = 0u}, // SE
+                             {.mET = 2u, .mGH = cHABIT_AEQB}  // SW, A (us) should == B (them)
+          } },
+        .mDVec = {.x =-20, .y =10},              // DiSeq#3 drift SSW
+        .mBootCode = "JjENENNNNWNWN",            // DiSeq#3 E, N+, W, then dvec
+      },
+
+      // DiSeq#4 tag 1 (leader of 2) to NE (Copy of #2)
+      { .mEdgeSJCs =             
+        { .mEdgeSJCArray = { {.mET = 0u}, // NW
+                             {.mET = 1u, .mGH = cHABIT_AEQBO2}, // NE, A (them) should == B (us) / 2
+                             {.mET = 0u}, // SE
+                             {.mET = 0u}  // SW
+          } },
+        .mDVec = {.x = 20, .y = -10},     // DiSeq#2 drift NNE
+        .mBootCode = "JjWSWSSSSESES",     // DiSeq#2 W, S+, E, then dvec
+      },
+
+      // DiSeq#5 tag 1 (leader of 2) to NE (Symmetric modification of #2)
+      { .mEdgeSJCs =             
+        { .mEdgeSJCArray = { {.mET = 0u}, // NW
+                             {.mET = 1u, .mGH = cHABIT_AEQB}, // NE, A (them) should == B (us)
+                             {.mET = 0u}, // SE
+                             {.mET = 0u}  // SW
+          } },
+        .mDVec = {.x = 20, .y = -10},     // DiSeq#5 drift NNE
+        .mBootCode = "JjEENNN",           // DiSeq#5 E to clear, N to realign with #3, then dvec
+      },
+
+    }
+  };
+
+  //// EdgeModel API
+  @Override
+  virtual DiSequence getChildDiSeq(Bool leftKid) {
+    if (mDiSequence == 2u)
+      return leftKid ? 1u : 5u; //XXX SHOULD BE : 4u// LD is first new MC/, RD becomes 2nd gen #2
+    if (mDiSequence == 4u)
+      return leftKid ? 1u : 5u; // LD is second new MC/, RD switches type
+    return super.getChildDiSeq(leftKid); //(probably never reached)
+  }
+
+  @Override
+  virtual Unsigned getMaxSizeForDiSeq(DiSequence diseq) {
+    if (diseq == 3u) return 10u; // Only NE di is limited but that limits the others
+    return Unsigned.maxof;
+  }
+
+  @Override
+  virtual DiSequence getMaxEmbodiedDiSeq() {
+    return cMCSLASH11_BODYPLAN.cDISEQ_COUNT;
+  }
+
+  @Override
+  virtual DiSeqInfo getDiSeqInfo(DiSequence diseq) {
+    MCSlash11BodyPlan bp = cMCSLASH11_BODYPLAN;
+    return bp.getDiSeqInfo(diseq);
+  }
+
+  @Override
+  virtual Bool adviseRoot(RootHardCellG & root,
+                          QHardCellState & qcs,
+                          DCReport & dcr)
+  {
+    mD&&pR(__FILE__,__LINE__);
+    if (super.adviseRoot(root,qcs,dcr)) return true;
+
+    // Everything else is only when moving
+    if (root.mCmdPhase != root.cCMD_MOVE) return false;
+    
+    if (adviseFromSpecial(root,qcs,dcr))
+      return true;
+
+    if (adviseFromStance(root, qcs, dcr))
+      return true;
+
+    if (adviseFromDefault(root,qcs,dcr))
+      return true;
+
+    return false;
+  }
+
+  typedef C2DT(8) B2D;          //< (-128..127,-128..127)
+  B2D mWalkiesVector;
+
+  typedef XTimer(3u, 7u, 2u) ChangeOfWalkiesTimer;
+  ChangeOfWalkiesTimer mChangeOfWalkiesTimer;
+
+  C2D getDynamicVector(RootHardCellG & root, QHardCellState & qcs, DCReport & dcr) {
+    if (mWalkiesVector.length() == 0u ||
+        mChangeOfWalkiesTimer.countAlarm()) {
+      Random random;
+      mWalkiesVector.set(random.between(-100,100), random.between(-100,100)); // could still be (0,0) beeg deal
+      mChangeOfWalkiesTimer.reset();
+    }
+    return C2D.instanceof(mWalkiesVector.x, mWalkiesVector.y);
+  }
+
+  Bool adviseFromDefault(RootHardCellG & root, QHardCellState & qcs, DCReport & dcr) {
+    mD&&pR("MCSAFDF10");
+
+    DiSeqInfo info = getDiSeqInfo(mDiSequence);
+    C2D def = info.getDefaultVector();
+    Bool wehaveconcerns = hasCares();
+
+    if (mDiSequence == 5u) {    // SPECIAL GROWNUP GO WALKIES 
+      // run timer on walkies whether we use it or not, so
+      // we'll give up on being blocked
+      C2D walkies = getDynamicVector(root, qcs, dcr); 
+      if (boundedCaring(1u,1u)) { // proxy for 'locked onto ngb'
+        wehaveconcerns = false;   // wave away your minor concerns if any
+        def = walkies;            // and WALK LIKE THIS!
+        dcr.printf("[WLK:%d,%d]",def.x,def.y);
+      }
+    }
+
+    if (wehaveconcerns) return false;
+
+    mD&&pR("MCSAFDFa10");    
+
+    mD&&pR(info);
+    mD&&pR(def);
+    MaxPick dirs;
+    dirs.update((SN) 0u, 1u, 32u); // doing nothing gets 32 votes
+    Random random;
+    dirs.update((SN) random.between(1,4), 1u, 2u); // doing random WNSE gets 2 votes
+    for (Unsigned i = 0u; i < 4u; ++i) {
+      AxialDir ad = (AxialDir) i;
+      C2D adc = axialDir2C2D(ad);
+      Int len = def.dot(adc);
+      mD&&pR("MCSAFDF11");
+      mD&&pR(adc);
+      mD&&pR(len);
+      if (len > 0)
+        dirs.update((SN) (ad+1u), 1u, (Unsigned) len); // pick weighted by len
+    }
+    mD&&pR("MCSAFDF12");
+    mD&&pR(dirs);
+
+    if (!dirs.hasPick()) fail(__FILE__,__LINE__);
+    SN movesn = (SN) dirs.getIdx();
+
+    if (movesn > 0u) {
+      dcr.printf("[MCSafdf:%d]",movesn);
+      return executeMove(movesn, root, qcs, dcr);
+    }
+    return false;
+  }
+
+  Bool adviseFromSpecial(RootHardCellG & root, QHardCellState & qcs, DCReport & dcr) {
+    mD&&pR("ADFMSP10");
+
+    if (mDiSequence != 5u) return false;
+
+    // SPECIAL GROWNUP GO WALKIES 
+    // run timer on walkies whether we use it or not, so
+    // we'll give up on being blocked
+    C2D def = getDynamicVector(root, qcs, dcr); 
+    if (!boundedCaring(1u,1u))  // proxy for 'locked onto ngb'
+      return false;
+
+    dcr.printf("[WLK:%d,%d]",def.x,def.y);
+
+    mD&&pR("ADFMSPa10");    
+
+    mD&&pR(def);
+    MaxPick dirs;
+    dirs.update((SN) 0u, 1u, 32u); // doing nothing gets 32 votes
+    Random random;
+    dirs.update((SN) random.between(1,4), 1u, 2u); // doing random WNSE gets 2 votes
+    for (Unsigned i = 0u; i < 4u; ++i) {
+      AxialDir ad = (AxialDir) i;
+      C2D adc = axialDir2C2D(ad);
+      Int len = def.dot(adc);
+      mD&&pR("ADFMSP11");
+      mD&&pR(adc);
+      mD&&pR(len);
+      if (len > 0)
+        dirs.update((SN) (ad+1u), 1u, (Unsigned) len); // pick weighted by len
+    }
+    mD&&pR("ADFMSP12");
+    mD&&pR(dirs);
+
+    if (!dirs.hasPick()) fail(__FILE__,__LINE__);
+    SN movesn = (SN) dirs.getIdx();
+
+    if (movesn > 0u) {
+      dcr.printf("[MCSafsp:%d]",movesn);
+      return executeMove(movesn, root, qcs, dcr);
+    }
+    return false;
+  }
+
+  Bool adviseFromStance(RootHardCellG & root, QHardCellState & qcs, DCReport & dcr) {
+    mD&&pR("MCSAFS10");
+    if (!hasCares()) return false;
+    mD&&pR("MCSAFS11");
+    MaxPick dirpick;
+    Unsigned maxbad = 0u, totalbad = 0u;
+    Unsigned maxgood = 0u, totalgood = 0u;
+    for (Unsigned i = cW; i <= cE; ++i) {
+      AxialDir ad = (AxialDir) i;
+      Unsigned goodidx = 2u*ad, badidx = 2u*ad + 1u;
+      Unsigned good = mCares[goodidx];
+      Unsigned bad = mCares[badidx];
+
+      totalgood += good;
+      if (good > maxgood) maxgood = good;
+      totalbad += bad;
+      if (bad > maxbad) maxbad = bad;
+
+      if (bad > 1u) continue; // call it a veto
+      Unsigned votes = good;
+      if (mCares[badidx] == 0u) ++votes; // Anything unopposed gets a boost
+      dirpick.update(ad+1u,votes); // ad+1 == sn
+    }
+    mD&&pR("MCSAFS12");
+    mD&&pR(dirpick);
+
+    // CONSIDER GROW
+    Bool tryGrow = false;
+    {
+      Unsigned growgood = mCares[8], growbad = mCares[9];
+      if (growgood > 0u && growbad == 0u &&
+          maxgood < 3u &&
+          maxbad < 2u && totalbad < 3u) {
+        Random random;
+        tryGrow = random.oddsOf(3u,4u);
+      }
+    }
+
+    dcr.printf("MCS<>");
+    reportDiamondStance(dcr);
+    resetStance(); // whether we'll 'use' it or not
+    //    reportDiamondStance(dcr);
+
+    if (tryGrow) {
+      if (root.mCmdPhase == RootHardCellG.cCMD_MOVE) {
+        dcr.printf("[MCSafs:STOP]");
+        root.setCmdPhase(RootHardCellG.cCMD_STOP);
+        root.setAllowDefcon1(); // SPECIAL TOP-DOWN CAUSALITY
+        return true;
+      }
+      if (root.mCmdPhase == RootHardCellG.cCMD_STOP &&
+          root.stableToEdge()) {
+        dcr.printf("[MCSafs:GROW]");
+        root.setCmdPhase(RootHardCellG.cCMD_GROW);
+      }
+      return true;              // grow or block
+    }
+
+    if (!dirpick.hasPick()) {
+      dcr.printf("X.");
+      return false;
+    }
+
+    SN movesn = (SN) dirpick.getIdx();
+    mD&&pR("MCSAFS13");
+    mD&&pR(movesn);
+
+    dcr.printf("[MCSafs]");
+    return executeMove(movesn, root, qcs, dcr);
+  }  
+
+}
+

@@ -1,0 +1,24 @@
+/** A1918: MCSlash11 - linear growth version
+ \author Dave Ackley
+ \copyright July 2023 LCF
+ \license GPL-3
+ \symbol S
+ \version 19
+*/
+element S + QDebugUtils {
+  Void behave() {
+    mD&&pR("zOANZ10");
+    mD&&pR("zOANZ11");
+
+    ClassUtils cu;
+    ByteStreamLogger bsl;
+    // more info? extend ClassUtils or AtomUtils to present metadata?
+    bsl.printf("[[S STARTUP: Max Class Id: %d]]\n",
+               cu.getMaxDefinedClassId());
+
+    EventWindow ew;
+    Random random;
+    ew[0] = SeedSeq.instanceof;
+  }
+}
+

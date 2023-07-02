@@ -1,0 +1,28 @@
+quark EdgeSJCs
+  + DTU
+{
+  typedef StandardJunctorConfig EdgeSJCArray[PocketDir.cQUAD_SW+1u];
+  EdgeSJCArray mEdgeSJCArray;
+
+  StandardJunctorConfig getSJC(PocketDir pd) { return mEdgeSJCArray[pd]; }
+}
+
+transient DiSeqInfo
+  + DTU
+{
+  StandardJunctorConfig getSJCForEdge(PocketDir pd) {
+    return mEdgeSJCs.mEdgeSJCArray[pd];
+  }
+  C2D getDefaultVector() {
+    C2D c(mDVec.x,mDVec.y);
+    return c;
+  }
+  String getBootCode() {
+    return mBootCode;
+  }
+  EdgeSJCs mEdgeSJCs;           //< ngb Di tags sought
+  typedef C2DT(8) B2D;          //< (-128..127,-128..127)
+  B2D mDVec;                    //< default vector if no other advice
+  String mBootCode;             //< Startup insns for new MC Di
+}
+

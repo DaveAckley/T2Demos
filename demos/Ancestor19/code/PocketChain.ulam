@@ -1,0 +1,737 @@
+transient PocketChainState : SegmentState + Fail {
+  Bool mGrowTemp = false;
+
+  Bool mInDSPValid = false; // set in observe(..) if all goes well
+  Bool mInDSP[MatchCodePosition.maxof + 1u];
+  Bool haveInDSP() { return mInDSPValid; }
+  Bool isInDSP(MatchCodePosition mcp) {
+    if (!haveInDSP()) fail(__FILE__,__LINE__);
+    return mInDSP[mcp];
+  }
+  Bool isInDSPBodyDir(BodyDir bd) {
+    return isInDSP( bd == cBODY_UP ?
+                    cMCP_PREV :
+                    cMCP_NEXT );
+  }
+
+
+  //// PocketChainState API
+
+  //// Intention API
+
+  @Override
+  virtual Bool init(Intender & seg) {
+    mD&&pR("PCHNS10");
+    if (super.init(seg)) { // If segmentstate can't init, we might need to die
+      PocketHC3 & p = self.mPocket;
+
+      mD&&pR("PCHNS11");
+      mD&&pR(p.mStatus);
+      /* Movement puts pocket content on edge; can't die about it in general
+      if (p.mStatus == PocketHC3.cSTATUS_EDGE) {
+        mD&&pR("PCHNS11EDGE");
+        PocketChain & qc = (PocketChain&) seg;
+        return qc.die("PocketChain: Met on edge");
+      }
+      */
+      if (p.mStatus == PocketHC3.cSTATUS_OPEN) {
+        mD&&pR("PCHNS12");
+        if (p.mCoordCount < 3u) {
+          if (p.mCoordCount > 1u) {
+            mD&&pR("PCHNSa13BLOCKON2");
+            return true;        // Block on 2 instead of die?
+          }
+          PocketChain & qc = (PocketChain&) seg;
+          return qc.die("PocketChain: Too open pocket");
+        }
+        mD&&pR("PCHNS13");
+      }
+      mD&&pR("PCHNS14");
+      return true;
+    }
+    mD&&pR("PCHNS15");
+    return false;
+  }
+
+  @Override
+  virtual Bool observe(Intender & in) {
+    if (super.observe(in)) return true;
+    mD&&pR("QchObs10");
+
+    PocketChain & qc = (PocketChain&) in;
+    
+    PocketHC3 & p = self.mPocket;
+    p.takeDebug(in);
+
+    if (p.mStatus != PocketHC3.cSTATUS_OK) {
+      return true; // Distorted pocket
+    }
+    mD&&pR("QchObs11");
+
+    Segment.MateStatus ms = qc.findMates(self);
+    mD&&pR("QchObs12");
+    mD&&pR(ms);
+    if (ms > cMATE_UNSURE) {
+      return qc.die("PocketChain:>MATE_UNSURE");
+    }
+    if (ms > cMATE_OK) return qc.diffuse(self);
+
+    mD&&pR("QchObs13");
+
+    mInDSP[cMCP_PREV] = p.isDSP(mPocketWithMate[cBODY_UP]);
+    mD&&pR("QchObs14PREV");
+    mD&&pR(mPocketWithMate[cBODY_UP]);
+    mD&&pR(mInDSP[cMCP_PREV]);
+
+    mInDSP[cMCP_HERE] = p.isDSP(cPP_SELF);
+    mD&&pR("QchObs15HERE");
+    mD&&pR(mInDSP[cMCP_HERE]);
+
+    mInDSP[cMCP_NEXT] = p.isDSP(mPocketWithMate[cBODY_DOWN]);
+    mD&&pR("QchObs16NEXT");
+    mD&&pR(mPocketWithMate[cBODY_DOWN]);
+    mD&&pR(mInDSP[cMCP_NEXT]);
+
+    mInDSPValid = true;
+
+    //// MateStatus is cMATE_OK
+    mD&&pR("QchObs17");
+    return false;
+  }
+
+  @Override
+  virtual Bool stabilize(Intender & in) {
+    if (super.stabilize(in)) return true;
+    mD&&pR("QchStab10");
+
+    PocketChain & qc = (PocketChain &) in;
+    if (qc.propagateChainControls(self)) return true;
+
+    mD&&pR("QchStab11");
+    return false;
+  }
+
+  @Override
+  virtual Bool act(Intender & in) {
+    mD&&pR("QchAct10");
+    if (super.act(in)) return true;
+
+    mD&&pR("QchAct11");
+    PocketChain & qc = (PocketChain &) in;
+    if (qc.actMovingSeg(self)) return true;
+    mD&&pR("QchAct12");
+    if (qc.actHeadSpecial(self)) return true;
+    mD&&pR("QchAct13");
+    if (qc.actTailSpecial(self)) return true;
+    mD&&pR("QchAct14");
+    return false;
+  }
+}
+
+quark PocketChain : Segment + TQDSControlSettable + Fail {
+  //  TQDSControl mTQDSControl;     //< target quadrant and dshops information
+
+  DriveStatusCode mDSType = cDS_DUMB;
+  Bool mArrived;                //< true when we've had an event after moving
+
+  //// UrSelf API
+  @Override
+  Void behave() {
+    pursueIntention();
+  }
+
+  @Override
+  ARGB getColor(Unsigned selector) {
+    if (selector == 1u) {
+      ColorUtils cu;
+      if (mDSType == cDS_DUMB) return cu.color(0xffcccccc);
+      if (mDSType == cDS_UP)   return cu.color(0xff00cccc);
+      if (mDSType == cDS_DOWN) return cu.color(0xffcccc00);
+      // cDS_NORM
+      ARGB head = cu.color(0xff0000cc);
+      ARGB tail = cu.color(0xff00cc00);
+      return cu.between(tail, head, 100u);
+    }
+    return super.getColor(selector);
+  }
+
+  @Override
+  virtual Void renderGraphics() {
+    Drawable drawable;
+    if (!drawable.canDraw()) return;
+    super.renderGraphics();
+
+    renderLinks(350u);
+
+    if (!Parms.cRENDER_POCKETCHAIN_BOXES) return;
+
+    C2D.Coord size;
+    which (mDSType) {
+    case cDS_DUMB: { size = 900; }
+    case cDS_NORM: { size = 700; }
+    otherwise: { size = 350; }
+    }
+    ARGB col = getColor(2u);
+    C2D siz(size, size);
+    C2D pos(-size/2,-size/2);
+
+    drawable.fillRectangle(pos, siz, col);
+  }
+  
+  Void renderLinks(Unsigned width) {
+    Drawable drawable;
+    if (!drawable.canDraw()) return;
+    SN side;
+
+    renderSide(mPocketPtrs[cBODY_DOWN],width,true);
+    renderSide(mPocketPtrs[cBODY_UP],width,false);
+  }
+
+  Void renderSide(SN side, Unsigned width, Bool long) {
+    if (side >= 1u && side <= 4u) 
+      drawPocketArrow_(side,width,long);
+    else if (side == 0u)
+      drawSelfArrow_(width,long);
+  }
+
+  //// D1Pocketable API
+  @Override
+  virtual Bool inMyGroup(D1Pocketable & other) {
+    return other is Self; // We'll dance with any other PocketChain!
+  }
+
+  //// Intender API
+  @Override
+  virtual ClassId getIntentionClass() { //< default unless overridden
+    PocketChainState qcs; // Ensure concrete
+    return qcs.classidof;
+  }
+
+  //// PocketChain API
+  /** Can this segment be swapped with its upstream (or downstream)
+      neighbor? Default says no if isInDSP, otherwise yes if non-DUMB segments
+   */
+  virtual Bool isSwappable(PocketChainState & ds, Bool upstream) {
+    mD&&pR("PCISWP10");
+    if (mDSType == cDS_DUMB) return false;
+    if (ds.haveInDSP()) {
+      if (ds.isInDSP(cMCP_HERE)) return false;
+      if (ds.isInDSP(upstream ? cMCP_PREV : cMCP_NEXT)) return false;
+    }
+    return true;
+  }
+
+  //// PocketChain SERVICES
+  virtual Void copySegAndPChain(PocketChain & from) {
+      PocketChain & qg = self;
+      qg = from;             // Copy other qchain info
+      Segment & sg = self;
+      sg = from;             // and their Segment info
+      if (self as TQDSControlStg) 
+        if (from as TQDSControlStg) 
+          self = from;          // and their tqds info
+  }
+
+  /** \returns true if this PocketChain is a temp heading up or down */
+  Bool isTemp() { return mDSType == cDS_DOWN || mDSType == cDS_UP; }
+
+  /** \returns true if this PocketChain is a mobile or immobile non-temp */
+  Bool isReal() { return mDSType == cDS_NORM || mDSType == cDS_DUMB; }
+
+  /** \returns true if this PocketChain is a mobile non-temp */
+  Bool isRealMobile() { return mDSType == cDS_NORM; }
+
+  Void setDSType(DriveStatusCode ds) { mDSType = ds; }
+
+  Bool drawPocketArrow_(SN towardSide, Unsigned width, Bool long) {
+    Drawable drawable;
+    if (!drawable.canDraw()) return false;
+    MDist md; // No ew when rendering!  Can't use ew.getCoordRaw()!
+    
+    C2D sc = md.getSiteCoord(towardSide); 
+    constant Int cSHIFT = 2*Drawable.cUNITS_PER_SITE/5;
+    Int bs = (Int) width; // box small
+    Int bl =
+      long
+      ? (3*Drawable.cUNITS_PER_SITE/2 - cSHIFT)
+      : (7*Drawable.cUNITS_PER_SITE/8 - cSHIFT);
+    C2D siz, pos;
+
+    which (towardSide) {
+      case cPP_WEST:  { siz.set(bl,bs); pos.set(-bl-cSHIFT,-bs/2); }
+      case cPP_NORTH: { siz.set(bs,bl); pos.set(-bs/2,-bl-cSHIFT); }
+      case cPP_SOUTH: { siz.set(bs,bl); pos.set(-bs/2,cSHIFT); }
+      case cPP_EAST:  { siz.set(bl,bs); pos.set(cSHIFT,-bs/2); }
+    }
+    ARGB oncol = getColor(0xff00ff00u);
+    drawable.fillRectangle(pos, siz, oncol);
+    return true;
+  }
+
+  Bool drawSelfArrow_(Unsigned width, Bool long) {
+    Drawable drawable;
+    if (!drawable.canDraw()) return false;
+    
+    constant Int cSHIFT = 2*Drawable.cUNITS_PER_SITE/5;
+    C2D.Coord side = (C2D.Coord) (long ? 4u*width/2u : 3u*width/2u);
+    C2D pos(-side/2,-side/2);
+    C2D siz(side,side);
+    ARGB oncol = getColor(0xff00ff00u);
+
+    /// Maybe better just to figure out pairs from the NON-PAIR arrows..
+    ///    drawable.fillRectangle(pos, siz, oncol);
+    return true;
+  }
+
+  /** Assuming self is inDSP
+   */
+  Void doDSPSwapOut(PocketChainState & pcs, Self & other, SN destsn) {
+    // Spread our DSP-is-root control info to swappee
+    other.copyTQDSControlFrom(self);
+    swapPocketPtrs(other);
+    doSwap(pcs,destsn);
+  }
+
+  Void swapPocketPtrs(Self & other) {
+    QDebugUtils & d = self;
+    mD&&pR("PCSPP10");
+    mD&&pR(self);
+    mD&&pR(other);
+
+    PocketPtrs temp = other.mPocketPtrs; // Exchange ptrs
+    other.mPocketPtrs = mPocketPtrs;
+    mPocketPtrs = temp;
+    mD&&pR("PCSPP11");
+    mD&&pR(self);
+    mD&&pR(other);
+
+    //// ALSO SWAP TQDS storage
+    if (self as TQDSControlStg) {
+      if (other as TQDSControlStg) {
+        d.mD&&d.pR("PCSPP12");
+        d.mD&&d.pR(self);
+        d.mD&&d.pR(other);
+
+        TQDSControlStg t = self;
+        d.mD&&d.pR("PCSPP13");
+        d.mD&&d.pR(t);
+        self = other;
+        other = t;
+
+        d.mD&&d.pR("PCSPP14");
+        d.mD&&d.pR(self);
+        d.mD&&d.pR(other);
+      }
+    }
+    mD&&pR("PCSPP15");
+    mD&&pR(self);
+    mD&&pR(other);
+  }
+
+  Bool die() {
+    DebugUtils du;
+    du.printContext();
+    du.print("^^^ PocketChain.die ^^^");
+    EventWindow ew;
+    ew[0] = Empty.instanceof;
+    return true;
+  }
+
+  Bool die(String msg) {
+    DebugUtils du;
+    du.print("vvv DYING vvv");
+    du.print(msg);
+    return die();
+  }
+
+  Bool propagateChainControls(PocketChainState & ds) {
+    EventWindow ew;
+
+    Bool iAmInDSP = ds.isInDSP(cMCP_HERE);
+    
+    mD&&pR("PRCHCN10");
+    mD&&pR(iAmInDSP);
+
+    PocketHC3 & ishtar = ds.mPocket;
+    PocketQuadrant & pquad = ishtar.mPocketQuadrant;
+
+    if (!pquad.mQuadrantKnown) 
+      return false;  //?? 
+
+    Bool ret = false;
+
+    Bool isCmdAnchor = mPocketPtrs[cBODY_DOWN] == cPP_NULL || iAmInDSP;
+    Bool isValueAnchor = mPocketPtrs[cBODY_UP] == cPP_NULL || iAmInDSP;
+
+    if (isCmdAnchor) {
+      mD&&pR("PRCHCN11");
+
+      stabilizeCommandAnchor(ds);
+
+    } else {
+
+      //// NOT A CMD ANCHOR
+      mD&&pR("PRCHCN12");
+      SN down = ds.mEWSNMate[Segment.cBODY_DOWN];
+      {
+        Atom & a = ew[down];
+        mD&&pR("PRCHCN13");
+        if (a as Self) {
+          mD&&pR("PRCHCNpre13");
+          mD&&pR(ret);
+          mD&&pR(self);
+          mD&&pR(a);
+          if (takeCommandFromDown(a)) ret = true;
+          mD&&pR(ret);
+          mD&&pR("PRCHCNpost13");
+          mD&&pR(self);
+          mD&&pR(a);
+        } else die("PRCHCN14: Down not Self");
+      }
+    }
+
+    mD&&pR("PRCHCN15");
+    if (isValueAnchor) {
+
+      stabilizeValueAnchor(ds);
+    } else {
+      
+      //// NOT A VALUE ANCHOR
+
+      SN up = ds.mEWSNMate[Segment.cBODY_UP];
+      {
+        Atom & a = ew[up];
+        if (a as Self) {
+          mD&&pR("PRCHCNpre17");
+          mD&&pR(ret);
+          mD&&pR(self);
+          mD&&pR(a);
+          if (takeValueFromUp(a)) ret = true;
+          mD&&pR(ret);
+          mD&&pR("PRCHCNpost17");
+          mD&&pR(self);
+          mD&&pR(a);
+
+        } else die("PRCHCN18: Up not Self");
+      }
+    }
+
+    mD&&pR("PRCHCNpre19");
+    mD&&pR(self);
+    updateTQDSValues(ds);
+    mD&&pR("PRCHCNpost19");
+    mD&&pR(self);
+
+    mD&&pR("PRCHCN210");
+    mD&&pR(ret);
+
+    return false;
+  }
+
+  Bool updateGradients(PocketChainState & ds) {
+    EventWindow ew;
+
+    Bool iAmFixedUp = !isSwappable(ds, true);  // can't go up
+    Bool iAmFixedDown = !isSwappable(ds, false); // can't go down
+    
+    mD&&pR("UPGD10");
+    //    mD&&pR(iAmFixed);
+    // Check downs if any
+    if (mPocketPtrs[cBODY_DOWN] == cPP_NULL || iAmFixedDown) {
+      mD&&pR("UPGD11");
+    { Fail f; f.fail(__FILE__,__LINE__); } // IMPLEMENT ME TQDS
+    //      mChainControlDown.atEnd(ds);  // Tail has nobody down
+    } else {
+      mD&&pR("UPGD12");
+      SN down = ds.mEWSNMate[Segment.cBODY_DOWN];
+      Atom & a = ew[down];
+      if (a as Self) {
+        mD&&pR("UPGD13");
+        if (mDSType == cDS_DOWN) {
+          mD&&pR("UPGD14");
+          mD&&pR("XXCHAINCONTROLCHECKHERE 10");
+          //          mSegsDown = a.mSegsDown;
+          //          mTempsDown = (SegCount) (a.mTempsDown + 1u);
+        } else {
+          mD&&pR("UPGD15");
+          mD&&pR("XXCHAINCONTROLCHECKHERE 11");
+          //          mSegsDown = (SegCount) (a.mSegsDown + 1u);
+          //          mTempsDown = a.mTempsDown;
+        }
+      } else die("updateGradients: Down not Self");
+    }
+    mD&&pR("UPGD16");
+    
+    // Check ups if any
+    if (mPocketPtrs[cBODY_UP] == cPP_NULL || iAmFixedUp ) {
+      mD&&pR("UPGD17");
+    { Fail f; f.fail(__FILE__,__LINE__); } // IMPLEMENT ME TQDS
+    //      mChainControlUp.atEnd(ds);  // Head has nobody up
+    } else {
+      SN up = ds.mEWSNMate[Segment.cBODY_UP];
+      Atom & a = ew[up];
+      if (a as Self) {
+        mD&&pR("UPGD18");
+        if (mDSType == cDS_UP) {
+          mD&&pR("UPGD19");
+          mD&&pR("XXCHAINCONTROLCHECKHERE 12");
+          //          mSegsUp = a.mSegsUp;
+          //          mTempsUp = (SegCount) (a.mTempsUp + 1u);
+        } else {
+          mD&&pR("UPGD210");
+          mD&&pR("XXCHAINCONTROLCHECKHERE 13");
+          //          mSegsUp = (SegCount) (a.mSegsUp + 1u);
+          //          mTempsUp = a.mTempsUp;
+        }
+      } else die("updateGradients: Up not Self");
+    }
+    mD&&pR("UPGD211");
+    return false;
+  }
+
+  Bool actMovingSeg(PocketChainState & ds) {
+    mD&&pR("AMVS10");
+    EventWindow ew;
+
+    //// ARE WE IN A DSP?
+    if (ds.isInDSP(cMCP_HERE)) {
+      // DON'T MOVE (VIA THIS METHOD) IF SO
+      return false;
+    }
+
+    //// ARE WE A MOVING SEG?
+    if (isTemp()) {
+      mD&&pR("AMVS11");
+      BodyDir movedir =
+        (mDSType == cDS_UP) ? cBODY_UP : cBODY_DOWN;
+      BodyDir backdir = (BodyDir) (1u - movedir);
+
+      /// HAVE WE REACHED THE END OF OUR MOVE?
+      if (mPocketPtrs[movedir] == cPP_NULL) {
+        mD&&pR("AMVS12");
+
+        /// WE HAVE REACHED THE END OF OUR MOVE.
+
+        /// ARE WE DETACHED FROM THE CHAIN?
+        if (mPocketPtrs[backdir] != cPP_NULL) {
+          mD&&pR("AMVS13");
+          /// WE ARE NOT DETACHED FROM THE CHAIN.
+
+          SN backsn = ds.mEWSNMate[backdir];
+
+          /// CAN WE ACCESS OUR BACK BEIN?
+          if (backsn == 0u) 
+            return diffuse(ds); // No, go jiggle maybe
+          /// WE CAN ACCESS OUR BACK BEIN.
+
+          mD&&pR("AMVS14");
+          Atom & a = ew[backsn];
+          if (a as Self) {
+            mD&&pR("AMVS15");
+            a.mPocketPtrs[movedir] = cPP_NULL;
+            // XXX PRE-FIXUP mTempDown IF DOWN?
+          } else fail("DETACHING SEG BACK MISSING");
+        }
+        /// WE ARE DETACHED FROM THE CHAIN.
+
+        mD&&pR("AMVS16");
+        ew[0u] = Empty.instanceof;
+        /// WE ARE GONE.
+        return true;
+      }
+      /// WE HAVE NOT REACHED THE END OF OUR MOVE.
+
+      mD&&pR("AMVS17");
+      /// CAN WE ADVANCE IN OUR MOVING DIRECTION?
+      SN movesn = ds.mEWSNMate[movedir];
+      if (movesn == 0u)
+        return diffuse(ds); // No go jiggly puff
+
+      mD&&pR("AMVS18");
+      /// WE CAN ACCESS OUR NEXT BEIN.
+      Atom & a = ew[movesn];
+      if (a as Self) {
+        mD&&pR("AMVS19");
+        mD&&pR(movedir);
+        mD&&pR(ds.isInDSPBodyDir(movedir));
+        mD&&pR(a);
+        mD&&pR(ds);
+        /// IS IT SWAPPABLE?
+        if (a.mDSType != cDS_DUMB && // if not dumb and 
+            !ds.isInDSPBodyDir(movedir)) {  // not in DSP, it's swappable
+          mD&&pR("AMVS210");
+          swapPocketPtrs(a);   // Exchange ptrs
+          doSwap(ds,movesn);   // Then swap wholesale
+          /// WE ADVANCED IN OUR MOVING DIRECTION
+          return true;
+        }
+        // ELSE FALL THROUGH
+        mD&&pR("AMVS211");
+      } else fail("MOVING SEG NEXT MISSING");
+    }
+    mD&&pR("AMVS212");
+    return false;
+  }
+
+  Bool tryDelAtom(PocketChainState & ds, ClassId baseid) { return tryDelAtom(ds,baseid,cPP_SELF); }
+  Bool tryDelAtom(PocketChainState & ds, ClassId baseid, PocketPtr pkt) {
+    PocketHC3 & p = ds.mPocket;
+    RectIterator ri;
+    if (!p.initIterator(ri,pkt,true)) 
+      return false;             // Can't iterate like that
+    Unsigned matches = 0u;
+    SN msn;
+    ClassUtils cu;
+    EventWindow ew;
+    Random random;
+    while (ri.hasNext()) {
+      C2D n = ri.next();
+      if (!ew.isAccessible(n)) continue;
+      ClassId cid = cu.getClassId(ew[n]);
+      if (cu.isBase(cid,baseid) && random.oneIn(++matches))
+        msn = ew.getSiteNumber(n);
+    }
+    if (matches == 0u)
+      return false;
+    ew[msn] = Empty.instanceof;
+    return true;
+  }
+
+  PocketPtr tryGrowOrMove(PocketChainState & ds, Bits axialdirmap, Bool canGrow, Bool canMove) {
+    mD&&pR("tGoM10");
+
+    SN newsn;
+    Unsigned newcount;
+    PocketPtr pickedptr;
+    Random random;
+    EventWindow ew;
+    mD&&pR("tGoM11");
+    mD&&pR(axialdirmap);
+    for (PocketPtr ptr = cPP_SELF; ptr <= cPP_EAST; ++ptr) {
+      mD&&pR("tGoM12");
+      mD&&pR(ptr);
+      if (((axialdirmap>>ptr)&1u) == 0u) continue; // don't even want to consider there
+      mD&&pR("tGoM13");
+      // NO LONGER REJECT ON SELF      if (ds.mUsSNs[ptr].count() > 0u) continue; // can't go there if we are there
+      mD&&pR("tGoM14");
+      mD&&pR(ptr);
+      mD&&pR(ds.mEmptySNs[ptr].count());
+      mD&&pR(ds.mPocketFull[ptr]);
+      mD&&pR(ds.mPocketInaccessible[ptr]);
+      if (ds.mEmptySNs[ptr].count() > 0u &&           // if has an empty
+          ((ptr == cPP_SELF && ds.mPocketFull[ptr] < 2u) || // (grow-in-place or ngb empty)
+           (ds.mPocketFull[ptr] < 1u)) &&            // means "not too full"
+          ds.mPocketInaccessible[ptr] == 0u) {   // and no hidden surprises
+        mD&&pR("tGoM15");
+        if (random.oneIn(++newcount)) {          // count and maybe pick
+          mD&&pR("tGoM16");
+          pickedptr = ptr;
+          newsn = ds.mEmptySNs[pickedptr].pick();
+          mD&&pR(pickedptr);
+          mD&&pR(newsn);
+        }
+      }
+    }
+    mD&&pR("tGoM17");
+    if (newcount > 0u) {
+      mD&&pR("tGoM18");
+      // init new head
+      Atom a = self.atomof;       // Copy as is
+      Self & copy = (Self&) a;
+      copy.mPocketPtrs[Segment.cBODY_DOWN] = reversePocket(pickedptr);
+      self.mPocketPtrs[Segment.cBODY_UP] = pickedptr;
+      
+      if (canGrow) {
+        mD&&pR("tGoM19");
+        mD&&pR("XXCHAINCONTROLCHECKHERE 14");
+        //        ++copy.mSegsDown;       // Preupdate for us as a new segment
+      } else /* canMove */ {
+        mD&&pR("tGoM210");
+        self.mDSType = cDS_DOWN; // We're a new temp
+        mD&&pR("XXCHAINCONTROLCHECKHERE 15");
+      }
+      mD&&pR("tGoM211");
+
+      // plant new head
+      ew[newsn] = copy.atomof;
+
+      //// WE GREW OR MOVED FROM THE HEAD.
+      return pickedptr; // into SN mEWSNAvailables[this]
+    }
+    mD&&pR("tGoM212");
+    return cPP_NULL; // WE DIDN'T
+  }
+
+  Bool actHeadSpecial(PocketChainState & ds) {
+    EventWindow ew;
+    Random random;
+    
+    //// SHALL WE GROW OR MOVE FROM THE HEAD?
+    if (self is EmptyCodon) // EC does not have that
+      return false;         // kind of initiative
+
+    mD&&pR("XXCHAINCONTROLCHECKHERE 16");
+
+    Bool canGrow = false; //mSegsDown < cMAX_SEG;
+    Bool canMove = false; //mTempsDown < cMAX_TMP;
+    mD&&pR("aHS10");
+    mD&&pR(mDSType);
+    if (mDSType != cDS_DUMB && isHead() && (canGrow || canMove)) 
+      return tryGrowOrMove(ds, 0xffu, canGrow, canMove) != cPP_NULL;
+
+    mD&&pR("aHS11");
+    //// WE DID NOT GROW OR MOVE FROM THE HEAD.
+    return false;
+  }
+
+  Bool actTailSpecial(PocketChainState & ds) {
+    EventWindow ew;
+    Random random;
+
+    mD&&pR("XXCHAINCONTROLCHECKHERE 17");
+
+    //// SHALL WE MOVE FROM THE TAIL?
+    Bool canTailMove = false; //mTempsUp < cMAX_TMP;
+    if (mDSType != cDS_DUMB && isTail() && canTailMove) {
+
+      SN newsn;
+      Unsigned newcount;
+      PocketPtr pickedptr;
+      for (PocketPtr ptr = cPP_SELF; ptr <= cPP_EAST; ++ptr) {
+        if (ds.mUsSNs[ptr].count() > 0u) continue; // can't go there if we are there
+        if (ds.mEmptySNs[ptr].count() > 0u &&      // if has an empty
+            ds.mPocketFull[ptr] < 2u &&            // and not too full
+            ds.mPocketInaccessible[ptr] == 0u) {   // and no hidden surprises
+          if (random.oneIn(++newcount)) {          // count and maybe pick
+            pickedptr = ptr;
+            newsn = ds.mEmptySNs[pickedptr].pick();
+          }
+        }
+      }
+      if (newcount > 0u) {
+        // init new head
+        Atom a = self.atomof;       // Copy as is
+        Self & copy = (Self&) a;
+        copy.mPocketPtrs[Segment.cBODY_UP] = reversePocket(pickedptr);
+        self.mPocketPtrs[Segment.cBODY_DOWN] = pickedptr;
+        
+        self.mDSType = cDS_UP; // We're a new temp
+        //        ++copy.mTempsUp;      // Preupdate them for that
+
+        // plant new tail
+        ew[newsn] = copy.atomof;
+
+        //// WE GREW OR MOVED FROM THE TAIL.
+        return true;
+      }
+    }
+    //// WE DID NOTHING EXCITING.
+    return false;
+  }
+
+}
+
+quark PocketChainTQ : PocketChain {
+
+}
+

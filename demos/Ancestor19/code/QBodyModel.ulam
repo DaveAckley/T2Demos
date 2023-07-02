@@ -1,0 +1,7 @@
+quark QBodyModel : D1Pocketable
+  + QDebugUtils
+  + DTU
+  + Fail
+{
+
+}

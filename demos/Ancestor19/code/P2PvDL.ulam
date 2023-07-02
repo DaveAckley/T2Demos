@@ -1,0 +1,138 @@
+/** Pocket2Pocket via Driving Lanes.
+ */
+quark P2PvDL
+  + DTU
+  + QDebugUtils
+  + Fail
+{
+  //// P2PvDL API
+  /** \returns true if caller wants delivery to pocket rather than
+      just a driving lane.
+  */
+  virtual Bool deliverToPocket(HP2HP& hp2hp) ;
+
+  virtual Void getDestPockets(HCPoint & hp1, HCPoint & hp2) ;
+
+  /** NOT IMPLEMENTED: USE Bool deliverToPocket(..) INSTEAD
+
+      \returns true if callee took 'curbside delivery' (i.e., while
+      the package was in a driving lane) and this shipment has
+      therefore been deleted. \returns false if callee wants package
+      to be dropped off in a nearby pocket. By default returns false.
+  virtual Bool onDeliverable(HP2HP& hp2hp) { return false; }
+  */
+
+  /** \returns true if callee accepted 'home delivery' (i.e., while
+      the package is in a pocket) and this shipment has therefore been
+      deleted. \returns false if callee can't accept delivery right
+      now and wishes another delivery attempt to be made later. 
+  */
+  virtual Bool onDelivery(HP2HP& hp2hp) ;
+
+  @Override
+  Void behave() { routeP2PvDL(); }
+
+  //// P2PvDL SERVICES
+
+  typedef Unsigned(5) LostTimer;
+  LostTimer mLostTimer;
+
+  Void nowIAmFound() { mLostTimer = 0u; }
+  Bool blockOrDieLost() {
+    if (mLostTimer++ == mLostTimer.maxof) {
+      setDebugOutputEnabled(true);
+      mD&&pR("P2PvDLLOST TO DEATH");
+      mD&&pR(self);
+      fail(__FILE__,__LINE__,"RP2PVDLb12 P2PvDL FAILING");
+      // (NOT REACHED)
+      return die();             // so die
+    }
+    return true;
+  }
+
+  Bool die() {
+    mD&&pR("P2PvDLDYING");
+    EventWindow ew;
+    ew[0] = Empty.instanceof;
+    return true;
+  }
+
+  Bool routeP2PvDL() {
+    HP2HP hp2hp;
+    hp2hp.takeDebug(self);
+    mD&&pR("RP2PVDL10");
+    Bool dtp = deliverToPocket(hp2hp);
+
+    HCPoint desthp1, desthp2;
+    getDestPockets(desthp1,desthp2);
+    if (!desthp1.isValid() || !desthp2.isValid())
+      return true;              // BLOCKED BY NO DEST
+
+    C2D destc1 = desthp1.validHCPoint2C2D();
+    C2D destc2 = desthp2.validHCPoint2C2D();
+    mD&&pR("RP2PVDL11");
+    mD&&pR(destc1);
+    mD&&pR(destc2);
+
+    SN nextsn = hp2hp.route2HP(destc1,destc2,dtp);
+
+    mD&&pR("RP2PVDL12");
+    if (nextsn == SN.maxof-1u)  // route says lost
+      return blockOrDieLost();
+
+    nowIAmFound();              // route says not lost
+    mD&&pR("RP2PVDLa12");
+
+    if (nextsn == SN.maxof)     // route says blocked
+      return true;              // BLOCKED BY ROUTE CONGESTION
+
+    mD&&pR("RP2PVDL13");
+    mD&&pR(nextsn);
+
+    EventWindow ew;
+    if (nextsn != 0u) {         // route says go here
+      mD&&pR("RP2PVDL14");
+      ew.swap(0u,nextsn);
+      return true;              // BLOCKED BY SHIPMENT PROGRESS
+    }
+
+    // route says we're there (or nearly there?)
+    mD&&pR("RP2PVDL15");
+    return onDelivery(hp2hp); 
+  }
+  
+}
+
+/** \symbol DV
+    \color #f00
+ */
+element DemoP2PvDL : P2PvDL {
+  Unsigned(3) mState;
+
+  //// P2PvDL API
+  @Override
+  virtual Bool deliverToPocket(HP2HP& hp2hp) { return false; }
+
+  @Override
+  virtual Void getDestPockets(HCPoint &hp1, HCPoint &hp2) {
+    HCPoint hp;
+    which (mState) {
+    case 0u: { hp.set(2,2); }
+    case 1u: { hp.set(2,-2); }
+    case 2u: { hp.set(-2,-2); }
+    case 3u: { hp.set(-2,2); }
+    otherwise: { hp.set(0,0); }
+    }
+    hp1 = hp2 = hp; 
+  }
+
+  @Override
+  virtual Bool onDelivery(HP2HP& hp2hp) {
+    if (mState < 4u) {
+      ++mState;
+      return false;
+    }
+    return die();
+  }
+  
+}

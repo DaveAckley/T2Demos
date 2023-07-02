@@ -1,0 +1,283 @@
+/** An abstraction for configuring a DiamondStance based on local
+    information
+ */
+transient Junctor
+  + DTU
+  + Fail
+{
+  //// Junctor API
+  virtual Bool makeStance(DiamondStance & stance) ;
+}
+
+/** An object capable of configuring a DiamondStance based on local
+    information plus its own configuration in our 'standard' way
+ */
+transient StandardJunctor : Junctor
+  + QDebugUtils
+{
+  StandardJunctorConfig mSJC;
+
+  EdgeCoord mUsEC;
+  EdgeCoord mThemEC;
+  C2D mThemC2D;
+
+  PocketDir mOpenDir;
+  
+  C2D mUsCenterC2D;
+  Unsigned mUsSize;
+
+  C2D mThemCenterC2D;
+  Unsigned mThemSize;
+
+  Unsigned mEdgeToEdgeManhattan;
+
+  typedef Unary(2) EdgeOrientation;
+  constant EdgeOrientation cEDGOR_NONE = 0u;
+  constant EdgeOrientation cEDGOR_USUP = 1u;
+  constant EdgeOrientation cEDGOR_USDOWN = 2u;
+  EdgeOrientation mEdgeOrientation;
+  
+  QHardCellState mQHS;
+
+  //// Junctor API
+  @Override
+  virtual Bool makeStance(DiamondStance & stance) {
+    mD&&pR("JNCMKST10");
+    mD&&pR(stance);
+    mD&&pR("JNCMKSTa10");
+    mD&&pR(self);
+
+    {
+      mD&&pR("JNCMKST11");
+      C2D uspd = pocketDir2C2D(mOpenDir);
+      mD&&pR(uspd);
+
+      /// Check for too close based on themec
+      if (mThemEC.isValid()) {
+        mD&&pR("JNCMKSTTC10");
+        C2D off = dirOff2C2D(mThemEC.mHopsToEdge,mOpenDir);
+        Unsigned diag = min(abs(off.x),abs(off.y));
+        mD&&pR(off);
+        mD&&pR(diag);
+        if (diag < 4u) {
+          //// EMERGENCY DI-DI NAVIGATION 
+          mD&&pR("JNCMKSTTC11");
+          AxialDir ad[2];
+          axialDirsBorderingQuad(mOpenDir, ad[0], ad[1]);
+          for (Unsigned i = 0u; i < 2u; ++i) {
+            AxialDir bad = ad[i];
+            AxialDir good = oppositeAxialDir(bad);
+            Unsigned bidx = stance.getCaringIdx(false, bad);
+            Unsigned gidx = stance.getCaringIdx(true, good);
+            mD&&pR("JNCMKSTTC12");
+            mD&&pR(i);
+            mD&&pR(bad);
+            mD&&pR(good);
+            mD&&pR(bidx);
+            mD&&pR(gidx);
+            stance.mCares[bidx] = 3u;
+            stance.mCares[gidx] = 3u;
+          }
+          mD&&pR("JNCMKSTTC13");
+          mD&&pR(stance);
+          return true;
+        }
+
+        C2D usedgectr = mUsCenterC2D+uspd*((C2D.Coord) ((mUsSize-1u)*3u/2u));
+        mD&&pR("JNCMKSTz10");
+        mD&&pR(uspd);
+        mD&&pR(usedgectr);
+
+        mD&&pR("JNCMKSTa11");
+        C2D thempd = pocketDir2C2D(oppositePocketDir(mOpenDir));
+        C2D themedgectr = mThemCenterC2D+thempd*((C2D.Coord) ((mThemSize-1u)*3u/2u));
+        mD&&pR(thempd);
+        mD&&pR(themedgectr);
+
+        C2D us2themgap = themedgectr - usedgectr;
+        mD&&pR("JNCMKSTb11");
+        C2D desiredus2themgap = uspd*((C2D.Coord) (mEdgeToEdgeManhattan/2u));
+        C2D finalerror = us2themgap - desiredus2themgap; // er<0 w/n, er>0 e/s
+        mD&&pR("JNCMKST12CONFGIRUEGAPHERE");
+        mD&&pR(us2themgap);
+        mD&&pR(desiredus2themgap);
+        mD&&pR(finalerror);
+        mD&&pR(self);
+        stance.setStanceFromError(finalerror);
+        mD&&pR("JNCMKST13STANCE");
+        mD&&pR(finalerror);
+        mD&&pR(stance);
+
+        //// GROWTH CARES
+        mD&&pR("JNCMKST14GROWTH");
+        {
+          GrowthHabit gh = mSJC.getGrowthHabit();
+          if (gh == cHABIT_AUNRLB) return true; // No size relations
+          mD&&pR("JNCMKST15");
+          mD&&pR(gh);
+          mD&&pR((Unsigned) mEdgeOrientation);
+          Int grobomb;
+          which (mEdgeOrientation) {
+          case cEDGOR_NONE: { return true; } // Not an oriented edge
+          case cEDGOR_USDOWN:
+            { /// US TRACK THEM: grow if follower (us) is too small
+              grobomb = mapThroughGrowthHabit(gh, mUsSize, mThemSize);
+            }
+            /*case cEDGOR_USUP:*/ otherwise:
+            { /// THEM TRACK US: grow if follower (them) is too big
+              grobomb = -mapThroughGrowthHabit(gh, mThemSize, mUsSize);
+            }
+          }
+          mD&&pR("JNCMKST16");
+          mD&&pR(grobomb);
+          stance.setGrowthStanceFromSizeDiff(grobomb);
+          mD&&pR("JNCMKST17");
+          mD&&pR(stance);
+        }
+        return true;
+      
+      }
+      mD&&pR("JNCMKST299");
+      return false;
+    }
+
+    return false; // NOT REACHED
+  }
+
+  //// StandardJunctor API
+  virtual Bool initStandardJunctor(StandardJunction & sj) {
+    takeDebug(sj);
+    mSJC = sj.getSJC();
+    return false;
+  }
+
+  //// StandardJunctor SERVICES
+  /** \returns > 0 if follower A is too small compared to leader B and
+      should grow, given growth habit GH, \returns < 0 if A is too
+      large compared to B and should not grow (or should shrink if it
+      could), and \returns == 0 if A size is just right.
+   */
+  Int mapThroughGrowthHabit(GrowthHabit gh, Unsigned asize, Unsigned bsize) {
+    Int az = (Int) asize, bz = (Int) bsize;
+    which (gh) {
+      // 0: A is unrelated to B
+    case cHABIT_AUNRLB: { return 0; }  
+      // 1: A should equal B
+    case cHABIT_AEQB:   { return bz-az; } 
+      // 2: A should equal B - 1
+    case cHABIT_AEQBM1: { return bz-1-az; } 
+      // 3: A should equal B + 1
+    case cHABIT_AEQBP1: { return bz+1-az; } 
+      // 4: A should equal B - 2
+    case cHABIT_AEQBM2: { return bz-2-az; } 
+      // 5: A should equal B + 2
+    case cHABIT_AEQBP2: { return bz+2-az; } 
+      // 6: A should equal B / 2
+    case cHABIT_AEQBO2: { return bz/2-az; } 
+      // 7: A should equal B * 2
+    case cHABIT_AEQBT2: { return bz*2-az; } 
+    }
+    fail(__FILE__,__LINE__);
+    return 0; // NOT REACHED
+  }
+
+  Bool configureStandardJunctor(EdgeCoord ourec, EdgeCoord themec, C2D themc) {
+    mD&&pR("JNCCFGSJ10");
+
+    mUsEC = ourec;
+    mThemEC = themec;
+    mThemC2D = themc;
+    if (!ourec.edgeCoord2PocketDir(mOpenDir))
+      return false;
+
+    mD&&pR("CFGJUNIa10");
+    mD&&pR(mUsEC);
+    mD&&pR(mThemEC);
+    mD&&pR(mThemC2D);
+    mD&&pR(mOpenDir);
+
+    C2D ctrus, ctrthem;
+    Unsigned sizus, sizthem;
+    if (!mUsEC.inferCenterAndSize(ctrus, sizus))
+      return false;
+
+    mD&&pR("CFGSTN11US");
+    mD&&pR(ctrus);
+    mD&&pR(sizus);
+
+    if (!mThemEC.inferCenterAndSize(ctrthem, sizthem))
+      return false;
+    mD&&pR("CFGSTN12");
+    mD&&pR(ctrthem);
+
+    ctrthem += mThemC2D; // Include offset from our origin 
+    mD&&pR("CFGSTN13THEM");
+    mD&&pR(ctrthem);
+    mD&&pR(sizthem);
+
+    mUsCenterC2D = ctrus;
+    mUsSize = sizus;
+
+    mThemCenterC2D = ctrthem;
+    mThemSize = sizthem;
+
+    //// CONFIGURE mEdgeToEdgeManhattan AND mEdgeOrientation
+    Int edgerel = edgeTagRelation(mUsEC.mEdgeTag, mThemEC.mEdgeTag);
+    if (edgerel > 0) {          // Us upstream match to them
+      mEdgeToEdgeManhattan = 12u;
+      mEdgeOrientation = cEDGOR_USUP;
+    } else if (edgerel < 0) {   // Us downstream match to them
+      mEdgeToEdgeManhattan = 12u;
+      mEdgeOrientation = cEDGOR_USDOWN;
+    } else {
+      mEdgeToEdgeManhattan = 512u;       // Keep away,
+      mEdgeOrientation = cEDGOR_NONE;    // they are nothing to us
+    }
+    mD&&pR("CFGSTN14E2E&EO");
+    mD&&pR(mEdgeToEdgeManhattan);
+    mD&&pR((Unsigned) mEdgeOrientation);
+
+    return true; 
+  }
+}
+
+/** An object containing the details needed for a StandardJunctor to
+    configure a DiamondStance based on local information.
+*/
+quark StandardJunctorConfig
+  + DTU
+  + Fail
+{
+  //// StandardJunctorConfig SERVICES
+  Bool hasEdgeControl() { return mET != 0u; }
+  Bool reset() {
+    Self s;
+    if (self != s) {
+      self = s;
+      return true;
+    }
+    return false;
+  }
+
+  EdgeTag mET;
+  GrowthHabit mGH;
+
+  EdgeTag getEdgeTag() { return mET; }
+  GrowthHabit getGrowthHabit() { return mGH; }
+
+  Bool operator==(Self & other) {
+    return
+      mET == other.mET &&
+      mGH == other.mGH;
+  }
+
+  Self& operator=(Self other) {
+    mET = other.mET;
+    mGH = other.mGH;
+    return self;
+  }
+
+}
+
+
+

@@ -1,0 +1,67 @@
+/** An object capable of configuring a StandardJunctor, and possibly
+    also serving as an anchor for distributing StandardJunctorConfig
+    information to neighbors.
+ */
+quark StandardJunction
+  + DTU
+  + Fail
+  + QDebugUtils
+{
+  //// StandardJunction API
+  virtual StandardJunctorConfig getSJC() ;
+  virtual Bool setSJC(StandardJunctorConfig sjc) ;
+  virtual Bool isJunctionAnchor() ;
+  virtual Bool setIsJunctionAnchor(Bool isanchor) ;
+
+  //// StandardJunction SERVICES
+  EdgeTag getJunctionEdgeTag() { return getSJC().mET; }
+
+  ARGB junctionColorMod(ARGB col) {
+    StandardJunctorConfig sjc = getSJC();
+    Bool isanchor = isJunctionAnchor();
+    return junctionColorMod(col, sjc, isanchor);
+  }
+
+  ARGB junctionColorMod(ARGB col, StandardJunctorConfig sjc, Bool isanchor) {
+    EdgeTag et = sjc.getEdgeTag();
+    if (et == 0u) return col;
+    ColorUtils cu;
+    Bits jic = 0x3f<<4u*(et-1u); // 0000003f, 0x000003f0, 0x00003f00 .. 3f000000
+    ARGB jarg = cu.color(jic);
+    if (isanchor) jarg = cu.brighter(jarg);
+    col = cu.between(jarg,col,25u); // 25% jarg
+    return col;
+  }
+  
+}
+
+quark StandardJunctionStg : StandardJunction {
+  StandardJunctorConfig mStandardJunctorConfig;
+  Bool mIsAnchor;
+
+  //// StandardJunction API
+  @Override
+  virtual StandardJunctorConfig getSJC() { return mStandardJunctorConfig; }
+
+  @Override
+  virtual Bool setSJC(StandardJunctorConfig sjc) {
+    if (sjc != mStandardJunctorConfig) {
+      mStandardJunctorConfig = sjc;
+      return true;
+    }
+    return false;
+  }
+
+  @Override
+  virtual Bool isJunctionAnchor() { return mIsAnchor; }
+
+  @Override
+  virtual Bool setIsJunctionAnchor(Bool isanchor) {
+    if (isanchor != mIsAnchor) {
+      mIsAnchor = isanchor;
+      return true;
+    }
+    return false;
+  }
+
+}
