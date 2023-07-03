@@ -1,4 +1,4 @@
-{676}  -*-  mode: text; fill-column: 50;  -*-
+{688}  -*-  mode: text; fill-column: 50;  -*-
 [0:
 
 Sun Apr 16 09:53:15 2023 OK, in a desperate
@@ -9339,3 +9339,114 @@ the matrix before T2sday!
 Maybe I should checkpoint commit this..
 
 :675]
+[676:
+
+Mon Jul  3 02:49:15 2023 Well giving up on the
+keymaster until after T2sday because there's some
+kind of issue with ulam getting confused when
+optimization is turned on.
+
+Instead I want to think about 'one last feature'
+we might might be able to cram in and demo in
+mfms.
+
+Since we're still over 32 hours to air.
+
+Ehhrrrm.
+
+[677:
+
+Mon Jul  3 02:52:47 2023 The problem I want to
+address is getting MC/ to move faster. Right now
+we have DiSeq#5 special-cased with a
+'getDynamicVector(..)' based on MC/ data member
+
+  B2D mWalkiesVector;
+
+What I want is
+
+ - Make a three-state interDi signaling molecule
+   that in the first state
+   = Uses P2PvDL to head for a given edge center
+   = Then crosses switches to second
+
+..no no no way too complicated. Let's review the
+EdgeCoord sizes, which is already distributed
+downstream and through the junctions.
+
+[678:
+
+Mon Jul  3 03:07:13 2023 It would be something
+like:
+
+[682:
+DONE :682] - Add 2b for 'AxialDir mMoveDir' to EdgeCoord,
+   taking it to 26b total.
+
+[683:
+DONE :683] - Add 2b for 'AxialDir .mMD' to
+   StandardJunctorConfig, taking it to 9b total
+
+[684: Mon Jul  3 04:24:07 2023 They now can
+DONE :684] - See if everybody can stand that.
+[679:
+
+Mon Jul  3 04:02:11 2023 Not everybody:
+
+./DeployJunctors.ulam:4:9: ERROR: Trying to exceed allotted bit size (71) for element DeployJunctors with 75 bits.
+
+but that's the only problem so far. Can we buy
+back four bits there?[680:
+
+Mon Jul  3 04:03:26 2023 We can get 3b by killing
+the I-suspect-ill-advised mInitialWait..
+
+And we can get 1b more by ditching
+mDeliverToPocket, which I don't think we're using
+anyway.
+[681:
+
+Mon Jul  3 04:23:13 2023 OK everything fits.
+[685:
+
+Mon Jul  3 04:24:21 2023 So now we want
+
+ - EdgeHG to take .MD from SJC and supply it
+   during EdgeHG.provisedEdgeCoordFor(..)
+
+ - Take EdgeCoord.mMoveDir into consideration in
+   StandardJunctor.makeStance - IF this edge is
+   downstream of its mating edge. In particular,
+   try to promote the direction upstream is asking
+   for if possible.
+
+[686:
+
+Mon Jul  3 04:56:47 2023 I also note that
+RootHardCellG has space for an AxialDir mMD; we
+could distribute the damn thing Di-wide from 
+there, and have QHardCellGState.stabilizeJunction
+pick it up from RG as a special case (before
+bailing if it's an anchor).
+
+[687:
+
+Mon Jul  3 05:18:31 2023 But now we're under 31
+hours to air. And we haven't made any finished
+clips yet, nor started the slides.
+
+:687]
+
+:686]
+
+:685]
+:681]
+:680]
+
+:679]
+:678]
+
+
+:677]
+
+:676]
