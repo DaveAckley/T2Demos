@@ -51,7 +51,7 @@ element MCSlash11 : EdgeModel
                              {.mET = 0u}, // SE
                              {.mET = 0u}  // SW
           } },
-        .mDVec = {.x = 20, .y = -10},     // DiSeq#2 drift NNE
+        .mDVec = {.x = 40, .y = -20},     // DiSeq#2 drift NNE (@4x SSE of #3)
         .mBootCode = "JjWSWSSSSESES",     // DiSeq#2 W, S+, E, then dvec
       },
 
@@ -62,8 +62,8 @@ element MCSlash11 : EdgeModel
                              {.mET = 0u}, // SE
                              {.mET = 2u, .mGH = cHABIT_AEQB}  // SW, A (us) should == B (them)
           } },
-        .mDVec = {.x =-20, .y =10},              // DiSeq#3 drift SSW
-        .mBootCode = "JjENENNNNWNWN",            // DiSeq#3 E, N+, W, then dvec
+        .mDVec = {.x =-10, .y = 5},       // DiSeq#3 drift SSW
+        .mBootCode = "JjENENNNNWNWN",     // DiSeq#3 E, N+, W, then dvec
       },
 
       // DiSeq#4 tag 1 (leader of 2) to NE (Copy of #2)
@@ -73,8 +73,8 @@ element MCSlash11 : EdgeModel
                              {.mET = 0u}, // SE
                              {.mET = 0u}  // SW
           } },
-        .mDVec = {.x = 20, .y = -10},     // DiSeq#2 drift NNE
-        .mBootCode = "JjWSWSSSSESES",     // DiSeq#2 W, S+, E, then dvec
+        .mDVec = {.x = 40, .y = -20},     // DiSeq#4 drift NNE (@4x SSE of #3)
+        .mBootCode = "JjWSWSSSSESES",     // DiSeq#4 W, S+, E, then dvec
       },
 
       // DiSeq#5 tag 1 (leader of 2) to NE (Symmetric modification of #2)
@@ -84,7 +84,7 @@ element MCSlash11 : EdgeModel
                              {.mET = 0u}, // SE
                              {.mET = 0u}  // SW
           } },
-        .mDVec = {.x = 20, .y = -10},     // DiSeq#5 drift NNE
+        .mDVec = {.x = 10, .y = -5},      // DiSeq#5 drift NNE
         .mBootCode = "JjEENNN",           // DiSeq#5 E to clear, N to realign with #3, then dvec
       },
 
@@ -95,7 +95,8 @@ element MCSlash11 : EdgeModel
   @Override
   virtual DiSequence getChildDiSeq(Bool leftKid) {
     if (mDiSequence == 2u)
-      return leftKid ? 1u : 5u; //XXX SHOULD BE : 4u// LD is first new MC/, RD becomes 2nd gen #2
+      //      return leftKid ? 1u : 5u; //1KID VERSION: GO STRAIGHT TO #5
+      return leftKid ? 1u : 4u; //2KID VERSION: LD is first new MC/, RD becomes 2nd gen #2
     if (mDiSequence == 4u)
       return leftKid ? 1u : 5u; // LD is second new MC/, RD switches type
     return super.getChildDiSeq(leftKid); //(probably never reached)
@@ -164,6 +165,7 @@ element MCSlash11 : EdgeModel
     C2D def = info.getDefaultVector();
     Bool wehaveconcerns = hasCares();
 
+    /*
     if (mDiSequence == 5u) {    // SPECIAL GROWNUP GO WALKIES 
       // run timer on walkies whether we use it or not, so
       // we'll give up on being blocked
@@ -174,6 +176,7 @@ element MCSlash11 : EdgeModel
         dcr.printf("[WLK:%d,%d]",def.x,def.y);
       }
     }
+    */
 
     if (wehaveconcerns) return false;
 
@@ -221,14 +224,15 @@ element MCSlash11 : EdgeModel
       return false;
 
     dcr.printf("[WLK:%d,%d]",def.x,def.y);
+    resetStance(); // seeing boundedCaring means we used the stance
 
     mD&&pR("ADFMSPa10");    
 
     mD&&pR(def);
     MaxPick dirs;
-    dirs.update((SN) 0u, 1u, 32u); // doing nothing gets 32 votes
+    //dirs.update((SN) 0u, 1u, 10u); // doing nothing gets 10 votes
     Random random;
-    dirs.update((SN) random.between(1,4), 1u, 2u); // doing random WNSE gets 2 votes
+    dirs.update((SN) random.between(0,4), 1u, 2u); // doing random stay+WNSE gets 2 votes
     for (Unsigned i = 0u; i < 4u; ++i) {
       AxialDir ad = (AxialDir) i;
       C2D adc = axialDir2C2D(ad);
@@ -245,11 +249,11 @@ element MCSlash11 : EdgeModel
     if (!dirs.hasPick()) fail(__FILE__,__LINE__);
     SN movesn = (SN) dirs.getIdx();
 
-    if (movesn > 0u) {
+    if (movesn > 0u) {          // if dir picked
       dcr.printf("[MCSafsp:%d]",movesn);
-      return executeMove(movesn, root, qcs, dcr);
+      return executeMove(movesn, root, qcs, dcr); // try the move
     }
-    return false;
+    return true;                // Otherwise block other options
   }
 
   Bool adviseFromStance(RootHardCellG & root, QHardCellState & qcs, DCReport & dcr) {

@@ -7,6 +7,8 @@ quark EdgeCoord
   EdgeTag mEdgeTag;
   EdgeTag getEdgeTag() { return isValid() ? mEdgeTag : 0u; }
 
+  AxialDir mMoveDir;            // XXX possible global movement signal
+
   Bool inferCenterAndSize(C2D & center, Unsigned & size) {
     /* if mEdgePos is (x,y) in pockets, and
           mHopsToEdge is (u,v) in sites, then

@@ -261,6 +261,7 @@ quark StandardJunctorConfig
 
   EdgeTag mET;
   GrowthHabit mGH;
+  AxialDir mMD;                 // XXX possible global movement signal
 
   EdgeTag getEdgeTag() { return mET; }
   GrowthHabit getGrowthHabit() { return mGH; }

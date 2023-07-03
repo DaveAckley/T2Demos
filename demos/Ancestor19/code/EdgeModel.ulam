@@ -335,7 +335,7 @@ quark EdgeModel : QBodyModel
       mD&&pR("DEPDepJun11");
       DeployJunctors dj;
       dj.init(dinf.mEdgeSJCs,ems);
-      dj.mDeliverToPocket = false;
+      //      dj.mDeliverToPocket = false;
       mD&&pR(dj);
       EventWindow ew;
       SN djsn = ems.mEmptySNs[0].pick();

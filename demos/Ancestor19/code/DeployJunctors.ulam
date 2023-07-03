@@ -8,16 +8,20 @@ element DeployJunctors : P2PvDL
   typedef Unsigned(3) DeployState;
   DeployState mState = DeployState.maxof; // 0..3 PocketDir, 4 return, 5 wait, 7 init
 
+  /* Mon Jul  3 04:06:07 2023 Bad idea and need the space?
   typedef Unsigned(3) InitialWait;
   InitialWait mInitialWait = 0u;
+  */
 
   Void behave() {
+    /* as above?
     if (mInitialWait++ < mInitialWait.maxof) // Reluctantly kill some time to help
       return;                                // HCPoint values near RG settle, so
+    */
     super.behave();                          // we don't anchor any wrong spots
   }
 
-  Bool mDeliverToPocket;
+  constant Bool mDeliverToPocket = false;
   HCPoint mReturnHP1, mReturnHP2;
 
   Void init(EdgeSJCs esjcs, D1PocketableState & d1s) {
