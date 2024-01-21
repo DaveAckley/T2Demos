@@ -1,7 +1,0 @@
-/** A zero-length collection of typedefs, constants, and utility
-    functions useful for life on a diamond
- */
-quark DTU {
-  //// WIDELY-KNOWN ALIASES
-  typedef EventWindow.SiteNum SN;
-}
