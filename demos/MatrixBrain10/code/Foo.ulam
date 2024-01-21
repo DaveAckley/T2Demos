@@ -1,0 +1,10 @@
+element Foo + QDebugUtils {
+  @Override
+  Void behave() {
+    setDebugOutputEnabled(true);
+    BrainStem bs;
+    Unsigned c = bs.getBrainSignalCount();
+    print("ZLKLDLKD");
+    print(c);
+  }
+}

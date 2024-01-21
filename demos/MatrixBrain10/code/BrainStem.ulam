@@ -1,0 +1,13 @@
+transient BrainSignal {
+  typedef ASCII SignalName[8];
+  SignalName mSignalName;
+  Bool mIsSensor;
+  Bool mIsMotor;
+}
+
+quark BrainStem {
+  virtual Unsigned getBrainSignalCount() native ; // { return 0; } 
+
+  virtual BrainSignal getBrainSignal(Unsigned index) native ; // { BrainSignal ret; return ret; }
+
+}
